@@ -1,0 +1,48 @@
+schema_version: "1.0"
+
+run:
+  name: "support-bot-offline-eval"
+  seed: 7
+  sample_rate: ${SAMPLE_RATE:-1.0}
+
+dataset:
+  type: inline
+  params:
+    items:
+      - id: q1
+        inputs: { question: "how do I reset my password" }
+        expected: "Go to settings to reset your password."
+      - id: q2
+        inputs: { question: "how do I cancel my plan" }
+        expected: "You can cancel your plan from billing."
+
+target:
+  type: echo
+  params:
+    output_key: question
+
+scorers:
+  - type: contains
+    params: { name: mentions_reset, substring: "reset" }
+  - type: llm_judge
+    params:
+      name: helpfulness
+      threshold: ${JUDGE_THRESHOLD:-0.6}
+
+judge:
+  type: mock
+  params:
+    default_score: 0.9
+    rules:
+      - { contains: "cancel", score: 0.4 }
+
+sinks:
+  - type: console
+    params: { verbose: false }
+  - type: json_file
+    params: { path: "${OUT_DIR:-./out}/results.json" }
+
+gate:
+  rules:
+    - { score: helpfulness, metric: mean, min: 0.5 }
+    - { score: mentions_reset, metric: pass_rate, min: 0.5 }

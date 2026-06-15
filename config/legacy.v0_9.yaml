@@ -1,0 +1,26 @@
+## Authored against the old 0.9 schema (evaluators/sink). The loader migrates
+## this to the current schema automatically — nothing here needs editing.
+schema_version: "0.9"
+
+run:
+  name: "legacy-eval"
+
+dataset:
+  type: inline
+  params:
+    items:
+      - id: a
+        inputs: { q: "hello" }
+        expected: "hello"
+
+target:
+  type: echo
+  params: { output_key: q }
+
+evaluators:
+  - type: exact            # old alias for exact_match
+    params: { name: exact }
+
+sink:
+  type: console
+  params: {}

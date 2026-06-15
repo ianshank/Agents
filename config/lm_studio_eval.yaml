@@ -1,0 +1,38 @@
+schema_version: "1.0"
+
+run:
+  name: "lm-studio-integration-test"
+  seed: 42
+
+dataset:
+  type: inline
+  params:
+    items:
+      - id: 1
+        inputs: { question: "Why is the sky blue?" }
+        expected: "Rayleigh scattering"
+
+target:
+  type: echo
+  params:
+    output_key: question
+
+scorers:
+  - type: llm_judge
+    params:
+      name: gemma_helpfulness
+      threshold: 0.7
+
+judge:
+  type: openai
+  params:
+    model: "google/gemma-4-e4b"
+    base_url: "http://127.0.0.1:1234/v1"
+    # api_key is omitted/not strictly required for local LM studio
+    temperature: 0.0
+    max_tokens: 512
+    system: "You are a fair and impartial judge. Respond ONLY with JSON: {\"score\": <0.0..1.0>, \"reasoning\": \"<brief string>\"}."
+
+sinks:
+  - type: console
+    params: { verbose: true }

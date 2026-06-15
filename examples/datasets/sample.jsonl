@@ -1,0 +1,2 @@
+{"id": "s1", "inputs": {"text": "the cat sat"}, "expected": "summary: the cat sat"}
+{"id": "s2", "inputs": {"text": "rockets are loud"}, "expected": "summary: rockets are loud"}
