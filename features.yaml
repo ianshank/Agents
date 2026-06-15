@@ -32,3 +32,55 @@ features:
     implemented_in: "57f7cc2cbcaa3cf618c0b9ec6c5048da11da6796"
     depends_on: ["F-001"]
     notes: "Supports NVIDIA Nemotron (with extra_body) and LM Studio (without)."
+
+  - id: "F-003"
+    epic: "Skills Framework"
+    name: "Skill template and validator infrastructure"
+    description: "Defines docs/SKILL_TEMPLATE.md, docs/SKILL_VALIDATION_TEMPLATE.md, scripts/validate_skill.py, and unit tests."
+    category: "infrastructure"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "SKILL_TEMPLATE.md exists and contains standard layout"
+      - "SKILL_VALIDATION_TEMPLATE.md exists and defines evals/grading JSON format"
+      - "validate_skill.py parses, validates skills structurally, and runs behavioral evals offline"
+    validation_command: "python scripts/validations/F_003.py"
+    implemented_in: "08849fdb157ef57a2a0acc2084db44fdad67d341"
+    depends_on: ["F-001"]
+    notes: "Skill validation is windows-safe and resource-isolated."
+
+  - id: "F-004"
+    epic: "Skills Framework"
+    name: "First real skill (openai-judge) integrated"
+    description: "Implements the openai-judge skill using the template. Validated structurally and behaviorally by validate_skill.py."
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "skills/openai-judge/SKILL.md exists and conforms to template"
+      - "skills/openai-judge/scripts/run.py wraps OpenAIJudge correctly"
+      - "validate_skill.py runs structural and behavioral checks successfully"
+    validation_command: "python scripts/validations/F_004.py"
+    implemented_in: "08849fdb157ef57a2a0acc2084db44fdad67d341"
+    depends_on: ["F-003"]
+    notes: "Demonstrates end-to-end self-validating skill execution."
+
+  - id: "F-005"
+    epic: "Tracing"
+    name: "Langfuse Tracing and Hosted Evaluation Integration"
+    description: "Instruments the evaluation engine and OpenAIJudge with Langfuse tracing, default cloud keys, and dataset run linking."
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "observe decorator traces engine run and run_one functions"
+      - "SDKLangfuseClient uses default credentials at https://us.cloud.langfuse.com"
+      - "Engine links trace to dataset run items via api.dataset_run_items.create"
+      - "OpenAIJudge automatically wraps client with langfuse.openai.OpenAI"
+    validation_command: "python scripts/validations/F_005.py"
+    implemented_in: "08849fdb157ef57a2a0acc2084db44fdad67d341"
+    depends_on: ["F-002"]
+    notes: "Fallback to no-op tracing when langfuse library is absent."
