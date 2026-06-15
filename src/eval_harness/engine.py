@@ -22,7 +22,7 @@ from .core.types import (
     ScoreAggregate,
     ScoreResult,
 )
-from .langfuse_client import LangfuseClient
+from .langfuse_client import LangfuseClient, observe
 from .plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS, bootstrap
 
 
@@ -68,11 +68,11 @@ class EvalEngine:
 
         # Inject the Langfuse client into any client-aware component.
         if langfuse_client is not None:
-            for component in [dataset, *sinks]:
-                if hasattr(component, "attach_client"):
+            for component in [dataset, judge, *sinks]:
+                if component is not None and hasattr(component, "attach_client"):
                     component.attach_client(langfuse_client)
 
-        return cls(
+        engine = cls(
             config,
             dataset=dataset,
             target=target,
@@ -80,6 +80,8 @@ class EvalEngine:
             sinks=sinks,
             judge=judge,
         )
+        engine.langfuse_client = langfuse_client
+        return engine
 
     def _sample(self, items: list[EvalItem]) -> list[EvalItem]:
         rate = self.config.run.sample_rate
@@ -87,7 +89,10 @@ class EvalEngine:
             return items
         return [it for it in items if self.rng.random() < rate]
 
+    @observe()
     def _run_one(self, item: EvalItem, ctx: RunContext) -> ItemResult:
+        from .langfuse_client import langfuse_context
+
         output = self.target.run(item)
         scores: list[ScoreResult] = []
         for scorer in self.scorers:
@@ -104,6 +109,19 @@ class EvalEngine:
                 )
                 if self.config.run.fail_fast:
                     raise
+
+        # Link trace to dataset item if client is available
+        client = getattr(self, "langfuse_client", None)
+        if client is not None:
+            trace_id = langfuse_context.get_current_trace_id()
+            if trace_id:
+                run_name = self.config.run.run_id or f"{self.config.run.name}"
+                client.link_dataset_item(
+                    item_id=item.id,
+                    trace_id=trace_id,
+                    run_name=run_name,
+                )
+
         return ItemResult(item=item, output=output, scores=scores)
 
     @staticmethod
@@ -124,6 +142,7 @@ class EvalEngine:
             )
         return aggregate
 
+    @observe()
     def run(self) -> RunResult:
         started = self.clock()
         items = self._sample(list(self.dataset.load()))

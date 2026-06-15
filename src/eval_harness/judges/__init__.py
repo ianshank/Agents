@@ -204,3 +204,14 @@ class OpenAIJudge(Judge):
                 "reasoning_content": full_reasoning
             },
         )
+
+    def attach_client(self, client: Any) -> None:
+        """Attach LangfuseClient and switch to the traced OpenAI wrapper if active."""
+        from ..langfuse_client import SDKLangfuseClient
+        if isinstance(client, SDKLangfuseClient):
+            try:
+                from langfuse.openai import OpenAI as LFOpenAI
+                self.client = LFOpenAI(base_url=str(self.client.base_url) if self.client.base_url else None, api_key=self.client.api_key)
+                logger.info("Successfully attached SDKLangfuseClient and enabled Langfuse OpenAI tracing.")
+            except ImportError:
+                logger.warning("Could not import langfuse.openai.OpenAI. Tracing is disabled.")

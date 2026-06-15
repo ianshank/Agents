@@ -29,6 +29,10 @@ tests/test_backwards_compat_cli.py
 tests/test_components.py
 tests/test_config.py
 tests/test_engine.py
+tests/test_langfuse_integration.py
 tests/test_openai_judge.py
 tests/test_registry.py
 tests/test_scorers.py
+tests/test_select_next.py
+tests/test_validate.py
+tests/test_validate_skill.py

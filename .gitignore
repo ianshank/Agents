@@ -1,0 +1,19 @@
+# Python ignores
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Skill validation artifacts
+.skill-validation/
+grading.json

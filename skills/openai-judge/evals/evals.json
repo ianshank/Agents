@@ -1,0 +1,32 @@
+{
+  "skill": "openai-judge",
+  "evals": [
+    {
+      "id": "happy-path",
+      "prompt": "Evaluate the correctness of the answer: question=What is 2+2, answer=4",
+      "run": "python scripts/run.py --prompt evals/fixtures/happy-path/prompt.txt --rubric evals/fixtures/happy-path/rubric.txt --out .skill-validation/happy/result.json --mock",
+      "assertions": [
+        { "type": "exit_zero", "text": "mock run succeeds" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import json; json.load(open('.skill-validation/happy/result.json', encoding='utf-8'))\"", "text": "result is valid JSON" },
+        { "type": "file_contains", "path": ".skill-validation/happy/result.json", "contains": "\"status\": \"ok\"", "text": "status is ok" }
+      ]
+    },
+    {
+      "id": "empty-input",
+      "prompt": "Triggers empty input handling",
+      "run": "python scripts/run.py --prompt evals/fixtures/empty-input/prompt.txt --rubric evals/fixtures/empty-input/rubric.txt --out .skill-validation/empty/result.json --mock",
+      "assertions": [
+        { "type": "exit_zero", "text": "run handles empty inputs" },
+        { "type": "file_exists", "path": ".skill-validation/empty/result.json", "text": "output is written" }
+      ]
+    },
+    {
+      "id": "malformed-rubric",
+      "prompt": "Triggers malformed rubric handling",
+      "run": "python scripts/run.py --prompt evals/fixtures/malformed-rubric/prompt.txt --rubric evals/fixtures/malformed-rubric/rubric.txt --out .skill-validation/malformed/result.json --mock",
+      "assertions": [
+        { "type": "exit_zero", "text": "run handles malformed rubric" }
+      ]
+    }
+  ]
+}

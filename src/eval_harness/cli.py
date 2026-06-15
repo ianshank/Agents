@@ -45,7 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     config = load_config(args.config, overrides=args.overrides)
-    client = NullLangfuseClient() if args.offline else None
+    if args.offline:
+        client = NullLangfuseClient()
+    else:
+        from .langfuse_client import SDKLangfuseClient
+        client = SDKLangfuseClient()
     engine = EvalEngine.from_config(config, langfuse_client=client)
     run = engine.run()
 

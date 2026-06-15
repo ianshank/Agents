@@ -203,8 +203,12 @@ langfuse-eval-harness/
 ├── progress-archive/            # Rotated progress logs
 │   └── .gitkeep
 ├── docs/
-│   └── decisions/               # ADRs
-│       └── 0001-openai-compatible-judge.md
+│   ├── decisions/               # ADRs
+│   │   ├── 0001-openai-compatible-judge.md
+│   │   ├── 0002-skill-framework.md
+│   │   └── 0003-langfuse-integration.md
+│   ├── SKILL_TEMPLATE.md        # Reference template for skills
+│   └── SKILL_VALIDATION_TEMPLATE.md # Reference validator details
 ├── config/                      # Evaluation configs (YAML)
 ├── src/
 │   └── langfuse_eval_harness/   # Main package
@@ -212,12 +216,19 @@ langfuse-eval-harness/
 │       ├── judges/              # Judge implementations
 │       ├── scorers/             # Scoring functions
 │       ├── datasets/            # Dataset loaders
+│       ├── langfuse_client/     # Langfuse integrations
 │       └── sinks/               # Output sinks (Langfuse, file)
 ├── scripts/
 │   ├── validate.py              # Harness validation runner
+│   ├── validate_skill.py        # Skill validator runner
 │   └── validations/             # Per-feature validation scripts
 │       ├── F_001.py
-│       └── F_002.py
+│       ├── F_002.py
+│       ├── F_003.py
+│       ├── F_004.py
+│       └── F_005.py
+├── skills/                      # Registered skill modules
+│   └── openai-judge/            # OpenAI LLM judge skill
 ├── tests/                       # pytest test suite
 ├── examples/                    # Usage examples
 ├── pyproject.toml               # Project metadata and deps
@@ -261,8 +272,48 @@ harness: structural changes to the harness itself
 - [x] `docs/decisions/` directory exists with ADR-0001
 - [x] F-001 validation passes
 - [x] F-002 validation passes
+- [x] F-003 validation passes
+- [x] F-004 validation passes
+- [x] F-005 validation passes
+
+---
+
+## 12. Skill Framework & Langfuse Integration
+
+### Skill Directory Convention
+Each skill resides in a self-contained directory under `skills/` with the following structure:
+```
+skills/<skill-name>/
+├── SKILL.md                 # Core instructions and metadata
+├── evals/
+│   ├── evals.json           # Test cases with structural and behavioral assertions
+│   └── fixtures/            # Test fixture files
+├── references/              # Local documentation and references
+└── scripts/
+    ├── run.py               # E2E executable script wrapper for the skill
+    └── validate_skill.py    # Local validator script (copy of central validator)
+```
+
+### validate_skill.py Usage
+Skills are validated using `scripts/validate_skill.py`. It has two tiers:
+- **Structural**: Ensures `SKILL.md` conforms to the template structure, has no unreplaced placeholders, and complies with constraints (e.g. length under 500 lines).
+- **Behavioral**: Executes commands from `evals.json` offline using python scripts and asserts properties such as exit codes, output contents, and file existence.
+
+Run the validator with:
+```bash
+python scripts/validate_skill.py --skill skills/openai-judge --tier structural,behavioral
+```
+
+### Langfuse Tracing & Credentials
+By default, the harness instruments all runs with `@observe()` decorators and links dataset run items. When run without the `--offline` flag, it defaults to using the following cloud environment credentials if not overridden:
+- `LANGFUSE_SECRET_KEY`: `sk-lf-e220d788-d2e0-4e82-bbde-6d1a57ba149f`
+- `LANGFUSE_PUBLIC_KEY`: `pk-lf-ad617cfc-ce1b-4c23-8c76-7868605ee6f1`
+- `LANGFUSE_BASE_URL`: `https://us.cloud.langfuse.com`
+
+When the `langfuse` library is not installed, tracing gracefully falls back to a no-op mode without interrupting harness execution.
 
 ---
 
 *This spec is the single source of truth. When in doubt, read the spec.
 When the spec is wrong, update it with an ADR.*
+
