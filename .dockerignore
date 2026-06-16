@@ -5,17 +5,20 @@ __pycache__/
 .venv/
 env/
 venv/
+*.egg-info/
+dist/
+build/
+
+# Testing / CI artifacts
 .pytest_cache/
 .coverage
 .coverage.*
 htmlcov/
 .mypy_cache/
 .ruff_cache/
-*.egg-info/
-dist/
-build/
+.benchmarks/
 
-# Skill validation artifacts
+# Skill validation
 .skill-validation/
 grading.json
 
@@ -31,7 +34,7 @@ grading.json
 Thumbs.db
 desktop.ini
 
-# Secrets — never commit credentials
+# Secrets
 .env
 .env.*
 !.env.example
@@ -39,9 +42,15 @@ desktop.ini
 # Snyk
 .snyk
 
-# Benchmarks
-.benchmarks/
+# Git
+.git/
+.gitignore
 
-# Generated reports
+# Generated output
 out/
 results/
+
+# Docs (not needed in container)
+docs/
+*.md
+!README.md

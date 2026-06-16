@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -25,8 +25,8 @@ class TargetOutput:
     """The result of running the system-under-test against one item."""
 
     output: Any
-    latency_ms: Optional[float] = None
-    error: Optional[str] = None
+    latency_ms: float | None = None
+    error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -36,8 +36,8 @@ class ScoreResult:
 
     name: str
     value: float
-    passed: Optional[bool] = None
-    comment: Optional[str] = None
+    passed: bool | None = None
+    comment: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -61,7 +61,7 @@ class ItemResult:
 class ScoreAggregate:
     count: int
     mean: float
-    pass_rate: Optional[float]
+    pass_rate: float | None
 
 
 @dataclass
@@ -117,5 +117,5 @@ class RunContext:
     config: Any
     judge: Any = None
     rng: Any = None
-    now: Optional[datetime] = None
+    now: datetime | None = None
     extra: dict[str, Any] = field(default_factory=dict)

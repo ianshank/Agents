@@ -8,7 +8,9 @@ from eval_harness.gating import evaluate_gate
 from eval_harness.langfuse_client import NullLangfuseClient
 from eval_harness.version import SCHEMA_VERSION
 
-FIXED_CLOCK = lambda: datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+def _fixed_clock():
+    return datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 CONFIG = {
     "schema_version": SCHEMA_VERSION,
@@ -36,7 +38,7 @@ CONFIG = {
 def _engine(cfg=None, client=None):
     config = load_config_dict(cfg or dict(CONFIG))
     engine = EvalEngine.from_config(config, langfuse_client=client or NullLangfuseClient())
-    engine.clock = FIXED_CLOCK
+    engine.clock = _fixed_clock
     return config, engine
 
 
@@ -105,5 +107,5 @@ def test_gate_missing_score():
 
 
 def test_gate_none_passes():
-    config, engine = _engine()
+    _config, engine = _engine()
     assert evaluate_gate(None, engine.run()).passed

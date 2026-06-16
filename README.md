@@ -1,26 +1,47 @@
 # langfuse-eval-harness
 
 A dynamic, modular, backwards-compatible enterprise LLM evaluation harness with
-first-class Langfuse integration. Everything that drives behaviour is config —
-there are no hard-coded thresholds, model ids, paths, or seeds in the engine.
+first-class Langfuse integration, Snyk dependency scanning, and a pluggable skill
+framework.
 
-## Why it is shaped this way
+## Architecture
+
+See [C4 Architecture Diagrams](docs/c4_architecture.md) for context, container,
+component, and data-flow views.
 
 | Requirement | How it is met |
 |---|---|
-| **No hard-coded values** | All behaviour comes from a validated config (`EvalConfig`). Defaults live on the schema and are overridable via `--set` or `${ENV_VAR:-default}` interpolation. |
+| **No hard-coded values** | All behaviour comes from a validated config (`EvalConfig`). Defaults live on the schema and are overridable via `--set` or `${ENV_VAR:-default}` interpolation. Credentials are sourced from environment variables only. |
 | **Modular / dynamic** | Components (scorers, datasets, targets, sinks, judges) self-register in `Registry` objects and are built by name at runtime. Third parties add components via the `eval_harness.plugins` entry-point group — no edits to this package. |
 | **Backwards compatible** | Configs carry a `schema_version`; the migration chain upgrades old configs to the current schema on load. Registry **aliases** keep renamed component names resolving. Component contracts are abstract base classes, so implementations can evolve. |
-| **Test coverage** | Offline pytest suite (no network/SDK) at ~96% line coverage, using a deterministic mock judge and an in-memory Langfuse client. |
+| **Test coverage** | Offline pytest suite (no network/SDK) at ≥85% line coverage, using a deterministic mock judge and an in-memory Langfuse client. |
 | **Langfuse integration** | Hidden behind a narrow `LangfuseClient` interface with a `NullLangfuseClient` (tests/offline) and a guarded `SDKLangfuseClient` (production). |
+| **Security** | Snyk monitors dependencies continuously. No credentials in source code. |
 
 ## Install
 
 ```bash
 pip install -e .            # core (pydantic, pyyaml)
 pip install -e '.[langfuse]' # add the real Langfuse SDK
+pip install -e '.[openai]'   # add OpenAI + tenacity for judge
 pip install -e '.[bedrock]'  # add boto3 for the Bedrock judge
-pip install -e '.[dev]'      # pytest + coverage
+pip install -e '.[dev]'      # pytest, coverage, ruff, mypy
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LANGFUSE_SECRET_KEY` | For Langfuse features | Langfuse secret key |
+| `LANGFUSE_PUBLIC_KEY` | For Langfuse features | Langfuse public key |
+| `LANGFUSE_BASE_URL` | For Langfuse features | Langfuse API endpoint (e.g. `https://us.cloud.langfuse.com`) |
+| `NVIDIA_API_KEY` | For Nemotron judge | NVIDIA API key |
+| `OPENAI_API_KEY` | For OpenAI judge | OpenAI API key |
+
+Create a `.env` file from the template:
+```bash
+cp .env.example .env
+# Edit .env with your credentials
 ```
 
 ## Run
@@ -57,24 +78,71 @@ Reference it from config: `{type: length_ok, params: {max_chars: 140}}`.
 ## Test
 
 ```bash
+# Full suite with coverage
 pytest --cov=eval_harness --cov-report=term-missing
+
+# Lint and type checks
+ruff check src/ tests/
+mypy src/eval_harness/
+```
+
+## Security Scanning
+
+```bash
+# Run Snyk dependency scan
+snyk test --file=requirements.txt --package-manager=pip --skip-unresolved
+
+# Update Snyk dashboard
+snyk monitor --file=requirements.txt --package-manager=pip --skip-unresolved
 ```
 
 ## Layout
 
 ```
 src/eval_harness/
-  config/        versioned models, migrations, env-interpolating loader
-  core/          types, interfaces, generic registry
-  scorers/       exact_match, regex_match, contains, json_keys, llm_judge
-  datasets/      inline, jsonl, langfuse
-  targets/       echo, callable (dynamic import)
-  sinks/         console, json_file, langfuse
-  judges/        mock (deterministic), bedrock (guarded)
-  langfuse_client/  interface + null + SDK adapter
-  gating/        config-driven quality gate
-  engine.py      orchestration
-  cli.py         entry point
+  config/          versioned models, migrations, env-interpolating loader
+  core/            types, interfaces, generic registry
+  scorers/         exact_match, regex_match, contains, json_keys, llm_judge
+  datasets/        inline, jsonl, langfuse
+  targets/         echo, callable (dynamic import)
+  sinks/           console, json_file, langfuse
+  judges/          mock (deterministic), openai (Nemotron/GPT), bedrock
+  langfuse_client/ interface + null + SDK adapter
+  gating/          config-driven quality gate
+  engine.py        orchestration
+  cli.py           entry point
+
+scripts/
+  validate.py       spec-driven project validation
+  validate_skill.py skill structural + behavioral validation
+  select_next.py    feature priority selector
+
+skills/
+  openai-judge/     skill: OpenAI-compatible LLM judge evaluation
+
+docs/
+  c4_architecture.md  C4 context/container/component diagrams
+  decisions/          Architecture Decision Records (ADRs)
+  SKILL_TEMPLATE.md   template for new skills
 ```
 
-See `docs/c4_architecture.svg` for the C4 context/container/component views.
+## CI Integration
+
+```yaml
+# GitHub Actions example
+- name: Test
+  run: pytest --cov=eval_harness --cov-report=term-missing --cov-fail-under=85
+
+- name: Lint
+  run: ruff check src/ tests/
+
+- name: Type check
+  run: mypy src/eval_harness/
+
+- name: Security scan
+  run: snyk test --file=requirements.txt --package-manager=pip --skip-unresolved
+```
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full release history.

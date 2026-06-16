@@ -9,8 +9,8 @@ from __future__ import annotations
 import random
 import statistics
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Callable, Optional
 
 from .config.models import EvalConfig
 from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
@@ -39,8 +39,8 @@ class EvalEngine:
         target: TargetRunner,
         scorers: list[Scorer],
         sinks: list[ResultSink],
-        judge: Optional[Judge] = None,
-        rng: Optional[random.Random] = None,
+        judge: Judge | None = None,
+        rng: random.Random | None = None,
         clock: Callable[[], datetime] = _utcnow,
     ) -> None:
         self.config = config
@@ -51,14 +51,15 @@ class EvalEngine:
         self.judge = judge
         self.rng = rng or random.Random(config.run.seed)
         self.clock = clock
+        self.langfuse_client: LangfuseClient | None = None
 
     @classmethod
     def from_config(
         cls,
         config: EvalConfig,
         *,
-        langfuse_client: Optional[LangfuseClient] = None,
-    ) -> "EvalEngine":
+        langfuse_client: LangfuseClient | None = None,
+    ) -> EvalEngine:
         bootstrap()
         dataset = DATASETS.create(config.dataset.type, config.dataset.params)
         target = TARGETS.create(config.target.type, config.target.params)

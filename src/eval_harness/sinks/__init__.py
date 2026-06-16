@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from ..core.interfaces import ResultSink
 from ..core.types import RunResult
@@ -43,9 +42,9 @@ class JsonFileSink(ResultSink):
 class LangfuseSink(ResultSink):
     """Writes per-item scores back to Langfuse. Client injected by the engine."""
 
-    def __init__(self, min_value_to_log: Optional[float] = None):
+    def __init__(self, min_value_to_log: float | None = None):
         self.min_value_to_log = min_value_to_log
-        self._client: Optional[LangfuseClient] = None
+        self._client: LangfuseClient | None = None
 
     def attach_client(self, client: LangfuseClient) -> None:
         self._client = client

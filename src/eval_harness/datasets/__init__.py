@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Optional
 
 from ..core.interfaces import DatasetSource
 from ..core.types import EvalItem
@@ -22,7 +22,7 @@ def _to_item(record: dict, fallback_id: int) -> EvalItem:
 
 @DATASETS.register("inline")
 class InlineDataset(DatasetSource):
-    def __init__(self, items: Optional[list[dict]] = None):
+    def __init__(self, items: list[dict] | None = None):
         self.items = items or []
 
     def load(self) -> Iterable[EvalItem]:
@@ -49,7 +49,7 @@ class LangfuseDataset(DatasetSource):
 
     def __init__(self, dataset_name: str):
         self.dataset_name = dataset_name
-        self._client: Optional[LangfuseClient] = None
+        self._client: LangfuseClient | None = None
 
     def attach_client(self, client: LangfuseClient) -> None:
         self._client = client

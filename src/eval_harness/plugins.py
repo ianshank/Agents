@@ -42,7 +42,7 @@ def load_entry_point_plugins() -> None:
         selected = (
             eps.select(group=ENTRY_POINT_GROUP)
             if hasattr(eps, "select")
-            else eps.get(ENTRY_POINT_GROUP, [])  # pragma: no cover - py<3.10 shim
+            else eps.get(ENTRY_POINT_GROUP, [])  # type: ignore[arg-type]  # pragma: no cover - py<3.10 shim
         )
         for ep in selected:
             try:

@@ -54,7 +54,7 @@ def test_override_applied_through_loader():
 
 def test_sample_rate_validator():
     bad = dict(BASE, run={"sample_rate": 2.0})
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         load_config_dict(bad)
 
 

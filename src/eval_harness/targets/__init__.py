@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import importlib
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from ..core.interfaces import TargetRunner
 from ..core.types import EvalItem, TargetOutput
@@ -14,7 +15,7 @@ from ..plugins import TARGETS
 class EchoTarget(TargetRunner):
     """Returns the input (optionally a single field). Handy for wiring tests."""
 
-    def __init__(self, output_key: Optional[str] = None):
+    def __init__(self, output_key: str | None = None):
         self.output_key = output_key
 
     def run(self, item: EvalItem) -> TargetOutput:
@@ -34,7 +35,7 @@ class CallableTarget(TargetRunner):
     def __init__(self, path: str, pass_item: bool = False):
         self.path = path
         self.pass_item = pass_item
-        self._fn: Optional[Callable[..., Any]] = None
+        self._fn: Callable[..., Any] | None = None
 
     def _resolve(self) -> Callable[..., Any]:
         if self._fn is None:

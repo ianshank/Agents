@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
 from ..core.interfaces import Judge
 from ..core.types import JudgeVerdict
@@ -20,11 +20,11 @@ class MockJudge(Judge):
     substring is found in the prompt wins, else ``default_score`` is returned.
     """
 
-    def __init__(self, default_score: float = 1.0, rules: Optional[list[dict]] = None):
+    def __init__(self, default_score: float = 1.0, rules: list[dict] | None = None):
         self.default_score = float(default_score)
         self.rules = rules or []
 
-    def evaluate(self, prompt: str, context: Optional[dict] = None) -> JudgeVerdict:
+    def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict:
         for rule in self.rules:
             needle = rule.get("contains", "")
             if needle and needle in prompt:
@@ -40,10 +40,10 @@ class BedrockJudge(Judge):  # pragma: no cover - requires boto3 + network
     def __init__(
         self,
         model_id: str,
-        region: Optional[str] = None,
+        region: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.0,
-        system: Optional[str] = None,
+        system: str | None = None,
         score_field: str = "score",
     ):
         try:
@@ -60,7 +60,7 @@ class BedrockJudge(Judge):  # pragma: no cover - requires boto3 + network
         self.system = system or "Respond ONLY with JSON: {\"score\": <0..1>, \"reasoning\": <str>}."
         self.score_field = score_field
 
-    def evaluate(self, prompt: str, context: Optional[dict] = None) -> JudgeVerdict:
+    def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict:
         body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": self.max_tokens,
@@ -86,14 +86,14 @@ class OpenAIJudge(Judge):
     def __init__(
         self,
         model: str,
-        base_url: Optional[str] = None,
-        api_key: Optional[str] = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.0,
         top_p: float = 1.0,
-        system: Optional[str] = None,
+        system: str | None = None,
         score_field: str = "score",
-        extra_body: Optional[dict[str, Any]] = None,
+        extra_body: dict[str, Any] | None = None,
     ):
         try:
             import openai
@@ -102,8 +102,8 @@ class OpenAIJudge(Judge):
                 "OpenAIJudge requires openai. Install with: "
                 "pip install 'langfuse-eval-harness[openai]'"
             ) from exc
-        
-        # We don't want to fail immediately if api_key is missing because it might be picked up by the openai client from env vars, 
+
+        # We don't want to fail immediately if api_key is missing because it might be picked up by the openai client from env vars,
         # or it might not be needed for LM studio.
         self.client = openai.OpenAI(base_url=base_url, api_key=api_key)
         self.model = model
@@ -122,12 +122,12 @@ class OpenAIJudge(Judge):
             try:
                 return json.loads(json_str)  # type: ignore[no-any-return]
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse extracted JSON: {json_str}", exc_info=True)
+                logger.error("Failed to parse extracted JSON: %s", json_str, exc_info=True)
                 raise
-        logger.error(f"No JSON object found in response: {text}")
+        logger.error("No JSON object found in response: %s", text)
         raise ValueError("Could not extract JSON from the LLM response.")
 
-    def evaluate(self, prompt: str, context: Optional[dict[str, Any]] = None) -> JudgeVerdict:
+    def evaluate(self, prompt: str, context: dict[str, Any] | None = None) -> JudgeVerdict:
         import openai
         from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -143,7 +143,7 @@ class OpenAIJudge(Judge):
             reraise=True,
         )
         def _call_api() -> Any:
-            logger.debug(f"Calling OpenAI API: model={self.model}, base_url={self.client.base_url}")
+            logger.debug("Calling OpenAI API: model=%s, base_url=%s", self.model, self.client.base_url)
             return self.client.chat.completions.create(
                 model=self.model,
                 messages=messages, # type: ignore
@@ -157,7 +157,7 @@ class OpenAIJudge(Judge):
         try:
             completion = _call_api()
         except Exception as exc:
-            logger.error(f"OpenAI API call failed: {exc}", exc_info=True)
+            logger.error("OpenAI API call failed: %s", exc, exc_info=True)
             raise
 
         content_chunks: list[str] = []
@@ -175,14 +175,14 @@ class OpenAIJudge(Judge):
 
         full_content = "".join(content_chunks)
         full_reasoning = "".join(reasoning_chunks)
-        
-        logger.debug(f"Received response: content_length={len(full_content)}, reasoning_length={len(full_reasoning)}")
+
+        logger.debug("Received response: content_length=%d, reasoning_length=%d", len(full_content), len(full_reasoning))
 
         try:
             parsed = self._extract_json(full_content)
         except Exception as exc:
             # If parsing fails, return a default verdict with the error
-            logger.warning(f"Returning default failure verdict due to parsing error: {exc}")
+            logger.warning("Returning default failure verdict due to parsing error: %s", exc)
             return JudgeVerdict(
                 score=0.0,
                 reasoning=f"Failed to parse LLM output: {exc}. Output was: {full_content}",
