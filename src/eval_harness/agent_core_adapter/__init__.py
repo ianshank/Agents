@@ -24,9 +24,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from eval_harness.core.interfaces import Judge
 from eval_harness.core.types import EvalItem
@@ -55,7 +54,7 @@ class AdapterConfig(BaseModel):
     Every tunable is a validated field; no literals appear in logic.
     """
 
-    model_config: Any = {"frozen": True}
+    model_config = ConfigDict(frozen=True)
 
     resolution_threshold: float = Field(
         default=0.8,
