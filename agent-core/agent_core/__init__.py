@@ -125,6 +125,7 @@ __all__ = [
     "MaxCyclesCondition",
     "NoProgressCondition",
     "ParallelClaimRunner",
+    "RecalibrationConfig",
     "RuleSanitizer",
     "RunResult",
     "SanitizationResult",
