@@ -36,6 +36,7 @@ def test_duplicate_registration_rejected():
         pass
 
     with pytest.raises(RegistryError):
+
         @reg.register("dup")
         class B:
             pass

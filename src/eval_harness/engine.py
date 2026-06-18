@@ -4,6 +4,7 @@ The engine holds no behavioural literals. Seed, sampling, component selection
 and parameters all come from the validated config; the clock and RNG are
 injectable so runs are fully deterministic under test.
 """
+
 from __future__ import annotations
 
 import random

@@ -1,4 +1,5 @@
 """A trivial system-under-test for exercising the dynamic CallableTarget."""
+
 from __future__ import annotations
 
 

@@ -4,6 +4,7 @@ Built-in components register themselves on import. Third-party packages can add
 components at runtime via the ``eval_harness.plugins`` entry-point group, so the
 harness is extensible without editing this package.
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,9 +41,7 @@ def load_entry_point_plugins() -> None:
 
         eps = entry_points()
         selected = (
-            eps.select(group=ENTRY_POINT_GROUP)
-            if hasattr(eps, "select")
-            else eps.get(ENTRY_POINT_GROUP, [])  # type: ignore[arg-type]  # pragma: no cover - py<3.10 shim
+            eps.select(group=ENTRY_POINT_GROUP) if hasattr(eps, "select") else eps.get(ENTRY_POINT_GROUP, [])  # type: ignore[arg-type]  # pragma: no cover - py<3.10 shim
         )
         for ep in selected:
             try:

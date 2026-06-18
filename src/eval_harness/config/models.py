@@ -4,6 +4,7 @@ Everything that drives behaviour lives here as data: component selection,
 parameters, sampling, gating thresholds. There are no behavioural literals in
 the engine itself — defaults are declared on these models and overridable.
 """
+
 from __future__ import annotations
 
 from typing import Any

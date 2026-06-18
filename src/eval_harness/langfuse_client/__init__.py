@@ -4,6 +4,7 @@ The engine and sinks depend only on ``LangfuseClient``; the real SDK is imported
 lazily so the package installs and tests run with zero external dependencies.
 ``NullLangfuseClient`` records calls in memory for assertions and offline runs.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -12,8 +13,7 @@ from typing import Any
 
 class LangfuseClient(ABC):
     @abstractmethod
-    def get_dataset_items(self, dataset_name: str) -> list[dict]:
-        ...
+    def get_dataset_items(self, dataset_name: str) -> list[dict]: ...
 
     @abstractmethod
     def log_score(
@@ -24,8 +24,7 @@ class LangfuseClient(ABC):
         name: str,
         value: float,
         comment: str | None = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @abstractmethod
     def link_dataset_item(
@@ -35,12 +34,10 @@ class LangfuseClient(ABC):
         trace_id: str,
         run_name: str,
         run_description: str | None = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @abstractmethod
-    def flush(self) -> None:
-        ...
+    def flush(self) -> None: ...
 
 
 class NullLangfuseClient(LangfuseClient):
@@ -92,6 +89,7 @@ class SDKLangfuseClient(LangfuseClient):
             ) from exc
 
         import os
+
         _required_env = {
             "LANGFUSE_SECRET_KEY": "secret_key",
             "LANGFUSE_PUBLIC_KEY": "public_key",
@@ -145,6 +143,7 @@ class SDKLangfuseClient(LangfuseClient):
             )
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).error("Failed to link trace to dataset item: %s", exc)
 
     def flush(self) -> None:
@@ -158,10 +157,13 @@ def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
     """
     try:
         from langfuse.decorators import observe as lf_observe
+
         return lf_observe(*decorator_args, **decorator_kwargs)
     except ImportError:
+
         def no_op_decorator(func: Any) -> Any:
             return func
+
         return no_op_decorator
 
 
@@ -169,8 +171,10 @@ class SafeLangfuseContext:
     def get_current_trace_id(self) -> str | None:
         try:
             from langfuse.decorators import langfuse_context
+
             return langfuse_context.get_current_trace_id()  # type: ignore[no-any-return]
         except ImportError:
             return None
+
 
 langfuse_context = SafeLangfuseContext()

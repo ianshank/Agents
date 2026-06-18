@@ -1,4 +1,5 @@
 """Built-in judges. ``mock`` is deterministic and offline; ``bedrock`` is real."""
+
 from __future__ import annotations
 
 import json
@@ -11,6 +12,7 @@ from ..core.types import JudgeVerdict
 from ..plugins import JUDGES
 
 logger = logging.getLogger(__name__)
+
 
 @JUDGES.register("mock", aliases=("deterministic",))
 class MockJudge(Judge):
@@ -50,14 +52,13 @@ class BedrockJudge(Judge):  # pragma: no cover - requires boto3 + network
             import boto3
         except ImportError as exc:
             raise RuntimeError(
-                "BedrockJudge requires boto3. Install with: "
-                "pip install 'langfuse-eval-harness[bedrock]'"
+                "BedrockJudge requires boto3. Install with: pip install 'langfuse-eval-harness[bedrock]'"
             ) from exc
         self._client = boto3.client("bedrock-runtime", region_name=region)
         self.model_id = model_id
         self.max_tokens = max_tokens
         self.temperature = temperature
-        self.system = system or "Respond ONLY with JSON: {\"score\": <0..1>, \"reasoning\": <str>}."
+        self.system = system or 'Respond ONLY with JSON: {"score": <0..1>, "reasoning": <str>}.'
         self.score_field = score_field
 
     def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict:
@@ -99,8 +100,7 @@ class OpenAIJudge(Judge):
             import openai
         except ImportError as exc:
             raise RuntimeError(
-                "OpenAIJudge requires openai. Install with: "
-                "pip install 'langfuse-eval-harness[openai]'"
+                "OpenAIJudge requires openai. Install with: pip install 'langfuse-eval-harness[openai]'"
             ) from exc
 
         # We don't want to fail immediately if api_key is missing because it might be picked up by the openai client from env vars,
@@ -110,7 +110,7 @@ class OpenAIJudge(Judge):
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.top_p = top_p
-        self.system = system or "Respond ONLY with JSON: {\"score\": <0..1>, \"reasoning\": <str>}."
+        self.system = system or 'Respond ONLY with JSON: {"score": <0..1>, "reasoning": <str>}.'
         self.score_field = score_field
         self.extra_body = extra_body or {}
 
@@ -146,7 +146,7 @@ class OpenAIJudge(Judge):
             logger.debug("Calling OpenAI API: model=%s, base_url=%s", self.model, self.client.base_url)
             return self.client.chat.completions.create(
                 model=self.model,
-                messages=messages, # type: ignore
+                messages=messages,  # type: ignore
                 temperature=self.temperature,
                 top_p=self.top_p,
                 max_tokens=self.max_tokens,
@@ -176,7 +176,9 @@ class OpenAIJudge(Judge):
         full_content = "".join(content_chunks)
         full_reasoning = "".join(reasoning_chunks)
 
-        logger.debug("Received response: content_length=%d, reasoning_length=%d", len(full_content), len(full_reasoning))
+        logger.debug(
+            "Received response: content_length=%d, reasoning_length=%d", len(full_content), len(full_reasoning)
+        )
 
         try:
             parsed = self._extract_json(full_content)
@@ -186,7 +188,7 @@ class OpenAIJudge(Judge):
             return JudgeVerdict(
                 score=0.0,
                 reasoning=f"Failed to parse LLM output: {exc}. Output was: {full_content}",
-                raw={"content": full_content, "reasoning_content": full_reasoning}
+                raw={"content": full_content, "reasoning_content": full_reasoning},
             )
 
         # If Nemotron gave us explicit reasoning via streaming, prepend or use it
@@ -198,20 +200,20 @@ class OpenAIJudge(Judge):
         return JudgeVerdict(
             score=float(parsed.get(self.score_field, 0.0)),
             reasoning=final_reasoning.strip(),
-            raw={
-                "parsed": parsed,
-                "raw_content": full_content,
-                "reasoning_content": full_reasoning
-            },
+            raw={"parsed": parsed, "raw_content": full_content, "reasoning_content": full_reasoning},
         )
 
     def attach_client(self, client: Any) -> None:
         """Attach LangfuseClient and switch to the traced OpenAI wrapper if active."""
         from ..langfuse_client import SDKLangfuseClient
+
         if isinstance(client, SDKLangfuseClient):
             try:
                 from langfuse.openai import OpenAI as LFOpenAI
-                self.client = LFOpenAI(base_url=str(self.client.base_url) if self.client.base_url else None, api_key=self.client.api_key)
+
+                self.client = LFOpenAI(
+                    base_url=str(self.client.base_url) if self.client.base_url else None, api_key=self.client.api_key
+                )
                 logger.info("Successfully attached SDKLangfuseClient and enabled Langfuse OpenAI tracing.")
             except ImportError:
                 logger.warning("Could not import langfuse.openai.OpenAI. Tracing is disabled.")

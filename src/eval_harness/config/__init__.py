@@ -7,6 +7,7 @@ Env interpolation keeps secrets and environment-specific values (regions, model
 ids, paths, endpoints) out of the committed config, satisfying the
 no-hard-coded-values requirement end to end.
 """
+
 from __future__ import annotations
 
 import os

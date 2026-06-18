@@ -4,6 +4,7 @@
 
 Exits non-zero when the quality gate fails, so it drops straight into CI.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,6 +51,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         client = NullLangfuseClient()
     else:
         from .langfuse_client import SDKLangfuseClient
+
         client = SDKLangfuseClient()
     engine = EvalEngine.from_config(config, langfuse_client=client)
     run = engine.run()

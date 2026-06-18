@@ -1,4 +1,5 @@
 """Langfuse integration tests — uses mocks, no network required."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -45,6 +46,7 @@ def test_client_works_without_env_vars(mock_langfuse_class, monkeypatch):
 
 def test_observe_transparent_fallback():
     """observe() acts as a no-op decorator when langfuse is not installed."""
+
     @observe()
     def dummy_func(x: int) -> int:
         return x + 1

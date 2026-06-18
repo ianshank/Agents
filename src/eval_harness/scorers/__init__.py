@@ -1,4 +1,5 @@
 """Built-in scorers. Each registers under a stable name (plus aliases)."""
+
 from __future__ import annotations
 
 import json
@@ -126,9 +127,7 @@ class LLMJudgeScorer(Scorer):
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
         if ctx.judge is None:
             raise RuntimeError(f"scorer '{self.name}' requires a judge but none was configured")
-        prompt = self.prompt_template.format(
-            input=item.inputs, expected=item.expected, output=output.output
-        )
+        prompt = self.prompt_template.format(input=item.inputs, expected=item.expected, output=output.output)
         verdict = ctx.judge.evaluate(prompt, context={"item_id": item.id})
         return ScoreResult(
             self.name,

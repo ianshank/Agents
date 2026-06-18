@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for scripts/validate.py — harness enforcement script."""
+
 from __future__ import annotations
 
 import json
@@ -12,6 +13,7 @@ import yaml
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write_schema(tmp: Path) -> Path:
     """Write the canonical features.schema.json to tmp and return the path."""
@@ -105,6 +107,7 @@ def _run_validate(tmp: Path, extra_args: str = "") -> subprocess.CompletedProces
 # Schema validation tests
 # ---------------------------------------------------------------------------
 
+
 class TestSchemaValidation:
     """Tests for JSON schema enforcement of features.yaml."""
 
@@ -139,6 +142,7 @@ class TestSchemaValidation:
 # ---------------------------------------------------------------------------
 # DAG tests
 # ---------------------------------------------------------------------------
+
 
 class TestDAGValidation:
     """Tests for dependency graph integrity checks."""
@@ -177,6 +181,7 @@ class TestDAGValidation:
 # Tier filtering tests
 # ---------------------------------------------------------------------------
 
+
 class TestTierFiltering:
     """Tests for tier-based command execution filtering."""
 
@@ -201,6 +206,7 @@ class TestTierFiltering:
 # Done feature validation tests
 # ---------------------------------------------------------------------------
 
+
 class TestDoneFeatureValidation:
     """Tests for validation_command execution on done features."""
 
@@ -211,7 +217,7 @@ class TestDoneFeatureValidation:
                 id="F-001",
                 status="done",
                 tier="fast",
-                validation_command="python -c \"import sys; sys.exit(0)\"",
+                validation_command='python -c "import sys; sys.exit(0)"',
                 implemented_in="abc123",
             ),
         ]
@@ -226,7 +232,7 @@ class TestDoneFeatureValidation:
                 id="F-001",
                 status="done",
                 tier="fast",
-                validation_command="python -c \"import sys; sys.exit(1)\"",
+                validation_command='python -c "import sys; sys.exit(1)"',
                 implemented_in="abc123",
             ),
         ]
@@ -239,6 +245,7 @@ class TestDoneFeatureValidation:
 # ---------------------------------------------------------------------------
 # Single feature check tests
 # ---------------------------------------------------------------------------
+
 
 class TestSingleFeatureCheck:
     """Tests for --check F-XXX mode."""

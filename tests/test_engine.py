@@ -12,6 +12,7 @@ from eval_harness.version import SCHEMA_VERSION
 def _fixed_clock():
     return datetime(2026, 1, 1, tzinfo=timezone.utc)
 
+
 CONFIG = {
     "schema_version": SCHEMA_VERSION,
     "run": {"name": "t", "run_id": "fixed-1", "seed": 1},

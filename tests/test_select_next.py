@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for scripts/select_next.py — DAG-aware feature selector."""
+
 from __future__ import annotations
 
 import subprocess
@@ -11,6 +12,7 @@ import yaml
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write_features(tmp: Path, features: list[dict[str, Any]]) -> Path:
     """Write a features.yaml file and return its path."""
@@ -50,6 +52,7 @@ def _run_select_next(tmp: Path) -> subprocess.CompletedProcess[str]:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestSelectNextInProgress:
     """Tests for resuming in-progress features."""
