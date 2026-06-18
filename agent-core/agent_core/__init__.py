@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from .async_loop import AsyncLoopController, ParallelClaimRunner
 from .budget import BudgetExceededError, BudgetLedger
 from .calibration import (
     Bin,
@@ -26,6 +27,7 @@ from .calibration import (
     wilson_interval,
 )
 from .config import (
+    AsyncConfig,
     BudgetConfig,
     CalibrationConfig,
     ConfigError,
@@ -58,6 +60,7 @@ from .persistence import (
     save_run,
 )
 from .protocols import (
+    AsyncCycleRunner,
     CostEstimator,
     CycleResult,
     CycleRunner,
@@ -101,6 +104,9 @@ __all__ = [
     "CALIBRATOR_FACTORIES",
     "RUN_STATE_SCHEMA_VERSION",
     "SCHEMA_VERSION",
+    "AsyncConfig",
+    "AsyncCycleRunner",
+    "AsyncLoopController",
     "Bin",
     "BrierDecomposition",
     "BudgetCondition",
@@ -130,6 +136,7 @@ __all__ = [
     "LoopController",
     "MaxCyclesCondition",
     "NoProgressCondition",
+    "ParallelClaimRunner",
     "RecalibrationConfig",
     "RuleSanitizer",
     "RunResult",
