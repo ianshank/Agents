@@ -6,6 +6,7 @@ on:
     paths: ["agent-core/**", ".github/workflows/agent-core-ci.yml"]
   pull_request:
     paths: ["agent-core/**", ".github/workflows/agent-core-ci.yml"]
+  workflow_dispatch:
 
 permissions:
   contents: read

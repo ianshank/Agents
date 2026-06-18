@@ -234,24 +234,42 @@ class IsotonicCalibrator:
         order = sorted(range(len(probs)), key=lambda i: probs[i])
         xs = [probs[i] for i in order]
         ys = [float(outcomes[i]) for i in order]
-        # PAV: blocks of (sum, weight); merge while non-monotonic
+        # Pre-aggregate identical probabilities to remove input-order sensitivity.
+        # Ties at the same x become a single weighted block before PAV runs.
+        xs_u: list[float] = []
+        ys_u: list[float] = []
+        ws_u: list[float] = []
+        i = 0
+        while i < len(xs):
+            j = i
+            while j < len(xs) and xs[j] == xs[i]:
+                j += 1
+            n = j - i
+            xs_u.append(xs[i])
+            ys_u.append(sum(ys[i:j]) / n)
+            ws_u.append(float(n))
+            i = j
+        # PAV: blocks of (weighted average, weight, constituent xs); merge while non-monotonic.
+        # Track all xs per block so that every original training point is retained in _x.
         values: list[float] = []
         weights: list[float] = []
-        knots: list[float] = []
-        for x, y in zip(xs, ys, strict=False):
+        block_xs: list[list[float]] = []
+        for x, y, w in zip(xs_u, ys_u, ws_u, strict=True):
             values.append(y)
-            weights.append(1.0)
-            knots.append(x)
+            weights.append(w)
+            block_xs.append([x])
             while len(values) > 1 and values[-2] > values[-1]:
-                v2, w2 = values.pop(), weights.pop()
-                v1, w1 = values.pop(), weights.pop()
+                v2, w2, bx2 = values.pop(), weights.pop(), block_xs.pop()
+                v1, w1, bx1 = values.pop(), weights.pop(), block_xs.pop()
                 merged_w = w1 + w2
                 values.append((v1 * w1 + v2 * w2) / merged_w)
                 weights.append(merged_w)
-                knots.pop()  # keep the left-most knot of the merged block
-        # After PAV, `knots`/`values` align 1:1 with blocks (left-most x retained).
-        self._x = list(knots)
-        self._y = list(values)
+                block_xs.append(bx1 + bx2)  # sorted left→right (bx1 < bx2 by construction)
+        # Expand each block back to its original xs, all with the block's calibrated value.
+        # Within a block y0==y1, so linear interpolation returns the constant; between blocks
+        # it interpolates smoothly across the block boundary.
+        self._x = [x for bx in block_xs for x in bx]
+        self._y = [v for v, bx in zip(values, block_xs, strict=True) for _ in bx]
         self._fitted = True
         return self
 
