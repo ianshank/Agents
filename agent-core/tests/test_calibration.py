@@ -61,6 +61,11 @@ def test_auroc_requires_both_classes():
         auroc([0.1, 0.2], [1, 1])
 
 
+def test_auroc_rejects_non_binary_labels():
+    with pytest.raises(ValueError, match="binary"):
+        auroc([0.9, 0.5, 0.1], [1, 2, 0])
+
+
 def test_wilson_interval_contains_point_and_bounded():
     lo, hi = wilson_interval(7, 10, z=1.96)
     assert 0.0 <= lo < 0.7 < hi <= 1.0
