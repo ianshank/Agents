@@ -13,8 +13,8 @@ import warnings
 from collections.abc import Callable
 from typing import Any
 
-__version__ = "1.1.0"  # package (distribution) version — single source of truth
-SCHEMA_VERSION = "1.1.0"  # config-schema version; may diverge from __version__ later
+__version__ = "1.2.0"  # package (distribution) version — single source of truth
+SCHEMA_VERSION = "1.2.0"  # config-schema version; may diverge from __version__ later
 
 # --- config migrations -------------------------------------------------------
 # Each migration maps an *input* version to a callable that returns a dict at
@@ -37,8 +37,19 @@ def _migrate_1_0_0_to_1_1_0(data: ConfigDict) -> ConfigDict:
     return data
 
 
+def _migrate_1_1_0_to_1_2_0(data: ConfigDict) -> ConfigDict:
+    """v1.1.0 → v1.2.0: additive new config sections (sanitizer, golden, recalibration, async_exec).
+
+    No key renames; new sections absent in old configs default cleanly via ``FrameworkConfig``.
+    """
+    data = dict(data)
+    data["version"] = "1.2.0"
+    return data
+
+
 MIGRATIONS: dict[str, Migration] = {
     "1.0.0": _migrate_1_0_0_to_1_1_0,
+    "1.1.0": _migrate_1_1_0_to_1_2_0,
 }
 
 
