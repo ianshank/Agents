@@ -26,10 +26,12 @@ interfaces. See `GAP_ANALYSIS.md` for exactly what is built vs. seamed vs. absen
 
 ## Install & test
 ```bash
-pip install pytest pytest-cov hypothesis ruff mypy --break-system-packages
-python -m pytest --cov     # 64 tests (incl. property-based), 96% branch coverage
+cd agent-core               # monorepo subfolder; run all dev commands from here
+pip install -e ".[dev]"     # editable install + pinned toolchain (zero runtime deps)
+python -m pytest --cov      # property-based incl.; branch coverage gated at 95%
 ruff check agent_core tests
-mypy agent_core            # clean
+ruff format --check agent_core tests
+mypy agent_core             # strict
 ```
 
 ## Enforced safety guarantees (post peer review)
@@ -88,5 +90,5 @@ agent_core/
   loop.py          LoopController (admission gate -> cycle -> outcome check)
   calibration.py   bins, ECE, MCE, Brier+Murphy, AUROC, Wilson, selective, isotonic
   logging_util.py  config-driven logging + debug_span
-tests/             54 tests across all modules
+tests/             70 tests across all modules
 ```
