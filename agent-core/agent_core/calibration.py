@@ -198,14 +198,20 @@ def selective_risk_coverage(
     n = len(probs)
     order = sorted(range(n), key=lambda i: probs[i], reverse=True)
     errors = 0
+    committed = 0
     points: list[tuple[float, float]] = []
-    for committed, idx in enumerate(order, start=1):
-        # treat a commit as predicting "true"; error if outcome is 0
-        if outcomes[idx] == 0:
-            errors += 1
-        coverage = committed / n
-        risk = errors / committed
-        points.append((coverage, risk))
+    i = 0
+    while i < len(order):
+        # advance through the entire tie group (same probability threshold)
+        # so that tied items are committed as one step, not in input order.
+        tie_prob = probs[order[i]]
+        while i < len(order) and probs[order[i]] == tie_prob:
+            committed += 1
+            if outcomes[order[i]] == 0:
+                errors += 1
+            i += 1
+        # emit one point per unique threshold
+        points.append((committed / n, errors / committed))
     return points
 
 

@@ -118,6 +118,26 @@ def test_selective_coverage_is_monotonic():
     assert all(b >= a for a, b in pairwise(coverages))
 
 
+def test_selective_coverage_stable_under_tied_probabilities() -> None:
+    """Tied probabilities must be committed as a single threshold step.
+
+    The (coverage, risk) curve must be identical regardless of the order in which
+    tied items appear in the input — previously one point was appended per sample,
+    making the result input-order-sensitive.
+    """
+    # Two items at p=0.8: one correct (y=1), one wrong (y=0).
+    # They form a tie group; both must be committed together before emitting a point.
+    probs_fwd = [0.9, 0.8, 0.8, 0.5]
+    outcomes_fwd = [1, 1, 0, 0]
+    probs_rev = [0.9, 0.8, 0.8, 0.5]
+    outcomes_rev = [1, 0, 1, 0]  # tied pair swapped
+    pts_fwd = selective_risk_coverage(probs_fwd, outcomes_fwd)
+    pts_rev = selective_risk_coverage(probs_rev, outcomes_rev)
+    assert pts_fwd == pts_rev, "curve must be invariant under permutation of tied inputs"
+    # Exactly 3 points (one per unique threshold: 0.9, 0.8, 0.5), not 4
+    assert len(pts_fwd) == 3
+
+
 def test_ship_gate_rejects_calibrated_but_undiscriminating_model():
     # base-rate forecaster: perfectly calibrated (ECE 0) but AUROC 0.5 -> must FAIL
     probs = [0.5] * 10
