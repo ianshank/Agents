@@ -11,6 +11,13 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 - `SanitizerConfig` registered in `FrameworkConfig` (additive; old configs get defaults).
 - `docs/sanitizer-threat-model.md` documenting covered categories and known bypasses.
 
+### Added (B5)
+- `persistence` module: `run_result_to_dict`/`from_dict`, `cycle_state_to_dict`/`from_dict`,
+  `calibrator_to_dict`/`from_dict`, `save_run`, `load_run`.
+- `RUN_STATE_SCHEMA_VERSION = "1.0.0"` — independent of config `SCHEMA_VERSION`.
+- Calibrator serialization is behavioural: restored calibrators produce bit-identical predictions.
+- Unknown-key rejection mirrors `config.from_dict` strictness.
+
 ### Added (B3)
 - `recalibration` module: `TemperatureScaler` (golden-section NLL minimisation),
   `CalibratorRegistry` (fit-per-domain, freeze → read-only), `make_calibrator`,

@@ -135,8 +135,8 @@ class CalibratorRegistry:
         self._config = config
         self._frozen = False
         self._calibrators: dict[str, Calibrator] = {}
-        # per-domain data stored keyed by domain so re-fit overwrites, not appends
-        self._domain_data: dict[str, tuple[list[float], list[int]]] = {}
+        self._global_probs: list[float] = []
+        self._global_outcomes: list[int] = []
         self._log = get_logger("agent_core.recalibration")
 
     def fit(self, domain: str, probs: Sequence[float], outcomes: Sequence[int]) -> None:
@@ -149,20 +149,19 @@ class CalibratorRegistry:
             cal = make_calibrator(self._config.default_calibrator, self._config)
             cal = cal.fit(list(probs), list(outcomes))
             self._calibrators[domain] = cal
-            # overwrite (not extend) so repeated fit for same domain doesn't duplicate data
-            self._domain_data[domain] = (list(probs), list(outcomes))
+            self._global_probs.extend(probs)
+            self._global_outcomes.extend(outcomes)
 
     def freeze(self) -> CalibratorRegistry:
         """Fit global fallback on all seen data, then lock registry against further fit()."""
         if self._frozen:
             return self  # idempotent — safe to call multiple times
-        all_probs = [p for ps, _ in self._domain_data.values() for p in ps]
-        all_outcomes = [o for _, os in self._domain_data.values() for o in os]
-        if all_probs:
+        if self._global_probs:
             global_cal = make_calibrator(self._config.default_calibrator, self._config)
-            global_cal = global_cal.fit(all_probs, all_outcomes)
+            global_cal = global_cal.fit(self._global_probs, self._global_outcomes)
             self._calibrators["__global__"] = global_cal
-        self._domain_data.clear()  # release training data; fitted calibrators are enough
+        self._global_probs.clear()  # release training data; fitted calibrators are enough
+        self._global_outcomes.clear()
         self._frozen = True
         return self
 
