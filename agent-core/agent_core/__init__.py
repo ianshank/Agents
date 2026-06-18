@@ -57,7 +57,9 @@ logging.getLogger("agent_core").addHandler(logging.NullHandler())
 
 # --- backwards-compat shim ---------------------------------------------------
 # ``ece`` was the public name before 1.1.0; keep it working with a warning.
-ece = deprecated_alias("expected_calibration_error")(expected_calibration_error)
+ece = deprecated_alias("expected_calibration_error", deprecated_name="ece")(
+    expected_calibration_error
+)
 
 __all__ = [
     "SCHEMA_VERSION",

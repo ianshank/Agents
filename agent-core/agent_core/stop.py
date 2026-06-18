@@ -71,7 +71,7 @@ class NoProgressCondition:
         r = ctx.last_result
         if r is None or ctx.prev_unresolved is None:
             return None
-        if tuple(r.new_unresolved) == tuple(ctx.prev_unresolved):
+        if set(r.new_unresolved) == set(ctx.prev_unresolved):
             return StopOutcome(
                 StopReason.STALL,
                 detail="unresolved set unchanged since previous cycle",

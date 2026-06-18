@@ -29,3 +29,9 @@ def test_deprecated_alias_still_works_with_warning():
     with pytest.warns(DeprecationWarning):
         legacy = agent_core.ece(probs, outcomes, n_bins=10)
     assert legacy == expected_calibration_error(probs, outcomes, n_bins=10)
+
+
+def test_ece_deprecation_warning_names_old_symbol() -> None:
+    """The deprecation warning must say 'ece' is deprecated, not the new name."""
+    with pytest.warns(DeprecationWarning, match="'ece' is deprecated"):
+        agent_core.ece([0.9, 0.1], [1, 0], n_bins=2)

@@ -60,6 +60,19 @@ def test_no_progress_detects_unchanged_set():
     assert cond.evaluate(_ctx(last_result=res, prev_unresolved=("a",))) is None
 
 
+def test_no_progress_reordered_unresolved_still_stalls() -> None:
+    """Reordering of unresolved claims must still be detected as a stall."""
+    gate = Gate([NoProgressCondition()])
+    result = CycleResult(cost=1.0, new_unresolved=("b", "a"), max_conf_delta=0.1)
+    ctx = _ctx(
+        cycle_index=2,
+        last_result=result,
+        prev_unresolved=("a", "b"),  # same claims, different order
+    )
+    outcome = gate.evaluate(ctx)
+    assert outcome is not None and outcome.reason is StopReason.STALL
+
+
 def test_gate_returns_first_non_none():
     # CAP registered before BUDGET: when both fire, CAP wins
     gate = Gate([MaxCyclesCondition(3), BudgetCondition()])

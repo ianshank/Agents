@@ -54,21 +54,26 @@ def migrate_config(data: ConfigDict) -> ConfigDict:
         migration = MIGRATIONS.get(version)
         if migration is None:
             raise ValueError(
-                f"no migration path from config version {version!r} " f"to {SCHEMA_VERSION!r}"
+                f"no migration path from config version {version!r} to {SCHEMA_VERSION!r}"
             )
         data = migration(data)
         version = data.get("version", SCHEMA_VERSION)
     return data
 
 
-def deprecated_alias(new_name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+def deprecated_alias(
+    new_name: str,
+    deprecated_name: str | None = None,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Wrap a callable so calling it emits a DeprecationWarning but still works."""
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        _old_name = deprecated_name if deprecated_name is not None else func.__name__
+
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             warnings.warn(
-                f"{func.__name__!r} is deprecated; use {new_name!r} instead.",
+                f"{_old_name!r} is deprecated; use {new_name!r} instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )

@@ -53,3 +53,8 @@ def test_partial_override_uses_defaults_elsewhere():
     cfg = FrameworkConfig.from_dict({"loop": {"max_cycles": 9}})
     assert cfg.loop.max_cycles == 9
     assert cfg.budget == BudgetConfig()  # untouched section keeps defaults
+
+
+def test_from_dict_invalid_section_value_raises_config_error() -> None:
+    with pytest.raises(ConfigError):
+        FrameworkConfig.from_dict({"loop": {"max_cycles": "not_an_int"}})

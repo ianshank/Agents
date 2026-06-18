@@ -107,3 +107,14 @@ def test_cap_backstop_path():
     res = ctrl.run(CycleState(cycle_index=1, unresolved=("a",)))
     assert res.reason is StopReason.CAP
     assert res.cycles_completed == 3
+
+
+def test_run_cycles_completed_from_nonzero_initial_cycle_index() -> None:
+    """cycles_completed counts cycles run in THIS call, not absolute cycle_index."""
+    cfg = FrameworkConfig.from_dict({"loop": {"max_cycles": 10}})
+    # ConvergingRunner with converge_at=1 converges immediately when cycle_index >= 1
+    ctrl = _controller(cfg, ConvergingRunner(converge_at=1), FixedEstimator(1.0))
+    initial = CycleState(cycle_index=5, unresolved=("x",))  # resumed from cycle 5
+    result = ctrl.run(initial)
+    assert result.reason is StopReason.SUCCESS
+    assert result.cycles_completed == 1  # ran 1 cycle, not 5

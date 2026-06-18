@@ -61,6 +61,11 @@ def test_auroc_requires_both_classes():
         auroc([0.1, 0.2], [1, 1])
 
 
+def test_auroc_rejects_non_binary_labels() -> None:
+    with pytest.raises(ValueError, match="binary labels"):
+        auroc([0.5, 0.6, 0.7], [0, 1, 2])
+
+
 def test_wilson_interval_contains_point_and_bounded():
     lo, hi = wilson_interval(7, 10, z=1.96)
     assert 0.0 <= lo < 0.7 < hi <= 1.0
@@ -76,7 +81,7 @@ def test_isotonic_reduces_ece_and_is_monotonic():
     # systematically overconfident: predicted = actual_acc + 0.2
     probs, outcomes = [], []
     for pred, acc in [(0.6, 0.4), (0.7, 0.5), (0.8, 0.6), (0.9, 0.7)]:
-        n_correct = int(round(acc * 10))
+        n_correct = round(acc * 10)
         probs += [pred] * 10
         outcomes += [1] * n_correct + [0] * (10 - n_correct)
 

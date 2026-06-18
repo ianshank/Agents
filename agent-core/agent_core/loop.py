@@ -169,7 +169,7 @@ class LoopController:
         return RunResult(
             reason=last_outcome.reason,
             partial=last_outcome.partial,
-            cycles_completed=state.cycle_index - 1,
+            cycles_completed=state.cycle_index - initial_state.cycle_index,
             spent=self._ledger.spent,
             reserve_available=self._ledger.reserve,
             final_state=state,
