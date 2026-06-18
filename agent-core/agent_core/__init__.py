@@ -46,6 +46,17 @@ from .golden import (
 )
 from .logging_util import configure_logging, debug_span, get_logger
 from .loop import LoopController, RunResult
+from .persistence import (
+    RUN_STATE_SCHEMA_VERSION,
+    calibrator_from_dict,
+    calibrator_to_dict,
+    cycle_state_from_dict,
+    cycle_state_to_dict,
+    load_run,
+    run_result_from_dict,
+    run_result_to_dict,
+    save_run,
+)
 from .protocols import (
     CostEstimator,
     CycleResult,
@@ -88,6 +99,7 @@ ece = deprecated_alias("expected_calibration_error", deprecated_name="ece")(
 
 __all__ = [
     "CALIBRATOR_FACTORIES",
+    "RUN_STATE_SCHEMA_VERSION",
     "SCHEMA_VERSION",
     "Bin",
     "BrierDecomposition",
@@ -133,17 +145,25 @@ __all__ = [
     "brier_decomposition",
     "brier_score",
     "build_sanitized_claims",
+    "calibrator_from_dict",
+    "calibrator_to_dict",
     "cohen_kappa",
     "configure_logging",
+    "cycle_state_from_dict",
+    "cycle_state_to_dict",
     "debug_span",
     "ece",
     "evaluate_calibration",
     "evaluate_on_split",
     "expected_calibration_error",
     "get_logger",
+    "load_run",
     "make_calibrator",
     "maximum_calibration_error",
     "reliability_bins",
+    "run_result_from_dict",
+    "run_result_to_dict",
+    "save_run",
     "selective_risk_coverage",
     "split",
     "wilson_interval",
