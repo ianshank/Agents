@@ -105,12 +105,15 @@ def test_split_is_deterministic_for_seed() -> None:
     assert split(gs, GoldenConfig()) == split(gs, GoldenConfig())
 
 
-def test_split_seed_override_differs_from_default() -> None:
+def test_split_seed_override_changes_assignments() -> None:
+    # sha256-based bucketing: P(identical 200-item split for two seeds) < 1e-60.
+    # Compare train ID sets rather than GoldenSplit equality for a tighter assertion.
     gs = _big_set(200)
     sp1 = split(gs, GoldenConfig())
     sp2 = split(gs, GoldenConfig(), seed=999)
-    # Different seeds should produce different splits (with very high probability)
-    assert sp1 != sp2
+    train1 = frozenset(i.item_id for i in sp1.train.items)
+    train2 = frozenset(i.item_id for i in sp2.train.items)
+    assert train1 != train2
 
 
 @given(n=st.integers(min_value=200, max_value=2000))
