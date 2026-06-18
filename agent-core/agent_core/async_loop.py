@@ -95,16 +95,7 @@ class AsyncLoopController:
         hard_limit = self._config.loop.absolute_max_cycles
 
         while True:
-            # --- controller-level termination backstop (gate-independent) ----
             iterations += 1
-            if iterations > hard_limit:
-                self._log.error("absolute cycle limit %d hit; aborting", hard_limit)
-                last_outcome = StopOutcome(
-                    StopReason.ABORTED,
-                    detail=f"absolute_max_cycles={hard_limit} exceeded (check gate config)",
-                    partial=True,
-                )
-                break
 
             projected = self._estimator.project(state)
             admit_ctx = self._context(
@@ -117,6 +108,18 @@ class AsyncLoopController:
             if denied is not None:
                 self._log.info("admission stop: %s (%s)", denied.reason.value, denied.detail)
                 last_outcome = denied
+                break
+
+            # --- controller-level termination backstop (gate-independent) ----
+            # Runs AFTER admission so MaxCyclesCondition can emit CAP rather than
+            # this backstop emitting ABORTED when absolute_max_cycles == max_cycles.
+            if iterations > hard_limit:
+                self._log.error("absolute cycle limit %d hit; aborting", hard_limit)
+                last_outcome = StopOutcome(
+                    StopReason.ABORTED,
+                    detail=f"absolute_max_cycles={hard_limit} exceeded (check gate config)",
+                    partial=True,
+                )
                 break
 
             # grant a hard allowance = whatever remains under the loop ceiling

@@ -324,3 +324,28 @@ def test_parallel_runner_deduplicates_new_unresolved() -> None:
     state = CycleState(unresolved=("a", "b", "c"))
     result = _run(ParallelClaimRunner(AsyncConfig(), verify).run(state))
     assert result.new_unresolved == ("shared",)  # deduplicated, not ("shared","shared","shared")
+
+
+def test_admission_fires_cap_before_hard_limit() -> None:
+    """When absolute_max_cycles == max_cycles, the MaxCyclesCondition in the default
+    admission gate must emit CAP before the hard-limit backstop emits ABORTED."""
+
+    class ProgressingRunner:
+        """Returns a different unresolved set each cycle (avoids NoProgress/STALL)
+        but never converges — only MaxCyclesCondition can stop this runner."""
+
+        def __init__(self) -> None:
+            self._n = 0
+
+        async def run(self, state: CycleState) -> CycleResult:
+            self._n += 1
+            return CycleResult(cost=0.0, new_unresolved=(f"c{self._n}",), max_conf_delta=0.5)
+
+    cfg = FrameworkConfig.from_dict({"loop": {"max_cycles": 3, "absolute_max_cycles": 3}})
+    result = _run(
+        AsyncLoopController(cfg, BudgetLedger(cfg), ProgressingRunner(), FixedEstimator(0.0)).run(
+            CycleState(unresolved=("a",))
+        )
+    )
+    assert result.reason is StopReason.CAP
+    assert result.cycles_completed == 3
