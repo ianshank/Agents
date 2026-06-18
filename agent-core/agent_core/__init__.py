@@ -33,6 +33,7 @@ from .config import (
     GoldenConfig,
     LoggingConfig,
     LoopConfig,
+    RecalibrationConfig,
     SanitizerConfig,
 )
 from .golden import (
@@ -52,6 +53,12 @@ from .protocols import (
     CycleState,
     StopOutcome,
     StopReason,
+)
+from .recalibration import (
+    CALIBRATOR_FACTORIES,
+    CalibratorRegistry,
+    TemperatureScaler,
+    make_calibrator,
 )
 from .sanitize import (
     Finding,
@@ -80,6 +87,7 @@ ece = deprecated_alias("expected_calibration_error", deprecated_name="ece")(
 )
 
 __all__ = [
+    "CALIBRATOR_FACTORIES",
     "SCHEMA_VERSION",
     "Bin",
     "BrierDecomposition",
@@ -90,6 +98,7 @@ __all__ = [
     "CalibrationConfig",
     "CalibrationReport",
     "Calibrator",
+    "CalibratorRegistry",
     "ConfigError",
     "ConvergenceCondition",
     "CostEstimator",
@@ -109,6 +118,7 @@ __all__ = [
     "LoopController",
     "MaxCyclesCondition",
     "NoProgressCondition",
+    "RecalibrationConfig",
     "RuleSanitizer",
     "RunResult",
     "SanitizationResult",
@@ -117,6 +127,7 @@ __all__ = [
     "SanitizerConfig",
     "StopOutcome",
     "StopReason",
+    "TemperatureScaler",
     "__version__",
     "auroc",
     "brier_decomposition",
@@ -130,6 +141,7 @@ __all__ = [
     "evaluate_on_split",
     "expected_calibration_error",
     "get_logger",
+    "make_calibrator",
     "maximum_calibration_error",
     "reliability_bins",
     "selective_risk_coverage",

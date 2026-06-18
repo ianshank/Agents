@@ -11,6 +11,14 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 - `SanitizerConfig` registered in `FrameworkConfig` (additive; old configs get defaults).
 - `docs/sanitizer-threat-model.md` documenting covered categories and known bypasses.
 
+### Added (B3)
+- `recalibration` module: `TemperatureScaler` (golden-section NLL minimisation),
+  `CalibratorRegistry` (fit-per-domain, freeze → read-only), `make_calibrator`,
+  `CALIBRATOR_FACTORIES` (factory type `Callable[[RecalibrationConfig], Calibrator]`).
+- `RecalibrationConfig` registered in `FrameworkConfig` (additive; old configs get defaults).
+  All temperature constants (bracket bounds, iterations, tolerance, clamp epsilon) are config
+  fields — no literals in logic.
+
 ### Added (B2)
 - `golden` module: `GoldenItem`, `GoldenSet`, `GoldenSplit`, `split` (deterministic hash-bucket),
   `cohen_kappa`, `evaluate_on_split` (enforces held-out discipline in code).
