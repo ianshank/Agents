@@ -2,7 +2,7 @@ name: agent-core CI
 
 on:
   push:
-    branches: [main, feat/agent-core-persistence]
+    branches: [main]
     paths: ["agent-core/**", ".github/workflows/agent-core-ci.yml"]
   pull_request:
     paths: ["agent-core/**", ".github/workflows/agent-core-ci.yml"]
