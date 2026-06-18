@@ -306,6 +306,17 @@ def test_save_is_deterministic() -> None:
     assert c1 == c2
 
 
+def test_save_run_cleans_up_tmp_on_failure() -> None:
+    """save_run removes the .tmp file when the write fails mid-way."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Write to a path whose parent directory does not exist; open() raises OSError.
+        path = os.path.join(tmpdir, "missing_subdir", "run.json")
+        with pytest.raises(OSError):
+            save_run(_make_run_result(), path)
+        # The .tmp was never created, so suppressed unlink is a no-op.
+        assert not os.path.exists(path + ".tmp")
+
+
 def test_save_is_compact_no_whitespace() -> None:
     """The saved JSON uses compact separators (no spaces after : or ,)."""
     result = _make_run_result()

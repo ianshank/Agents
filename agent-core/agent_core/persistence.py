@@ -17,6 +17,7 @@ Real controllers always set a finite allowance before running cycles.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import os
@@ -228,13 +229,22 @@ def calibrator_from_dict(d: dict[str, Any]) -> Calibrator:
 
 
 def save_run(result: RunResult, path: str) -> None:
-    """Write RunResult to a JSON file.  Atomic: writes to temp then renames."""
+    """Write RunResult to a JSON file.  Atomic: writes to temp then renames.
+
+    Cleans up the temporary file if the write or rename fails so no partial
+    state is left on disk.
+    """
     d = run_result_to_dict(result)
     serialized = json.dumps(d, sort_keys=True, separators=(",", ":"))
     tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(serialized)
-    os.replace(tmp, path)
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(serialized)
+        os.replace(tmp, path)
+    except Exception:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp)
+        raise
 
 
 def load_run(path: str) -> RunResult:
