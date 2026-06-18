@@ -145,8 +145,8 @@ def test_run_result_migrates_from_0_9_0() -> None:
     """A 0.9.0 payload (no schema_version field) migrates to 1.0.0."""
     result = _make_run_result()
     d = run_result_to_dict(result)
-    # Simulate a 0.9.0 payload: schema_version was absent, now we mark it
-    d["schema_version"] = "0.9.0"
+    # Simulate a real 0.9.0 payload: the field was ABSENT (not "0.9.0")
+    del d["schema_version"]
     restored = run_result_from_dict(d)
     assert restored == result
 

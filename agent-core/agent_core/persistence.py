@@ -52,7 +52,9 @@ _RUN_STATE_MIGRATIONS: dict[str, _MigrationFn] = {
 def _migrate_run_state(data: _RunStateDict) -> _RunStateDict:
     """Bring a run-state dict up to RUN_STATE_SCHEMA_VERSION."""
     data = dict(data)
-    version = str(data.get("schema_version", RUN_STATE_SCHEMA_VERSION))
+    # Pre-release (0.9.0) payloads had no schema_version key; treat absent as "0.9.0"
+    # so the migration chain runs rather than silently skipping it.
+    version = str(data.get("schema_version", "0.9.0"))
     seen: set[str] = set()
     while version != RUN_STATE_SCHEMA_VERSION:
         if version in seen:  # pragma: no cover  # cycle guard; unreachable via valid migrations
