@@ -147,6 +147,8 @@ class RecalibrationConfig:
             raise ConfigError("recalibration temperature bracket must satisfy 0 < lo < hi")
         if self.temperature_max_iter < 1:
             raise ConfigError("recalibration.temperature_max_iter must be >= 1")
+        if not self.temperature_tol > 0.0:
+            raise ConfigError("recalibration.temperature_tol must be > 0")
         if not 0.0 < self.clamp_eps < 0.5:
             raise ConfigError("recalibration.clamp_eps must be in (0, 0.5)")
 
