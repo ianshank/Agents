@@ -58,19 +58,26 @@ class TemperatureScaler:
                 total -= y * math.log(p_hat) + (1 - y) * math.log(1.0 - p_hat)
             return total / len(logits)
 
-        # Golden-section search over [lo, hi] for minimum NLL
+        # Golden-section search over [lo, hi] for minimum NLL.
+        # Each iteration reuses one of the two previously-evaluated points, so only
+        # one new _nll() call per iteration instead of two (O(dataset) each).
         a, b = cfg.temperature_search_lo, cfg.temperature_search_hi
         c = b - (b - a) / _GR
         d = a + (b - a) / _GR
+        fc, fd = _nll(c), _nll(d)
         for _ in range(cfg.temperature_max_iter):
-            if _nll(c) < _nll(d):
+            if fc < fd:
                 b = d
+                d, fd = c, fc
+                c = b - (b - a) / _GR
+                fc = _nll(c)
             else:
                 a = c
+                c, fc = d, fd
+                d = a + (b - a) / _GR
+                fd = _nll(d)
             if abs(b - a) < cfg.temperature_tol:
                 break
-            c = b - (b - a) / _GR
-            d = a + (b - a) / _GR
         self._T = (a + b) / 2.0
         return self
 
