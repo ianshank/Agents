@@ -29,6 +29,10 @@ class TemperatureScaler:
         self._T: float | None = None  # None = not fitted
 
     def fit(self, probs: Sequence[float], outcomes: Sequence[int]) -> TemperatureScaler:
+        if len(probs) != len(outcomes):
+            raise ValueError("probs and outcomes must have equal length")
+        if not probs:
+            raise ValueError("TemperatureScaler.fit requires at least one sample")
         cfg = self._config
         eps = cfg.clamp_eps
 
@@ -40,7 +44,11 @@ class TemperatureScaler:
             return math.log(q / (1.0 - q))
 
         def _sigmoid(x: float) -> float:
-            return 1.0 / (1.0 + math.exp(-x))
+            # Numerically stable: avoid overflow for large |x|.
+            if x >= 0:
+                return 1.0 / (1.0 + math.exp(-x))
+            ex = math.exp(x)
+            return ex / (1.0 + ex)
 
         logits = [_logit(p) for p in probs]
         ys = list(outcomes)
@@ -133,6 +141,8 @@ class CalibratorRegistry:
         """Fit a calibrator for `domain`. Raises RuntimeError if already frozen."""
         if self._frozen:
             raise RuntimeError("CalibratorRegistry is frozen; fit() is not allowed after freeze()")
+        if domain == "__global__":
+            raise ConfigError("'__global__' is a reserved domain name")
         with debug_span(self._log, "recalibration.fit", domain=domain, n=len(probs)):
             cal = make_calibrator(self._config.default_calibrator, self._config)
             cal = cal.fit(list(probs), list(outcomes))
@@ -142,12 +152,15 @@ class CalibratorRegistry:
 
     def freeze(self) -> CalibratorRegistry:
         """Fit global fallback on all seen data, then lock registry against further fit()."""
+        if self._frozen:
+            return self  # idempotent — safe to call multiple times
         all_probs = [p for ps, _ in self._domain_data.values() for p in ps]
         all_outcomes = [o for _, os in self._domain_data.values() for o in os]
         if all_probs:
             global_cal = make_calibrator(self._config.default_calibrator, self._config)
             global_cal = global_cal.fit(all_probs, all_outcomes)
             self._calibrators["__global__"] = global_cal
+        self._domain_data.clear()  # release training data; fitted calibrators are enough
         self._frozen = True
         return self
 
