@@ -1,4 +1,5 @@
 """Single source of truth for package and config-schema versions."""
+
 from __future__ import annotations
 
 __version__ = "1.0.0"

@@ -4,6 +4,7 @@ Each migration upgrades a raw config dict from one schema version to the next.
 ``migrate_to_current`` chains them so a config authored against any past schema
 loads cleanly on the current code.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -51,10 +52,7 @@ def migrate_to_current(raw: dict) -> dict:
             raise ConfigError(f"migration cycle detected at version {current!r}")
         seen.add(current)  # type: ignore[arg-type]
         if current not in MIGRATIONS:
-            raise ConfigError(
-                f"no migration path from schema_version {current!r} "
-                f"to {SCHEMA_VERSION!r}"
-            )
+            raise ConfigError(f"no migration path from schema_version {current!r} to {SCHEMA_VERSION!r}")
         to_version, fn = MIGRATIONS[current]
         raw = fn(raw)
         raw["schema_version"] = to_version

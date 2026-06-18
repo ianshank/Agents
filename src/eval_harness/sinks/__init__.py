@@ -1,4 +1,5 @@
 """Built-in result sinks."""
+
 from __future__ import annotations
 
 import json
@@ -23,7 +24,7 @@ class ConsoleSink(ResultSink):
             self.lines.append(f"  {name}: mean={agg.mean:.3f} pass_rate={pr} n={agg.count}")
         if self.verbose:
             for ir in run.items:
-                self.lines.append(f"  - {ir.item.id}: {[ (s.name, round(s.value,3)) for s in ir.scores ]}")
+                self.lines.append(f"  - {ir.item.id}: {[(s.name, round(s.value, 3)) for s in ir.scores]}")
         print("\n".join(self.lines))
 
 

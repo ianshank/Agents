@@ -10,15 +10,14 @@ def mock_openai():
     with patch("openai.OpenAI") as mock:
         yield mock
 
+
 def test_openai_judge_initialization(mock_openai):
     judge = OpenAIJudge(
-        model="test-model",
-        base_url="http://localhost:1234",
-        api_key="test-key",
-        extra_body={"hello": "world"}
+        model="test-model", base_url="http://localhost:1234", api_key="test-key", extra_body={"hello": "world"}
     )
     assert judge.model == "test-model"
     mock_openai.assert_called_once_with(base_url="http://localhost:1234", api_key="test-key")
+
 
 def test_openai_judge_evaluate_success(mock_openai):
     judge = OpenAIJudge(model="test-model")
@@ -38,6 +37,7 @@ def test_openai_judge_evaluate_success(mock_openai):
     assert "thinking..." in verdict.reasoning
     assert "good" in verdict.reasoning
 
+
 def test_openai_judge_robust_json_parsing(mock_openai):
     judge = OpenAIJudge(model="test-model")
 
@@ -51,8 +51,10 @@ def test_openai_judge_robust_json_parsing(mock_openai):
     assert verdict.score == 0.5
     assert verdict.reasoning == "wrapped"
 
+
 def test_openai_judge_rate_limit_retry(mock_openai):
     import openai
+
     judge = OpenAIJudge(model="test-model")
 
     mock_chunk = MagicMock()
@@ -61,7 +63,7 @@ def test_openai_judge_rate_limit_retry(mock_openai):
 
     judge.client.chat.completions.create.side_effect = [
         openai.RateLimitError("Rate limit exceeded", response=MagicMock(), body=None),
-        [mock_chunk]
+        [mock_chunk],
     ]
 
     # Mock sleep so test doesn't actually wait

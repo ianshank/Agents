@@ -72,13 +72,15 @@ def test_langfuse_dataset_with_client():
 # ---- sinks ----
 def _run():
     item = EvalItem(id="i", inputs={}, expected=None)
-    ir = ItemResult(item=item, output=TargetOutput(output="o"),
-                    scores=[ScoreResult("acc", 1.0, True)])
+    ir = ItemResult(item=item, output=TargetOutput(output="o"), scores=[ScoreResult("acc", 1.0, True)])
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
     return RunResult(
-        run_id="r1", config_name="c", items=[ir],
+        run_id="r1",
+        config_name="c",
+        items=[ir],
         aggregate={"acc": ScoreAggregate(count=1, mean=1.0, pass_rate=1.0)},
-        started_at=now, finished_at=now,
+        started_at=now,
+        finished_at=now,
     )
 
 

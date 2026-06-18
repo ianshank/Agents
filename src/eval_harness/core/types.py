@@ -3,6 +3,7 @@
 These are deliberately plain dataclasses with no dependency on config models or
 external SDKs so they can be imported anywhere without creating import cycles.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -80,8 +81,7 @@ class RunResult:
             "started_at": self.started_at.isoformat(),
             "finished_at": self.finished_at.isoformat(),
             "aggregate": {
-                k: {"count": v.count, "mean": v.mean, "pass_rate": v.pass_rate}
-                for k, v in self.aggregate.items()
+                k: {"count": v.count, "mean": v.mean, "pass_rate": v.pass_rate} for k, v in self.aggregate.items()
             },
             "items": [
                 {

@@ -1,33 +1,36 @@
-name: agent-core CI
+name: eval-harness CI
 
 on:
   push:
     branches: [main]
-    paths: ["agent-core/**", ".github/workflows/agent-core-ci.yml"]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/eval-harness-ci.yml"
   pull_request:
-    paths: ["agent-core/**", ".github/workflows/agent-core-ci.yml"]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/eval-harness-ci.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: agent-core-${{ github.ref }}
+  group: eval-harness-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
     name: py${{ matrix.python-version }}
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: agent-core
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-    env:
-      HYPOTHESIS_PROFILE: ci
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
@@ -36,8 +39,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip "setuptools>=68"
-      - run: pip install -e ".[dev]"
-      - run: ruff check agent_core tests
-      - run: ruff format --check agent_core tests
-      - run: mypy agent_core
+      - run: pip install -e ".[dev,langfuse,openai]"
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+      - run: mypy src/eval_harness
       - run: python -m pytest --cov --cov-report=term-missing

@@ -2,6 +2,7 @@
 
 All thresholds come from GateConfig; there are no baked-in cutoffs.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -31,11 +32,7 @@ def evaluate_gate(gate: GateConfig | None, run: RunResult) -> GateResult:
             failures.append(f"score '{rule.score}' has no {rule.metric}")
             continue
         if rule.min is not None and observed < rule.min:
-            failures.append(
-                f"{rule.score}.{rule.metric}={observed:.3f} below min {rule.min}"
-            )
+            failures.append(f"{rule.score}.{rule.metric}={observed:.3f} below min {rule.min}")
         if rule.max is not None and observed > rule.max:
-            failures.append(
-                f"{rule.score}.{rule.metric}={observed:.3f} above max {rule.max}"
-            )
+            failures.append(f"{rule.score}.{rule.metric}={observed:.3f} above max {rule.max}")
     return GateResult(passed=not failures, failures=failures)

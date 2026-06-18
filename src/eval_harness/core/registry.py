@@ -4,6 +4,7 @@ Components register under a string ``type`` name; config selects them by that
 name. Aliases let a renamed component keep resolving its old name, so configs
 written against an earlier version keep working.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -42,9 +43,7 @@ class Registry(Generic[T]):
     def get(self, name: str) -> type[T]:
         key = self.resolve(name)
         if key not in self._reg:
-            raise RegistryError(
-                f"Unknown {self.kind} '{name}'. Available: {self.names()}"
-            )
+            raise RegistryError(f"Unknown {self.kind} '{name}'. Available: {self.names()}")
         return self._reg[key]
 
     def create(self, name: str, params: dict | None = None) -> T:
