@@ -32,9 +32,18 @@ from .config import (
     CalibrationConfig,
     ConfigError,
     FrameworkConfig,
+    GoldenConfig,
     LoggingConfig,
     LoopConfig,
     SanitizerConfig,
+)
+from .golden import (
+    GoldenItem,
+    GoldenSet,
+    GoldenSplit,
+    cohen_kappa,
+    evaluate_on_split,
+    split,
 )
 from .logging_util import configure_logging, debug_span, get_logger
 from .loop import LoopController, RunResult
@@ -96,6 +105,10 @@ __all__ = [
     "Finding",
     "FrameworkConfig",
     "Gate",
+    "GoldenConfig",
+    "GoldenItem",
+    "GoldenSet",
+    "GoldenSplit",
     "IsotonicCalibrator",
     "LoggingConfig",
     "LoopConfig",
@@ -116,14 +129,17 @@ __all__ = [
     "brier_decomposition",
     "brier_score",
     "build_sanitized_claims",
+    "cohen_kappa",
     "configure_logging",
     "debug_span",
     "ece",
     "evaluate_calibration",
+    "evaluate_on_split",
     "expected_calibration_error",
     "get_logger",
     "maximum_calibration_error",
     "reliability_bins",
     "selective_risk_coverage",
+    "split",
     "wilson_interval",
 ]
