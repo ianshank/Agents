@@ -196,12 +196,20 @@ class ParallelClaimRunner:
         tasks: list[asyncio.Task[CycleResult]] = [
             asyncio.create_task(bounded_verify(c)) for c in state.unresolved
         ]
-        results: list[CycleResult] = await asyncio.gather(*tasks)
+        try:
+            results: list[CycleResult] = await asyncio.gather(*tasks)
+        except Exception:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
         total_cost = sum(r.cost for r in results)
         max_conf_delta = max(r.max_conf_delta for r in results)  # safe: results non-empty
-        # union of unresolved across all claim results
-        new_unresolved: tuple[ClaimId, ...] = tuple(c for r in results for c in r.new_unresolved)
+        # set-union of unresolved across all claim results (preserve insertion order)
+        new_unresolved: tuple[ClaimId, ...] = tuple(
+            dict.fromkeys(c for r in results for c in r.new_unresolved)
+        )
         new_evidence = any(r.new_evidence for r in results)
 
         return CycleResult(
