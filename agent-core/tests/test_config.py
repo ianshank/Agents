@@ -58,3 +58,9 @@ def test_partial_override_uses_defaults_elsewhere():
 def test_from_dict_invalid_section_value_raises_config_error() -> None:
     with pytest.raises(ConfigError):
         FrameworkConfig.from_dict({"loop": {"max_cycles": "not_an_int"}})
+
+
+def test_from_dict_null_section_value_uses_default() -> None:
+    """Explicit null for a known section must not be treated as an unknown key."""
+    cfg = FrameworkConfig.from_dict({"budget": None})
+    assert cfg.budget == BudgetConfig()

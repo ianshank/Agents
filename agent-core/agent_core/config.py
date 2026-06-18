@@ -105,11 +105,13 @@ class FrameworkConfig:
         }
         kwargs: dict[str, Any] = {}
         for key, klass in sections.items():
-            if key in migrated and migrated[key] is not None:
-                try:
-                    kwargs[key] = klass(**migrated.pop(key))
-                except TypeError as exc:
-                    raise ConfigError(f"invalid config section {key!r}: {exc}") from exc
+            if key in migrated:
+                raw = migrated.pop(key)
+                if raw is not None:
+                    try:
+                        kwargs[key] = klass(**raw)
+                    except TypeError as exc:
+                        raise ConfigError(f"invalid config section {key!r}: {exc}") from exc
         if migrated:  # unknown keys are a config error, not silently ignored
             raise ConfigError(f"unknown config keys: {sorted(migrated)}")
         return cls(**kwargs)
