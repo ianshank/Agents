@@ -111,3 +111,10 @@ class StopCondition(Protocol):
     """Returns a StopOutcome to halt, or None to let evaluation continue."""
 
     def evaluate(self, ctx: LoopContext) -> StopOutcome | None: ...
+
+
+@runtime_checkable
+class AsyncCycleRunner(Protocol):
+    """Async variant of CycleRunner for parallel claim execution."""
+
+    async def run(self, state: CycleState) -> CycleResult: ...

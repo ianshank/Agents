@@ -109,6 +109,15 @@ class SanitizerConfig:
 
 
 @dataclass(frozen=True)
+class AsyncConfig:
+    max_concurrency: int = 8
+
+    def __post_init__(self) -> None:
+        if self.max_concurrency < 1:
+            raise ConfigError("async_exec.max_concurrency must be >= 1")
+
+
+@dataclass(frozen=True)
 class FrameworkConfig:
     version: str = SCHEMA_VERSION
     budget: BudgetConfig = field(default_factory=BudgetConfig)
@@ -116,6 +125,7 @@ class FrameworkConfig:
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     sanitizer: SanitizerConfig = field(default_factory=SanitizerConfig)
+    async_exec: AsyncConfig = field(default_factory=AsyncConfig)
 
     @property
     def reserve_units(self) -> float:
@@ -140,6 +150,7 @@ class FrameworkConfig:
             "calibration": CalibrationConfig,
             "logging": LoggingConfig,
             "sanitizer": SanitizerConfig,
+            "async_exec": AsyncConfig,
         }
         kwargs: dict[str, Any] = {}
         for key, klass in sections.items():
