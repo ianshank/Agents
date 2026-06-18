@@ -218,19 +218,14 @@ class RuleSanitizer:
 
         blocked = risk_score >= cfg.risk_block_threshold
 
-        # replace each match with default_redaction (left-to-right, non-overlapping)
-        # rebuild from original to avoid offset drift
+        # replace each match with default_redaction; apply rules sequentially to avoid
+        # group-numbering / precedence conflicts that arise from joining patterns with |
         active_rules = [
             rule for rule in self._rules if (enabled is None or rule.category in enabled)
         ]
-        if active_rules:
-            pattern_union = re.compile(
-                "|".join(rule.pattern.pattern for rule in active_rules),
-                re.IGNORECASE,
-            )
-            sanitized = pattern_union.sub(cfg.default_redaction, text)
-        else:
-            sanitized = text
+        sanitized = text
+        for rule in active_rules:
+            sanitized = rule.pattern.sub(cfg.default_redaction, sanitized)
 
         if blocked:
             with debug_span(self._log, "sanitize.blocked", risk=f"{risk_score:.3f}"):
