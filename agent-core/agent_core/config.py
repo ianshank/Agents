@@ -73,12 +73,49 @@ class LoggingConfig:
 
 
 @dataclass(frozen=True)
+class SanitizerConfig:
+    """Configuration for the prompt-injection sanitizer."""
+
+    risk_block_threshold: float = 0.80
+    risk_aggregation: str = "max"  # "max" | "weighted_sum"
+    default_redaction: str = "[redacted]"
+    severity_weights: tuple[tuple[str, float], ...] = (
+        ("instruction_override", 1.0),
+        ("role_hijack", 0.9),
+        ("delimiter_injection", 0.6),
+        ("exfiltration", 1.0),
+        ("prompt_leak", 0.7),
+    )
+    enabled_categories: tuple[str, ...] = ()  # () = all registered categories
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "enabled_categories", tuple(self.enabled_categories))
+        object.__setattr__(
+            self,
+            "severity_weights",
+            tuple((str(k), float(v)) for k, v in self.severity_weights),
+        )
+        if not 0.0 <= self.risk_block_threshold <= 1.0:
+            raise ConfigError("sanitizer.risk_block_threshold must be in [0, 1]")
+        if self.risk_aggregation not in ("max", "weighted_sum"):
+            raise ConfigError("sanitizer.risk_aggregation must be 'max' or 'weighted_sum'")
+        for cat, w in self.severity_weights:
+            if not 0.0 <= w <= 1.0:
+                raise ConfigError(f"sanitizer.severity_weights[{cat!r}] must be in [0, 1]")
+
+    @property
+    def weights(self) -> dict[str, float]:
+        return dict(self.severity_weights)
+
+
+@dataclass(frozen=True)
 class FrameworkConfig:
     version: str = SCHEMA_VERSION
     budget: BudgetConfig = field(default_factory=BudgetConfig)
     loop: LoopConfig = field(default_factory=LoopConfig)
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
+    sanitizer: SanitizerConfig = field(default_factory=SanitizerConfig)
 
     @property
     def reserve_units(self) -> float:
@@ -102,6 +139,7 @@ class FrameworkConfig:
             "loop": LoopConfig,
             "calibration": CalibrationConfig,
             "logging": LoggingConfig,
+            "sanitizer": SanitizerConfig,
         }
         kwargs: dict[str, Any] = {}
         for key, klass in sections.items():

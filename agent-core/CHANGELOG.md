@@ -5,6 +5,12 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 
 ## [Unreleased]
 
+### Added (B1)
+- `sanitize` module: `RuleSanitizer`, `Sanitizer` protocol, `SanitizationResult`, `Finding`,
+  `SanitizationRule`, `build_sanitized_claims` utility.
+- `SanitizerConfig` registered in `FrameworkConfig` (additive; old configs get defaults).
+- `docs/sanitizer-threat-model.md` documenting covered categories and known bypasses.
+
 ### Added
 - Monorepo packaging: `[dev]` optional-dependencies extra, `py.typed` (PEP 561), and a
   dynamic package version single-sourced from `agent_core.version.__version__`

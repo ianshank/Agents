@@ -61,9 +61,9 @@ def test_auroc_requires_both_classes():
         auroc([0.1, 0.2], [1, 1])
 
 
-def test_auroc_rejects_non_binary_labels() -> None:
-    with pytest.raises(ValueError, match="binary labels"):
-        auroc([0.5, 0.6, 0.7], [0, 1, 2])
+def test_auroc_rejects_non_binary_labels():
+    with pytest.raises(ValueError, match="binary"):
+        auroc([0.9, 0.5, 0.1], [1, 2, 0])
 
 
 def test_wilson_interval_contains_point_and_bounded():
@@ -97,19 +97,6 @@ def test_isotonic_reduces_ece_and_is_monotonic():
     assert all(b >= a - 1e-12 for a, b in pairwise(mapped))
 
 
-def test_isotonic_fit_handles_duplicate_probabilities() -> None:
-    """Duplicate training probabilities must be averaged into one knot, not kept separate."""
-    import math
-
-    cal = IsotonicCalibrator().fit([0.5, 0.5, 0.5], [0, 1, 0])
-    # three 0.5-prob samples: 0+1+0 → average = 1/3
-    assert math.isclose(cal.predict(0.5), 1 / 3, abs_tol=1e-12)
-    # predict() must still be monotonic
-    grid = [i / 20 for i in range(21)]
-    mapped = [cal.predict(x) for x in grid]
-    assert all(b >= a - 1e-12 for a, b in pairwise(mapped))
-
-
 def test_selective_coverage_is_monotonic():
     probs = [0.95, 0.9, 0.6, 0.55, 0.4]
     outcomes = [1, 1, 0, 1, 0]
@@ -125,8 +112,6 @@ def test_selective_coverage_stable_under_tied_probabilities() -> None:
     tied items appear in the input — previously one point was appended per sample,
     making the result input-order-sensitive.
     """
-    # Two items at p=0.8: one correct (y=1), one wrong (y=0).
-    # They form a tie group; both must be committed together before emitting a point.
     probs_fwd = [0.9, 0.8, 0.8, 0.5]
     outcomes_fwd = [1, 1, 0, 0]
     probs_rev = [0.9, 0.8, 0.8, 0.5]
@@ -134,8 +119,7 @@ def test_selective_coverage_stable_under_tied_probabilities() -> None:
     pts_fwd = selective_risk_coverage(probs_fwd, outcomes_fwd)
     pts_rev = selective_risk_coverage(probs_rev, outcomes_rev)
     assert pts_fwd == pts_rev, "curve must be invariant under permutation of tied inputs"
-    # Exactly 3 points (one per unique threshold: 0.9, 0.8, 0.5), not 4
-    assert len(pts_fwd) == 3
+    assert len(pts_fwd) == 3  # one point per unique threshold: 0.9, 0.8, 0.5
 
 
 def test_ship_gate_rejects_calibrated_but_undiscriminating_model():

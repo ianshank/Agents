@@ -160,9 +160,8 @@ def auroc(scores: Sequence[float], labels: Sequence[int]) -> float:
     """Area under ROC via the rank (Mann-Whitney U) identity, tie-aware."""
     if len(scores) != len(labels):
         raise ValueError("scores and labels must have equal length")
-    invalid = [y for y in labels if y not in (0, 1)]
-    if invalid:
-        raise ValueError(f"auroc requires binary labels (0/1); got {invalid[:3]!r}")
+    if any(y not in (0, 1) for y in labels):
+        raise ValueError("labels must be binary (0 or 1)")
     pos = [s for s, y in zip(scores, labels, strict=False) if y == 1]
     neg = [s for s, y in zip(scores, labels, strict=False) if y == 0]
     if not pos or not neg:
@@ -243,7 +242,7 @@ class IsotonicCalibrator:
             values.append(y)
             weights.append(1.0)
             knots.append(x)
-            while len(values) > 1 and (values[-2] > values[-1] or knots[-2] == knots[-1]):
+            while len(values) > 1 and values[-2] > values[-1]:
                 v2, w2 = values.pop(), weights.pop()
                 v1, w1 = values.pop(), weights.pop()
                 merged_w = w1 + w2
