@@ -96,7 +96,12 @@ class TemperatureScaler:
         eps = cfg.clamp_eps
         p = max(eps, min(1.0 - eps, prob))
         logit = math.log(p / (1.0 - p))
-        return 1.0 / (1.0 + math.exp(-logit / self._T))
+        x = logit / self._T
+        # Numerically stable sigmoid to avoid overflow for large |x|.
+        if x >= 0:
+            return 1.0 / (1.0 + math.exp(-x))
+        ex = math.exp(x)
+        return ex / (1.0 + ex)
 
 
 def _make_isotonic(cfg: RecalibrationConfig) -> Calibrator:
