@@ -24,6 +24,12 @@ All notable changes to `agent-core` are documented here. The format loosely foll
   `cohen_kappa`, `evaluate_on_split` (enforces held-out discipline in code).
 - `GoldenConfig` registered in `FrameworkConfig` (additive; old configs get defaults).
 
+### Added (B4)
+- `async_loop` module: `AsyncLoopController` (async mirror of sync LoopController, disjoint),
+  `ParallelClaimRunner` (semaphore-capped fan-out).
+- `AsyncCycleRunner` Protocol in `protocols.py` (I/O-node seam for async verification).
+- `AsyncConfig` registered in `FrameworkConfig` as `async_exec` (additive; old configs get defaults).
+
 ### Added
 - Monorepo packaging: `[dev]` optional-dependencies extra, `py.typed` (PEP 561), and a
   dynamic package version single-sourced from `agent_core.version.__version__`

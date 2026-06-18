@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from .async_loop import AsyncLoopController, ParallelClaimRunner
 from .budget import BudgetExceededError, BudgetLedger
 from .calibration import (
     Bin,
@@ -26,6 +27,7 @@ from .calibration import (
     wilson_interval,
 )
 from .config import (
+    AsyncConfig,
     BudgetConfig,
     CalibrationConfig,
     ConfigError,
@@ -47,6 +49,7 @@ from .golden import (
 from .logging_util import configure_logging, debug_span, get_logger
 from .loop import LoopController, RunResult
 from .protocols import (
+    AsyncCycleRunner,
     CostEstimator,
     CycleResult,
     CycleRunner,
@@ -89,6 +92,9 @@ ece = deprecated_alias("expected_calibration_error", deprecated_name="ece")(
 __all__ = [
     "CALIBRATOR_FACTORIES",
     "SCHEMA_VERSION",
+    "AsyncConfig",
+    "AsyncCycleRunner",
+    "AsyncLoopController",
     "Bin",
     "BrierDecomposition",
     "BudgetCondition",
@@ -118,7 +124,7 @@ __all__ = [
     "LoopController",
     "MaxCyclesCondition",
     "NoProgressCondition",
-    "RecalibrationConfig",
+    "ParallelClaimRunner",
     "RuleSanitizer",
     "RunResult",
     "SanitizationResult",
