@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from eval_harness.core.types import (
     EvalItem,
     ItemResult,
@@ -13,8 +15,6 @@ from eval_harness.judges import MockJudge
 from eval_harness.langfuse_client import NullLangfuseClient
 from eval_harness.plugins import SINKS, TARGETS
 from eval_harness.sinks import JsonFileSink, LangfuseSink
-
-from datetime import datetime, timezone
 
 
 # ---- judges ----

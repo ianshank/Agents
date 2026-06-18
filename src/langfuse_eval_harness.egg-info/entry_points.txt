@@ -1,2 +1,0 @@
-[console_scripts]
-eval-harness = eval_harness.cli:main

@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any
 
 import yaml
 
@@ -29,7 +30,7 @@ def _interpolate_str(value: str, env: Mapping[str, str]) -> str:
         if var in env:
             return env[var]
         if default is not None:
-            return default
+            return default  # type: ignore[no-any-return]
         raise ConfigError(f"environment variable {var!r} is not set and has no default")
 
     return _ENV_PATTERN.sub(repl, value)
@@ -76,8 +77,8 @@ def apply_overrides(raw: dict, overrides: Iterable[str]) -> dict:
 def load_config_dict(
     raw: dict,
     *,
-    overrides: Optional[Iterable[str]] = None,
-    env: Optional[Mapping[str, str]] = None,
+    overrides: Iterable[str] | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> EvalConfig:
     env = os.environ if env is None else env
     raw = migrate_to_current(raw)
@@ -90,10 +91,10 @@ def load_config_dict(
 def load_config(
     path: str | Path,
     *,
-    overrides: Optional[Iterable[str]] = None,
-    env: Optional[Mapping[str, str]] = None,
+    overrides: Iterable[str] | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> EvalConfig:
-    raw = yaml.safe_load(Path(path).read_text())
+    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ConfigError(f"config at {path} did not parse to a mapping")
     return load_config_dict(raw, overrides=overrides, env=env)

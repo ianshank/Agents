@@ -6,7 +6,8 @@ written against an earlier version keep working.
 """
 from __future__ import annotations
 
-from typing import Generic, Iterable, Optional, Type, TypeVar
+from collections.abc import Iterable
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -18,17 +19,17 @@ class RegistryError(KeyError):
 class Registry(Generic[T]):
     def __init__(self, kind: str) -> None:
         self.kind = kind
-        self._reg: dict[str, Type[T]] = {}
+        self._reg: dict[str, type[T]] = {}
         self._aliases: dict[str, str] = {}
 
     def register(self, name: str, *, aliases: Iterable[str] = ()):  # decorator
-        def deco(cls: Type[T]) -> Type[T]:
+        def deco(cls: type[T]) -> type[T]:
             self.register_class(name, cls, aliases=aliases)
             return cls
 
         return deco
 
-    def register_class(self, name: str, cls: Type[T], *, aliases: Iterable[str] = ()) -> None:
+    def register_class(self, name: str, cls: type[T], *, aliases: Iterable[str] = ()) -> None:
         if name in self._reg and self._reg[name] is not cls:
             raise RegistryError(f"{self.kind} '{name}' already registered")
         self._reg[name] = cls
@@ -38,7 +39,7 @@ class Registry(Generic[T]):
     def resolve(self, name: str) -> str:
         return self._aliases.get(name, name)
 
-    def get(self, name: str) -> Type[T]:
+    def get(self, name: str) -> type[T]:
         key = self.resolve(name)
         if key not in self._reg:
             raise RegistryError(
@@ -46,7 +47,7 @@ class Registry(Generic[T]):
             )
         return self._reg[key]
 
-    def create(self, name: str, params: Optional[dict] = None) -> T:
+    def create(self, name: str, params: dict | None = None) -> T:
         return self.get(name)(**(params or {}))
 
     def names(self) -> list[str]:

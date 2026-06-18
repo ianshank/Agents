@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from .config import load_config
 from .engine import EvalEngine
 from .gating import evaluate_gate
-from .langfuse_client import NullLangfuseClient
+from .langfuse_client import LangfuseClient, NullLangfuseClient
 from .plugins import bootstrap
 from .version import __version__
 
@@ -45,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     config = load_config(args.config, overrides=args.overrides)
+    client: LangfuseClient
     if args.offline:
         client = NullLangfuseClient()
     else:
@@ -77,7 +78,7 @@ def _cmd_list(_: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "run":
         return _cmd_run(args)

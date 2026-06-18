@@ -7,7 +7,7 @@ lazily so the package installs and tests run with zero external dependencies.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
 
 class LangfuseClient(ABC):
@@ -23,7 +23,7 @@ class LangfuseClient(ABC):
         item_id: str,
         name: str,
         value: float,
-        comment: Optional[str] = None,
+        comment: str | None = None,
     ) -> None:
         ...
 
@@ -34,7 +34,7 @@ class LangfuseClient(ABC):
         item_id: str,
         trace_id: str,
         run_name: str,
-        run_description: Optional[str] = None,
+        run_description: str | None = None,
     ) -> None:
         ...
 
@@ -46,7 +46,7 @@ class LangfuseClient(ABC):
 class NullLangfuseClient(LangfuseClient):
     """In-memory no-op client. Useful for offline runs and as a test double."""
 
-    def __init__(self, dataset_items: Optional[dict[str, list[dict]]] = None) -> None:
+    def __init__(self, dataset_items: dict[str, list[dict]] | None = None) -> None:
         self._datasets = dataset_items or {}
         self.scores: list[dict] = []
         self.flushed = False
@@ -71,7 +71,7 @@ class NullLangfuseClient(LangfuseClient):
         item_id: str,
         trace_id: str,
         run_name: str,
-        run_description: Optional[str] = None,
+        run_description: str | None = None,
     ) -> None:
         pass
 
@@ -79,7 +79,7 @@ class NullLangfuseClient(LangfuseClient):
         self.flushed = True
 
 
-class SDKLangfuseClient(LangfuseClient):  # pragma: no cover - requires network/SDK
+class SDKLangfuseClient(LangfuseClient):
     """Adapter over the real ``langfuse`` SDK. Imported lazily."""
 
     def __init__(self, **client_kwargs: Any) -> None:
@@ -90,20 +90,18 @@ class SDKLangfuseClient(LangfuseClient):  # pragma: no cover - requires network/
                 "The 'langfuse' package is required for SDKLangfuseClient. "
                 "Install with: pip install 'langfuse-eval-harness[langfuse]'"
             ) from exc
-        
-        # Inject defaults if not present in env or kwargs
+
         import os
-        os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-e220d788-d2e0-4e82-bbde-6d1a57ba149f")
-        os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-ad617cfc-ce1b-4c23-8c76-7868605ee6f1")
-        os.environ.setdefault("LANGFUSE_BASE_URL", "https://us.cloud.langfuse.com")
-        
-        # Explicit keys check in client_kwargs
-        if "secret_key" not in client_kwargs:
-            client_kwargs["secret_key"] = os.environ["LANGFUSE_SECRET_KEY"]
-        if "public_key" not in client_kwargs:
-            client_kwargs["public_key"] = os.environ["LANGFUSE_PUBLIC_KEY"]
-        if "host" not in client_kwargs:
-            client_kwargs["host"] = os.environ["LANGFUSE_BASE_URL"]
+        _required_env = {
+            "LANGFUSE_SECRET_KEY": "secret_key",
+            "LANGFUSE_PUBLIC_KEY": "public_key",
+            "LANGFUSE_BASE_URL": "host",
+        }
+        for env_var, kwarg_name in _required_env.items():
+            if kwarg_name not in client_kwargs:
+                value = os.environ.get(env_var)
+                if value:
+                    client_kwargs[kwarg_name] = value
 
         self._lf = Langfuse(**client_kwargs)
 
@@ -136,7 +134,7 @@ class SDKLangfuseClient(LangfuseClient):  # pragma: no cover - requires network/
         item_id: str,
         trace_id: str,
         run_name: str,
-        run_description: Optional[str] = None,
+        run_description: str | None = None,
     ) -> None:
         try:
             self._lf.api.dataset_run_items.create(
@@ -147,7 +145,7 @@ class SDKLangfuseClient(LangfuseClient):  # pragma: no cover - requires network/
             )
         except Exception as exc:
             import logging
-            logging.getLogger(__name__).error(f"Failed to link trace to dataset item: {exc}")
+            logging.getLogger(__name__).error("Failed to link trace to dataset item: %s", exc)
 
     def flush(self) -> None:
         self._lf.flush()
@@ -155,7 +153,7 @@ class SDKLangfuseClient(LangfuseClient):  # pragma: no cover - requires network/
 
 def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
     """Graceful wrapper around langfuse.decorators.observe.
-    
+
     If the langfuse SDK is not installed, it acts as a transparent no-op decorator.
     """
     try:
@@ -168,7 +166,7 @@ def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
 
 
 class SafeLangfuseContext:
-    def get_current_trace_id(self) -> Optional[str]:
+    def get_current_trace_id(self) -> str | None:
         try:
             from langfuse.decorators import langfuse_context
             return langfuse_context.get_current_trace_id()  # type: ignore[no-any-return]

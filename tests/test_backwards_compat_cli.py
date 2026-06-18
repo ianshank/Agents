@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from eval_harness.cli import main
-from eval_harness.config import load_config, load_config_dict
+from eval_harness.config import load_config
 from eval_harness.config.migrations import migrate_to_current
 from eval_harness.engine import EvalEngine
 from eval_harness.langfuse_client import NullLangfuseClient

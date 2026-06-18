@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Optional
+from typing import Any
 
 from ..core.interfaces import Scorer
 from ..core.types import EvalItem, RunContext, ScoreResult, TargetOutput
@@ -18,7 +18,7 @@ def _as_text(value: Any) -> str:
 class ExactMatchScorer(Scorer):
     default_name = "exact_match"
 
-    def __init__(self, name: Optional[str] = None, case_sensitive: bool = True, strip: bool = True):
+    def __init__(self, name: str | None = None, case_sensitive: bool = True, strip: bool = True):
         super().__init__(name)
         self.case_sensitive = case_sensitive
         self.strip = strip
@@ -40,7 +40,7 @@ class ExactMatchScorer(Scorer):
 class RegexMatchScorer(Scorer):
     default_name = "regex_match"
 
-    def __init__(self, name: Optional[str] = None, pattern: str = ".*", flags: int = 0):
+    def __init__(self, name: str | None = None, pattern: str = ".*", flags: int = 0):
         super().__init__(name)
         self.pattern = re.compile(pattern, flags)
 
@@ -53,7 +53,7 @@ class RegexMatchScorer(Scorer):
 class ContainsScorer(Scorer):
     default_name = "contains"
 
-    def __init__(self, name: Optional[str] = None, substring: str = "", case_sensitive: bool = False):
+    def __init__(self, name: str | None = None, substring: str = "", case_sensitive: bool = False):
         super().__init__(name)
         self.substring = substring
         self.case_sensitive = case_sensitive
@@ -73,7 +73,7 @@ class JsonKeysScorer(Scorer):
 
     default_name = "json_keys"
 
-    def __init__(self, name: Optional[str] = None, required: Optional[list[str]] = None):
+    def __init__(self, name: str | None = None, required: list[str] | None = None):
         super().__init__(name)
         self.required = required or []
 
@@ -115,8 +115,8 @@ class LLMJudgeScorer(Scorer):
 
     def __init__(
         self,
-        name: Optional[str] = None,
-        prompt_template: Optional[str] = None,
+        name: str | None = None,
+        prompt_template: str | None = None,
         threshold: float = 0.5,
     ):
         super().__init__(name)

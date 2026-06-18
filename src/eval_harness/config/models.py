@@ -6,7 +6,7 @@ the engine itself — defaults are declared on these models and overridable.
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -22,7 +22,7 @@ class ComponentSpec(BaseModel):
 
 class RunSettings(BaseModel):
     name: str = "eval-run"
-    run_id: Optional[str] = None
+    run_id: str | None = None
     seed: int = 0
     sample_rate: float = 1.0
     fail_fast: bool = False
@@ -38,8 +38,8 @@ class RunSettings(BaseModel):
 class GateRule(BaseModel):
     score: str
     metric: str = "mean"  # "mean" | "pass_rate"
-    min: Optional[float] = None
-    max: Optional[float] = None
+    min: float | None = None
+    max: float | None = None
 
     @field_validator("metric")
     @classmethod
@@ -59,9 +59,9 @@ class EvalConfig(BaseModel):
     dataset: ComponentSpec
     target: ComponentSpec
     scorers: list[ComponentSpec] = Field(default_factory=list)
-    judge: Optional[ComponentSpec] = None
+    judge: ComponentSpec | None = None
     sinks: list[ComponentSpec] = Field(default_factory=list)
-    gate: Optional[GateConfig] = None
+    gate: GateConfig | None = None
 
     @field_validator("schema_version")
     @classmethod
