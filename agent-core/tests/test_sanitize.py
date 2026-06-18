@@ -61,9 +61,9 @@ KNOWN_BYPASSES = [
 @pytest.mark.parametrize("category,text", POSITIVE_CORPUS)
 def test_positive_corpus_is_flagged(category: str, text: str) -> None:
     res = RuleSanitizer(SanitizerConfig()).sanitize(text)
-    assert any(
-        f.category == category for f in res.findings
-    ), f"Expected category {category!r} in findings for {text!r}"
+    assert any(f.category == category for f in res.findings), (
+        f"Expected category {category!r} in findings for {text!r}"
+    )
     assert res.risk_score > 0.0
 
 
