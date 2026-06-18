@@ -171,9 +171,9 @@ def test_isotonic_behavioural_round_trip() -> None:
     for p in grid:
         orig_pred = original.predict(p)
         rest_pred = restored.predict(p)
-        assert math.isclose(orig_pred, rest_pred, abs_tol=1e-12), (
-            f"IsotonicCalibrator predict({p}) differs: {orig_pred} vs {rest_pred}"
-        )
+        assert math.isclose(
+            orig_pred, rest_pred, abs_tol=1e-12
+        ), f"IsotonicCalibrator predict({p}) differs: {orig_pred} vs {rest_pred}"
 
 
 def test_temperature_behavioural_round_trip() -> None:
@@ -185,9 +185,9 @@ def test_temperature_behavioural_round_trip() -> None:
     for p in grid:
         orig_pred = original.predict(p)
         rest_pred = restored.predict(p)
-        assert math.isclose(orig_pred, rest_pred, abs_tol=1e-12), (
-            f"TemperatureScaler predict({p}) differs: {orig_pred} vs {rest_pred}"
-        )
+        assert math.isclose(
+            orig_pred, rest_pred, abs_tol=1e-12
+        ), f"TemperatureScaler predict({p}) differs: {orig_pred} vs {rest_pred}"
 
 
 def test_calibrator_dict_has_type_tag() -> None:
