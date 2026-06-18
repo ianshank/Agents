@@ -1,0 +1,42 @@
+name: agent-core CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["agent-core/**", ".github/workflows/agent-core-ci.yml"]
+  pull_request:
+    paths: ["agent-core/**", ".github/workflows/agent-core-ci.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent-core
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    env:
+      HYPOTHESIS_PROFILE: ci
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip "setuptools>=68"
+      - run: pip install -e ".[dev]"
+      - run: ruff check agent_core tests
+      - run: ruff format --check agent_core tests
+      - run: mypy agent_core
+      - run: python -m pytest --cov --cov-report=term-missing

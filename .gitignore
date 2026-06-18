@@ -15,6 +15,9 @@ htmlcov/
 dist/
 build/
 
+# Hypothesis property-test database (agent-core)
+.hypothesis/
+
 # Skill validation artifacts
 .skill-validation/
 grading.json

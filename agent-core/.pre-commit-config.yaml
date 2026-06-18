@@ -1,0 +1,36 @@
+# Pre-commit hooks for the agent-core package (monorepo subfolder).
+# Run from the repo root, pointed at this config:
+#   pre-commit run --all-files --config agent-core/.pre-commit-config.yaml
+# All hooks are scoped to agent-core/** so the harness at the repo root is untouched.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^agent-core/.*\.py$
+      - id: ruff-format
+        files: ^agent-core/.*\.py$
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        files: ^agent-core/
+      - id: end-of-file-fixer
+        files: ^agent-core/
+      - id: check-toml
+        files: ^agent-core/
+      - id: check-yaml
+        files: ^agent-core/
+
+  # Strict mypy on the library only; runs from agent-core/ via the local env so
+  # module resolution and the [tool.mypy] config are picked up correctly.
+  - repo: local
+    hooks:
+      - id: mypy-agent-core
+        name: mypy --strict (agent-core library)
+        entry: bash -c 'cd agent-core && python -m mypy agent_core'
+        language: system
+        pass_filenames: false
+        files: ^agent-core/agent_core/.*\.py$
