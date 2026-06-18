@@ -26,6 +26,7 @@ from .config import FrameworkConfig
 from .logging_util import debug_span, get_logger
 from .protocols import (
     CostEstimator,
+    CycleResult,
     CycleRunner,
     CycleState,
     LoopContext,
@@ -83,7 +84,14 @@ class LoopController:
         )
         self._log = get_logger("agent_core.loop", config.logging.level)
 
-    def _context(self, *, cycle_index, projected, last_result, prev_unresolved) -> LoopContext:
+    def _context(
+        self,
+        *,
+        cycle_index: int,
+        projected: float,
+        last_result: CycleResult | None,
+        prev_unresolved: tuple[str, ...] | None,
+    ) -> LoopContext:
         return LoopContext(
             cycle_index=cycle_index,
             config=self._config,

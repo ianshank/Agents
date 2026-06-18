@@ -61,10 +61,10 @@ def migrate_config(data: ConfigDict) -> ConfigDict:
     return data
 
 
-def deprecated_alias(new_name: str) -> Callable[[Callable], Callable]:
+def deprecated_alias(new_name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Wrap a callable so calling it emits a DeprecationWarning but still works."""
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             warnings.warn(

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:  # avoid runtime import cycle; restores static typing
     from .config import FrameworkConfig
@@ -103,7 +103,7 @@ class LoopContext:
     projected_next_cost: float = 0.0
     last_result: CycleResult | None = None
     prev_unresolved: tuple[ClaimId, ...] | None = None
-    extras: dict = field(default_factory=dict)
+    extras: dict[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable

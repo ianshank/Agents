@@ -35,6 +35,13 @@ omit = ["agent_core/__init__.py"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
+fail_under = 95
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",                 # Protocol / abstract method bodies
+    "if __name__ == .__main__.:",
+]
 
 [tool.ruff]
 line-length = 100
@@ -49,5 +56,12 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
 
 [tool.mypy]
 python_version = "3.10"
+strict = true
 ignore_missing_imports = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+disallow_incomplete_defs = false
