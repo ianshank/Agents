@@ -109,6 +109,14 @@ def test_cycle_state_unknown_key_raises() -> None:
 # ---- RunResult round-trip ---------------------------------------------------
 
 
+def test_cycle_state_unresolved_must_be_list() -> None:
+    """A string value for 'unresolved' must raise, not silently iterate characters."""
+    d = cycle_state_to_dict(CycleState(unresolved=("c1", "c2")))
+    d["unresolved"] = "c1c2"  # a string instead of a list
+    with pytest.raises(ValueError, match="must be a list"):
+        cycle_state_from_dict(d)
+
+
 def test_run_result_structural_round_trip() -> None:
     for reason in (StopReason.SUCCESS, StopReason.STALL, StopReason.BUDGET, StopReason.CAP):
         result = _make_run_result(reason)

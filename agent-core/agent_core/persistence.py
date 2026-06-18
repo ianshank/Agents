@@ -102,9 +102,14 @@ def cycle_state_from_dict(d: dict[str, Any]) -> CycleState:
     delta: float | None = float(delta_raw) if delta_raw is not None else None
     allowance_raw = d.get("allowance")
     allowance = float("inf") if allowance_raw is None else float(allowance_raw)
+    unresolved_raw = d["unresolved"]
+    if not isinstance(unresolved_raw, list):
+        raise ValueError(
+            f"cycle_state 'unresolved' must be a list, got {type(unresolved_raw).__name__!r}"
+        )
     return CycleState(
         cycle_index=int(d["cycle_index"]),
-        unresolved=tuple(str(c) for c in d["unresolved"]),
+        unresolved=tuple(str(c) for c in unresolved_raw),
         last_max_conf_delta=delta,
         allowance=allowance,
     )
