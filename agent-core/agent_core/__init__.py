@@ -32,6 +32,7 @@ from .config import (
     FrameworkConfig,
     LoggingConfig,
     LoopConfig,
+    SanitizerConfig,
 )
 from .logging_util import configure_logging, debug_span, get_logger
 from .loop import LoopController, RunResult
@@ -42,6 +43,14 @@ from .protocols import (
     CycleState,
     StopOutcome,
     StopReason,
+)
+from .sanitize import (
+    Finding,
+    RuleSanitizer,
+    SanitizationResult,
+    SanitizationRule,
+    Sanitizer,
+    build_sanitized_claims,
 )
 from .stop import (
     BudgetCondition,
@@ -78,6 +87,7 @@ __all__ = [
     "CycleResult",
     "CycleRunner",
     "CycleState",
+    "Finding",
     "FrameworkConfig",
     "Gate",
     "IsotonicCalibrator",
@@ -86,13 +96,19 @@ __all__ = [
     "LoopController",
     "MaxCyclesCondition",
     "NoProgressCondition",
+    "RuleSanitizer",
     "RunResult",
+    "SanitizationResult",
+    "SanitizationRule",
+    "Sanitizer",
+    "SanitizerConfig",
     "StopOutcome",
     "StopReason",
     "__version__",
     "auroc",
     "brier_decomposition",
     "brier_score",
+    "build_sanitized_claims",
     "configure_logging",
     "debug_span",
     "ece",
