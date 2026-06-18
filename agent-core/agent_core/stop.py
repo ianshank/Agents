@@ -12,6 +12,8 @@ from collections.abc import Sequence
 
 from .protocols import LoopContext, StopCondition, StopOutcome, StopReason
 
+_EPS = 1e-9  # float tolerance for boundary comparisons (matches BudgetLedger._EPS)
+
 
 class MaxCyclesCondition:
     """Admission-phase: refuse to start a cycle beyond the configured backstop."""
@@ -33,7 +35,7 @@ class BudgetCondition:
     """Admission-phase: refuse a cycle whose projected cost breaks the ceiling."""
 
     def evaluate(self, ctx: LoopContext) -> StopOutcome | None:
-        if (ctx.spent + ctx.projected_next_cost) > ctx.ceiling:
+        if (ctx.spent + ctx.projected_next_cost) > ctx.ceiling + _EPS:
             return StopOutcome(
                 StopReason.BUDGET,
                 detail=(
