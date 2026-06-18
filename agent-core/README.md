@@ -90,5 +90,10 @@ agent_core/
   loop.py          LoopController (admission gate -> cycle -> outcome check)
   calibration.py   bins, ECE, MCE, Brier+Murphy, AUROC, Wilson, selective, isotonic
   logging_util.py  config-driven logging + debug_span
-tests/             70 tests across all modules
+  sanitize.py      RuleSanitizer, Sanitizer protocol, build_sanitized_claims
+  golden.py        GoldenSet, split (hash-bucket), cohen_kappa, evaluate_on_split
+  recalibration.py TemperatureScaler, CalibratorRegistry, make_calibrator
+  async_loop.py    AsyncLoopController, ParallelClaimRunner (semaphore-capped)
+  persistence.py   save_run, load_run, calibrator round-trip serialization
+tests/             241 tests across all modules
 ```

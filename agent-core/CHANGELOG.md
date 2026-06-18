@@ -3,7 +3,7 @@
 All notable changes to `agent-core` are documented here. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the package follows semantic versioning.
 
-## [Unreleased]
+## [1.2.0] – 2026-06-18
 
 ### Added (B1)
 - `sanitize` module: `RuleSanitizer`, `Sanitizer` protocol, `SanitizationResult`, `Finding`,
@@ -49,9 +49,6 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 ### Changed
 - `selective_risk_coverage` uses `enumerate`; successive-pair assertions use
   `itertools.pairwise`; modern PEP 585/604 typing throughout.
-
-> Phase B features (sanitizer, golden-set, per-domain recalibration, async loop,
-> persistence) will append their entries here per PR.
 
 ## [1.1.0]
 

@@ -14,6 +14,11 @@ reviewer can see the seams deliberately, not discover them later.
 | Isotonic (PAV) recalibration | `calibration.py` | yes (monotonic + ECE↓) |
 | Config-driven logging + debug tracer | `logging_util.py` | yes |
 | Backwards-compat (config migration + deprecated alias) | `version.py` | yes |
+| Prompt-injection sanitizer + threat-model | `sanitize.py`, `docs/sanitizer-threat-model.md` | yes |
+| Golden-set construction, split, cohen_kappa, evaluate_on_split | `golden.py` | yes |
+| Per-domain recalibration: TemperatureScaler, CalibratorRegistry | `recalibration.py` | yes |
+| Async / parallel cycle execution with semaphore-capped fan-out | `async_loop.py` | yes |
+| Run-state persistence with behavioural calibrator round-trip | `persistence.py` | yes |
 
 ## 2. Deliberate Protocol seams — interface defined, implementation NOT included
 These are I/O-bound or external and would be untestable fakes if stubbed here.
@@ -23,20 +28,13 @@ The contract exists; a real implementation drops in without core changes.
 |---|---|---|
 | Adversarial verifier | `CycleRunner` | needs a real LLM + retrieval; faking it adds untested, throwaway code |
 | Cost projection | `CostEstimator` | depends on the chosen model's tokeniser/pricing |
-| Source sanitizer / injection filter | (not yet a Protocol) | security-critical; deserves its own module + threat-model tests, out of scope for the deterministic core |
+| Source sanitizer / injection filter | `Sanitizer` Protocol in `sanitize.py` | **built** — see §1; the seam is retained so custom sanitizers can be injected |
 | Retrieval, LLM gateway, claim store | — | external services / persistence |
 | Eval-harness orchestration & observability sink | — | wiring layer over the metrics in `calibration.py` |
 
-## 3. Not addressed at all (would be next, in priority order)
-1. **Sanitizer module + prompt-injection tests** — highest-risk omission; the
-   metrics and loop assume clean inputs.
-2. **Golden-set construction & labelling tooling** — every calibration number is
-   only as good as the ground-truth labels; that pipeline is unbuilt.
-3. **Per-domain recalibration management** — `IsotonicCalibrator` is single-domain;
-   no registry/selection of calibrators by domain.
-4. **Async / parallel cycle execution** — the loop is synchronous; latency
-   (max over parallel claims) is modelled in docs only, not in code.
-5. **Persistence / serialization of run state** beyond config dicts.
+## 3. Not addressed at all
+All five items from the original §3 roadmap are now built (see §1). No unaddressed
+roadmap items remain from this phase.
 
 ## 4. Known limitations of what IS built
 - **Isotonic recalibration is validated in-sample** in tests (proves the
@@ -93,4 +91,5 @@ Test count: 54 → 64. Coverage held at 96% branch. ruff + mypy clean.
 - Property tests assert invariants, not correctness against a reference isotonic
   implementation; a port to scikit-learn's isotonic could be added as a
   differential test if exactness matters.
-- The sanitizer/injection module remains the top unbuilt item (Section 3).
+- All five §3 roadmap items (sanitizer, golden-set, per-domain recalibration, async loop,
+  persistence) are now built and tested — §3 is empty.
