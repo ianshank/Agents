@@ -76,12 +76,12 @@ DEFAULT_RULES: tuple[SanitizationRule, ...] = (
     SanitizationRule(
         "rh-01",
         "role_hijack",
-        re.compile(r"you\s+are\s+now\s+\w", re.IGNORECASE),
+        re.compile(r"you\s+are\s+now\s+\w+", re.IGNORECASE),
     ),
     SanitizationRule(
         "rh-02",
         "role_hijack",
-        re.compile(r"act\s+as\s+(a\s+|an\s+)?\w", re.IGNORECASE),
+        re.compile(r"act\s+as\s+(a\s+|an\s+)?\w+", re.IGNORECASE),
     ),
     SanitizationRule(
         "rh-03",
@@ -188,7 +188,12 @@ class RuleSanitizer:
         for rule in self._rules:
             if enabled is not None and rule.category not in enabled:
                 continue
-            severity = weights.get(rule.category, 0.0)
+            try:
+                severity = weights[rule.category]
+            except KeyError as exc:
+                raise ConfigError(
+                    f"missing severity weight for category {rule.category!r}"
+                ) from exc
             for m in rule.pattern.finditer(text):
                 raw_findings.append(
                     (
