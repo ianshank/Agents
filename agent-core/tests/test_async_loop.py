@@ -291,3 +291,36 @@ def test_async_absolute_max_cycles_aborts() -> None:
     )
     assert result.reason is StopReason.ABORTED
     assert result.partial is True
+
+
+# ---- Robustness: orphaned task cancellation + duplicate dedup ----------------
+
+
+def test_parallel_runner_cancels_tasks_on_exception() -> None:
+    """If one verify_fn raises, remaining tasks must be cancelled (not left running)."""
+    completed: list[str] = []
+
+    async def flaky(claim: str) -> CycleResult:
+        if claim == "bad":
+            await asyncio.sleep(0)  # yield so c1/c2 start their sleep first
+            raise RuntimeError("injected failure")
+        await asyncio.sleep(10)  # long sleep — must be cancelled, never completes
+        completed.append(claim)
+        return CycleResult(cost=0.0, new_unresolved=(), max_conf_delta=0.0)
+
+    state = CycleState(unresolved=("bad", "c1", "c2"))
+    with pytest.raises(RuntimeError, match="injected failure"):
+        _run(ParallelClaimRunner(AsyncConfig(max_concurrency=3), flaky).run(state))
+    assert completed == []
+
+
+def test_parallel_runner_deduplicates_new_unresolved() -> None:
+    """new_unresolved is a set-union: duplicate claim IDs across runners are removed."""
+
+    async def verify(claim: str) -> CycleResult:
+        # every runner returns the same shared claim
+        return CycleResult(cost=0.0, new_unresolved=("shared",), max_conf_delta=0.0)
+
+    state = CycleState(unresolved=("a", "b", "c"))
+    result = _run(ParallelClaimRunner(AsyncConfig(), verify).run(state))
+    assert result.new_unresolved == ("shared",)  # deduplicated, not ("shared","shared","shared")
