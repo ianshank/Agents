@@ -81,6 +81,29 @@ def test_no_progress_detects_unchanged_set():
     assert cond.evaluate(_ctx(last_result=res, prev_unresolved=("a",))) is None
 
 
+def test_convergence_skips_first_cycle_with_no_result() -> None:
+    """ConvergenceCondition must return None when last_result is None (first cycle)."""
+    cond = ConvergenceCondition(0.05)
+    assert cond.evaluate(_ctx(last_result=None)) is None
+
+
+def test_no_progress_skips_when_prev_unresolved_is_none() -> None:
+    """NoProgressCondition must return None when prev_unresolved is None (first cycle)."""
+    cond = NoProgressCondition()
+    res = CycleResult(cost=1, new_unresolved=("a",), max_conf_delta=0.5)
+    assert cond.evaluate(_ctx(last_result=res, prev_unresolved=None)) is None
+
+
+def test_gate_add_enables_fluent_chaining() -> None:
+    """Gate.add() must return the Gate itself for fluent chaining and append the condition."""
+    gate = Gate([MaxCyclesCondition(3)])
+    returned = gate.add(BudgetCondition())
+    assert returned is gate
+    # the added condition is now evaluated
+    out = gate.evaluate(_ctx(cycle_index=1, spent=999, ceiling=1, projected_next_cost=999))
+    assert out is not None and out.reason is StopReason.BUDGET
+
+
 def test_gate_returns_first_non_none():
     # CAP registered before BUDGET: when both fire, CAP wins
     gate = Gate([MaxCyclesCondition(3), BudgetCondition()])
