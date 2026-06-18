@@ -234,13 +234,28 @@ class IsotonicCalibrator:
         order = sorted(range(len(probs)), key=lambda i: probs[i])
         xs = [probs[i] for i in order]
         ys = [float(outcomes[i]) for i in order]
-        # PAV: blocks of (sum, weight); merge while non-monotonic
+        # Pre-aggregate identical probabilities to remove input-order sensitivity.
+        # Ties at the same x become a single weighted block before PAV runs.
+        xs_u: list[float] = []
+        ys_u: list[float] = []
+        ws_u: list[float] = []
+        i = 0
+        while i < len(xs):
+            j = i
+            while j < len(xs) and xs[j] == xs[i]:
+                j += 1
+            n = j - i
+            xs_u.append(xs[i])
+            ys_u.append(sum(ys[i:j]) / n)
+            ws_u.append(float(n))
+            i = j
+        # PAV: blocks of (weighted average, weight); merge while non-monotonic
         values: list[float] = []
         weights: list[float] = []
         knots: list[float] = []
-        for x, y in zip(xs, ys, strict=False):
+        for x, y, w in zip(xs_u, ys_u, ws_u, strict=True):
             values.append(y)
-            weights.append(1.0)
+            weights.append(w)
             knots.append(x)
             while len(values) > 1 and values[-2] > values[-1]:
                 v2, w2 = values.pop(), weights.pop()

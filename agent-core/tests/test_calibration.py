@@ -97,6 +97,22 @@ def test_isotonic_reduces_ece_and_is_monotonic():
     assert all(b >= a - 1e-12 for a, b in pairwise(mapped))
 
 
+def test_isotonic_fit_handles_duplicate_probabilities() -> None:
+    # Duplicate x values must be pre-aggregated before PAV so the result is
+    # input-order-independent (e.g. two samples at p=0.8 with different outcomes
+    # must yield the same calibrated output regardless of order).
+    probs = [0.8, 0.8, 0.9, 0.9]
+    outcomes_ab = [1, 0, 1, 0]
+    outcomes_ba = [0, 1, 0, 1]  # same pairs, reversed within each tie group
+    cal_ab = IsotonicCalibrator().fit(probs, outcomes_ab)
+    cal_ba = IsotonicCalibrator().fit(probs, outcomes_ba)
+    assert cal_ab.predict(0.8) == cal_ba.predict(0.8)
+    assert cal_ab.predict(0.9) == cal_ba.predict(0.9)
+    # Both should average to 0.5 (1 hit / 2 samples each x)
+    assert math.isclose(cal_ab.predict(0.8), 0.5, abs_tol=1e-12)
+    assert math.isclose(cal_ab.predict(0.9), 0.5, abs_tol=1e-12)
+
+
 def test_selective_coverage_is_monotonic():
     probs = [0.95, 0.9, 0.6, 0.55, 0.4]
     outcomes = [1, 1, 0, 1, 0]
