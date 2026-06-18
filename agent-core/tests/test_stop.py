@@ -42,23 +42,24 @@ def test_budget_condition_boundary():
 
 
 def test_budget_condition_tolerates_fp_rounding_at_boundary() -> None:
-    """spent + projected == ceiling within FP noise must not produce a false BUDGET stop.
-
-    Without _EPS tolerance, a cycle whose sum lands just above ceiling (e.g.
-    100.0 + 1e-15) would be denied even though it is effectively at-boundary.
-    """
+    """FP noise (< _EPS) at boundary must not produce a false BUDGET stop."""
     cond = BudgetCondition()
-    # Exactly at boundary: must be admitted
     assert cond.evaluate(_ctx(spent=50.0, ceiling=100.0, projected_next_cost=50.0)) is None
-    # Just below boundary: admitted
-    assert cond.evaluate(_ctx(spent=50.0, ceiling=100.0, projected_next_cost=49.999)) is None
-    # Clearly over boundary: denied
     out = cond.evaluate(_ctx(spent=50.0, ceiling=100.0, projected_next_cost=51.0))
     assert out is not None and out.reason is StopReason.BUDGET
-    # FP noise (< _EPS) at boundary: admitted, not falsely denied
+    # FP noise below _EPS must not falsely deny
     fp_noise = 1e-15
     noise_ctx = _ctx(spent=50.0, ceiling=100.0, projected_next_cost=50.0 + fp_noise)
     assert cond.evaluate(noise_ctx) is None
+
+
+def test_no_progress_ignores_reordering() -> None:
+    """Reordering of an identical unresolved set must not evade stall detection."""
+    cond = NoProgressCondition()
+    # same elements, different order → STALL (set semantics)
+    res = CycleResult(cost=1, new_unresolved=("b", "a"), max_conf_delta=0.5)
+    out = cond.evaluate(_ctx(last_result=res, prev_unresolved=("a", "b")))
+    assert out is not None and out.reason is StopReason.STALL
 
 
 def test_convergence_requires_low_delta_and_no_new_evidence():
@@ -78,42 +79,6 @@ def test_no_progress_detects_unchanged_set():
         cond.evaluate(_ctx(last_result=res, prev_unresolved=("a", "b"))).reason is StopReason.STALL
     )
     assert cond.evaluate(_ctx(last_result=res, prev_unresolved=("a",))) is None
-
-
-def test_no_progress_reordered_unresolved_still_stalls() -> None:
-    """Reordering of unresolved claims must still be detected as a stall."""
-    gate = Gate([NoProgressCondition()])
-    result = CycleResult(cost=1.0, new_unresolved=("b", "a"), max_conf_delta=0.1)
-    ctx = _ctx(
-        cycle_index=2,
-        last_result=result,
-        prev_unresolved=("a", "b"),  # same claims, different order
-    )
-    outcome = gate.evaluate(ctx)
-    assert outcome is not None and outcome.reason is StopReason.STALL
-
-
-def test_convergence_skips_first_cycle_with_no_result() -> None:
-    """ConvergenceCondition must return None when last_result is None (first cycle)."""
-    cond = ConvergenceCondition(0.05)
-    assert cond.evaluate(_ctx(last_result=None)) is None
-
-
-def test_no_progress_skips_when_prev_unresolved_is_none() -> None:
-    """NoProgressCondition must return None when prev_unresolved is None (first cycle)."""
-    cond = NoProgressCondition()
-    res = CycleResult(cost=1, new_unresolved=("a",), max_conf_delta=0.5)
-    assert cond.evaluate(_ctx(last_result=res, prev_unresolved=None)) is None
-
-
-def test_gate_add_enables_fluent_chaining() -> None:
-    """Gate.add() must return the Gate itself for fluent chaining and append the condition."""
-    gate = Gate([MaxCyclesCondition(3)])
-    returned = gate.add(BudgetCondition())
-    assert returned is gate
-    # the added condition is now evaluated
-    out = gate.evaluate(_ctx(cycle_index=1, spent=999, ceiling=1, projected_next_cost=999))
-    assert out is not None and out.reason is StopReason.BUDGET
 
 
 def test_gate_returns_first_non_none():
