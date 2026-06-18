@@ -24,6 +24,7 @@ def test_round_trip_to_from_dict():
     assert restored.budget == cfg.budget
     assert restored.loop == cfg.loop
     assert restored.calibration == cfg.calibration
+    assert restored.logging == cfg.logging
 
 
 @pytest.mark.parametrize(
@@ -64,3 +65,15 @@ def test_from_dict_null_section_value_uses_default() -> None:
     """Explicit null for a known section must not be treated as an unknown key."""
     cfg = FrameworkConfig.from_dict({"budget": None})
     assert cfg.budget == BudgetConfig()
+
+
+def test_from_dict_unknown_nested_key_raises() -> None:
+    """Unknown keys inside a known section must raise ConfigError (via TypeError)."""
+    with pytest.raises(ConfigError):
+        FrameworkConfig.from_dict({"budget": {"unknown_key": 1}})
+
+
+def test_from_dict_bad_section_type_raises() -> None:
+    """Passing a non-dict value for a known section must raise ConfigError."""
+    with pytest.raises(ConfigError):
+        FrameworkConfig.from_dict({"budget": 42})
