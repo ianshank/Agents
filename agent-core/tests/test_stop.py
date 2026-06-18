@@ -14,8 +14,15 @@ CFG = FrameworkConfig()
 
 
 def _ctx(**kw):
-    base = dict(cycle_index=1, config=CFG, spent=0.0, ceiling=100.0,
-               projected_next_cost=0.0, last_result=None, prev_unresolved=None)
+    base = dict(
+        cycle_index=1,
+        config=CFG,
+        spent=0.0,
+        ceiling=100.0,
+        projected_next_cost=0.0,
+        last_result=None,
+        prev_unresolved=None,
+    )
     base.update(kw)
     return LoopContext(**base)
 
@@ -47,7 +54,9 @@ def test_convergence_requires_low_delta_and_no_new_evidence():
 def test_no_progress_detects_unchanged_set():
     cond = NoProgressCondition()
     res = CycleResult(cost=1, new_unresolved=("a", "b"), max_conf_delta=0.5)
-    assert cond.evaluate(_ctx(last_result=res, prev_unresolved=("a", "b"))).reason is StopReason.STALL
+    assert (
+        cond.evaluate(_ctx(last_result=res, prev_unresolved=("a", "b"))).reason is StopReason.STALL
+    )
     assert cond.evaluate(_ctx(last_result=res, prev_unresolved=("a",))) is None
 
 

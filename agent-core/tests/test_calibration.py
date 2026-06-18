@@ -1,4 +1,5 @@
 import math
+from itertools import pairwise
 
 import pytest
 
@@ -88,7 +89,7 @@ def test_isotonic_reduces_ece_and_is_monotonic():
     # monotonic non-decreasing mapping
     grid = [i / 20 for i in range(21)]
     mapped = [cal.predict(x) for x in grid]
-    assert all(b >= a - 1e-12 for a, b in zip(mapped, mapped[1:]))
+    assert all(b >= a - 1e-12 for a, b in pairwise(mapped))
 
 
 def test_selective_coverage_is_monotonic():
@@ -96,7 +97,7 @@ def test_selective_coverage_is_monotonic():
     outcomes = [1, 1, 0, 1, 0]
     pts = selective_risk_coverage(probs, outcomes)
     coverages = [c for c, _ in pts]
-    assert all(b >= a for a, b in zip(coverages, coverages[1:]))
+    assert all(b >= a for a, b in pairwise(coverages))
 
 
 def test_ship_gate_rejects_calibrated_but_undiscriminating_model():

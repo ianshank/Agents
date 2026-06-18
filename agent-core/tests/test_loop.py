@@ -3,6 +3,7 @@
 Deterministic CycleRunner doubles drive the *real* control logic through each of
 the four exit paths. No part of the controller is mocked.
 """
+
 from agent_core import (
     BudgetLedger,
     CycleResult,
@@ -86,7 +87,7 @@ def test_budget_denies_before_overshoot():
     res = ctrl.run(CycleState(cycle_index=1, unresolved=("a",)))
     assert res.reason is StopReason.BUDGET
     assert res.partial is True
-    assert res.cycles_completed == 2          # cycle 3 denied admission
+    assert res.cycles_completed == 2  # cycle 3 denied admission
     assert res.spent <= cfg.loop_ceiling_units  # never overshot
     assert res.reserve_available == cfg.reserve_units  # reserve intact
 

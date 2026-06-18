@@ -11,6 +11,7 @@ Hard guarantees (enforced, not assumed):
   * cumulative ``spent`` can never exceed ``cap``.
 The ledger is thread-safe so parallel cycle execution cannot corrupt the total.
 """
+
 from __future__ import annotations
 
 import threading
@@ -69,7 +70,9 @@ class BudgetLedger:
         if not ok:
             self._log.info(
                 "admission denied: spent=%.1f + projected=%.1f > ceiling=%.1f",
-                spent, projected_cost, self._ceiling,
+                spent,
+                projected_cost,
+                self._ceiling,
             )
         return ok
 

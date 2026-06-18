@@ -6,10 +6,11 @@ versioned and round-trip through ``to_dict``/``from_dict`` with automatic
 migration of older payloads, which is what makes persisted configs
 backwards-compatible across releases.
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict
+from typing import Any
 
 from .version import SCHEMA_VERSION, migrate_config
 
@@ -20,8 +21,8 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class BudgetConfig:
-    cap_units: float = 600_000.0           # total cost budget per run (tokens/units)
-    reserve_fraction: float = 0.15         # fraction held back for the final report
+    cap_units: float = 600_000.0  # total cost budget per run (tokens/units)
+    reserve_fraction: float = 0.15  # fraction held back for the final report
 
     def __post_init__(self) -> None:
         if self.cap_units <= 0:
@@ -32,9 +33,9 @@ class BudgetConfig:
 
 @dataclass(frozen=True)
 class LoopConfig:
-    max_cycles: int = 5                    # safety backstop, not the primary control
-    convergence_epsilon: float = 0.05      # max confidence delta to call it converged
-    absolute_max_cycles: int = 1000        # controller hard limit; guards gate misconfig
+    max_cycles: int = 5  # safety backstop, not the primary control
+    convergence_epsilon: float = 0.05  # max confidence delta to call it converged
+    absolute_max_cycles: int = 1000  # controller hard limit; guards gate misconfig
 
     def __post_init__(self) -> None:
         if self.max_cycles < 1:
@@ -51,7 +52,7 @@ class CalibrationConfig:
     ece_target: float = 0.05
     mce_target: float = 0.12
     auroc_target: float = 0.80
-    wilson_z: float = 1.96                 # 95% interval by default
+    wilson_z: float = 1.96  # 95% interval by default
 
     def __post_init__(self) -> None:
         if self.n_bins < 1:
@@ -88,11 +89,11 @@ class FrameworkConfig:
         """Spend ceiling for the verifier loop (cap minus the report reserve)."""
         return self.budget.cap_units - self.reserve_units
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "FrameworkConfig":
+    def from_dict(cls, data: dict[str, Any]) -> FrameworkConfig:
         """Build from a dict, migrating older schema versions transparently."""
         migrated = migrate_config(dict(data))
         migrated.pop("version", None)
@@ -102,7 +103,7 @@ class FrameworkConfig:
             "calibration": CalibrationConfig,
             "logging": LoggingConfig,
         }
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         for key, klass in sections.items():
             if key in migrated and migrated[key] is not None:
                 kwargs[key] = klass(**migrated.pop(key))

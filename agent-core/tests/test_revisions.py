@@ -4,6 +4,7 @@ These cover the failure modes the original suite missed: a CostEstimator that
 under-projects (the demonstrated breach), gate misconfiguration causing
 non-termination, and the zero-cycle admission denial.
 """
+
 import pytest
 
 from agent_core import (
@@ -56,8 +57,8 @@ def test_lying_estimator_cannot_breach_reserve_or_cap():
 
     assert res.reason is StopReason.BUDGET
     assert res.overspent is True
-    assert res.spent <= cfg.budget.cap_units          # hard cap held
-    assert res.spent <= cfg.loop_ceiling_units         # reserve never touched
+    assert res.spent <= cfg.budget.cap_units  # hard cap held
+    assert res.spent <= cfg.loop_ceiling_units  # reserve never touched
     assert res.reserve_available == cfg.reserve_units
 
 
@@ -67,7 +68,10 @@ def test_aborts_when_admission_gate_misconfigured():
     led = BudgetLedger(cfg)
     # empty admission gate => no CAP/BUDGET guard; only the controller backstop saves us
     ctrl = LoopController(
-        cfg, led, CheapNeverConvergingRunner(), FixedEstimator(1.0),
+        cfg,
+        led,
+        CheapNeverConvergingRunner(),
+        FixedEstimator(1.0),
         admission_gate=Gate([]),
     )
     res = ctrl.run(CycleState(unresolved=("a",)))

@@ -5,12 +5,13 @@ so nothing about levels or formatting is hardcoded in business logic. A
 ``debug_span`` context manager gives uniform, greppable enter/exit traces for
 any block worth instrumenting.
 """
+
 from __future__ import annotations
 
 import contextlib
 import logging
 import time
-from typing import Iterator, Optional
+from collections.abc import Iterator
 
 _DEFAULT_FORMAT = "%(asctime)s %(levelname)-7s %(name)s :: %(message)s"
 
@@ -28,7 +29,7 @@ def configure_logging(
     logging.basicConfig(level=numeric, format=fmt, force=force)
 
 
-def get_logger(name: str, level: Optional[str] = None) -> logging.Logger:
+def get_logger(name: str, level: str | None = None) -> logging.Logger:
     """Return a named logger, optionally overriding its level dynamically."""
     logger = logging.getLogger(name)
     if level is not None:

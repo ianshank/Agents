@@ -5,9 +5,10 @@ The four stop conditions are independent, registrable objects implementing the
 them with first-true-wins semantics. Adding a new stop rule means writing a
 condition and registering it — the loop never changes (open/closed principle).
 """
+
 from __future__ import annotations
 
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
 
 from .protocols import LoopContext, StopCondition, StopOutcome, StopReason
 
@@ -18,7 +19,7 @@ class MaxCyclesCondition:
     def __init__(self, max_cycles: int) -> None:
         self._max = max_cycles
 
-    def evaluate(self, ctx: LoopContext) -> Optional[StopOutcome]:
+    def evaluate(self, ctx: LoopContext) -> StopOutcome | None:
         if ctx.cycle_index > self._max:
             return StopOutcome(
                 StopReason.CAP,
@@ -31,7 +32,7 @@ class MaxCyclesCondition:
 class BudgetCondition:
     """Admission-phase: refuse a cycle whose projected cost breaks the ceiling."""
 
-    def evaluate(self, ctx: LoopContext) -> Optional[StopOutcome]:
+    def evaluate(self, ctx: LoopContext) -> StopOutcome | None:
         if (ctx.spent + ctx.projected_next_cost) > ctx.ceiling:
             return StopOutcome(
                 StopReason.BUDGET,
@@ -50,7 +51,7 @@ class ConvergenceCondition:
     def __init__(self, epsilon: float) -> None:
         self._eps = epsilon
 
-    def evaluate(self, ctx: LoopContext) -> Optional[StopOutcome]:
+    def evaluate(self, ctx: LoopContext) -> StopOutcome | None:
         r = ctx.last_result
         if r is None:
             return None
@@ -66,7 +67,7 @@ class ConvergenceCondition:
 class NoProgressCondition:
     """Outcome-phase: stall when the unresolved set is unchanged since last cycle."""
 
-    def evaluate(self, ctx: LoopContext) -> Optional[StopOutcome]:
+    def evaluate(self, ctx: LoopContext) -> StopOutcome | None:
         r = ctx.last_result
         if r is None or ctx.prev_unresolved is None:
             return None
@@ -83,13 +84,13 @@ class Gate:
     """Evaluates an ordered list of conditions; first non-None outcome wins."""
 
     def __init__(self, conditions: Sequence[StopCondition]) -> None:
-        self._conditions: List[StopCondition] = list(conditions)
+        self._conditions: list[StopCondition] = list(conditions)
 
-    def add(self, condition: StopCondition) -> "Gate":
+    def add(self, condition: StopCondition) -> Gate:
         self._conditions.append(condition)
         return self
 
-    def evaluate(self, ctx: LoopContext) -> Optional[StopOutcome]:
+    def evaluate(self, ctx: LoopContext) -> StopOutcome | None:
         for cond in self._conditions:
             outcome = cond.evaluate(ctx)
             if outcome is not None:

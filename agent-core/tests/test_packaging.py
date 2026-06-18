@@ -4,6 +4,7 @@ These guard the A1-A3 hardening: the dev extra exists, the PEP 561 marker ships,
 and the package version is single-sourced from ``agent_core.version.__version__``
 (kept distinct from the config ``SCHEMA_VERSION``).
 """
+
 from __future__ import annotations
 
 import importlib.metadata as md

@@ -4,6 +4,9 @@ Example tests catch the bugs you thought of; these catch the ones you didn't.
 Invariants asserted over randomised inputs: metric ranges, and isotonic
 monotonicity evaluated at *non-knot* points (the gap the review flagged).
 """
+
+from itertools import pairwise
+
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -25,7 +28,8 @@ def _outcomes(n, data):
 @given(
     pairs=st.lists(
         st.tuples(st.floats(min_value=0.0, max_value=1.0), st.integers(0, 1)),
-        min_size=1, max_size=200,
+        min_size=1,
+        max_size=200,
     )
 )
 def test_ece_and_mce_in_unit_interval(pairs):
@@ -40,7 +44,8 @@ def test_ece_and_mce_in_unit_interval(pairs):
 @given(
     pairs=st.lists(
         st.tuples(st.floats(min_value=0.0, max_value=1.0), st.integers(0, 1)),
-        min_size=1, max_size=200,
+        min_size=1,
+        max_size=200,
     )
 )
 def test_brier_in_unit_interval(pairs):
@@ -52,7 +57,8 @@ def test_brier_in_unit_interval(pairs):
 @given(
     pairs=st.lists(
         st.tuples(st.floats(min_value=0.0, max_value=1.0), st.integers(0, 1)),
-        min_size=2, max_size=200,
+        min_size=2,
+        max_size=200,
     )
 )
 def test_auroc_in_unit_interval_when_both_classes_present(pairs):
@@ -66,7 +72,8 @@ def test_auroc_in_unit_interval_when_both_classes_present(pairs):
 @given(
     pairs=st.lists(
         st.tuples(st.floats(min_value=0.0, max_value=1.0), st.integers(0, 1)),
-        min_size=2, max_size=200,
+        min_size=2,
+        max_size=200,
     )
 )
 def test_isotonic_monotone_at_arbitrary_points(pairs):
@@ -78,4 +85,4 @@ def test_isotonic_monotone_at_arbitrary_points(pairs):
     grid = [i / 50 for i in range(51)]
     out = [cal.predict(x) for x in grid]
     assert all(0.0 <= y <= 1.0 for y in out)
-    assert all(b >= a - 1e-9 for a, b in zip(out, out[1:]))
+    assert all(b >= a - 1e-9 for a, b in pairwise(out))

@@ -16,10 +16,10 @@ Hardened per peer review:
 The controller is generic: it knows nothing about how verification works, only
 the CycleRunner / CostEstimator protocols. All thresholds come from config.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from .budget import BudgetExceededError, BudgetLedger
 from .config import FrameworkConfig
@@ -60,8 +60,8 @@ class LoopController:
         ledger: BudgetLedger,
         runner: CycleRunner,
         estimator: CostEstimator,
-        admission_gate: Optional[Gate] = None,
-        outcome_check: Optional[Gate] = None,
+        admission_gate: Gate | None = None,
+        outcome_check: Gate | None = None,
     ) -> None:
         self._config = config
         self._ledger = ledger
@@ -140,9 +140,7 @@ class LoopController:
                 # reserve stays intact because the over-cost was never recorded.
                 self._log.warning("runner exceeded allowance: %s", exc)
                 overspent = True
-                last_outcome = StopOutcome(
-                    StopReason.BUDGET, detail=str(exc), partial=True
-                )
+                last_outcome = StopOutcome(StopReason.BUDGET, detail=str(exc), partial=True)
                 break
 
             prev_unresolved = state.unresolved

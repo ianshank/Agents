@@ -6,11 +6,12 @@ these abstractions, so real implementations — or test doubles — can be injec
 without touching control logic. This is the modular/backwards-compatible spine:
 add or swap an implementation, never edit the loop.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import TYPE_CHECKING, Optional, Protocol, Tuple, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:  # avoid runtime import cycle; restores static typing
     from .config import FrameworkConfig
@@ -27,13 +28,14 @@ class CycleState:
     Default is unbounded for backwards compatibility, but the controller always
     sets a finite allowance derived from the remaining loop budget.
     """
+
     cycle_index: int = 1
-    unresolved: Tuple[ClaimId, ...] = ()
+    unresolved: tuple[ClaimId, ...] = ()
     # last observed max per-claim confidence delta; None before any cycle runs
-    last_max_conf_delta: Optional[float] = None
+    last_max_conf_delta: float | None = None
     allowance: float = float("inf")
 
-    def advanced(self, result: "CycleResult") -> "CycleState":
+    def advanced(self, result: CycleResult) -> CycleState:
         return replace(
             self,
             cycle_index=self.cycle_index + 1,
@@ -41,15 +43,16 @@ class CycleState:
             last_max_conf_delta=result.max_conf_delta,
         )
 
-    def with_allowance(self, allowance: float) -> "CycleState":
+    def with_allowance(self, allowance: float) -> CycleState:
         return replace(self, allowance=allowance)
 
 
 @dataclass(frozen=True)
 class CycleResult:
     """What a CycleRunner reports after one verification pass."""
+
     cost: float
-    new_unresolved: Tuple[ClaimId, ...]
+    new_unresolved: tuple[ClaimId, ...]
     max_conf_delta: float
     new_evidence: bool = False
     detail: str = ""
@@ -75,11 +78,11 @@ class CostEstimator(Protocol):
 
 class StopReason(str, Enum):
     CONTINUE = "continue"
-    SUCCESS = "success"     # converged
-    STALL = "stall"         # no progress
-    BUDGET = "budget"       # admission denied on cost, or runner exceeded allowance
-    CAP = "cap"             # admission denied on cycle count
-    ABORTED = "aborted"     # controller hard safety limit hit (gate misconfiguration)
+    SUCCESS = "success"  # converged
+    STALL = "stall"  # no progress
+    BUDGET = "budget"  # admission denied on cost, or runner exceeded allowance
+    CAP = "cap"  # admission denied on cycle count
+    ABORTED = "aborted"  # controller hard safety limit hit (gate misconfiguration)
 
 
 @dataclass(frozen=True)
@@ -92,13 +95,14 @@ class StopOutcome:
 @dataclass(frozen=True)
 class LoopContext:
     """Everything a stop condition might need to make its decision."""
+
     cycle_index: int
-    config: "FrameworkConfig"
+    config: FrameworkConfig
     spent: float = 0.0
     ceiling: float = 0.0
     projected_next_cost: float = 0.0
-    last_result: Optional[CycleResult] = None
-    prev_unresolved: Optional[Tuple[ClaimId, ...]] = None
+    last_result: CycleResult | None = None
+    prev_unresolved: tuple[ClaimId, ...] | None = None
     extras: dict = field(default_factory=dict)
 
 
@@ -106,4 +110,4 @@ class LoopContext:
 class StopCondition(Protocol):
     """Returns a StopOutcome to halt, or None to let evaluation continue."""
 
-    def evaluate(self, ctx: LoopContext) -> Optional[StopOutcome]: ...
+    def evaluate(self, ctx: LoopContext) -> StopOutcome | None: ...

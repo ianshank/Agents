@@ -10,12 +10,13 @@ protocol so temperature scaling could swap in later.
 Inputs are plain sequences of floats/ints; targets come from
 :class:`CalibrationConfig`, never hardcoded.
 """
+
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Optional, Protocol, Sequence, Tuple, runtime_checkable
-
+from typing import Protocol, runtime_checkable
 
 
 def _check_pairs(probs: Sequence[float], outcomes: Sequence[int]) -> None:
@@ -48,7 +49,7 @@ class Bin:
         return self.count > 0
 
 
-def wilson_interval(k: int, n: int, z: float = 1.96) -> Tuple[float, float]:
+def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     """Wilson score interval for a binomial proportion (no normal-approx blow-up)."""
     if n == 0:
         return (0.0, 0.0)
@@ -65,19 +66,19 @@ def reliability_bins(
     outcomes: Sequence[int],
     n_bins: int = 10,
     z: float = 1.96,
-) -> List[Bin]:
+) -> list[Bin]:
     _check_pairs(probs, outcomes)
     if n_bins < 1:
         raise ValueError("n_bins must be >= 1")
     edges = [i / n_bins for i in range(n_bins + 1)]
-    bins: List[Bin] = []
+    bins: list[Bin] = []
     for b in range(n_bins):
         lo, hi = edges[b], edges[b + 1]
         # last bin is closed on the right to capture p == 1.0
         if b == n_bins - 1:
-            members = [(p, o) for p, o in zip(probs, outcomes) if lo <= p <= hi]
+            members = [(p, o) for p, o in zip(probs, outcomes, strict=False) if lo <= p <= hi]
         else:
-            members = [(p, o) for p, o in zip(probs, outcomes) if lo <= p < hi]
+            members = [(p, o) for p, o in zip(probs, outcomes, strict=False) if lo <= p < hi]
         count = len(members)
         if count == 0:
             bins.append(Bin(lo, hi, 0, float("nan"), float("nan"), 0.0, 0.0))
@@ -116,7 +117,7 @@ def maximum_calibration_error(
 # --- Brier + Murphy decomposition -------------------------------------------
 def brier_score(probs: Sequence[float], outcomes: Sequence[int]) -> float:
     _check_pairs(probs, outcomes)
-    return sum((p - o) ** 2 for p, o in zip(probs, outcomes)) / len(probs)
+    return sum((p - o) ** 2 for p, o in zip(probs, outcomes, strict=False)) / len(probs)
 
 
 @dataclass(frozen=True)
@@ -159,8 +160,8 @@ def auroc(scores: Sequence[float], labels: Sequence[int]) -> float:
     """Area under ROC via the rank (Mann-Whitney U) identity, tie-aware."""
     if len(scores) != len(labels):
         raise ValueError("scores and labels must have equal length")
-    pos = [s for s, y in zip(scores, labels) if y == 1]
-    neg = [s for s, y in zip(scores, labels) if y == 0]
+    pos = [s for s, y in zip(scores, labels, strict=False) if y == 1]
+    neg = [s for s, y in zip(scores, labels, strict=False) if y == 0]
     if not pos or not neg:
         raise ValueError("AUROC undefined without both classes present")
     # average ranks (1-based) to handle ties
@@ -175,7 +176,7 @@ def auroc(scores: Sequence[float], labels: Sequence[int]) -> float:
         for k in range(i, j + 1):
             ranks[order[k]] = avg_rank
         i = j + 1
-    rank_sum_pos = sum(r for r, y in zip(ranks, labels) if y == 1)
+    rank_sum_pos = sum(r for r, y in zip(ranks, labels, strict=False) if y == 1)
     n_pos, n_neg = len(pos), len(neg)
     u = rank_sum_pos - n_pos * (n_pos + 1) / 2.0
     return u / (n_pos * n_neg)
@@ -184,7 +185,7 @@ def auroc(scores: Sequence[float], labels: Sequence[int]) -> float:
 # --- selective prediction (abstention) --------------------------------------
 def selective_risk_coverage(
     probs: Sequence[float], outcomes: Sequence[int]
-) -> List[Tuple[float, float]]:
+) -> list[tuple[float, float]]:
     """Return (coverage, risk) points as the commit threshold sweeps high->low.
 
     coverage = fraction committed; risk = error rate among committed. Coverage is
@@ -193,11 +194,9 @@ def selective_risk_coverage(
     _check_pairs(probs, outcomes)
     n = len(probs)
     order = sorted(range(n), key=lambda i: probs[i], reverse=True)
-    committed = 0
     errors = 0
-    points: List[Tuple[float, float]] = []
-    for idx in order:
-        committed += 1
+    points: list[tuple[float, float]] = []
+    for committed, idx in enumerate(order, start=1):
         # treat a commit as predicting "true"; error if outcome is 0
         if outcomes[idx] == 0:
             errors += 1
@@ -210,7 +209,7 @@ def selective_risk_coverage(
 # --- recalibration -----------------------------------------------------------
 @runtime_checkable
 class Calibrator(Protocol):
-    def fit(self, probs: Sequence[float], outcomes: Sequence[int]) -> "Calibrator": ...
+    def fit(self, probs: Sequence[float], outcomes: Sequence[int]) -> Calibrator: ...
     def predict(self, prob: float) -> float: ...
 
 
@@ -218,20 +217,20 @@ class IsotonicCalibrator:
     """Monotonic recalibration via Pool Adjacent Violators. Dependency-free."""
 
     def __init__(self) -> None:
-        self._x: List[float] = []
-        self._y: List[float] = []
+        self._x: list[float] = []
+        self._y: list[float] = []
         self._fitted = False
 
-    def fit(self, probs: Sequence[float], outcomes: Sequence[int]) -> "IsotonicCalibrator":
+    def fit(self, probs: Sequence[float], outcomes: Sequence[int]) -> IsotonicCalibrator:
         _check_pairs(probs, outcomes)
         order = sorted(range(len(probs)), key=lambda i: probs[i])
         xs = [probs[i] for i in order]
         ys = [float(outcomes[i]) for i in order]
         # PAV: blocks of (sum, weight); merge while non-monotonic
-        values: List[float] = []
-        weights: List[float] = []
-        knots: List[float] = []
-        for x, y in zip(xs, ys):
+        values: list[float] = []
+        weights: list[float] = []
+        knots: list[float] = []
+        for x, y in zip(xs, ys, strict=False):
             values.append(y)
             weights.append(1.0)
             knots.append(x)
@@ -273,7 +272,7 @@ class CalibrationReport:
     ece: float
     mce: float
     brier: float
-    auroc: Optional[float]
+    auroc: float | None
     passes: bool
 
 
@@ -289,11 +288,7 @@ def evaluate_calibration(
     # Bin once and derive ECE/MCE from the shared bins (avoids re-binning 2-3x).
     bins = reliability_bins(probs, outcomes, n_bins)
     total = len(probs)
-    ece = sum(
-        (b.count / total) * abs(b.accuracy - b.mean_conf)
-        for b in bins
-        if b.is_populated
-    )
+    ece = sum((b.count / total) * abs(b.accuracy - b.mean_conf) for b in bins if b.is_populated)
     gaps = [abs(b.accuracy - b.mean_conf) for b in bins if b.is_populated]
     mce = max(gaps) if gaps else 0.0
     brier = brier_score(probs, outcomes)
@@ -301,9 +296,5 @@ def evaluate_calibration(
         roc = auroc(list(probs), list(outcomes))
     except ValueError:
         roc = None  # single-class slice: discrimination undefined
-    passes = (
-        ece <= ece_target
-        and mce <= mce_target
-        and (roc is None or roc >= auroc_target)
-    )
+    passes = ece <= ece_target and mce <= mce_target and (roc is None or roc >= auroc_target)
     return CalibrationReport(ece=ece, mce=mce, brier=brier, auroc=roc, passes=passes)
