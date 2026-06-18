@@ -97,6 +97,19 @@ def test_isotonic_reduces_ece_and_is_monotonic():
     assert all(b >= a - 1e-12 for a, b in pairwise(mapped))
 
 
+def test_isotonic_fit_handles_duplicate_probabilities() -> None:
+    """Duplicate training probabilities must be averaged into one knot, not kept separate."""
+    import math
+
+    cal = IsotonicCalibrator().fit([0.5, 0.5, 0.5], [0, 1, 0])
+    # three 0.5-prob samples: 0+1+0 → average = 1/3
+    assert math.isclose(cal.predict(0.5), 1 / 3, abs_tol=1e-12)
+    # predict() must still be monotonic
+    grid = [i / 20 for i in range(21)]
+    mapped = [cal.predict(x) for x in grid]
+    assert all(b >= a - 1e-12 for a, b in pairwise(mapped))
+
+
 def test_selective_coverage_is_monotonic():
     probs = [0.95, 0.9, 0.6, 0.55, 0.4]
     outcomes = [1, 1, 0, 1, 0]

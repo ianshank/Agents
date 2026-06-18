@@ -237,7 +237,7 @@ class IsotonicCalibrator:
             values.append(y)
             weights.append(1.0)
             knots.append(x)
-            while len(values) > 1 and values[-2] > values[-1]:
+            while len(values) > 1 and (values[-2] > values[-1] or knots[-2] == knots[-1]):
                 v2, w2 = values.pop(), weights.pop()
                 v1, w1 = values.pop(), weights.pop()
                 merged_w = w1 + w2
