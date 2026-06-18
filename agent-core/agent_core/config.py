@@ -126,6 +126,27 @@ class GoldenConfig:
 
 
 @dataclass(frozen=True)
+class RecalibrationConfig:
+    default_calibrator: str = "isotonic"
+    fallback_policy: str = "global"  # "global" | "error"
+    temperature_search_lo: float = 1e-2  # golden-section bracket lower bound
+    temperature_search_hi: float = 1e2  # golden-section bracket upper bound
+    temperature_max_iter: int = 50
+    temperature_tol: float = 1e-6
+    clamp_eps: float = 1e-6  # p clamped to [eps, 1-eps] before logit
+
+    def __post_init__(self) -> None:
+        if self.fallback_policy not in ("global", "error"):
+            raise ConfigError("recalibration.fallback_policy must be 'global' or 'error'")
+        if not 0.0 < self.temperature_search_lo < self.temperature_search_hi:
+            raise ConfigError("recalibration temperature bracket must satisfy 0 < lo < hi")
+        if self.temperature_max_iter < 1:
+            raise ConfigError("recalibration.temperature_max_iter must be >= 1")
+        if not 0.0 < self.clamp_eps < 0.5:
+            raise ConfigError("recalibration.clamp_eps must be in (0, 0.5)")
+
+
+@dataclass(frozen=True)
 class FrameworkConfig:
     version: str = SCHEMA_VERSION
     budget: BudgetConfig = field(default_factory=BudgetConfig)
@@ -134,6 +155,7 @@ class FrameworkConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     sanitizer: SanitizerConfig = field(default_factory=SanitizerConfig)
     golden: GoldenConfig = field(default_factory=GoldenConfig)
+    recalibration: RecalibrationConfig = field(default_factory=RecalibrationConfig)
 
     @property
     def reserve_units(self) -> float:
@@ -159,6 +181,7 @@ class FrameworkConfig:
             "logging": LoggingConfig,
             "sanitizer": SanitizerConfig,
             "golden": GoldenConfig,
+            "recalibration": RecalibrationConfig,
         }
         kwargs: dict[str, Any] = {}
         for key, klass in sections.items():
