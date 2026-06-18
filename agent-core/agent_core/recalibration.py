@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Sequence
 
-from .calibration import Calibrator, IsotonicCalibrator
+from .calibration import Calibrator, IsotonicCalibrator, _check_pairs
 from .config import ConfigError, RecalibrationConfig
 from .logging_util import debug_span, get_logger
 
@@ -29,10 +29,7 @@ class TemperatureScaler:
         self._T: float | None = None  # None = not fitted
 
     def fit(self, probs: Sequence[float], outcomes: Sequence[int]) -> TemperatureScaler:
-        if len(probs) != len(outcomes):
-            raise ValueError("probs and outcomes must have equal length")
-        if not probs:
-            raise ValueError("TemperatureScaler.fit requires at least one sample")
+        _check_pairs(probs, outcomes)
         cfg = self._config
         eps = cfg.clamp_eps
 
