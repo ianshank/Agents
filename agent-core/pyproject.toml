@@ -24,8 +24,12 @@ include = ["agent_core*"]
 agent_core = ["py.typed"]
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q --strict-markers --strict-config"
 testpaths = ["tests"]
+markers = [
+    "slow: long-running tests (deselect with -m 'not slow')",
+    "property: Hypothesis property-based tests",
+]
 
 [tool.coverage.run]
 branch = true
