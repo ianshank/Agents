@@ -148,11 +148,12 @@ def cohen_kappa(r1: Sequence[int], r2: Sequence[int]) -> float:
     n = len(r1)
     if n == 0:
         raise ValueError("cohen_kappa: empty sequences")
+    categories = sorted(set(r1) | set(r2))
     agree = sum(a == b for a, b in zip(r1, r2, strict=False))
     po = agree / n
-    # expected agreement
-    freq1 = [sum(1 for x in r1 if x == c) / n for c in (0, 1)]
-    freq2 = [sum(1 for x in r2 if x == c) / n for c in (0, 1)]
+    # expected agreement across all observed categories (not hardcoded to (0, 1))
+    freq1 = [sum(1 for x in r1 if x == c) / n for c in categories]
+    freq2 = [sum(1 for x in r2 if x == c) / n for c in categories]
     pe = sum(f1 * f2 for f1, f2 in zip(freq1, freq2, strict=False))
     if math.isclose(pe, 1.0):
         return 1.0
