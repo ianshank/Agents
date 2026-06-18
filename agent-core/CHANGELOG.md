@@ -11,6 +11,11 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 - `SanitizerConfig` registered in `FrameworkConfig` (additive; old configs get defaults).
 - `docs/sanitizer-threat-model.md` documenting covered categories and known bypasses.
 
+### Added (B2)
+- `golden` module: `GoldenItem`, `GoldenSet`, `GoldenSplit`, `split` (deterministic hash-bucket),
+  `cohen_kappa`, `evaluate_on_split` (enforces held-out discipline in code).
+- `GoldenConfig` registered in `FrameworkConfig` (additive; old configs get defaults).
+
 ### Added
 - Monorepo packaging: `[dev]` optional-dependencies extra, `py.typed` (PEP 561), and a
   dynamic package version single-sourced from `agent_core.version.__version__`

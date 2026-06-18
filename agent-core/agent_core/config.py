@@ -9,6 +9,7 @@ backwards-compatible across releases.
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -109,6 +110,22 @@ class SanitizerConfig:
 
 
 @dataclass(frozen=True)
+class GoldenConfig:
+    train_ratio: float = 0.6
+    calibration_ratio: float = 0.2
+    test_ratio: float = 0.2
+    split_seed: int = 1729
+
+    def __post_init__(self) -> None:
+        total = self.train_ratio + self.calibration_ratio + self.test_ratio
+        if not math.isclose(total, 1.0, abs_tol=1e-9):
+            raise ConfigError("golden ratios must sum to 1.0")
+        for name in ("train_ratio", "calibration_ratio", "test_ratio"):
+            if not 0.0 <= getattr(self, name) <= 1.0:
+                raise ConfigError(f"golden.{name} must be in [0, 1]")
+
+
+@dataclass(frozen=True)
 class FrameworkConfig:
     version: str = SCHEMA_VERSION
     budget: BudgetConfig = field(default_factory=BudgetConfig)
@@ -116,6 +133,7 @@ class FrameworkConfig:
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     sanitizer: SanitizerConfig = field(default_factory=SanitizerConfig)
+    golden: GoldenConfig = field(default_factory=GoldenConfig)
 
     @property
     def reserve_units(self) -> float:
@@ -140,6 +158,7 @@ class FrameworkConfig:
             "calibration": CalibrationConfig,
             "logging": LoggingConfig,
             "sanitizer": SanitizerConfig,
+            "golden": GoldenConfig,
         }
         kwargs: dict[str, Any] = {}
         for key, klass in sections.items():
