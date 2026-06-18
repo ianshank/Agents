@@ -136,6 +136,11 @@ class RecalibrationConfig:
     clamp_eps: float = 1e-6  # p clamped to [eps, 1-eps] before logit
 
     def __post_init__(self) -> None:
+        if self.default_calibrator not in ("isotonic", "temperature"):
+            raise ConfigError(
+                f"recalibration.default_calibrator must be 'isotonic' or 'temperature';"
+                f" got {self.default_calibrator!r}"
+            )
         if self.fallback_policy not in ("global", "error"):
             raise ConfigError("recalibration.fallback_policy must be 'global' or 'error'")
         if not 0.0 < self.temperature_search_lo < self.temperature_search_hi:
