@@ -11,7 +11,8 @@ import functools
 import warnings
 from typing import Any, Callable, Dict
 
-SCHEMA_VERSION = "1.1.0"
+__version__ = "1.1.0"      # package (distribution) version — single source of truth
+SCHEMA_VERSION = "1.1.0"   # config-schema version; may diverge from __version__ later
 
 # --- config migrations -------------------------------------------------------
 # Each migration maps an *input* version to a callable that returns a dict at

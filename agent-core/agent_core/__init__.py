@@ -49,9 +49,7 @@ from .stop import (
     MaxCyclesCondition,
     NoProgressCondition,
 )
-from .version import SCHEMA_VERSION, deprecated_alias
-
-__version__ = SCHEMA_VERSION
+from .version import SCHEMA_VERSION, __version__, deprecated_alias
 
 # Library best practice: attach a NullHandler so importing apps control logging.
 logging.getLogger("agent_core").addHandler(logging.NullHandler())
