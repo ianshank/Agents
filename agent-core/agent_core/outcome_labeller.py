@@ -11,7 +11,9 @@ mechanically-observable signals only:
 These labels drive alerting and fast rollback. They DO NOT underwrite the
 auto-merge guarantee — TIMEOUT_CLEAN cannot see silent errors, so it is biased
 optimistic. Only HUMAN_AUDIT labels (from audit_sampler) feed the gate's tau.
-Detectors are Protocols: swap in git/GitHub/Datadog implementations.
+Detectors are Protocols; ``main`` wires the real git/GitHub implementations from
+:mod:`agent_core.detectors`, and other backends (Datadog, …) can be injected via
+:func:`label_matured`.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Protocol, runtime_checkable
 
+from .detectors import GitHubChecksFailureAttributor, GitRevertDetector, resolve_repo
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 
 
@@ -93,20 +96,22 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Passive outcome labeller.")
     ap.add_argument("--store", required=True)
     ap.add_argument("--maturity-days", type=int, default=LabellerConfig.maturity_days)
+    ap.add_argument("--repo-dir", default=".", help="git repo for revert detection")
+    ap.add_argument(
+        "--repo",
+        help="owner/name for GitHub check-run lookup (default: derived from the origin remote)",
+    )
     args = ap.parse_args(argv)
 
-    # Placeholder detectors: real deployments inject git/GitHub/Datadog clients.
-    class _NoReverts:
-        def was_reverted(self, change_id: str, since: datetime) -> bool:
-            return False
-
-    class _NoFailures:
-        def caused_failure(self, change_id: str, since: datetime) -> bool:
-            return False
+    # Real detectors: reverts from git history, CI failures from GitHub Actions
+    # check-runs. Both fail safe when the repo / remote / network is unavailable,
+    # degrading to TIMEOUT_CLEAN rather than raising.
+    reverts = GitRevertDetector(args.repo_dir)
+    failures = GitHubChecksFailureAttributor(args.repo or resolve_repo(args.repo_dir))
 
     store = OutcomeStore(args.store)
     emitted = label_matured(
-        store, _NoReverts(), _NoFailures(), LabellerConfig(maturity_days=args.maturity_days)
+        store, reverts, failures, LabellerConfig(maturity_days=args.maturity_days)
     )
     for r in emitted:
         print(f"labelled {r.change_id} {r.label_source} correct={r.label}")

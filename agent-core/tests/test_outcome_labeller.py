@@ -89,9 +89,11 @@ def test_z_suffix_timestamp_is_parsed(tmp_path):
     assert out and out[0].label_source == LabelSource.TIMEOUT_CLEAN.value
 
 
-def test_main_runs_with_placeholder_detectors(tmp_path):
+def test_main_offline_yields_timeout_clean(tmp_path):
+    # --repo-dir points at a non-repo directory, so the real git/GitHub detectors
+    # fail safe (no revert observed, no origin remote -> no CI lookup) and the
+    # matured change is labelled TIMEOUT_CLEAN. Hermetic: no git history, no network.
     store = _store(tmp_path, _pending("c1", "2000-01-01T00:00:00+00:00"))
-    rc = main(["--store", str(store.path), "--maturity-days", "7"])
+    rc = main(["--store", str(store.path), "--maturity-days", "7", "--repo-dir", str(tmp_path)])
     assert rc == 0
-    # placeholder detectors never revert/fail, so the matured change is TIMEOUT_CLEAN
     assert any(r.label_source == LabelSource.TIMEOUT_CLEAN.value for r in store.all())
