@@ -171,14 +171,22 @@ def compute_net_new(baseline: set, current: set) -> list:
 
 
 def _relativise(raw: str, root: Path) -> str:
-    """Best-effort relativise *raw* against *root*; fall back to the basename."""
+    """Relativise *raw* against *root*; fall back to the basename.
+
+    ruff emits filenames either absolute or relative to its invocation cwd (the tree
+    *root*), so relative inputs are joined to *root* — not the current process cwd —
+    before resolving. This keeps baseline and working-tree findings comparable and
+    avoids collapsing distinct directories to the same basename.
+    """
     if not raw:
         return ""
     candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = root / candidate
     try:
         return candidate.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
-        return candidate.name
+        return Path(raw).name
 
 
 # ---------------------------------------------------------------------------
@@ -220,11 +228,17 @@ def run_pytest(tree: Path, test_paths: Sequence[str], *, timeout: int) -> set[st
     logger.debug("pytest: %s (cwd=%s)", " ".join(cmd), tree)
     try:
         try:
-            subprocess.run(cmd, cwd=tree, capture_output=True, text=True, timeout=timeout)
+            proc = subprocess.run(cmd, cwd=tree, capture_output=True, text=True, timeout=timeout)
         except FileNotFoundError as exc:  # pragma: no cover - defensive
             raise ConfigError("pytest is not installed or not on PATH") from exc
         except subprocess.TimeoutExpired as exc:
             raise ConfigError(f"pytest timed out after {timeout}s") from exc
+        # 0 = all passed, 1 = tests failed (both expected and diffable). Anything else
+        # (2 interrupted/collection error, 3 internal, 4 usage, 5 no tests) means the run
+        # itself is broken — surface it rather than parsing partial output as "0 failures".
+        if proc.returncode not in (0, 1):
+            tail = (proc.stdout + proc.stderr).strip().splitlines()[-5:]
+            raise ConfigError(f"pytest run failed with exit code {proc.returncode}: " + " | ".join(tail))
         if not junit.exists():
             raise ConfigError("pytest did not produce a junit report (collection error?)")
         return parse_junit_failures(junit.read_text(encoding="utf-8"))

@@ -185,3 +185,13 @@ def test_guard_label_via_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_guard_custom_approval_label() -> None:
     rc = guard.main(["--files", "config/x.yaml", "--labels", "ok", "--approval-label", "ok"])
     assert rc == 0
+
+
+def test_guard_reports_flag_approval_source(capsys: pytest.CaptureFixture[str]) -> None:
+    assert guard.main(["--files", "config/x.yaml", "--approved"]) == 0
+    assert "--approved flag" in capsys.readouterr().out
+
+
+def test_guard_reports_label_approval_source(capsys: pytest.CaptureFixture[str]) -> None:
+    assert guard.main(["--files", "config/x.yaml", "--labels", "eval-change-approved"]) == 0
+    assert "label 'eval-change-approved'" in capsys.readouterr().out

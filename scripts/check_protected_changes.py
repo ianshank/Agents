@@ -88,12 +88,14 @@ def resolve_changed_files(args: argparse.Namespace) -> list[str]:
     return changed_files_from_git(base_ref)
 
 
-def is_approved(args: argparse.Namespace) -> bool:
-    """Return True if an approval signal is present."""
+def approval_source(args: argparse.Namespace) -> str | None:
+    """Return a human-readable description of the approval signal, or None if absent."""
     if args.approved:
-        return True
+        return "--approved flag"
     raw = args.labels if args.labels is not None else os.environ.get("PR_LABELS")
-    return args.approval_label in parse_labels(raw)
+    if args.approval_label in parse_labels(raw):
+        return f"label '{args.approval_label}'"
+    return None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -127,10 +129,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("protected-guard: OK — no eval-defining paths changed.")
         return 0
 
-    if is_approved(args):
-        print(
-            f"protected-guard: OK — {len(protected)} protected path(s) changed, approved via '{args.approval_label}'."
-        )
+    source = approval_source(args)
+    if source is not None:
+        print(f"protected-guard: OK — {len(protected)} protected path(s) changed, approved via {source}.")
         for path in protected:
             print(f"  - {path}")
         return 0

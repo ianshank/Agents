@@ -244,6 +244,21 @@ def test_run_pytest_collects_failures(tmp_path: Path) -> None:
     assert not (tmp_path / ".regression_gate_junit.xml").exists()
 
 
+def test_run_pytest_raises_on_collection_error(tmp_path: Path) -> None:
+    # An un-importable test module makes pytest exit 2 (collection error), not 0/1.
+    (tmp_path / "test_broken.py").write_text("import a_module_that_does_not_exist_xyz\n", encoding="utf-8")
+    with pytest.raises(rg.ConfigError):
+        rg.run_pytest(tmp_path, ["."], timeout=120)
+    assert not (tmp_path / ".regression_gate_junit.xml").exists()
+
+
+def test_relativise_joins_relative_paths_to_root(tmp_path: Path) -> None:
+    # A ruff-style relative filename must resolve against root, not the process cwd.
+    payload = json.dumps([{"filename": "pkg/mod.py", "code": "F401", "location": {"row": 1}}])
+    findings = rg.parse_ruff_json(payload, root=tmp_path)
+    assert {f.path for f in findings} == {"pkg/mod.py"}
+
+
 def test_run_pytest_cleans_report_on_parse_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "test_demo.py").write_text("def test_a():\n    assert True\n", encoding="utf-8")
 
