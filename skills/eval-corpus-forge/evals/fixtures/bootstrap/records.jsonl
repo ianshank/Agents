@@ -1,0 +1,2 @@
+{"session_id": "b1", "turn_id": "t1", "prompt": "What is the capital of France?", "expected_outcome": {"answer": "Paris"}}
+{"session_id": "b2", "turn_id": "t1", "prompt": "Summarize the onboarding flow", "expected_outcome": {"summary": "three steps"}}

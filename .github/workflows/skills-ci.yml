@@ -1,0 +1,49 @@
+name: skills CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "skills/eval-corpus-forge/**"
+      - ".github/workflows/skills-ci.yml"
+  pull_request:
+    paths:
+      - "skills/eval-corpus-forge/**"
+      - ".github/workflows/skills-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skills-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval-corpus-forge:
+    name: eval-corpus-forge py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: skills/eval-corpus-forge
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install pytest pytest-cov "pyyaml>=6" ruff
+      # Lint the authored library, runner, and tests (the vendored validate_skill.py mirrors
+      # the repo root copy and is intentionally excluded).
+      - run: ruff check scripts/forge scripts/run_eval_corpus_forge.py tests
+      # Unit + e2e tests with coverage gate on the forge library.
+      - run: python -m pytest tests --cov=forge --cov-report=term-missing --cov-fail-under=90
+      # The skill's own end-to-end self-check (structural + behavioral evals).
+      - run: python scripts/validate_skill.py --skill . --tier structural,behavioral

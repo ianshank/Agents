@@ -1,0 +1,70 @@
+{
+  "skill": "eval-corpus-forge",
+  "evals": [
+    {
+      "id": "full-dataset",
+      "prompt": "Forge a full dataset package from prompts + traces + tool calls.",
+      "run": "python scripts/run_eval_corpus_forge.py --in evals/fixtures/full-dataset --out .skill-validation/full",
+      "assertions": [
+        { "type": "exit_zero", "text": "full-dataset run succeeds" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import json;m=json.load(open('.skill-validation/full/manifest.json',encoding='utf-8'));assert m['validation']['status']=='passed';assert m['counts']['canonical_scenarios']>0\"", "text": "manifest validation passed and scenarios exist" },
+        { "type": "file_contains", "path": ".skill-validation/full/manifest.json", "contains": "\"mode\": \"full_dataset\"", "text": "detected full_dataset mode" }
+      ]
+    },
+    {
+      "id": "golden-values",
+      "prompt": "Output matches pinned ground-truth id and exact view counts (independent of code under test).",
+      "run": "python scripts/run_eval_corpus_forge.py --in evals/fixtures/full-dataset --out .skill-validation/golden",
+      "assertions": [
+        { "type": "exit_zero", "text": "golden run succeeds" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import json;sid=json.loads(open('.skill-validation/golden/canonical/scenarios.jsonl',encoding='utf-8').readline())['scenario_id'];assert sid=='scn_d343445c10e8f235', sid\"", "text": "deterministic scenario_id matches pinned golden value" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import os;c=lambda p:sum(1 for _ in open(p,encoding='utf-8'));b='.skill-validation/golden/views/';assert c(b+'retrieval_eval.jsonl')==1;assert c(b+'tool_invocation_eval.jsonl')==2;assert c(b+'response_eval.jsonl')==2;assert c(b+'end_to_end_eval.jsonl')==2\"", "text": "view record counts match pinned golden values" }
+      ]
+    },
+    {
+      "id": "bootstrap-views-empty",
+      "prompt": "Bootstrap input populates only applicable views and labels the rest not-applicable.",
+      "run": "python scripts/run_eval_corpus_forge.py --in evals/fixtures/bootstrap --out .skill-validation/boot",
+      "assertions": [
+        { "type": "exit_zero", "text": "bootstrap run succeeds" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import os;b='.skill-validation/boot/views/';assert os.path.getsize(b+'tool_invocation_eval.jsonl')==0;assert os.path.getsize(b+'retrieval_eval.jsonl')==0;assert os.path.getsize(b+'response_eval.jsonl')==0\"", "text": "non-applicable views are empty, not fabricated" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import json;m=json.load(open('.skill-validation/boot/manifest.json',encoding='utf-8'));va=m['view_applicability'];assert va['tool_invocation_eval']['applicable'] is False;assert va['tool_invocation_eval']['reason'];assert m['mode']=='bootstrap'\"", "text": "manifest marks empty views not-applicable with a reason" }
+      ]
+    },
+    {
+      "id": "no-prompts-stops",
+      "prompt": "Input with no prompts/scenarios stops with a precondition error and no package.",
+      "run": "python scripts/run_eval_corpus_forge.py --in evals/fixtures/no-prompts --out .skill-validation/nop || true",
+      "assertions": [
+        { "type": "output_contains", "contains": "no prompts or scenarios", "text": "stops with the precondition message" }
+      ]
+    },
+    {
+      "id": "csv-input",
+      "prompt": "CSV rows with JSON-encoded cells ingest into a valid package.",
+      "run": "python scripts/run_eval_corpus_forge.py --in evals/fixtures/csv --out .skill-validation/csv",
+      "assertions": [
+        { "type": "exit_zero", "text": "csv run succeeds" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import json;m=json.load(open('.skill-validation/csv/manifest.json',encoding='utf-8'));assert m['validation']['status']=='passed';assert m['counts']['canonical_scenarios']==2\"", "text": "two CSV rows became scenarios and validation passed" }
+      ]
+    },
+    {
+      "id": "transcript-input",
+      "prompt": "A conversation transcript expands per user turn without fabricating comparison targets.",
+      "run": "python scripts/run_eval_corpus_forge.py --in evals/fixtures/transcript --out .skill-validation/tr",
+      "assertions": [
+        { "type": "exit_zero", "text": "transcript run succeeds" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import json;m=json.load(open('.skill-validation/tr/manifest.json',encoding='utf-8'));c=m['counts'];assert c['canonical_scenarios']==2;assert c['tool_invocation_eval_records']==2;assert c['response_eval_records']==0\"", "text": "user turns expanded; tool view populated; no fabricated response records" }
+      ]
+    },
+    {
+      "id": "validator-rejects-broken",
+      "prompt": "The package validator actually fails on a deliberately corrupt package (negative test).",
+      "run": "python scripts/forge/package_validate.py --self-test-broken .skill-validation/broken",
+      "assertions": [
+        { "type": "exit_zero", "text": "validator correctly rejected the corrupt package" },
+        { "type": "output_contains", "contains": "correctly rejected", "text": "self-test confirms rejection" }
+      ]
+    }
+  ]
+}
