@@ -53,3 +53,7 @@ out/
 results/
 regression_report.json
 .regression_gate_junit.xml
+
+# Calibrated merge gate (F-010) runtime artifacts
+merge_outcomes.jsonl
+merge_decisions.jsonl

@@ -17,8 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decisions). Wired via `.github/workflows/calibrated-merge-gate.yml`, which auto-merges
   nothing unless `ENABLE_CALIBRATED_AUTOMERGE` is set. Documented in ADR 0005. Strict mypy +
   100% module coverage.
+- **Real outcome detectors (F-010):** `outcome_labeller` wires real detectors instead of
+  no-op placeholders — `agent_core/detectors.py`: `GitRevertDetector` (reads `git log` for
+  the `This reverts commit <sha>` footer), `GitHubChecksFailureAttributor` (a commit's GitHub
+  Actions check-runs via `gh api`), and `resolve_repo`. Every tunable lives on `DetectorConfig`
+  (timeouts + failing-conclusion set); all subprocess calls are timeout-bounded and fail *safe*
+  (missing binary / timeout / no repo → "no signal observed"). Shared `agent_core/timeutil.py`
+  (`parse_iso8601`, Z-tolerant, UTC-default). Tests are mock-free — real temporary git
+  repositories and real check-run payloads.
 
 ### Fixed
+- **Calibrated merge gate (review follow-ups):** `calibrated-merge-gate.yml`'s decide step
+  now fails on `REJECT` *and* on `merge_gate_ci`'s internal-error (`1`) / usage (`2`) exit
+  codes — previously only `20` mapped to failure, so an error silently passed the gate.
+  `OutcomeStore.all()` streams the append-only JSONL line-by-line instead of `read_text()`-ing
+  the whole (unbounded) store into one string.
 - **architecture-drift-guard:** `migrate_to_current` rejects a non-string
   `schema_version` (e.g. YAML list/dict) with a `ManifestError` instead of a bare
   `TypeError`; `_prepend_sys_path` now preserves manifest `sys_path` order on
@@ -60,8 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the gate's decision path.
 
 ### Changed
-- **`.gitignore` / `.dockerignore`:** Ignore `regression_report.json` and
-  `.regression_gate_junit.xml`.
+- **`.gitignore` / `.dockerignore`:** Ignore `regression_report.json`,
+  `.regression_gate_junit.xml`, and the merge-gate runtime artifacts
+  `merge_outcomes.jsonl` / `merge_decisions.jsonl`.
 - **`tests/conftest.py`:** Expose `scripts/` on `sys.path` so tooling has first-class tests.
 - **README / C4 Architecture:** Document the quality-gate and eval-integrity layer.
 - **`skills CI` workflow:** Added an isolated `architecture-drift-guard` job (matrix

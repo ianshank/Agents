@@ -50,9 +50,13 @@ of the risk guarantee. Tuning `min_calibration_n` / `risk_target` is a human dec
 
 ## Seam (must be wired by the enabling change)
 
-Nothing here writes the *initial* pending `OutcomeRecord` at merge time. The enabling
-workflow must seed `change_id / domain / raw_confidence / merged_at` so the labeller and
-audit sampler have records to resolve.
+The passive **detectors are wired** (`agent_core/detectors.py`): reverts come from `git log`
+(the `This reverts commit <sha>` footer) and CI failures from a commit's GitHub Actions
+check-runs (`gh api`), both timeout-bounded and failing *safe* (missing binary / timeout / no
+repo → no signal). What remains open is **record seeding**: nothing here writes the *initial*
+pending `OutcomeRecord` at merge time. The enabling workflow must seed
+`change_id / domain / raw_confidence / merged_at` so the labeller and audit sampler have
+records to resolve.
 
 ## Consequences
 

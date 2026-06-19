@@ -95,5 +95,20 @@ agent_core/
   recalibration.py TemperatureScaler, CalibratorRegistry, make_calibrator
   async_loop.py    AsyncLoopController, ParallelClaimRunner (semaphore-capped)
   persistence.py   save_run, load_run, calibrator round-trip serialization
-tests/             241 tests across all modules
+  merge_gate.py    GatePolicyConfig, decide() (REJECT->ESCALATE->AUTO_MERGE), threshold_for_risk
+  outcome_store.py OutcomeStore (append-only JSONL), BinningCalibrator, build_domain_models
+  outcome_labeller.py passive revert/CI-failure/timeout-clean labels (real detectors)
+  audit_sampler.py unbiased stratified sampling + HUMAN_AUDIT verdicts
+  merge_gate_ci.py CI entrypoint (exit 0/10/20), audit-logged decisions
+  detectors.py     GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo (fail-safe)
+  timeutil.py      parse_iso8601 (Z-tolerant, UTC-default)
+tests/             330 tests across all modules
 ```
+
+## Calibrated merge gate (F-010, default-off)
+A pure, deterministic merge-decision subsystem (ADR 0005). `merge_gate.decide()` is REJECT on
+mechanical failure → ESCALATE on protected paths → calibrated trust (risk-derived `tau` + health
+floors + per-bin Wilson floor) → AUTO_MERGE. Outcomes are labelled by **real** detectors —
+reverts from `git log`, CI failures from GitHub Actions check-runs via `gh api` — all
+timeout-bounded and failing safe. Auto-merge stays off unless `ENABLE_CALIBRATED_AUTOMERGE` is
+set and a populated, human-audited outcome store has earned it.
