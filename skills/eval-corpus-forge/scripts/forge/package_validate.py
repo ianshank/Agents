@@ -69,15 +69,33 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
         return False, errors
 
     # --- §7.1 structural ---
+    # Required artifacts are always created (§2); a missing file is a contract violation, not
+    # an empty view. _read_jsonl cannot distinguish missing from empty, so check existence here.
+    required_files = [
+        os.path.join("canonical", "scenarios.jsonl"),
+        os.path.join("ground_truth", "mappings.jsonl"),
+        *(os.path.join("views", f"{name}.jsonl") for name in VIEW_FILES),
+    ]
+    for rel in required_files:
+        if not os.path.isfile(os.path.join(out_dir, rel)):
+            fail("structural.missing_artifact", f"required artifact {rel} is missing")
+
     if not canonical:
         fail("structural.no_canonical", "no canonical scenarios produced")
     scenario_ids: set[str] = set()
     for sc in canonical:
+        if not isinstance(sc, dict):
+            fail("structural.invalid_canonical_row", f"canonical row is not a JSON object: {sc!r}")
+            continue
         sid = sc.get("scenario_id")
         for field in REQUIRED_SCENARIO_FIELDS:
             if field not in sc:
-                fail("structural.missing_field", f"canonical scenario missing field {field!r}", sid)
-        scenario_ids.add(sid)
+                fail("structural.missing_field", f"canonical scenario missing field {field!r}", sid if isinstance(sid, str) else None)
+        # Only a non-empty string is a usable id; record invalid ones instead of poisoning the set.
+        if isinstance(sid, str) and sid:
+            scenario_ids.add(sid)
+        else:
+            fail("structural.invalid_scenario_id", f"scenario_id must be a non-empty string, got {sid!r}")
 
     # manifest presence + count cross-check (independent re-count from disk, revision 3)
     if manifest is None:
@@ -102,12 +120,18 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
 
     # ground-truth references valid scenarios
     for gt in ground_truth:
+        if not isinstance(gt, dict):
+            fail("structural.invalid_ground_truth_row", f"ground-truth row is not a JSON object: {gt!r}")
+            continue
         if gt.get("scenario_id") not in scenario_ids:
             fail("structural.gt_dangling", f"ground-truth references unknown scenario {gt.get('scenario_id')!r}", gt.get("scenario_id"))
 
     # view records reference valid scenarios and carry required evidence
     for name, rows in views.items():
         for row in rows:
+            if not isinstance(row, dict):
+                fail("structural.invalid_view_row", f"{name} row is not a JSON object: {row!r}")
+                continue
             sid = row.get("scenario_id")
             if sid not in scenario_ids:
                 fail("structural.view_dangling", f"{name} references unknown scenario {sid!r}", sid)
@@ -129,9 +153,13 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
                 fail("structural.applicability_contradiction", f"{name}: applicable={applicable} but rows={has_rows}")
 
     # --- §7.2 behavioral ---
-    by_id = {sc.get("scenario_id"): sc for sc in canonical}
+    # Non-dict rows were already reported structurally; skip them here so the checks below can
+    # safely assume dict access without crashing on malformed packages.
+    by_id = {sc.get("scenario_id"): sc for sc in canonical if isinstance(sc, dict)}
     for sc in canonical:
-        prov = sc.get("provenance") or {}
+        if not isinstance(sc, dict):
+            continue
+        prov = sc.get("provenance") if isinstance(sc.get("provenance"), dict) else {}
         # provenance traceable to a source origin
         if not prov.get("source_file"):
             fail("behavioral.untraceable_provenance", "scenario provenance lacks source_file", sc.get("scenario_id"))
@@ -144,14 +172,18 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
             prov.get("turn_id"),
             sc.get("raw_prompt", ""),
         )
-        # only enforce when the id was generated (not a preserved source id)
-        if sc.get("scenario_id", "").startswith("scn_") and sc["scenario_id"] != recomputed:
-            fail("behavioral.nondeterministic_id", f"id {sc['scenario_id']} != recomputed {recomputed}", sc.get("scenario_id"))
+        # only enforce when the id was generated (not a preserved source id); a non-string id
+        # is already reported as structural.invalid_scenario_id, so guard against it here.
+        sid = sc.get("scenario_id")
+        if isinstance(sid, str) and sid.startswith("scn_") and sid != recomputed:
+            fail("behavioral.nondeterministic_id", f"id {sid} != recomputed {recomputed}", sid)
 
     # each view record maps to exactly one canonical; views do not duplicate full canonical
     for name, rows in views.items():
         seen: set[str] = set()
         for row in rows:
+            if not isinstance(row, dict):
+                continue  # already reported structurally
             sid = row.get("scenario_id")
             if sid in seen:
                 fail("behavioral.view_not_unique", f"{name} has duplicate record for {sid}", sid)
@@ -167,7 +199,7 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
 
     # ground truth separate from canonical (no raw_prompt leaking into mappings)
     for gt in ground_truth:
-        if "raw_prompt" in gt:
+        if isinstance(gt, dict) and "raw_prompt" in gt:
             fail("behavioral.gt_not_separate", "ground-truth mapping contains raw_prompt", gt.get("scenario_id"))
 
     # empty views correctly labeled not-applicable; bootstrap fabrication guard

@@ -217,12 +217,26 @@ def has_prompt(obj: dict[str, Any]) -> bool:
 
 
 def has_execution_artifact(obj: dict[str, Any]) -> bool:
-    """True if a record carries an observable execution artifact (§1.2)."""
+    """True if a record carries an observable execution artifact (§1.2).
+
+    A string counts only if non-whitespace; a dict counts only if it has truthy content (so
+    ``{"trace": {"tool_names": []}}`` is not evidence); a list counts if non-empty; any other
+    present scalar (e.g. a boolean ``completion_status``) counts.
+    """
     for key in _EXECUTION_KEYS:
         val = obj.get(key)
-        if isinstance(val, (list, dict, str)) and val:
-            return True
-        if isinstance(val, dict) and any(val.values()):
+        if val is None:
+            continue
+        if isinstance(val, str):
+            if val.strip():
+                return True
+        elif isinstance(val, dict):
+            if any(val.values()):
+                return True
+        elif isinstance(val, list):
+            if val:
+                return True
+        else:  # present scalar (bool/int/float)
             return True
     return False
 

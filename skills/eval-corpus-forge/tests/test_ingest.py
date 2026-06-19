@@ -86,8 +86,11 @@ def test_has_prompt(obj, expected):
         ({"retrieved_ids": ["d1"]}, True),
         ({"response": "hello"}, True),
         ({"completion_status": "success"}, True),
+        ({"completion_status": False}, True),   # present scalar counts as evidence
         ({"prompt": "x"}, False),
         ({"trace": {}}, False),
+        ({"trace": {"tool_names": []}}, False),  # dict with only empty content is not evidence
+        ({"response": "   "}, False),            # whitespace-only string is not evidence
     ],
 )
 def test_has_execution_artifact(obj, expected):

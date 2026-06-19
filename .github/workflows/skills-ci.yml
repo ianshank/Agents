@@ -23,6 +23,7 @@ jobs:
   eval-corpus-forge:
     name: eval-corpus-forge py${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: skills/eval-corpus-forge

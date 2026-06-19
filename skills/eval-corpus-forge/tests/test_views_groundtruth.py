@@ -48,6 +48,15 @@ def test_response_view_requires_comparison_target():
     assert out["response_eval"]["applicable"] is False
 
 
+def test_response_view_falls_back_to_model_output_when_response_blank():
+    # whitespace response must fall back to model_output, consistent with applicability
+    c = _canon({"prompt": "x", "response": "   ", "model_output": "answer", "expected_output_fields": {"ok": True}})
+    assert c["metadata"]["evaluator_applicability"]["response"] is True
+    out = views.build_views([c])
+    assert out["response_eval"]["applicable"] is True
+    assert out["response_eval"]["records"][0]["response"] == "answer"
+
+
 def test_view_records_are_thin_projections():
     out = views.build_views([_canon(FULL_RAW)])
     for name in views.VIEW_NAMES:

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import time
 from typing import Any
 
@@ -51,14 +50,23 @@ def write_package(
 
 
 def make_temp_dir(out: str) -> str:
-    """Create a sibling temp dir guaranteed to be on the same filesystem as ``out``."""
+    """Create a unique sibling temp dir on the same filesystem as ``out``.
+
+    The name includes the pid and a counter so concurrent forge runs never collide; we create
+    with os.makedirs (failing if it exists) rather than deleting any directory that is already
+    there, which could be another run's live staging area.
+    """
     parent = os.path.dirname(os.path.abspath(out)) or "."
     os.makedirs(parent, exist_ok=True)
-    tmp = os.path.join(parent, f"{os.path.basename(os.path.abspath(out))}.tmp.{int(time.time()*1000)}")
-    if os.path.exists(tmp):
-        shutil.rmtree(tmp)
-    os.makedirs(tmp)
-    return tmp
+    base = os.path.basename(os.path.abspath(out))
+    for attempt in range(100):
+        tmp = os.path.join(parent, f"{base}.tmp.{int(time.time()*1000)}.{os.getpid()}.{attempt}")
+        try:
+            os.makedirs(tmp)
+            return tmp
+        except FileExistsError:
+            continue
+    raise OSError(f"could not allocate a unique temp dir next to {out!r}")
 
 
 def commit(tmp_dir: str, out: str) -> str | None:

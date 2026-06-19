@@ -42,8 +42,15 @@ def _tool_record(c: dict[str, Any]) -> dict[str, Any] | None:
 
 def _response_record(c: dict[str, Any]) -> dict[str, Any] | None:
     raw = c["_raw"]
-    response = raw.get("response") or raw.get("model_output")
-    if not (isinstance(response, str) and response.strip()):
+    # Prefer a non-blank response, falling back to model_output — consistent with the
+    # applicability predicate in normalize._evaluator_applicability.
+    response = None
+    for key in ("response", "model_output"):
+        val = raw.get(key)
+        if isinstance(val, str) and val.strip():
+            response = val
+            break
+    if response is None:
         return None
     if not _has_comparison_target(raw):
         return None

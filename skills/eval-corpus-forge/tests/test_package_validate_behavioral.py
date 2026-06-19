@@ -97,6 +97,45 @@ def test_untraceable_provenance_detected(tmp_path):
     assert not passed and "behavioral.untraceable_provenance" in _checks(errors)
 
 
+def test_null_scenario_id_reported_not_crashed(tmp_path):
+    out = str(tmp_path / "pkg")
+    _build(out)
+    cpath = os.path.join(out, "canonical", "scenarios.jsonl")
+    rec = _read_first(cpath)
+    rec["scenario_id"] = None  # valid JSON, invalid type
+    _rewrite_jsonl(cpath, [rec])
+    passed, errors = validate_package(out)  # must not raise AttributeError
+    assert not passed and "structural.invalid_scenario_id" in _checks(errors)
+
+
+def test_non_object_canonical_row_reported_not_crashed(tmp_path):
+    out = str(tmp_path / "pkg")
+    _build(out)
+    cpath = os.path.join(out, "canonical", "scenarios.jsonl")
+    with open(cpath, "w", encoding="utf-8") as f:
+        f.write(json.dumps(["not", "an", "object"]) + "\n")  # a JSON array row
+    passed, errors = validate_package(out)  # must not raise
+    assert not passed and "structural.invalid_canonical_row" in _checks(errors)
+
+
+def test_non_object_view_row_reported_not_crashed(tmp_path):
+    out = str(tmp_path / "pkg")
+    _build(out)
+    vpath = os.path.join(out, "views", "retrieval_eval.jsonl")
+    with open(vpath, "w", encoding="utf-8") as f:
+        f.write(json.dumps(["bad"]) + "\n")
+    passed, errors = validate_package(out)  # must not raise
+    assert not passed and "structural.invalid_view_row" in _checks(errors)
+
+
+def test_missing_view_file_reported(tmp_path):
+    out = str(tmp_path / "pkg")
+    _build(out, mode="bootstrap")
+    os.remove(os.path.join(out, "views", "retrieval_eval.jsonl"))  # contract: always created
+    passed, errors = validate_package(out)
+    assert not passed and "structural.missing_artifact" in _checks(errors)
+
+
 def test_view_duplicates_canonical_detected(tmp_path):
     out = str(tmp_path / "pkg")
     canonicals, _gt, _vd = _build(out)
