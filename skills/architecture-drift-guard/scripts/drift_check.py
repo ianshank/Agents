@@ -70,8 +70,12 @@ def _prepend_sys_path(dirs: Sequence[str], base_dir: str) -> None:
     Relative entries resolve against ``base_dir`` (the manifest's directory), not
     the current working directory, so the gate is portable: it can be run from
     anywhere with ``--manifest /path/to/architecture.yaml``.
+
+    Manifest order is preserved on ``sys.path``: we iterate in reverse and
+    ``insert(0, ...)`` so the first ``sys_path`` entry ends up first (highest
+    precedence), matching the order a reader expects from the manifest.
     """
-    for raw in dirs:
+    for raw in reversed(list(dirs)):
         resolved = raw if os.path.isabs(raw) else os.path.join(base_dir, raw)
         resolved = os.path.abspath(resolved)
         if resolved not in sys.path:

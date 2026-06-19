@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] — Quality & Eval-Integrity Gates
 
+### Fixed
+- **architecture-drift-guard:** `migrate_to_current` rejects a non-string
+  `schema_version` (e.g. YAML list/dict) with a `ManifestError` instead of a bare
+  `TypeError`; `_prepend_sys_path` now preserves manifest `sys_path` order on
+  `sys.path` (was reversed by repeated `insert(0, …)`). (PR review follow-ups.)
+
+### Changed
+- **`validate_skill.py` (all copies):** the eval `setup` command's exit code is no
+  longer ignored — a non-zero `setup` now fails the eval (with truncated
+  stdout/stderr) instead of silently poisoning a passing run. Applied byte-identically
+  to the canonical `scripts/validate_skill.py` and all three vendored skill copies.
+
 ### Added
 - **Regression Gate (F-006):** `scripts/regression_gate.py` — materialises an isolated
   HEAD baseline via `git worktree` and blocks only *net-new* ruff/offline-test failures,
