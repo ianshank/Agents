@@ -61,25 +61,28 @@ class ScopeGuard:
     root: Path = field(default_factory=Path.cwd)
 
     def assert_writable(self, path: str | Path) -> Path:
-        """Return a resolved path if writable; raise :class:`ProtectedPathError` otherwise."""
-        rel = self._relative(path)
+        """Return a resolved path if writable; raise :class:`ProtectedPathError` otherwise.
+
+        The path is resolved and must stay *inside* ``root``. Absolute paths or
+        ``..`` traversal that escape the root are rejected outright — a fixer can only
+        ever touch the project tree, and within it never a protected eval-defining path.
+        """
+        resolved_root = self.root.resolve()
+        resolved = (resolved_root / Path(path)).resolve() if not Path(path).is_absolute() else Path(path).resolve()
+        try:
+            rel = resolved.relative_to(resolved_root).as_posix()
+        except ValueError as exc:
+            raise ProtectedPathError(f"refusing to write outside the project root: {path}") from exc
         if is_protected(rel):
             raise ProtectedPathError(f"refusing to write protected eval-defining path: {rel}")
-        return (self.root / rel).resolve()
+        return resolved
 
     def write_text(self, path: str | Path, content: str) -> Path:
-        """Write *content* to *path* only if it is outside the protected set."""
+        """Write *content* to *path* only if it is inside root and outside the protected set."""
         target = self.assert_writable(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return target
-
-    def _relative(self, path: str | Path) -> str:
-        candidate = Path(path)
-        try:
-            return candidate.resolve().relative_to(self.root.resolve()).as_posix()
-        except ValueError:
-            return candidate.as_posix()
 
 
 @dataclass

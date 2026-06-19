@@ -14,9 +14,10 @@ component, and data-flow views.
 | **No hard-coded values** | All behaviour comes from a validated config (`EvalConfig`). Defaults live on the schema and are overridable via `--set` or `${ENV_VAR:-default}` interpolation. Credentials are sourced from environment variables only. |
 | **Modular / dynamic** | Components (scorers, datasets, targets, sinks, judges) self-register in `Registry` objects and are built by name at runtime. Third parties add components via the `eval_harness.plugins` entry-point group — no edits to this package. |
 | **Backwards compatible** | Configs carry a `schema_version`; the migration chain upgrades old configs to the current schema on load. Registry **aliases** keep renamed component names resolving. Component contracts are abstract base classes, so implementations can evolve. |
-| **Test coverage** | Offline pytest suite (no network/SDK) at ≥85% line coverage, using a deterministic mock judge and an in-memory Langfuse client. |
+| **Test coverage** | Offline pytest suite (no network/SDK) at ≥85% line coverage, using a deterministic mock judge and an in-memory Langfuse client. The quality-gate tooling has its own ≥85% coverage gate. |
 | **Langfuse integration** | Hidden behind a narrow `LangfuseClient` interface with a `NullLangfuseClient` (tests/offline) and a guarded `SDKLangfuseClient` (production). |
 | **Security** | Snyk monitors dependencies continuously. No credentials in source code. |
+| **Eval integrity** | A regression gate blocks *net-new* lint/test failures vs the base, and a CODEOWNERS + label guard prevents silent weakening of evaluation-defining files. See [Quality Gates](#quality-gates). |
 
 ## Install
 
@@ -86,6 +87,33 @@ ruff check src/ tests/
 mypy src/eval_harness/
 ```
 
+## Quality Gates
+
+Because this is an **evaluation harness**, the cheapest way to make a check "pass" is to
+weaken the evaluation itself (lower a gate threshold, swap to the `mock` judge, edit a
+`verification:` clause). Two complementary gates make that hard:
+
+```bash
+# Regression gate — fails only on NET-NEW lint/test findings vs the base ref.
+python scripts/regression_gate.py --base-ref origin/main --report-path regression_report.json
+python scripts/regression_gate.py --mode warn      # annotate-only soak mode
+
+# Eval-integrity guard — fails if evaluation-defining files change without approval.
+python scripts/check_protected_changes.py --base-ref origin/main
+```
+
+- **Regression gate** (`F-006`) materialises an isolated `git worktree` baseline and runs
+  `ruff` + the offline pytest suite in both trees, blocking only findings that are new
+  relative to the base. It never runs live-judge / Langfuse evals.
+- **Protected-path guard** (`F-007`) + `.github/CODEOWNERS` require a human-reviewed
+  `eval-change-approved` label for any change under `features.yaml`, `config/`,
+  `src/eval_harness/{gating,scorers,judges}/`, `scripts/validations/`, `tests/`, or
+  `.github/`. The single source of truth is `scripts/eval_protected_paths.py`.
+- **Auto-fix loop** (`F-008`) is intentionally **disabled** design-only scaffolding; see
+  [`docs/decisions/0004-auto-fix-loop.md`](docs/decisions/0004-auto-fix-loop.md).
+
+All three run in `.github/workflows/quality-gates.yml`.
+
 ## Security Scanning
 
 ```bash
@@ -113,9 +141,14 @@ src/eval_harness/
   cli.py           entry point
 
 scripts/
-  validate.py       spec-driven project validation
-  validate_skill.py skill structural + behavioral validation
-  select_next.py    feature priority selector
+  validate.py             spec-driven project validation
+  validate_skill.py       skill structural + behavioral validation
+  select_next.py          feature priority selector
+  regression_gate.py      net-new lint/test diff vs an isolated HEAD baseline
+  eval_protected_paths.py single source of truth for protected eval-defining paths
+  check_protected_changes.py  CI guard: flags protected changes lacking approval
+  fix_loop.py             auto-fix loop scaffolding (DESIGN-ONLY, disabled)
+  validations/            per-feature validation scripts (F_0NN.py)
 
 skills/
   openai-judge/     skill: OpenAI-compatible LLM judge evaluation

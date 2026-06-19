@@ -32,6 +32,16 @@ jobs:
       - run: pip install -e ".[dev,langfuse,openai]"
       # Feature ledger: schema + DAG + git provenance + tier-fast validation commands.
       - run: python scripts/validate.py --tier fast
+      # Coverage gate for the quality-gate tooling itself (separate from the library's
+      # eval_harness coverage, since scripts/ is omitted from that config).
+      - name: Quality-gate tooling coverage (>=85%)
+        run: >-
+          python -m pytest
+          tests/test_regression_gate.py tests/test_protected_paths.py tests/test_fix_loop.py
+          --override-ini addopts=""
+          --cov=regression_gate --cov=eval_protected_paths
+          --cov=check_protected_changes --cov=fix_loop
+          --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
       # Net-new lint/test regressions vs the PR base (or main on push). Blocks on net-new.
       - name: Regression gate
         run: >-

@@ -59,6 +59,30 @@ def test_matched_protected_dedupes_and_sorts() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Glob translation + normalisation internals
+# ---------------------------------------------------------------------------
+
+
+def test_glob_to_regex_question_and_star_do_not_cross_separator() -> None:
+    rx = epp._glob_to_regex("a?b*c")
+    assert rx.match("axbZZc")
+    assert rx.match("axbc")
+    assert not rx.match("a/bc")
+
+
+def test_glob_to_regex_double_star_middle_crosses_separators() -> None:
+    rx = epp._glob_to_regex("a/**/b")
+    assert rx.match("a/b")
+    assert rx.match("a/x/y/b")
+    assert not rx.match("a/x/y")
+
+
+def test_normalise_strips_repeated_dot_slash_and_leading_slash() -> None:
+    assert epp._normalise("././a/b") == "a/b"
+    assert epp._normalise("/a/b") == "a/b"
+
+
+# ---------------------------------------------------------------------------
 # Label parsing
 # ---------------------------------------------------------------------------
 
@@ -75,6 +99,60 @@ def test_parse_labels_comma_and_space() -> None:
 def test_parse_labels_empty() -> None:
     assert guard.parse_labels(None) == set()
     assert guard.parse_labels("") == set()
+
+
+def test_parse_labels_json_strings() -> None:
+    assert guard.parse_labels('["a", "b"]') == {"a", "b"}
+
+
+def test_parse_labels_invalid_json_returns_empty() -> None:
+    assert guard.parse_labels("[not valid json") == set()
+
+
+# ---------------------------------------------------------------------------
+# git-backed diff resolution + config-error path
+# ---------------------------------------------------------------------------
+
+
+def _git(args: list[str], cwd) -> None:
+    import subprocess
+
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_changed_files_from_git(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init"], repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    _git(["add", "."], repo)
+    _git(["commit", "-m", "base"], repo)
+    (repo / "added.py").write_text("x = 1\n", encoding="utf-8")
+    _git(["add", "."], repo)
+    _git(["commit", "-m", "second"], repo)
+
+    monkeypatch.chdir(repo)
+    changed = guard.changed_files_from_git("HEAD~1")
+    assert "added.py" in changed
+
+
+def test_guard_config_error_on_unknown_ref(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init"], repo)
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    _git(["add", "."], repo)
+    _git(["commit", "-m", "base"], repo)
+
+    monkeypatch.chdir(repo)
+    # No --files, and an unresolvable base ref => configuration error (exit 2).
+    assert guard.main(["--base-ref", "no-such-ref-xyz"]) == 2
 
 
 # ---------------------------------------------------------------------------

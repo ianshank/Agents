@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — Quality & Eval-Integrity Gates
+
+### Added
+- **Regression Gate (F-006):** `scripts/regression_gate.py` — materialises an isolated
+  HEAD baseline via `git worktree` and blocks only *net-new* ruff/offline-test failures,
+  complementing the absolute coverage gate. Line-keyed lint identity, robust class-based
+  junit nodeid reconstruction, configurable lint/test paths + base ref + `block`/`warn`
+  mode, and a JSON report validated by `scripts/regression_report.schema.json`.
+- **Eval-Integrity Protected-Path Guard (F-007):** `scripts/eval_protected_paths.py`
+  (single source of truth + glob matcher) and `scripts/check_protected_changes.py` CI
+  guard, backed by `.github/CODEOWNERS`, require human approval (the `eval-change-approved`
+  label) for any change to evaluation-defining files (features, config, gating, scorers,
+  judges, validations, tests, CI).
+- **Auto-Fix Loop — design-only, disabled (F-008):** `scripts/fix_loop.py` inert skeleton
+  with a path-traversal-safe `ScopeGuard` that cannot write to protected paths, plus
+  `docs/decisions/0004-auto-fix-loop.md` and the human enable-checklist.
+- **Quality-Gates Workflow:** `.github/workflows/quality-gates.yml` runs feature
+  validation, a dedicated ≥85% coverage gate for the new tooling, the regression gate
+  (vs the PR base), and the protected-path guard.
+
+### Changed
+- **`.gitignore` / `.dockerignore`:** Ignore `regression_report.json` and
+  `.regression_gate_junit.xml`.
+- **`tests/conftest.py`:** Expose `scripts/` on `sys.path` so tooling has first-class tests.
+- **README / C4 Architecture:** Document the quality-gate and eval-integrity layer.
+
+### Security
+- Hardened `ScopeGuard` against path-traversal / absolute-path escapes (per peer review):
+  writes are confined to the project root *and* outside the protected set.
+
 ## [1.1.0] — 2026-06-16
 
 ### Added

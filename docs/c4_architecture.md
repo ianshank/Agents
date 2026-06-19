@@ -97,6 +97,37 @@ C4Component
     Rel(from_config, config_model, "validated input")
 ```
 
+## Quality & Eval-Integrity Gates
+
+These gates run in CI (`.github/workflows/quality-gates.yml`) and guard the harness
+against the Goodhart failure mode where the cheapest path to "green" is weakening the
+evaluation itself rather than fixing the code.
+
+```mermaid
+flowchart TB
+    PR[Pull Request] --> VAL[validate.py<br/>features.yaml schema + DAG + provenance]
+    PR --> COV[Tooling coverage gate<br/>>=85% on gate modules]
+    PR --> REG[regression_gate.py]
+    PR --> GUARD[check_protected_changes.py]
+
+    subgraph Regression Gate F-006
+        REG --> WT[git worktree<br/>isolated HEAD baseline]
+        WT --> DIFF[ruff + offline pytest<br/>in both trees]
+        DIFF --> NET{net-new findings?}
+        NET -->|yes & block| FAIL1[exit 1]
+        NET -->|no| PASS1[exit 0]
+    end
+
+    subgraph Eval-Integrity Guard F-007
+        GUARD --> MATCH[eval_protected_paths.py<br/>single source of truth]
+        MATCH --> PROT{protected path changed?}
+        PROT -->|yes, unapproved| FAIL2[exit 1 — needs label/CODEOWNERS]
+        PROT -->|no, or approved| PASS2[exit 0]
+    end
+
+    FIX[fix_loop.py<br/>DESIGN-ONLY / DISABLED] -.->|ScopeGuard blocks protected writes| MATCH
+```
+
 ## Data Flow
 
 ```mermaid

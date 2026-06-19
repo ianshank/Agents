@@ -47,6 +47,24 @@ def test_scope_guard_allows_implementation_write(tmp_path: Path) -> None:
     assert written.read_text(encoding="utf-8") == "ok = 1\n"
 
 
+def test_scope_guard_rejects_absolute_path_outside_root(tmp_path: Path) -> None:
+    sg = fix_loop.ScopeGuard(root=tmp_path)
+    with pytest.raises(fix_loop.ProtectedPathError):
+        sg.assert_writable("/etc/passwd")
+
+
+def test_scope_guard_rejects_parent_traversal(tmp_path: Path) -> None:
+    sg = fix_loop.ScopeGuard(root=tmp_path / "project")
+    (tmp_path / "project").mkdir()
+    with pytest.raises(fix_loop.ProtectedPathError):
+        sg.write_text("../../etc/passwd", "nope")
+
+
+def test_main_reports_disabled(capsys: pytest.CaptureFixture[str]) -> None:
+    assert fix_loop.main() == 0
+    assert "DISABLED" in capsys.readouterr().out
+
+
 # ---------------------------------------------------------------------------
 # Loop refusal / preconditions
 # ---------------------------------------------------------------------------

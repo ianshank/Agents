@@ -1,5 +1,16 @@
 # Next Steps
 
+## Recently Landed — Quality & Eval-Integrity Gates
+
+- [x] **Regression Gate (F-006)** — net-new ruff/offline-test diff vs an isolated HEAD
+  worktree baseline (`scripts/regression_gate.py`).
+- [x] **Protected-Path Guard (F-007)** — CODEOWNERS + label-checked CI guard over the
+  evaluation-defining surface (`scripts/check_protected_changes.py`).
+- [x] **Auto-Fix Loop design (F-008)** — inert, disabled scaffolding + ADR 0004.
+- [ ] **Make gates required** — add `quality-gates` jobs to branch-protection required
+  checks once they have soaked.
+- [ ] **Enable auto-fix loop** — only after the ADR 0004 human checklist is complete.
+
 ## Immediate (Pre-v1.2.0)
 
 - [ ] **Rotate Leaked Credentials** — The Langfuse keys `sk-lf-e220d788...` and
@@ -14,8 +25,8 @@
 
 ## Short Term (v1.2.0)
 
-- [ ] **CI/CD Pipeline** — GitHub Actions workflow for test, lint, type-check,
-  and Snyk scan on every PR.
+- [x] **CI/CD Pipeline** — GitHub Actions workflows for test, lint, type-check,
+  feature validation, regression + eval-integrity gates, and Snyk scan on every PR.
 - [ ] **Dynamic Version** — Use `setuptools.dynamic.version` to derive version
   from `version.py` and eliminate duplication in `pyproject.toml`.
 - [ ] **Parallel Execution** — Add `asyncio`/`concurrent.futures` option to

@@ -113,19 +113,24 @@ def reconstruct_nodeid(classname: str, name: str, file: str | None = None) -> st
     ``classname="tests.test_x" name="test_y"``; a class-based test
     ``tests/test_x.py::TestC::test_y`` becomes ``classname="tests.test_x.TestC"``.
 
-    When the ``file`` attribute is present (modern pytest) we use it to split the
-    module prefix off precisely; otherwise we fall back to the convention that
-    trailing Capitalised dotted segments are class names.
+    When the ``file`` attribute is present (modern pytest) we locate the module name
+    (the file stem) inside the dotted ``classname`` and treat any segments after it as
+    class parts. This is robust to the classname carrying a different package prefix
+    than the file path (which happens when pytest's rootdir/import mode differs between
+    CI and local runs). Otherwise we fall back to the convention that trailing
+    Capitalised dotted segments are class names.
     """
     if file:
-        module_dotted = file[:-3] if file.endswith(".py") else file
-        module_dotted = module_dotted.replace("/", ".").replace("\\", ".")
-        if classname == module_dotted:
-            class_parts: list[str] = []
-        elif classname.startswith(module_dotted + "."):
-            class_parts = classname[len(module_dotted) + 1 :].split(".")
-        else:
-            class_parts = []
+        file = file.replace("\\", "/")
+        module_name = Path(file).stem
+        class_parts: list[str] = []
+        if classname:
+            parts = classname.split(".")
+            if module_name in parts:
+                class_parts = parts[parts.index(module_name) + 1 :]
+            elif parts and parts[-1] != module_name:
+                # No module segment at all: keep only trailing Capitalised (class) parts.
+                class_parts = [p for p in parts if p[:1].isupper()]
         return "::".join([file, *class_parts, name])
 
     parts = classname.split(".") if classname else []
@@ -191,7 +196,11 @@ def run_ruff(tree: Path, lint_paths: Sequence[str], *, timeout: int) -> set[Lint
         raise ConfigError("ruff is not installed or not on PATH") from exc
     except subprocess.TimeoutExpired as exc:
         raise ConfigError(f"ruff timed out after {timeout}s") from exc
-    # ruff exits non-zero when it finds violations — that is expected, not an error.
+    # ruff exits 0 (clean) or 1 (violations found); anything else (e.g. 2 = config/internal
+    # error) must surface, otherwise empty stdout would be parsed as "0 findings" and the
+    # gate would pass silently on a broken lint run.
+    if proc.returncode not in (0, 1):
+        raise ConfigError(f"ruff failed with exit code {proc.returncode}: {proc.stderr.strip()}")
     return parse_ruff_json(proc.stdout, root=tree)
 
 
@@ -210,16 +219,18 @@ def run_pytest(tree: Path, test_paths: Sequence[str], *, timeout: int) -> set[st
     ]
     logger.debug("pytest: %s (cwd=%s)", " ".join(cmd), tree)
     try:
-        subprocess.run(cmd, cwd=tree, capture_output=True, text=True, timeout=timeout)
-    except FileNotFoundError as exc:  # pragma: no cover - defensive
-        raise ConfigError("pytest is not installed or not on PATH") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise ConfigError(f"pytest timed out after {timeout}s") from exc
-    if not junit.exists():
-        raise ConfigError("pytest did not produce a junit report (collection error?)")
-    payload = junit.read_text(encoding="utf-8")
-    junit.unlink(missing_ok=True)
-    return parse_junit_failures(payload)
+        try:
+            subprocess.run(cmd, cwd=tree, capture_output=True, text=True, timeout=timeout)
+        except FileNotFoundError as exc:  # pragma: no cover - defensive
+            raise ConfigError("pytest is not installed or not on PATH") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise ConfigError(f"pytest timed out after {timeout}s") from exc
+        if not junit.exists():
+            raise ConfigError("pytest did not produce a junit report (collection error?)")
+        return parse_junit_failures(junit.read_text(encoding="utf-8"))
+    finally:
+        # Always remove the temp report, even if parsing raised mid-way.
+        junit.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
