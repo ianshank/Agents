@@ -53,9 +53,15 @@ jobs:
             --audit-log merge_decisions.jsonl
           rc=$?
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
-          # Exit-code contract: 0 AUTO_MERGE, 10 ESCALATE, 20 REJECT.
-          if [ "$rc" -eq 20 ]; then exit 1; fi   # mechanical ground-truth failure
-          exit 0
+          # Exit-code contract: 0 AUTO_MERGE, 10 ESCALATE, 20 REJECT,
+          # 2 usage error, 1 unexpected internal error. Only the two non-failing
+          # decisions (AUTO_MERGE / ESCALATE) pass the gate; REJECT *and* any
+          # error code fail it, so an internal or usage error can never be
+          # mistaken for success and silently bypass the gate.
+          case "$rc" in
+            0 | 10) exit 0 ;;
+            *) exit 1 ;;
+          esac
       - name: Auto-merge (gated, default-off)
         if: steps.decide.outputs.rc == '0' && vars.ENABLE_CALIBRATED_AUTOMERGE == 'true'
         run: echo "AUTO_MERGE — enabling merge would happen here (human-enabled)."

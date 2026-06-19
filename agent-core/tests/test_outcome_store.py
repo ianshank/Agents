@@ -48,6 +48,17 @@ def test_store_append_and_all(tmp_path):
     assert {r.change_id for r in store.all()} == {"c1", "c2"}
 
 
+def test_store_all_skips_blank_lines(tmp_path):
+    # all() streams the file line-by-line; blank/whitespace-only lines (e.g. a
+    # stray trailing newline) must be skipped, not handed to json.loads.
+    path = tmp_path / "s.jsonl"
+    store = OutcomeStore(path)
+    store.append(_rec("c1", "core", 0.9, True, LabelSource.HUMAN_AUDIT))
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write("\n   \n")  # blank line + whitespace-only line
+    assert [r.change_id for r in store.all()] == ["c1"]
+
+
 def test_resolved_human_audit_wins(tmp_path):
     store = OutcomeStore(tmp_path / "s.jsonl")
     store.append(_rec("c1", "core", 0.9, True, LabelSource.TIMEOUT_CLEAN))

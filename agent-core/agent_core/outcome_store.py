@@ -61,10 +61,12 @@ class OutcomeStore:
             fh.write(rec.to_json() + "\n")
 
     def all(self) -> list[OutcomeRecord]:
+        # Stream line-by-line rather than read_text(): this store is append-only
+        # and grows unbounded, so never materialise the whole file as one string.
         if not self.path.exists():
             return []
-        lines = self.path.read_text(encoding="utf-8").splitlines()
-        return [OutcomeRecord.from_json(line) for line in lines if line.strip()]
+        with self.path.open(encoding="utf-8") as fh:
+            return [OutcomeRecord.from_json(line) for line in fh if line.strip()]
 
     def resolved(self) -> dict[str, OutcomeRecord]:
         """One authoritative record per change_id (HUMAN_AUDIT wins, else latest labeled)."""
