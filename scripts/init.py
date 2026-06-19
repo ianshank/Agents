@@ -4,11 +4,11 @@
 Creates a virtual-environment (if it does not already exist), installs the
 project with ``[dev,openai]`` extras, and prints *baseline ready* on success.
 
-Idempotent – safe to run multiple times.
+Idempotent - safe to run multiple times.
 
 Exit codes:
-    0 – success
-    1 – a step failed
+    0 - success
+    1 - a step failed
 """
 from __future__ import annotations
 
@@ -16,8 +16,9 @@ import logging
 import platform
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Constants

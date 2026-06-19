@@ -7,10 +7,11 @@ written against an earlier version keep working.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Generic, TypeVar
+from collections.abc import Callable, Iterable
+from typing import Generic, TypeVar, cast
 
 T = TypeVar("T")
+RegisteredT = TypeVar("RegisteredT")
 
 
 class RegistryError(KeyError):
@@ -23,9 +24,9 @@ class Registry(Generic[T]):
         self._reg: dict[str, type[T]] = {}
         self._aliases: dict[str, str] = {}
 
-    def register(self, name: str, *, aliases: Iterable[str] = ()):  # decorator
-        def deco(cls: type[T]) -> type[T]:
-            self.register_class(name, cls, aliases=aliases)
+    def register(self, name: str, *, aliases: Iterable[str] = ()) -> Callable[[type[RegisteredT]], type[RegisteredT]]:
+        def deco(cls: type[RegisteredT]) -> type[RegisteredT]:
+            self.register_class(name, cast(type[T], cls), aliases=aliases)
             return cls
 
         return deco

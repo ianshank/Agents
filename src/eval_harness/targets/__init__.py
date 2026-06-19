@@ -39,13 +39,15 @@ class CallableTarget(TargetRunner):
         self._fn: Callable[..., Any] | None = None
 
     def _resolve(self) -> Callable[..., Any]:
-        if self._fn is None:
+        fn = self._fn
+        if fn is None:
             module_name, _, attr = self.path.partition(":")
             if not attr:
                 raise ValueError(f"target path {self.path!r} must be 'module:function'")
             module = importlib.import_module(module_name)
-            self._fn = getattr(module, attr)
-        return self._fn
+            fn = getattr(module, attr)
+            self._fn = fn
+        return fn
 
     def run(self, item: EvalItem) -> TargetOutput:
         fn = self._resolve()

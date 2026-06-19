@@ -1,3 +1,5 @@
+# pyright: reportMissingImports=false
+# mypy: disable-error-code=import-not-found
 """Tests for eval_harness.agent_core_adapter.
 
 All tests use deterministic doubles — no network, no real LLM.
@@ -154,41 +156,41 @@ class TestHarnessJudgeRunner:
         cfg = _config(resolution_threshold=threshold, tokens_per_claim=tokens, per_token_rate=rate)
         return HarnessJudgeRunner(judge, _store(), cfg)
 
-    def _state(self, *ids: str) -> agent_core.CycleState:
+    def _state(self, *ids: str) -> Any:
         return agent_core.CycleState(cycle_index=1, unresolved=tuple(ids))
 
     def test_resolves_all_claims_above_threshold(self) -> None:
         runner = self._runner(_FixedJudge(0.9))
-        result = runner.run(self._state("c1", "c2", "c3"))
+        result: Any = runner.run(self._state("c1", "c2", "c3"))
         assert result.new_unresolved == ()
 
     def test_keeps_claims_below_threshold_unresolved(self) -> None:
         runner = self._runner(_FixedJudge(0.3))
-        result = runner.run(self._state("c1", "c2", "c3"))
+        result: Any = runner.run(self._state("c1", "c2", "c3"))
         assert set(result.new_unresolved) == {"c1", "c2", "c3"}
 
     def test_mixed_threshold(self) -> None:
         judge = _PerClaimJudge({"c1": 0.9, "c2": 0.4, "c3": 0.95})
         runner = self._runner(judge)
-        result = runner.run(self._state("c1", "c2", "c3"))
+        result: Any = runner.run(self._state("c1", "c2", "c3"))
         assert set(result.new_unresolved) == {"c2"}
 
     def test_cost_equals_n_claims_times_rate(self) -> None:
         runner = self._runner(_FixedJudge(0.5), tokens=1_000, rate=0.001)
-        result = runner.run(self._state("c1", "c2", "c3"))
+        result: Any = runner.run(self._state("c1", "c2", "c3"))
         expected_cost = 3 * 1_000 * 0.001
         assert math.isclose(result.cost, expected_cost, rel_tol=1e-9)
 
     def test_empty_unresolved_returns_zero_cost(self) -> None:
         runner = self._runner(_FixedJudge(0.9))
-        result = runner.run(self._state())
+        result: Any = runner.run(self._state())
         assert result.cost == 0.0
         assert result.new_unresolved == ()
 
     def test_first_cycle_delta_equals_score(self) -> None:
         # prev defaults to 0.0 → delta == |score - 0| == score
         runner = self._runner(_FixedJudge(0.6))
-        result = runner.run(self._state("c1"))
+        result: Any = runner.run(self._state("c1"))
         assert math.isclose(result.max_conf_delta, 0.6, rel_tol=1e-9)
 
     def test_second_cycle_delta_is_score_change(self) -> None:
@@ -198,17 +200,17 @@ class TestHarnessJudgeRunner:
 
         judge._scores["c1"] = 0.7  # cycle 2: score=0.7, prev=0.4 → delta=0.3
         state2 = agent_core.CycleState(cycle_index=2, unresolved=("c1",))
-        result2 = runner.run(state2)
+        result2: Any = runner.run(state2)
         assert math.isclose(result2.max_conf_delta, 0.3, rel_tol=1e-9)
 
     def test_new_evidence_true_when_claims_resolved(self) -> None:
         runner = self._runner(_FixedJudge(0.9))
-        result = runner.run(self._state("c1", "c2"))
+        result: Any = runner.run(self._state("c1", "c2"))
         assert result.new_evidence is True
 
     def test_new_evidence_false_when_nothing_resolved(self) -> None:
         runner = self._runner(_FixedJudge(0.1))
-        result = runner.run(self._state("c1", "c2"))
+        result: Any = runner.run(self._state("c1", "c2"))
         assert result.new_evidence is False
 
     def test_prompt_contains_claim_id_and_inputs(self) -> None:
@@ -252,7 +254,7 @@ class TestFixedCostEstimator:
     def _est(self, tokens: int = 2_000, rate: float = 1e-5) -> FixedCostEstimator:
         return FixedCostEstimator(_config(tokens_per_claim=tokens, per_token_rate=rate))
 
-    def _state(self, *ids: str) -> agent_core.CycleState:
+    def _state(self, *ids: str) -> Any:
         return agent_core.CycleState(unresolved=tuple(ids))
 
     def test_projects_n_unresolved_times_rate(self) -> None:

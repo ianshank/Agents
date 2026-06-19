@@ -14,7 +14,7 @@ component, and data-flow views.
 | **No hard-coded values** | All behaviour comes from a validated config (`EvalConfig`). Defaults live on the schema and are overridable via `--set` or `${ENV_VAR:-default}` interpolation. Credentials are sourced from environment variables only. |
 | **Modular / dynamic** | Components (scorers, datasets, targets, sinks, judges) self-register in `Registry` objects and are built by name at runtime. Third parties add components via the `eval_harness.plugins` entry-point group — no edits to this package. |
 | **Backwards compatible** | Configs carry a `schema_version`; the migration chain upgrades old configs to the current schema on load. Registry **aliases** keep renamed component names resolving. Component contracts are abstract base classes, so implementations can evolve. |
-| **Test coverage** | Offline pytest suite (no network/SDK) at ≥85% line coverage, using a deterministic mock judge and an in-memory Langfuse client. |
+| **Test coverage** | Offline pytest suite (no network/SDK) at ≥96% line coverage (152 tests), using a deterministic mock judge and an in-memory Langfuse client. |
 | **Langfuse integration** | Hidden behind a narrow `LangfuseClient` interface with a `NullLangfuseClient` (tests/offline) and a guarded `SDKLangfuseClient` (production). |
 | **Security** | Snyk monitors dependencies continuously. No credentials in source code. |
 
@@ -131,7 +131,7 @@ docs/
 ```yaml
 # GitHub Actions example
 - name: Test
-  run: pytest --cov=eval_harness --cov-report=term-missing --cov-fail-under=85
+  run: pytest --cov=eval_harness --cov-report=term-missing --cov-fail-under=96
 
 - name: Lint
   run: ruff check src/ tests/

@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`py.typed` marker (PEP 561):** `src/eval_harness/py.typed` shipped and registered
+  in `pyproject.toml` — downstream type-checkers now recognise the package as typed.
+- **Configurable `OpenAIJudge` parameters:** `stream`, `failure_score`,
+  `retry_attempts`, `retry_wait_multiplier_seconds`, `retry_wait_min_seconds`,
+  `retry_wait_max_seconds`, and `langfuse_openai_module` are now constructor
+  arguments with sensible defaults, enabling per-instance tuning and full unit-test
+  coverage of retry/failure paths.
+- **`BedrockJudge.anthropic_version`:** Configurable Bedrock API version string
+  (default `"bedrock-2023-05-31"`).
+- **Named constants in `judges/__init__.py`:** Magic numbers and string literals
+  extracted to module-level constants (`DEFAULT_OPENAI_MAX_TOKENS`, etc.).
+- **`BedrockJudge` test suite (`tests/test_bedrock_judge.py`):** Full mocked-boto3
+  coverage of request construction, response parsing, and custom `score_field`.
+
+### Changed
+- **`agent_core_adapter`:** Import guard for `agent_core.protocols` now uses a
+  `TYPE_CHECKING` branch so mypy sees the real types without a hard runtime import;
+  falls back to a lazy `import_module` at runtime.
+- **CI (`eval-harness-ci.yml`):** `pytest` step now enforces `--cov-fail-under=96`
+  to lock in the improved coverage baseline.
+- **Input validation:** `OpenAIJudge.__init__` validates `max_tokens`, `temperature`,
+  `top_p`, `failure_score`, retry bounds, `score_field`, and `langfuse_openai_module`
+  at construction time.
+
+### Tests
+- **Coverage gaps closed (gating, sinks, judges):** Added 18+ new test cases across
+  `test_components.py`, `test_engine.py`, and `test_openai_judge.py` to exercise
+  previously uncovered branches:
+  - `ConsoleSink` verbose mode output
+  - `LangfuseSink` no-client guard, `min_value_to_log` filter
+  - `evaluate_gate` with `pass_rate=None` and `max`-constraint violations
+  - `OpenAIJudge` empty-choices chunk, non-rate-limit API errors, no-JSON / malformed-JSON
+    response paths, `attach_client()` with `SDKLangfuseClient`, and Langfuse import failure
+  - `BedrockJudge` request body, response parsing, custom score field
+- **`pragma: no cover`:** Annotated the unreachable `ImportError` branch in
+  `judges/__init__.py` (openai is a required extra; the branch cannot be hit when
+  the package is correctly installed); removed the blanket annotation from `BedrockJudge`
+  class now that it is covered by mocked tests.
+- Overall line coverage: **93.8% → 96.49%**. All 152 tests pass.
+
 ## [1.1.0] — 2026-06-16
 
 ### Added

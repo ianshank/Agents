@@ -8,6 +8,7 @@ lazily so the package installs and tests run with zero external dependencies.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from importlib import import_module
 from typing import Any
 
 
@@ -81,7 +82,7 @@ class SDKLangfuseClient(LangfuseClient):
 
     def __init__(self, **client_kwargs: Any) -> None:
         try:
-            from langfuse import Langfuse
+            langfuse_cls = import_module("langfuse").Langfuse
         except ImportError as exc:
             raise RuntimeError(
                 "The 'langfuse' package is required for SDKLangfuseClient. "
@@ -101,7 +102,7 @@ class SDKLangfuseClient(LangfuseClient):
                 if value:
                     client_kwargs[kwarg_name] = value
 
-        self._lf = Langfuse(**client_kwargs)
+        self._lf = langfuse_cls(**client_kwargs)
 
     def get_dataset_items(self, dataset_name: str) -> list[dict]:
         dataset = self._lf.get_dataset(dataset_name)
@@ -156,7 +157,7 @@ def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
     If the langfuse SDK is not installed, it acts as a transparent no-op decorator.
     """
     try:
-        from langfuse.decorators import observe as lf_observe
+        lf_observe = import_module("langfuse.decorators").observe
 
         return lf_observe(*decorator_args, **decorator_kwargs)
     except ImportError:
@@ -170,7 +171,8 @@ def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
 class SafeLangfuseContext:
     def get_current_trace_id(self) -> str | None:
         try:
-            from langfuse.decorators import langfuse_context
+            decorators = import_module("langfuse.decorators")
+            langfuse_context = decorators.langfuse_context
 
             return langfuse_context.get_current_trace_id()  # type: ignore[no-any-return]
         except ImportError:

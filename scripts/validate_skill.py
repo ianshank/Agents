@@ -17,7 +17,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +25,9 @@ BEHAVIORAL_TYPES: set[str] = {"exit_zero", "output_contains", "file_contains", "
 WORKDIR: str = ".skill-validation"
 
 
-def parse_frontmatter(skill_md: str) -> tuple[Optional[dict[str, str]], int]:
+def parse_frontmatter(skill_md: str) -> tuple[dict[str, str] | None, int]:
     """Return (frontmatter_dict_or_None, line_count). Prefer real YAML; fall back tolerantly."""
-    with open(skill_md, "r", encoding="utf-8") as f:
+    with open(skill_md, encoding="utf-8") as f:
         text = f.read()
     nlines = len(text.splitlines())
     m = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.S)
@@ -42,32 +42,33 @@ def parse_frontmatter(skill_md: str) -> tuple[Optional[dict[str, str]], int]:
     except Exception:
         pass
     fm: dict[str, str] = {}
-    key: Optional[str] = None
+    key: str | None = None
     for line in block.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         if not line[0].isspace() and ":" in line:
-            key, val = line.split(":", 1)
-            key = key.strip()
-            fm[key] = val.strip()
+            raw_key, val = line.split(":", 1)
+            parsed_key = raw_key.strip()
+            key = parsed_key
+            fm[parsed_key] = val.strip()
         elif key and line[0].isspace():           # folded continuation
             fm[key] = (fm[key] + " " + line.strip()).strip()
     return fm, nlines
 
 
-def load_evals(skill_dir: str, evals_path: str, errs: list[str]) -> Optional[dict[str, Any]]:
+def load_evals(skill_dir: str, evals_path: str, errs: list[str]) -> dict[str, Any] | None:
     path = evals_path if os.path.isabs(evals_path) else os.path.join(skill_dir, evals_path)
     if not os.path.isfile(path):
         return None
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)  # type: ignore[no-any-return]
     except (json.JSONDecodeError, OSError) as e:
         errs.append(f"cannot parse {evals_path}: {e}")
         return None
 
 
-def first_path_token(cmd: str) -> Optional[str]:
+def first_path_token(cmd: str) -> str | None:
     for tok in cmd.split():
         if "/" in tok and not tok.startswith("-"):
             return tok
@@ -142,7 +143,7 @@ def grade(
     if t == "file_contains":
         p = os.path.join(skill_dir, a["path"])
         try:
-            with open(p, "r", encoding="utf-8", errors="replace") as f:
+            with open(p, encoding="utf-8", errors="replace") as f:
                 body = f.read()
         except OSError as e:
             return res(False, f"cannot read {a['path']}: {e}")
@@ -246,8 +247,8 @@ def main() -> int:
         warns += w
     if "behavioral" in tiers:
         errs += check_behavioral(args.skill, args.evals, args.timeout)
-    for w in warns:
-        print(f"[warn] {w}")
+    for warn in warns:
+        print(f"[warn] {warn}")
     if errs:
         print("SKILL VALIDATION FAILED:\n  - " + "\n  - ".join(errs))
         return 1

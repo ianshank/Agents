@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from eval_harness.langfuse_client import NullLangfuseClient, SDKLangfuseClient, langfuse_context, observe
+from eval_harness.langfuse_client import (  # type: ignore[import-not-found]
+    NullLangfuseClient,
+    SDKLangfuseClient,
+    langfuse_context,
+    observe,
+)
 
 
 @patch("langfuse.Langfuse")

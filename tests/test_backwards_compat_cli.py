@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+import sys
+from importlib import import_module
 from pathlib import Path
 
-from eval_harness.cli import main
-from eval_harness.config import load_config
-from eval_harness.config.migrations import migrate_to_current
-from eval_harness.engine import EvalEngine
-from eval_harness.langfuse_client import NullLangfuseClient
-from eval_harness.version import SCHEMA_VERSION
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SRC_DIR = PROJECT_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
+main = import_module("eval_harness.cli").main
+load_config = import_module("eval_harness.config").load_config
+migrate_to_current = import_module("eval_harness.config.migrations").migrate_to_current
+EvalEngine = import_module("eval_harness.engine").EvalEngine
+NullLangfuseClient = import_module("eval_harness.langfuse_client").NullLangfuseClient
+SCHEMA_VERSION = import_module("eval_harness.version").SCHEMA_VERSION
+
+CONFIG_DIR = PROJECT_ROOT / "config"
 
 
 def test_migration_0_9_renames_fields():

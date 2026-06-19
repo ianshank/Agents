@@ -42,7 +42,7 @@ def test_json_keys_partial():
     s = SCORERS.create("json_keys", {"required": ["a", "b"]})
     r = s.score(_item(), TargetOutput(output={"a": 1}), _ctx())
     assert r.value == 0.5 and r.passed is False
-    assert "missing keys" in r.comment
+    assert r.comment is not None and "missing keys" in r.comment
 
 
 def test_json_keys_from_string():
