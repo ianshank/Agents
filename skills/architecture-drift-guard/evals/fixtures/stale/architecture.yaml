@@ -1,0 +1,10 @@
+schema_version: "1.0.0"
+root_packages: [stalepkg]
+components:
+  api: [stalepkg.api]
+  core: [stalepkg.core]
+dependencies:
+  api: [core]
+output:
+  mermaid_path: evals/fixtures/stale/architecture.mmd
+  title: Stale fixture

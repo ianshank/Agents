@@ -1,0 +1,61 @@
+{
+  "skill": "architecture-drift-guard",
+  "evals": [
+    {
+      "id": "drift-clean",
+      "prompt": "Run the drift gate on a package whose imports exactly match the manifest.",
+      "run": "python scripts/drift_check.py --manifest evals/fixtures/clean/architecture.yaml",
+      "assertions": [
+        { "type": "exit_zero", "text": "clean architecture passes the gate" },
+        { "type": "output_contains", "contains": "matches the manifest", "text": "reports a clean result" }
+      ]
+    },
+    {
+      "id": "drift-detects-undocumented",
+      "prompt": "Run the drift gate on a package with an undeclared back-edge; it must fail.",
+      "run": "python scripts/drift_check.py --manifest evals/fixtures/drift/architecture.yaml",
+      "assertions": [
+        { "type": "output_contains", "contains": "core -> api", "text": "names the undocumented edge" },
+        { "type": "output_contains", "contains": "architecture drift", "text": "explains the failure" },
+        { "type": "command_exit_zero", "cmd": "python scripts/drift_check.py --manifest evals/fixtures/drift/architecture.yaml >/dev/null 2>&1; test $? -eq 1", "text": "the gate exits non-zero on drift" }
+      ]
+    },
+    {
+      "id": "emit-actual-bootstrap",
+      "prompt": "Emit a dependencies: block from the real graph for bootstrapping a manifest.",
+      "run": "python scripts/drift_check.py --manifest evals/fixtures/clean/architecture.yaml --emit-actual",
+      "assertions": [
+        { "type": "exit_zero", "text": "emit-actual succeeds" },
+        { "type": "output_contains", "contains": "dependencies:", "text": "prints a dependencies block" },
+        { "type": "command_exit_zero", "cmd": "python scripts/drift_check.py --manifest evals/fixtures/clean/architecture.yaml --emit-actual 2>/dev/null | python -c 'import sys,yaml; d=yaml.safe_load(sys.stdin); assert \"dependencies\" in d'", "text": "emitted block is valid YAML with a dependencies key" }
+      ]
+    },
+    {
+      "id": "mermaid-fresh-ok",
+      "prompt": "Freshness check passes when the committed diagram matches the manifest.",
+      "run": "python scripts/mermaid_gen.py --manifest evals/fixtures/fresh/architecture.yaml --check -o evals/fixtures/fresh/architecture.mmd",
+      "assertions": [
+        { "type": "exit_zero", "text": "fresh diagram passes the freshness gate" },
+        { "type": "output_contains", "contains": "up to date", "text": "reports the diagram is current" }
+      ]
+    },
+    {
+      "id": "mermaid-stale-fails",
+      "prompt": "Freshness check fails when the committed diagram is out of date.",
+      "run": "python scripts/mermaid_gen.py --manifest evals/fixtures/stale/architecture.yaml --check -o evals/fixtures/stale/architecture.mmd",
+      "assertions": [
+        { "type": "output_contains", "contains": "stale", "text": "reports the diagram is stale" },
+        { "type": "command_exit_zero", "cmd": "python scripts/mermaid_gen.py --manifest evals/fixtures/stale/architecture.yaml --check -o evals/fixtures/stale/architecture.mmd >/dev/null 2>&1; test $? -eq 1", "text": "the freshness gate exits non-zero when stale" }
+      ]
+    },
+    {
+      "id": "mermaid-generate",
+      "prompt": "Generate the C4 component diagram from a manifest.",
+      "run": "python scripts/mermaid_gen.py --manifest evals/fixtures/clean/architecture.yaml -o .skill-validation/out.mmd",
+      "assertions": [
+        { "type": "exit_zero", "text": "generation succeeds" },
+        { "type": "file_contains", "path": ".skill-validation/out.mmd", "contains": "C4Component", "text": "writes a C4 Component diagram" }
+      ]
+    }
+  ]
+}

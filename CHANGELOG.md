@@ -23,12 +23,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Quality-Gates Workflow:** `.github/workflows/quality-gates.yml` runs feature
   validation, a dedicated ≥85% coverage gate for the new tooling, the regression gate
   (vs the PR base), and the protected-path guard.
+- **Architecture Drift-Guard Skill (F-009):** `skills/architecture-drift-guard/` — a
+  self-contained skill (runtime deps `grimp` + `pyyaml` only) that extracts a codebase's
+  actual Python import graph, folds it to C4 **components**, and diffs it against a
+  declared `architecture.yaml`. `scripts/drift_check.py` is the deterministic drift gate
+  (with `--emit-actual` to bootstrap a manifest); `scripts/mermaid_gen.py` renders the C4
+  diagram and `--check` enforces freshness. Reusable `scripts/adguard/` library with the
+  grimp call isolated in `extractor.py`; ≥90% unit coverage plus structural+behavioral evals.
+- **Architecture Dogfood Gate:** root `architecture.yaml` + `architecture.mmd` (seeded from
+  `--emit-actual` and reviewed) and `.github/workflows/architecture-drift.yml`, a
+  deterministic drift+freshness gate over `eval_harness` and `agent_core`. No model is in
+  the gate's decision path.
 
 ### Changed
 - **`.gitignore` / `.dockerignore`:** Ignore `regression_report.json` and
   `.regression_gate_junit.xml`.
 - **`tests/conftest.py`:** Expose `scripts/` on `sys.path` so tooling has first-class tests.
 - **README / C4 Architecture:** Document the quality-gate and eval-integrity layer.
+- **`skills CI` workflow:** Added an isolated `architecture-drift-guard` job (matrix
+  3.10–3.12, pinned `grimp==3.14`) that never installs the repo packages.
+- **`pyproject.toml`:** Added the pinned `archguard` optional extra used by the dogfood gate.
 
 ### Security
 - Hardened `ScopeGuard` against path-traversal / absolute-path escapes (per peer review):

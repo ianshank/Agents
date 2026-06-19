@@ -1,0 +1,12 @@
+schema_version: "1.0.0"
+root_packages: [cleanpkg]
+# Resolved relative to this manifest's directory (where cleanpkg lives).
+sys_path: ["."]
+components:
+  api: [cleanpkg.api]
+  core: [cleanpkg.core]
+dependencies:
+  api: [core]
+output:
+  mermaid_path: evals/fixtures/clean/architecture.mmd
+  title: Clean fixture

@@ -136,3 +136,20 @@ features:
     validation_command: "python scripts/validations/F_008.py"
     depends_on: ["F-007"]
     notes: "DESIGN ONLY. No CI hook, no default-on path, no live-judge/Langfuse coupling. Tests run via the normal offline suite (tests/test_fix_loop.py)."
+
+  - id: "F-009"
+    epic: "Skills Framework"
+    name: "Architecture drift-guard skill + dogfood CI gate"
+    description: "Self-contained skills/architecture-drift-guard (grimp + pyyaml only) that diffs a codebase's actual import graph against a declared C4 component manifest and renders a Mermaid C4 diagram. Dogfooded on this repo via architecture.yaml/architecture.mmd and a deterministic drift+freshness CI gate over eval_harness and agent_core."
+    category: "infrastructure"
+    priority: "high"
+    status: "in_progress"
+    tier: "fast"
+    verification:
+      - "validate_skill.py passes structural+behavioral for skills/architecture-drift-guard"
+      - "drift_check.py exits 1 on an undocumented component edge, 0 when the manifest matches"
+      - "mermaid_gen.py --check exits 1 when architecture.mmd is stale, 0 when fresh"
+      - "drift gate is deterministic code with no model in the decision path; grimp isolated in adguard/extractor.py"
+    validation_command: "python scripts/validations/F_009.py"
+    depends_on: ["F-003", "F-004"]
+    notes: "Self-contained: the skill never imports the code it polices. The dogfood manifest's dependencies were seeded from --emit-actual and reviewed (core depends on nothing; deps flow inward)."
