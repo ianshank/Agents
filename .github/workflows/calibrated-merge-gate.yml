@@ -1,0 +1,56 @@
+name: calibrated merge gate
+
+# Default-OFF (see ADR 0005). Auto-merge happens ONLY when the repo variable
+# ENABLE_CALIBRATED_AUTOMERGE == 'true' AND a populated outcome store exists.
+# With no store every domain cold-starts to ESCALATE, so this workflow is inert
+# until a human enables it and audit data accumulates.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: merge-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: calibrated merge decision
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: agent-core
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip "setuptools>=68"
+      - run: pip install -e .
+      # Inputs (mech_pass / touches_protected / raw_confidence / domain) and the
+      # outcome store are produced upstream once seeding is implemented (ADR 0005
+      # seam). Until then STORE points at a (likely absent) file => cold start.
+      - name: Decide
+        id: decide
+        env:
+          STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
+          DOMAIN: ${{ vars.MERGE_GATE_DOMAIN || 'unknown' }}
+        run: |
+          set +e
+          python -m agent_core.merge_gate_ci --store "$STORE" --domain "$DOMAIN" \
+            --audit-log merge_decisions.jsonl
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          # Exit-code contract: 0 AUTO_MERGE, 10 ESCALATE, 20 REJECT.
+          if [ "$rc" -eq 20 ]; then exit 1; fi   # mechanical ground-truth failure
+          exit 0
+      - name: Auto-merge (gated, default-off)
+        if: steps.decide.outputs.rc == '0' && vars.ENABLE_CALIBRATED_AUTOMERGE == 'true'
+        run: echo "AUTO_MERGE — enabling merge would happen here (human-enabled)."

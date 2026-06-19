@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] — Quality & Eval-Integrity Gates
 
+### Added
+- **Calibrated auto-merge gate (F-010, opt-in / default-off):** a pure `agent_core`
+  subsystem — `merge_gate.py` (deterministic `decide()`: mechanical-failure REJECT →
+  protected-path ESCALATE → risk-derived `tau` + calibrator health + Wilson bin floor →
+  AUTO_MERGE), `outcome_store.py` (append-only `OutcomeStore`, `BinningCalibrator`, and
+  per-domain models built from HUMAN_AUDIT records on a held-out fold), `outcome_labeller.py`
+  (passive revert/CI-failure/timeout-clean signals), `audit_sampler.py` (unbiased stratified
+  sampling), and `merge_gate_ci.py` (CI entrypoint, exit codes 0/10/20, audit-logged
+  decisions). Wired via `.github/workflows/calibrated-merge-gate.yml`, which auto-merges
+  nothing unless `ENABLE_CALIBRATED_AUTOMERGE` is set. Documented in ADR 0005. Strict mypy +
+  100% module coverage.
+
 ### Fixed
 - **architecture-drift-guard:** `migrate_to_current` rejects a non-string
   `schema_version` (e.g. YAML list/dict) with a `ManifestError` instead of a bare
