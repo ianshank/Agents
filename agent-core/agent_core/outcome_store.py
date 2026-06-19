@@ -89,10 +89,15 @@ class BinningCalibrator:
     bin_acc: tuple[float, ...]
 
     def predict(self, raw_score: float) -> float:
+        return self.bin_acc[self.bin_index(raw_score)]
+
+    def bin_index(self, raw_score: float) -> int:
+        """Index of the score's bin. Distinct bins never conflate even when they
+        share the same empirical accuracy (unlike grouping by ``predict``)."""
         for i in range(len(self.bin_acc)):
             if raw_score < self.edges[i + 1]:
-                return self.bin_acc[i]
-        return self.bin_acc[-1]  # score >= top edge (e.g. exactly 1.0)
+                return i
+        return len(self.bin_acc) - 1  # score >= top edge (e.g. exactly 1.0)
 
     @staticmethod
     def fit(scores: list[float], labels: list[bool], bins: int = 10) -> BinningCalibrator:
@@ -174,7 +179,9 @@ def build_domain_models(store: OutcomeStore, cfg: GatePolicyConfig) -> dict[str,
             n=len(recs),
             ece=expected_calibration_error(ev_cal, ev_outcomes),
             auroc=ev_auroc,
-            bin_ci_width=_upper_half_ci_width(ev_cal, ev_labels, cfg.wilson_z),
+            # Bin by RAW (continuous) scores, not the discrete calibrated values,
+            # so equal-accuracy bins aren't conflated into an over-narrow CI.
+            bin_ci_width=_upper_half_ci_width(ev_raw, ev_labels, cfg.wilson_z),
         )
         tau = threshold_for_risk(ev_cal, ev_labels, cfg) if health.is_trustworthy(cfg) else None
         models[domain] = DomainModel(calibrator=cal, health=health, tau=tau)

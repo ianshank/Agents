@@ -80,6 +80,16 @@ def test_binning_calibrator_fit_predict():
     assert cal.predict(0.45) == 0.0  # empty bin -> 0.0
 
 
+def test_binning_calibrator_bin_index_distinguishes_equal_accuracy_bins():
+    # Two distinct bins both with 100% accuracy must NOT share a bin index.
+    scores = [0.85, 0.95]
+    labels = [True, True]
+    cal = BinningCalibrator.fit(scores, labels)
+    assert cal.predict(0.85) == cal.predict(0.95) == 1.0  # same accuracy
+    assert cal.bin_index(0.85) != cal.bin_index(0.95)  # but different bins
+    assert cal.bin_index(1.0) == len(cal.bin_acc) - 1
+
+
 def test_upper_half_ci_width_empty_and_nonempty():
     assert _upper_half_ci_width([], [], 1.96) == 0.0
     width = _upper_half_ci_width([0.95, 0.96, 0.97], [True, True, False], 1.96)

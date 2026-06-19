@@ -82,6 +82,13 @@ def test_label_matured_default_now(tmp_path):
     assert out and out[0].label_source == LabelSource.TIMEOUT_CLEAN.value
 
 
+def test_z_suffix_timestamp_is_parsed(tmp_path):
+    # 'Z'-suffixed merged_at must parse (datetime.fromisoformat rejects it < 3.11).
+    store = _store(tmp_path, _pending("c1", "2000-01-01T00:00:00Z"))
+    out = label_matured(store, _Reverts(set()), _Failures(set()), CFG, now=NOW)
+    assert out and out[0].label_source == LabelSource.TIMEOUT_CLEAN.value
+
+
 def test_main_runs_with_placeholder_detectors(tmp_path):
     store = _store(tmp_path, _pending("c1", "2000-01-01T00:00:00+00:00"))
     rc = main(["--store", str(store.path), "--maturity-days", "7"])

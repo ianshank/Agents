@@ -63,8 +63,12 @@ def run(ctx: ChangeContext, store: OutcomeStore, cfg: GatePolicyConfig) -> tuple
         d = decide(ctx, None, None, None, 0, 0, cfg)
         return d, f"no audit data for domain '{ctx.domain}' (cold start)"
 
-    # bin stats at the change's operating point, for the Wilson floor check
+    # bin stats at the change's operating point, for the Wilson floor check.
+    # Group by bin INDEX, not predicted accuracy: distinct bins can share the
+    # same accuracy (e.g. several 100% bins) and grouping by value would conflate
+    # them, inflating bin_n and letting thin data piggyback on a populated bin.
     p = m.calibrator.predict(ctx.raw_confidence)
+    target_bin = m.calibrator.bin_index(ctx.raw_confidence)
     audit = [
         r
         for r in store.resolved().values()
@@ -72,7 +76,7 @@ def run(ctx: ChangeContext, store: OutcomeStore, cfg: GatePolicyConfig) -> tuple
         and r.label_source == LabelSource.HUMAN_AUDIT.value
         and r.label is not None
     ]
-    same_bin = [r for r in audit if abs(m.calibrator.predict(r.raw_confidence) - p) < 1e-9]
+    same_bin = [r for r in audit if m.calibrator.bin_index(r.raw_confidence) == target_bin]
     bin_n = len(same_bin)
     bin_succ = sum(1 for r in same_bin if r.label)
 

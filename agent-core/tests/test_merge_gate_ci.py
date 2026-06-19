@@ -64,6 +64,25 @@ def test_run_auto_merge_on_healthy_high_confidence(tmp_path):
     assert "tau=" in why
 
 
+def test_run_bin_conflation_avoided(tmp_path):
+    # A lone audit in a different high bin (0.85) must not piggyback on the
+    # well-populated 0.96 bin: grouping by bin index keeps it thin -> ESCALATE.
+    store = _healthy_store(tmp_path / "s.jsonl")
+    store.append(
+        OutcomeRecord(
+            change_id="lone",
+            domain="core",
+            raw_confidence=0.85,
+            merged_at="2026-01-01T00:00:00+00:00",
+            label=True,
+            label_source=LabelSource.HUMAN_AUDIT.value,
+            labeled_at="2026-01-02T00:00:00+00:00",
+        )
+    )
+    d, _ = run(_ctx(raw_confidence=0.85), store, CFG)
+    assert d == GateDecision.ESCALATE
+
+
 def test_main_exit_codes_via_argv(tmp_path):
     store_path = str(_healthy_store(tmp_path / "s.jsonl").path)
     assert (
