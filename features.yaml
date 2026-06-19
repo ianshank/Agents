@@ -84,3 +84,55 @@ features:
     implemented_in: "08849fdb157ef57a2a0acc2084db44fdad67d341"
     depends_on: ["F-002"]
     notes: "Fallback to no-op tracing when langfuse library is absent."
+
+  - id: "F-006"
+    epic: "Quality Gate"
+    name: "Regression gate (net-new failures vs HEAD)"
+    description: "Worktree-baseline lint+offline-test diff; blocks only net-new findings/regressions, complementing the absolute coverage gate."
+    category: "infrastructure"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "Worktree baseline isolates HEAD (no untracked leakage)"
+      - "Net-new lint violation blocks; pre-existing does not"
+      - "Newly failing offline test blocks; class-based nodeids resolved"
+      - "Lint identity is line-keyed; report conforms to JSON schema"
+    validation_command: "python scripts/validations/F_006.py"
+    implemented_in: "e5796d1"
+    depends_on: ["F-001"]
+    notes: "Offline deterministic suite only; never runs live-judge/Langfuse evals."
+
+  - id: "F-007"
+    epic: "Quality Gate"
+    name: "Eval-integrity protected-path guard"
+    description: "Single-source protected-path matcher plus a CI guard that flags PRs touching eval-defining files (features, config, gating, scorers, judges, validations, tests, CI) without an approval signal. Backed by CODEOWNERS."
+    category: "infrastructure"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "Matcher blocks every protected glob and allows implementation modules"
+      - "Guard blocks protected changes without approval label/flag"
+      - "Guard allows protected changes when approved, and implementation-only changes always"
+    validation_command: "python scripts/validations/F_007.py"
+    implemented_in: "e5796d1"
+    depends_on: ["F-001"]
+    notes: "Defense in depth: CODEOWNERS review + label-checked CI guard. Single source of truth in scripts/eval_protected_paths.py."
+
+  - id: "F-008"
+    epic: "Quality Gate"
+    name: "Agentic auto-fix loop (design-only, disabled)"
+    description: "Inert, unit-tested skeleton of a bounded auto-fix loop with an OS-layer scope guard that cannot write to protected eval-defining paths. Disabled by default; enabling is human-gated per ADR 0004."
+    category: "infrastructure"
+    priority: "medium"
+    status: "in_progress"
+    tier: "fast"
+    verification:
+      - "FIX_ENABLED defaults to False; loop refuses to run while disabled or unguarded"
+      - "ScopeGuard rejects writes to every protected glob"
+      - "Loop escalates at max_cycles; verdict re-derived from clean re-evaluation"
+      - "ADR 0004 documents the design and the human enable-checklist"
+    validation_command: "python scripts/validations/F_008.py"
+    depends_on: ["F-007"]
+    notes: "DESIGN ONLY. No CI hook, no default-on path, no live-judge/Langfuse coupling. Tests run via the normal offline suite (tests/test_fix_loop.py)."

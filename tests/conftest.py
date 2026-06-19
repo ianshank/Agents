@@ -5,7 +5,8 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
-for _p in (str(ROOT), str(SRC)):
+SCRIPTS = ROOT / "scripts"
+for _p in (str(ROOT), str(SRC), str(SCRIPTS)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
