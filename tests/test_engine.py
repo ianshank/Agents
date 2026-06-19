@@ -110,3 +110,34 @@ def test_gate_missing_score():
 def test_gate_none_passes():
     _config, engine = _engine()
     assert evaluate_gate(None, engine.run()).passed
+
+
+def test_gate_pass_rate_none_fails():
+    """Metric='pass_rate' on an aggregate with pass_rate=None → failure with informative message."""
+    from datetime import timezone
+
+    from eval_harness.config.models import GateConfig, GateRule
+    from eval_harness.core.types import RunResult, ScoreAggregate
+
+    run = RunResult(
+        run_id="r",
+        config_name="c",
+        items=[],
+        aggregate={"acc": ScoreAggregate(count=1, mean=0.9, pass_rate=None)},
+        started_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        finished_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    gate = GateConfig(rules=[GateRule(score="acc", metric="pass_rate", min=0.5)])
+    result = evaluate_gate(gate, run)
+    assert not result.passed
+    assert any("pass_rate" in f for f in result.failures)
+
+
+def test_gate_max_violated_fails():
+    """A rule with max=0.5 fails when observed mean=1.0 exceeds it."""
+    cfg = dict(CONFIG)
+    cfg["gate"] = {"rules": [{"score": "acc", "metric": "mean", "max": 0.5}]}
+    config, engine = _engine(cfg)
+    result = evaluate_gate(config.gate, engine.run())
+    assert not result.passed
+    assert any("above max" in f for f in result.failures)
