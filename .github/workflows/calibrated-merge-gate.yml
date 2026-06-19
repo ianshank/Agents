@@ -20,6 +20,11 @@ concurrency:
 jobs:
   gate:
     name: calibrated merge decision
+    # Inert by default: the job only runs once a human enables the gate AND wires
+    # the real upstream inputs (mech_pass / touches_protected / raw_confidence /
+    # domain + a populated store). Until then it is skipped (neutral), never
+    # failing PRs. See ADR 0005.
+    if: ${{ vars.ENABLE_CALIBRATED_AUTOMERGE == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:

@@ -58,9 +58,11 @@ audit sampler have records to resolve.
 
 - The subsystem is pure and proven by `agent-core/tests/test_merge_gate*.py`,
   `test_outcome_store.py`, `test_outcome_labeller.py`, `test_audit_sampler.py`.
-- `.github/workflows/calibrated-merge-gate.yml` runs the gate, labels `needs-human-review`
-  on `ESCALATE` and fails on `REJECT`, but only enables GitHub auto-merge on `AUTO_MERGE`
-  when `vars.ENABLE_CALIBRATED_AUTOMERGE == 'true'` (unset by default).
+- `.github/workflows/calibrated-merge-gate.yml` is **skipped entirely** unless
+  `vars.ENABLE_CALIBRATED_AUTOMERGE == 'true'` (a job-level `if`), so it never fails PRs by
+  default. When enabled it runs the gate, fails on `REJECT`, and only enables GitHub
+  auto-merge on `AUTO_MERGE`. Enabling also requires wiring the real upstream inputs
+  (mech_pass / touches_protected / raw_confidence / domain) and a populated store.
 - Once wired to merge, the gate is itself eval-defining infra and lives under the protected
   set.
 
