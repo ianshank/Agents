@@ -68,5 +68,11 @@ def commit(tmp_dir: str, out: str) -> str | None:
     if os.path.exists(out_abs):
         backup = f"{out_abs}.bak.{int(time.time()*1000)}"
         os.rename(out_abs, backup)
-    os.replace(tmp_dir, out_abs)
+    try:
+        os.replace(tmp_dir, out_abs)
+    except OSError:
+        # Honor the contract: restore the original if the swap fails after the backup rename.
+        if backup and os.path.exists(backup) and not os.path.exists(out_abs):
+            os.rename(backup, out_abs)
+        raise
     return backup

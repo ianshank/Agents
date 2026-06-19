@@ -33,9 +33,14 @@ def scenario_id(
     turn_id: str | None,
     prompt: str,
 ) -> str:
-    """Deterministic id from stable attributes (§3.1). Same input -> same id across runs."""
+    """Deterministic id from stable attributes (§3.1). Same input -> same id across runs.
+
+    Backslashes in ``source_file`` are normalized to forward slashes so the same input
+    layout yields identical ids on Windows and Unix.
+    """
+    normalized_file = source_file.replace("\\", "/")
     key = "\x1f".join(
-        [source_file, str(locator), session_id or "", turn_id or "", _normalize_prompt(prompt)]
+        [normalized_file, str(locator), session_id or "", turn_id or "", _normalize_prompt(prompt)]
     )
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
     return f"scn_{digest[:16]}"

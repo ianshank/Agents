@@ -38,34 +38,37 @@ def _load_file(path: str) -> list[Record]:
     """Parse one .json or .jsonl file into records, preserving a stable locator."""
     ext = os.path.splitext(path)[1].lower()
     records: list[Record] = []
-    with open(path, encoding="utf-8") as f:
-        if ext == ".json":
-            data = json.load(f)
-            if isinstance(data, list):
-                for idx, obj in enumerate(data):
-                    if isinstance(obj, dict):
-                        records.append((path, str(idx), obj))
-            elif isinstance(data, dict):
-                # A single object, or a wrapper like {"records": [...]} / {"scenarios": [...]}.
-                inner = None
-                for key in ("records", "scenarios", "data", "items"):
-                    if isinstance(data.get(key), list):
-                        inner = data[key]
-                        break
-                if inner is not None:
-                    for idx, obj in enumerate(inner):
+    try:
+        with open(path, encoding="utf-8") as f:
+            if ext == ".json":
+                data = json.load(f)
+                if isinstance(data, list):
+                    for idx, obj in enumerate(data):
                         if isinstance(obj, dict):
                             records.append((path, str(idx), obj))
-                else:
-                    records.append((path, "0", data))
-        else:  # jsonl / ndjson
-            for lineno, line in enumerate(f, start=1):
-                line = line.strip()
-                if not line:
-                    continue
-                obj = json.loads(line)
-                if isinstance(obj, dict):
-                    records.append((path, str(lineno), obj))
+                elif isinstance(data, dict):
+                    # A single object, or a wrapper like {"records": [...]} / {"scenarios": [...]}.
+                    inner = None
+                    for key in ("records", "scenarios", "data", "items"):
+                        if isinstance(data.get(key), list):
+                            inner = data[key]
+                            break
+                    if inner is not None:
+                        for idx, obj in enumerate(inner):
+                            if isinstance(obj, dict):
+                                records.append((path, str(idx), obj))
+                    else:
+                        records.append((path, "0", data))
+            else:  # jsonl / ndjson
+                for lineno, line in enumerate(f, start=1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    obj = json.loads(line)
+                    if isinstance(obj, dict):
+                        records.append((path, str(lineno), obj))
+    except json.JSONDecodeError as e:
+        raise IngestError(f"malformed JSON/JSONL file {path}: {e}") from e
     return records
 
 

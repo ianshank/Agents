@@ -58,10 +58,15 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
     def fail(check: str, detail: str, scenario: str | None = None) -> None:
         errors.append({"check": check, "detail": detail, "scenario_id": scenario})
 
-    manifest = _read_json(os.path.join(out_dir, "manifest.json"))
-    canonical = _read_jsonl(os.path.join(out_dir, "canonical", "scenarios.jsonl"))
-    ground_truth = _read_jsonl(os.path.join(out_dir, "ground_truth", "mappings.jsonl"))
-    views = {name: _read_jsonl(os.path.join(out_dir, "views", f"{name}.jsonl")) for name in VIEW_FILES}
+    try:
+        manifest = _read_json(os.path.join(out_dir, "manifest.json"))
+        canonical = _read_jsonl(os.path.join(out_dir, "canonical", "scenarios.jsonl"))
+        ground_truth = _read_jsonl(os.path.join(out_dir, "ground_truth", "mappings.jsonl"))
+        views = {name: _read_jsonl(os.path.join(out_dir, "views", f"{name}.jsonl")) for name in VIEW_FILES}
+    except json.JSONDecodeError as e:
+        # Record a structural error instead of crashing on a corrupt package file.
+        fail("structural.malformed_json", f"failed to parse JSON/JSONL file: {e}")
+        return False, errors
 
     # --- §7.1 structural ---
     if not canonical:
