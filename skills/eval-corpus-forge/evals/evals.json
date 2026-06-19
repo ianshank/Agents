@@ -40,6 +40,24 @@
       ]
     },
     {
+      "id": "csv-input",
+      "prompt": "CSV rows with JSON-encoded cells ingest into a valid package.",
+      "run": "python scripts/run_eval_corpus_forge.py --in evals/fixtures/csv --out .skill-validation/csv",
+      "assertions": [
+        { "type": "exit_zero", "text": "csv run succeeds" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import json;m=json.load(open('.skill-validation/csv/manifest.json',encoding='utf-8'));assert m['validation']['status']=='passed';assert m['counts']['canonical_scenarios']==2\"", "text": "two CSV rows became scenarios and validation passed" }
+      ]
+    },
+    {
+      "id": "transcript-input",
+      "prompt": "A conversation transcript expands per user turn without fabricating comparison targets.",
+      "run": "python scripts/run_eval_corpus_forge.py --in evals/fixtures/transcript --out .skill-validation/tr",
+      "assertions": [
+        { "type": "exit_zero", "text": "transcript run succeeds" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import json;m=json.load(open('.skill-validation/tr/manifest.json',encoding='utf-8'));c=m['counts'];assert c['canonical_scenarios']==2;assert c['tool_invocation_eval_records']==2;assert c['response_eval_records']==0\"", "text": "user turns expanded; tool view populated; no fabricated response records" }
+      ]
+    },
+    {
       "id": "validator-rejects-broken",
       "prompt": "The package validator actually fails on a deliberately corrupt package (negative test).",
       "run": "python scripts/forge/package_validate.py --self-test-broken .skill-validation/broken",

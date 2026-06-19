@@ -53,7 +53,7 @@ def test_missing_path_raises(tmp_path):
 
 
 def test_unsupported_extension_raises(tmp_path):
-    p = _write(tmp_path / "a.csv", "prompt\nhi\n")
+    p = _write(tmp_path / "a.yaml", "prompt: hi\n")
     with pytest.raises(ingest.IngestError, match="unsupported input format"):
         ingest.load_records(p)
 

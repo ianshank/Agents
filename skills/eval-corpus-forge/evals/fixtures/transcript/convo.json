@@ -1,0 +1,9 @@
+{
+  "session_id": "conv-1",
+  "messages": [
+    {"role": "user", "content": "Search the docs for the refund window"},
+    {"role": "assistant", "content": "Refunds are allowed within 30 days.", "tool_calls": [{"function": {"name": "search_kb"}}]},
+    {"role": "user", "content": "Now cancel my plan"},
+    {"role": "assistant", "content": "Your plan is cancelled.", "tool_names": ["cancel_plan"]}
+  ]
+}

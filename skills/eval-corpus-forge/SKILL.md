@@ -22,8 +22,11 @@ correctness, response/output quality, and end-to-end task completion. Full schem
 Confirm before executing. If any fails, stop and report the exact missing requirement and
 fix. Do not fabricate missing data.
 
-* A source input exists: a `.json`/`.jsonl` file, or a folder of them. (CSV, transcript, and
-  trace-export formats are deferred in v1 — do not claim support for them.)
+* A source input exists: a `.json`, `.jsonl`, or `.csv` file, a conversation transcript
+  (a JSON/JSONL object with a `messages`/`turns` array), or a folder mixing these. CSV rows
+  become one scenario each (JSON-encoded cells are parsed); transcripts expand into one
+  scenario per user turn, pairing the following assistant turn for response and tool names.
+  Trace-export formats beyond the transcript shape are out of scope.
 * The input includes at least one prompt or scenario, and at least one expected outcome,
   evaluation target, or ground-truth artifact. If no prompts or scenarios are discoverable,
   stop.
