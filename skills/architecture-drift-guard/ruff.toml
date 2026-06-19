@@ -1,0 +1,6 @@
+# Inherit the repo-root ruff configuration so the skill lints by the same rules,
+# but exclude the synthetic test fixtures: those tiny packages contain
+# deliberately "unused" imports because the imports ARE the dependency edges the
+# extractor is meant to find.
+extend = "../../pyproject.toml"
+extend-exclude = ["tests/fixtures"]

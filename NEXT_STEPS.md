@@ -1,10 +1,32 @@
 # Next Steps
 
+## Recently Landed — Quality & Eval-Integrity Gates
+
+- [x] **Regression Gate (F-006)** — net-new ruff/offline-test diff vs an isolated HEAD
+  worktree baseline (`scripts/regression_gate.py`).
+- [x] **Protected-Path Guard (F-007)** — CODEOWNERS + label-checked CI guard over the
+  evaluation-defining surface (`scripts/check_protected_changes.py`).
+- [x] **Auto-Fix Loop design (F-008)** — inert, disabled scaffolding + ADR 0004.
+- [x] **Architecture Drift-Guard (F-009)** — import-graph → C4-component drift + freshness
+  gate over `eval_harness` and `agent_core` (`skills/architecture-drift-guard/`).
+- [x] **Calibrated auto-merge gate (F-010, default-off)** — pure `agent_core` decision
+  subsystem (`merge_gate`, `outcome_store`, `outcome_labeller`, `audit_sampler`,
+  `merge_gate_ci`) with real git/GitHub outcome detectors (`detectors.py`); ADR 0005.
+  Auto-merges nothing unless `ENABLE_CALIBRATED_AUTOMERGE` is set.
+- [ ] **Make gates required** — add `quality-gates` jobs to branch-protection required
+  checks once they have soaked.
+- [ ] **Enable auto-fix loop** — only after the ADR 0004 human checklist is complete.
+- [ ] **Seed merge-gate records (F-010 seam)** — write the initial pending `OutcomeRecord`
+  (`change_id` / `domain` / `raw_confidence` / `merged_at`) at merge time so the labeller and
+  audit sampler have data to resolve (the only seam left open by ADR 0005; detection is wired).
+- [ ] **Accumulate audit labels** — run `audit_sampler` to build per-domain HUMAN_AUDIT
+  history before any domain can leave cold-start ESCALATE, then enable per the ADR 0005 checklist.
+
 ## Immediate (Pre-v1.2.0)
 
-- [ ] **Rotate Leaked Credentials** — The Langfuse keys `sk-lf-e220d788...` and
-  `pk-lf-ad617cfc...` were committed in git history. Rotate them in the Langfuse
-  dashboard and update `.env` files.
+- [ ] **Rotate Leaked Credentials** — A Langfuse secret/public key pair was committed
+  in git history. Rotate the affected keys in the Langfuse dashboard and update `.env`
+  files. (Key material intentionally omitted here; see the original incident record.)
 - [ ] **Pin Vulnerable Dependencies** — Upgrade `urllib3>=2.7.0`, `idna>=3.15`,
   `pygments>=2.20.0`, `requests>=2.33.0` per Snyk scan results.
 - [ ] **Enable Snyk Code (SAST)** — Upgrade the Snyk org plan to enable static
@@ -16,8 +38,8 @@
 
 ## Short Term (v1.2.0)
 
-- [x] **CI/CD Pipeline** — GitHub Actions workflow for test, lint, type-check,
-  and Snyk scan on every PR.
+- [x] **CI/CD Pipeline** — GitHub Actions workflows for test, lint, type-check,
+  feature validation, regression + eval-integrity gates, and Snyk scan on every PR.
 - [ ] **Dynamic Version** — Use `setuptools.dynamic.version` to derive version
   from `version.py` and eliminate duplication in `pyproject.toml`.
 - [ ] **Parallel Execution** — Add `asyncio`/`concurrent.futures` option to

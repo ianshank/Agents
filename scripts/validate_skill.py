@@ -190,16 +190,23 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
             errs.append(f"eval {eid}: only existence checks — add a behavioral assertion")
         if ev.get("setup"):
             try:
-                subprocess.run(
+                sp = subprocess.run(
                     ev["setup"],
                     shell=True,
                     cwd=skill_dir,
+                    capture_output=True,
+                    text=True,
                     encoding="utf-8",
                     errors="replace",
                     timeout=timeout,
                 )
             except subprocess.TimeoutExpired:
                 errs.append(f"eval {eid}: setup timed out after {timeout}s")
+                continue
+            if sp.returncode != 0:
+                detail = (sp.stdout + sp.stderr).strip()[:500]
+                errs.append(f"eval {eid}: setup failed (exit {sp.returncode}): {detail}")
+                continue
         run_rc, run_out = 0, ""
         if has_run:
             try:

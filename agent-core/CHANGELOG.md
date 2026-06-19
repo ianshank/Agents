@@ -3,6 +3,32 @@
 All notable changes to `agent-core` are documented here. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); the package follows semantic versioning.
 
+## [Unreleased]
+
+### Added (F-010 — calibrated auto-merge gate, opt-in / default-off)
+- `merge_gate` module: `GatePolicyConfig` (all tunables; no literal in decision logic),
+  `CalibratorHealth`, `ChangeContext`, `threshold_for_risk` (risk-derived `tau` via a Wilson
+  upper bound on a held-out fold), and `decide()` (mechanical-failure REJECT → protected-path
+  ESCALATE → calibrated trust + per-bin Wilson floor → AUTO_MERGE).
+- `outcome_store` module: append-only `OutcomeStore` (streamed line-by-line), `BinningCalibrator`
+  (grouped by bin **index** so equal-accuracy bins never conflate), and `build_domain_models`
+  (per-domain calibrator/health/`tau` from HUMAN_AUDIT records on a deterministic held-out fold).
+- `outcome_labeller` module: passive revert / CI-failure / timeout-clean labels (alerting only;
+  never feed `tau`). `audit_sampler` module: unbiased stratified sampling + authoritative
+  HUMAN_AUDIT verdicts. `merge_gate_ci` module: CI entrypoint, exit codes 0/10/20 (+1 internal,
+  +2 usage), decisions audit-logged.
+- `detectors` module: real `GitRevertDetector` (git history), `GitHubChecksFailureAttributor`
+  (GitHub Actions check-runs via `gh api`), and `resolve_repo`. Every tunable on `DetectorConfig`
+  (timeouts + failing-conclusion set); all subprocess calls are timeout-bounded and fail safe.
+  Replaces the previous no-op placeholder detectors wired into `outcome_labeller.main`.
+- `timeutil` module: `parse_iso8601` — shared 'Z'-tolerant, UTC-defaulting ISO-8601 parser.
+
+### Notes
+- Reuses `agent_core.calibration` (`wilson_interval`, `auroc`, `expected_calibration_error`)
+  rather than re-implementing the math.
+- 100% coverage on the new modules; agent-core gate (ruff / ruff-format / mypy --strict /
+  branch coverage ≥95%) green. Tests are mock-free (real temp git repos, real check-run payloads).
+
 ## [1.2.0] – 2026-06-18
 
 ### Added (B1)

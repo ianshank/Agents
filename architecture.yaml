@@ -1,0 +1,50 @@
+schema_version: "1.0.0"
+
+# Top-level importable packages grimp analyses. They are made importable via
+# sys_path below (no install required — grimp parses statically).
+root_packages:
+  - eval_harness
+  - agent_core
+
+# Resolved relative to this manifest's directory (the repo root), so the gate is
+# portable — it can be run from any working directory.
+sys_path:
+  - "src"
+  - "agent-core"
+
+# Component model — mirrors docs/c4_architecture.md (L3 Component view). Each
+# component owns one package prefix; modules resolve to the longest match.
+components:
+  core: [eval_harness.core]
+  plugins: [eval_harness.plugins]
+  scorers: [eval_harness.scorers]
+  judges: [eval_harness.judges]
+  datasets: [eval_harness.datasets]
+  targets: [eval_harness.targets]
+  sinks: [eval_harness.sinks]
+  gating: [eval_harness.gating]
+  config: [eval_harness.config]
+  langfuse_client: [eval_harness.langfuse_client]
+  agent_core_adapter: [eval_harness.agent_core_adapter]
+  engine: [eval_harness.engine]
+  cli: [eval_harness.cli]
+  agent_core: [agent_core]
+
+# Declared DIRECT component edges. Seeded from `drift_check.py --emit-actual` and
+# reviewed: core depends on nothing; dependencies flow inward; no layering
+# inversions. Add an edge here only when a new dependency is intended.
+dependencies:
+  agent_core_adapter: [agent_core, core]
+  cli: [config, engine, gating, langfuse_client, plugins]
+  datasets: [core, langfuse_client, plugins]
+  engine: [config, core, langfuse_client, plugins]
+  gating: [config, core]
+  judges: [core, langfuse_client, plugins]
+  plugins: [core, datasets, judges, scorers, sinks, targets]
+  scorers: [core, plugins]
+  sinks: [core, langfuse_client, plugins]
+  targets: [core, plugins]
+
+output:
+  mermaid_path: architecture.mmd
+  title: Langfuse Eval Harness — Component View

@@ -1,0 +1,3 @@
+prompt,expected_outcome,complexity,response,expected_output_fields
+"What is 2+2?","{""answer"": ""4""}",low,"The answer is 4.","{""answer"": ""4""}"
+"Capital of France?","{""answer"": ""Paris""}",low,,

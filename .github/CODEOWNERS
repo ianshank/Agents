@@ -1,0 +1,17 @@
+# Eval-integrity protected paths.
+#
+# These files define the evaluation surface of the harness (feature ledger, gate
+# thresholds, scorers, judges, validation scripts, the test suite, and CI). Changing
+# them can silently weaken what the harness measures, so every change requires review
+# by a CODEOWNER. This mirrors scripts/eval_protected_paths.py (the single source of
+# truth) and the CI guard in scripts/check_protected_changes.py.
+
+/features.yaml                  @ianshank
+/features.schema.json           @ianshank
+/scripts/validations/           @ianshank
+/config/                        @ianshank
+/src/eval_harness/gating/       @ianshank
+/src/eval_harness/scorers/      @ianshank
+/src/eval_harness/judges/       @ianshank
+/tests/                         @ianshank
+/.github/                       @ianshank

@@ -97,6 +97,84 @@ C4Component
     Rel(from_config, config_model, "validated input")
 ```
 
+## Level 3 — Component: Calibrated Merge Gate (F-010, agent_core, default-off)
+
+A pure, deterministic merge-decision subsystem under `agent_core` (ADR 0005), wired by
+`.github/workflows/calibrated-merge-gate.yml`. It **auto-merges nothing** unless
+`ENABLE_CALIBRATED_AUTOMERGE` is set and a populated, human-audited outcome store has earned it.
+Outcomes are labelled by **real** detectors (git history + GitHub Actions check-runs), all
+timeout-bounded and failing safe.
+
+```mermaid
+C4Component
+    title Component Diagram: Calibrated Merge Gate (agent_core)
+
+    Container_Boundary(gate, "agent_core merge-gate subsystem") {
+        Component(ci, "merge_gate_ci", "CLI entrypoint", "exit 0/10/20 (+1 internal, +2 usage); --audit-log JSONL")
+        Component(decide, "merge_gate.decide()", "pure function", "REJECT mech-fail -> ESCALATE protected -> calibrated trust + Wilson bin floor -> AUTO_MERGE")
+        Component(store, "outcome_store", "append-only JSONL", "OutcomeStore, BinningCalibrator, build_domain_models (held-out fold)")
+        Component(labeller, "outcome_labeller", "module", "passive revert / CI-failure / timeout-clean labels (alerting only)")
+        Component(sampler, "audit_sampler", "module", "unbiased stratified sampling + HUMAN_AUDIT verdicts")
+        Component(detectors, "detectors", "module", "GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo; DetectorConfig timeouts, fail-safe")
+        Component(calib, "calibration", "module", "Wilson interval, AUROC, ECE (reused, not re-implemented)")
+    }
+
+    System_Ext(git, "git", "Local history — revert footer detection")
+    System_Ext(gha, "GitHub Actions", "Commit check-runs via gh api")
+
+    Rel(ci, decide, "decide(ctx, calibrator, health, tau, bin)")
+    Rel(ci, store, "build_domain_models()")
+    Rel(decide, calib, "wilson_interval()")
+    Rel(store, calib, "auroc / ECE / wilson")
+    Rel(labeller, detectors, "was_reverted() / caused_failure()")
+    Rel(labeller, store, "append passive labels")
+    Rel(sampler, store, "select + record HUMAN_AUDIT")
+    Rel(detectors, git, "git log (-z, revert footer)")
+    Rel(detectors, gha, "gh api check-runs")
+```
+
+## Quality & Eval-Integrity Gates
+
+These gates run in CI (`.github/workflows/quality-gates.yml`) and guard the harness
+against the Goodhart failure mode where the cheapest path to "green" is weakening the
+evaluation itself rather than fixing the code.
+
+```mermaid
+flowchart TB
+    PR[Pull Request] --> VAL[validate.py<br/>features.yaml schema + DAG + provenance]
+    PR --> COV[Tooling coverage gate<br/>>=85% on gate modules]
+    PR --> REG[regression_gate.py]
+    PR --> GUARD[check_protected_changes.py]
+    PR --> MG[calibrated-merge-gate.yml<br/>F-010 — default-off]
+
+    subgraph Regression Gate F-006
+        REG --> WT[git worktree<br/>isolated HEAD baseline]
+        WT --> DIFF[ruff + offline pytest<br/>in both trees]
+        DIFF --> NET{net-new findings?}
+        NET -->|yes & block| FAIL1[exit 1]
+        NET -->|no| PASS1[exit 0]
+    end
+
+    subgraph Eval-Integrity Guard F-007
+        GUARD --> MATCH[eval_protected_paths.py<br/>single source of truth]
+        MATCH --> PROT{protected path changed?}
+        PROT -->|yes, unapproved| FAIL2[exit 1 — needs label/CODEOWNERS]
+        PROT -->|no, or approved| PASS2[exit 0]
+    end
+
+    subgraph Calibrated Merge Gate F-010
+        MG --> ENABLED{ENABLE_CALIBRATED_AUTOMERGE?}
+        ENABLED -->|no| SKIP[skipped — neutral, never fails PRs]
+        ENABLED -->|yes| DECIDE[merge_gate_ci.decide]
+        DECIDE --> RC{exit code}
+        RC -->|0 AUTO_MERGE| MERGE[enable auto-merge]
+        RC -->|10 ESCALATE| HUMAN[needs-human-review]
+        RC -->|20 REJECT / 1,2 error| FAIL3[exit 1]
+    end
+
+    FIX[fix_loop.py<br/>DESIGN-ONLY / DISABLED] -.->|ScopeGuard blocks protected writes| MATCH
+```
+
 ## Data Flow
 
 ```mermaid
