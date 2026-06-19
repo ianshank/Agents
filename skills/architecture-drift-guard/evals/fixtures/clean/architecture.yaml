@@ -1,0 +1,12 @@
+schema_version: "1.0.0"
+root_packages: [cleanpkg]
+# Relative to the skill dir (the cwd the validator runs eval commands from).
+sys_path: ["evals/fixtures/clean"]
+components:
+  api: [cleanpkg.api]
+  core: [cleanpkg.core]
+dependencies:
+  api: [core]
+output:
+  mermaid_path: evals/fixtures/clean/architecture.mmd
+  title: Clean fixture

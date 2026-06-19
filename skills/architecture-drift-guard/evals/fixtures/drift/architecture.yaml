@@ -1,0 +1,10 @@
+schema_version: "1.0.0"
+root_packages: [driftpkg]
+sys_path: ["evals/fixtures/drift"]
+components:
+  api: [driftpkg.api]
+  core: [driftpkg.core]
+# Only the api -> core edge is declared; the code also has core -> api, which is
+# the undocumented drift the gate must catch.
+dependencies:
+  api: [core]

@@ -22,6 +22,9 @@ build/
 .skill-validation/
 grading.json
 
+# grimp import-graph cache (architecture-drift-guard)
+.grimp_cache/
+
 # IDE
 .vscode/
 .idea/

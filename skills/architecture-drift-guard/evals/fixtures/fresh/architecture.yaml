@@ -1,0 +1,11 @@
+schema_version: "1.0.0"
+# Mermaid generation does not import code, so freshness fixtures need no package.
+root_packages: [freshpkg]
+components:
+  api: [freshpkg.api]
+  core: [freshpkg.core]
+dependencies:
+  api: [core]
+output:
+  mermaid_path: evals/fixtures/fresh/architecture.mmd
+  title: Fresh fixture
