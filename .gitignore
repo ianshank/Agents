@@ -48,3 +48,5 @@ desktop.ini
 # Generated reports
 out/
 results/
+regression_report.json
+.regression_gate_junit.xml

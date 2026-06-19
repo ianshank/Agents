@@ -49,6 +49,8 @@ desktop.ini
 # Generated output
 out/
 results/
+regression_report.json
+.regression_gate_junit.xml
 
 # Docs (not needed in container)
 docs/

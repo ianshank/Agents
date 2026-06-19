@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "regression_gate report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "base_ref",
+    "mode",
+    "passed",
+    "net_new_lint",
+    "net_new_tests",
+    "baseline_lint_count",
+    "current_lint_count",
+    "baseline_test_failures",
+    "current_test_failures"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "minLength": 1 },
+    "base_ref": { "type": "string", "minLength": 1 },
+    "mode": { "enum": ["block", "warn"] },
+    "passed": { "type": "boolean" },
+    "net_new_lint": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "code", "line"],
+        "properties": {
+          "file": { "type": "string" },
+          "code": { "type": "string" },
+          "line": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "net_new_tests": { "type": "array", "items": { "type": "string" } },
+    "baseline_lint_count": { "type": "integer", "minimum": 0 },
+    "current_lint_count": { "type": "integer", "minimum": 0 },
+    "baseline_test_failures": { "type": "integer", "minimum": 0 },
+    "current_test_failures": { "type": "integer", "minimum": 0 }
+  }
+}
