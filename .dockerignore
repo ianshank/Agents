@@ -51,6 +51,8 @@ out/
 results/
 regression_report.json
 .regression_gate_junit.xml
+merge_outcomes.jsonl
+merge_decisions.jsonl
 
 # Docs (not needed in container)
 docs/

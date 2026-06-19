@@ -185,3 +185,26 @@ def test_check_behavioral_valid(tmp_path):
     with open(grading, encoding="utf-8") as f:
         data = json.load(f)
     assert data["results"][0]["eval_id"] == "test"
+
+
+def test_check_behavioral_failing_setup(tmp_path):
+    # A non-zero setup must fail the eval (not silently poison a passing run).
+    evals_json = tmp_path / "evals.json"
+    evals_json.write_text(
+        json.dumps(
+            {
+                "skill": "my-skill",
+                "evals": [
+                    {
+                        "id": "test",
+                        "setup": "echo boom 1>&2; exit 3",
+                        "run": "python -c \"print('success')\"",
+                        "assertions": [{"type": "exit_zero"}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    errs = check_behavioral(str(tmp_path), "evals.json", 10)
+    assert any("setup failed (exit 3)" in e for e in errs)

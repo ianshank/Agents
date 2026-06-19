@@ -50,6 +50,10 @@ def migrate_to_current(raw: dict[str, Any]) -> dict[str, Any]:
     raw = dict(raw)
     if "schema_version" not in raw:
         raise ManifestError("manifest is missing required 'schema_version'")
+    if not isinstance(raw["schema_version"], str):
+        # A non-string (e.g. YAML list/dict) is unhashable and unmappable; reject
+        # it as a ManifestError rather than letting it raise a bare TypeError.
+        raise ManifestError("'schema_version' must be a string")
 
     seen: set[str] = set()
     while raw.get("schema_version") != SCHEMA_VERSION:

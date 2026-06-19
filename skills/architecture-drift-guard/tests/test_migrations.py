@@ -24,6 +24,13 @@ def test_missing_schema_version_raises():
         migrate_to_current({"components": {}})
 
 
+@pytest.mark.parametrize("bad", [["1.0.0"], {"v": "1.0.0"}, 1.0])
+def test_non_string_schema_version_raises_manifest_error(bad):
+    # Unhashable/non-string versions must raise ManifestError, not TypeError.
+    with pytest.raises(ManifestError, match="must be a string"):
+        migrate_to_current({"schema_version": bad})
+
+
 def test_no_migration_path_raises():
     with pytest.raises(ManifestError, match="no migration path"):
         migrate_to_current({"schema_version": "0.1"})
