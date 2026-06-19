@@ -49,7 +49,10 @@ def get_logger(name: str, level: str | None = None) -> logging.Logger:
 def debug_span(logger: logging.Logger, label: str, **fields: object) -> Iterator[None]:
     """Log entry/exit of a block at DEBUG with elapsed time and structured fields."""
     extra = " ".join(f"{k}={v}" for k, v in fields.items())
-    logger.debug("ENTER %s %s", label, extra)
+    if extra:
+        logger.debug("ENTER %s %s", label, extra)
+    else:
+        logger.debug("ENTER %s", label)
     start = time.perf_counter()
     try:
         yield

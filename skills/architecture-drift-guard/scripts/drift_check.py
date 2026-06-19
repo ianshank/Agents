@@ -64,10 +64,16 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def _prepend_sys_path(dirs: Sequence[str]) -> None:
-    """Make the analysed roots importable by grimp without hardcoding paths."""
+def _prepend_sys_path(dirs: Sequence[str], base_dir: str) -> None:
+    """Make the analysed roots importable by grimp without hardcoding paths.
+
+    Relative entries resolve against ``base_dir`` (the manifest's directory), not
+    the current working directory, so the gate is portable: it can be run from
+    anywhere with ``--manifest /path/to/architecture.yaml``.
+    """
     for raw in dirs:
-        resolved = os.path.abspath(raw)
+        resolved = raw if os.path.isabs(raw) else os.path.join(base_dir, raw)
+        resolved = os.path.abspath(resolved)
         if resolved not in sys.path:
             sys.path.insert(0, resolved)
             logger.debug("prepended sys.path entry: %s", resolved)
@@ -79,7 +85,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         manifest = load_manifest(args.manifest, overrides=args.overrides)
-        _prepend_sys_path(manifest.sys_path)
+        base_dir = os.path.dirname(os.path.abspath(args.manifest))
+        _prepend_sys_path(manifest.sys_path, base_dir)
         module_graph = extract_graph(manifest.root_packages)
         actual = fold_to_components(module_graph, manifest.components)
     except AdGuardError as exc:

@@ -8,7 +8,7 @@ schema_version: "1.0.0"        # required; drives backward-compatible migrations
 root_packages:                 # required; top-level importable packages grimp analyses
   - myapp
 sys_path:                      # optional; dirs prepended to sys.path so roots import
-  - "${REPO_ROOT:-.}/src"
+  - "src"                      # relative entries resolve against THIS manifest's dir
 components:                    # required; component name -> owned package prefixes
   payments: [myapp.payments]
   core:     [myapp.core]
@@ -25,7 +25,7 @@ output:                       # optional
 |-------|----------|---------|
 | `schema_version` | yes | Current is `1.0.0`. Older versions are migrated automatically (e.g. `0.9` used `modules:` for `components:`). |
 | `root_packages` | yes | Importable package names grimp builds the graph from. Must be non-empty; each must be importable. |
-| `sys_path` | no | Directories prepended to `sys.path` before extraction, so `root_packages` resolve without installation. Supports `${VAR}` / `${VAR:-default}`. |
+| `sys_path` | no | Directories prepended to `sys.path` before extraction, so `root_packages` resolve without installation. **Relative entries resolve against the manifest's directory** (not the cwd), so the gate runs from anywhere. Supports `${VAR}` / `${VAR:-default}`. |
 | `components` | yes | Map of component name → list of package prefixes it owns. Modules are assigned to the component with the **longest** matching prefix. |
 | `dependencies` | no | Map of `from` component → list of allowed `to` components. These are the declared **direct** edges; anything observed in code but not listed here is drift. |
 | `output.mermaid_path` | no | Where `mermaid_gen.py` writes/checks the diagram (default `architecture.mmd`). |

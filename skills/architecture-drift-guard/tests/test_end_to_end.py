@@ -108,3 +108,38 @@ def test_mermaid_check_missing_file_fails(tmp_path):
 def test_runner_manifest_not_found_exits_two(tmp_path, script):
     result = _run(script, "--manifest", str(tmp_path / "absent.yaml"))
     assert result.returncode == 2
+
+
+def test_relative_sys_path_resolves_against_manifest_dir(tmp_path):
+    """Portability: a manifest with a relative sys_path works from any cwd."""
+    proj = tmp_path / "proj"
+    pkg = proj / "relpkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "core.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (pkg / "api.py").write_text("from . import core\n", encoding="utf-8")
+    (proj / "architecture.yaml").write_text(
+        textwrap.dedent(
+            """
+            schema_version: "1.0.0"
+            root_packages: [relpkg]
+            sys_path: ["."]
+            components:
+              api: [relpkg.api]
+              core: [relpkg.core]
+            dependencies:
+              api: [core]
+            """
+        ),
+        encoding="utf-8",
+    )
+    # Run from an unrelated cwd; the relative sys_path must resolve against the
+    # manifest's directory, not the cwd.
+    result = subprocess.run(
+        [sys.executable, DRIFT_CHECK, "--manifest", str(proj / "architecture.yaml")],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert result.returncode == 0, result.stderr

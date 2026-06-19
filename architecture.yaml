@@ -6,9 +6,11 @@ root_packages:
   - eval_harness
   - agent_core
 
+# Resolved relative to this manifest's directory (the repo root), so the gate is
+# portable — it can be run from any working directory.
 sys_path:
-  - "${REPO_ROOT:-.}/src"
-  - "${REPO_ROOT:-.}/agent-core"
+  - "src"
+  - "agent-core"
 
 # Component model — mirrors docs/c4_architecture.md (L3 Component view). Each
 # component owns one package prefix; modules resolve to the longest match.

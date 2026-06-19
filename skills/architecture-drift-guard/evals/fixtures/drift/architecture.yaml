@@ -1,6 +1,7 @@
 schema_version: "1.0.0"
 root_packages: [driftpkg]
-sys_path: ["evals/fixtures/drift"]
+# Resolved relative to this manifest's directory (where driftpkg lives).
+sys_path: ["."]
 components:
   api: [driftpkg.api]
   core: [driftpkg.core]
