@@ -63,12 +63,16 @@ class ScopeGuard:
     def assert_writable(self, path: str | Path) -> Path:
         """Return a resolved path if writable; raise :class:`ProtectedPathError` otherwise.
 
-        The path is resolved and must stay *inside* ``root``. Absolute paths or
-        ``..`` traversal that escape the root are rejected outright — a fixer can only
-        ever touch the project tree, and within it never a protected eval-defining path.
+        A fixer may only ever write *repo-relative* paths inside the tree, and never a
+        protected eval-defining path. Absolute paths are rejected outright (so a fixer
+        cannot rely on absolute addressing even within the repo); ``..`` traversal that
+        escapes the root is rejected; and protected paths are rejected.
         """
+        candidate = Path(path)
+        if candidate.is_absolute():
+            raise ProtectedPathError(f"refusing absolute path; use a repo-relative path: {path}")
         resolved_root = self.root.resolve()
-        resolved = (resolved_root / Path(path)).resolve() if not Path(path).is_absolute() else Path(path).resolve()
+        resolved = (resolved_root / candidate).resolve()
         try:
             rel = resolved.relative_to(resolved_root).as_posix()
         except ValueError as exc:

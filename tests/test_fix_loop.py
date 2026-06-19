@@ -53,6 +53,13 @@ def test_scope_guard_rejects_absolute_path_outside_root(tmp_path: Path) -> None:
         sg.assert_writable("/etc/passwd")
 
 
+def test_scope_guard_rejects_absolute_path_even_inside_root(tmp_path: Path) -> None:
+    # Absolute addressing is rejected outright, even for a path under root.
+    sg = fix_loop.ScopeGuard(root=tmp_path)
+    with pytest.raises(fix_loop.ProtectedPathError):
+        sg.assert_writable(str(tmp_path / "src" / "eval_harness" / "engine.py"))
+
+
 def test_scope_guard_rejects_parent_traversal(tmp_path: Path) -> None:
     sg = fix_loop.ScopeGuard(root=tmp_path / "project")
     (tmp_path / "project").mkdir()

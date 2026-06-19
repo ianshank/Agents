@@ -73,5 +73,10 @@ def is_protected(path: str) -> bool:
 
 
 def matched_protected(paths: Iterable[str]) -> list[str]:
-    """Return the subset of *paths* that are protected, sorted and de-duplicated."""
-    return sorted({p for p in paths if is_protected(p)})
+    """Return the normalised subset of *paths* that are protected, sorted + de-duplicated.
+
+    Paths are normalised before de-duplication so equivalent spellings (``./features.yaml``
+    vs ``features.yaml``, mixed separators) collapse to a single, stable entry regardless
+    of how the caller formatted them.
+    """
+    return sorted({_normalise(p) for p in paths if is_protected(p)})
