@@ -26,6 +26,7 @@ from typing import Protocol, runtime_checkable
 
 from .detectors import GitHubChecksFailureAttributor, GitRevertDetector, resolve_repo
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from .timeutil import parse_iso8601
 
 
 @runtime_checkable
@@ -47,14 +48,6 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _parse_iso(value: str) -> datetime:
-    """Parse an ISO-8601 timestamp, tolerating a trailing 'Z' (which
-    datetime.fromisoformat rejects before Python 3.11)."""
-    if value.endswith("Z"):
-        value = value[:-1] + "+00:00"
-    return datetime.fromisoformat(value)
-
-
 def label_matured(
     store: OutcomeStore,
     reverts: RevertDetector,
@@ -69,7 +62,7 @@ def label_matured(
     for change_id, rec in resolved.items():
         if rec.label is not None:
             continue  # already labelled
-        merged = _parse_iso(rec.merged_at)
+        merged = parse_iso8601(rec.merged_at)
         if reverts.was_reverted(change_id, merged):
             src, lbl = LabelSource.REVERT, False
         elif failures.caused_failure(change_id, merged):

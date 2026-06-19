@@ -9,12 +9,16 @@ which cannot be exercised deterministically offline without a mock.
 from __future__ import annotations
 
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 from agent_core.detectors import (
+    DetectorConfig,
     GitHubChecksFailureAttributor,
     GitRevertDetector,
+    _parse_check_runs,
+    _run,
     commit_has_ci_failure,
     resolve_repo,
 )
@@ -153,6 +157,55 @@ def test_ci_failure_parses_offset_timestamp():
     # completed_at without a 'Z' (explicit offset form) must also parse.
     runs = [{"conclusion": "failure", "completed_at": "2026-01-02T00:00:00+00:00"}]
     assert commit_has_ci_failure(runs, SINCE) is True
+
+
+def test_ci_failure_respects_custom_failing_set():
+    # 'cancelled' is not failing by default, but a custom set can opt it in.
+    runs = [{"conclusion": "cancelled", "completed_at": None}]
+    assert commit_has_ci_failure(runs, SINCE) is False
+    assert commit_has_ci_failure(runs, SINCE, failing={"cancelled"}) is True
+
+
+# --- _run hardening: real subprocesses, never hangs or raises ----------------
+def test_run_times_out_returns_124():
+    # A real child that outlives the timeout fails safe (rc 124), never hangs.
+    proc = _run([sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.5)
+    assert proc.returncode == 124
+
+
+def test_run_missing_binary_returns_127():
+    proc = _run(["agent-core-nonexistent-binary-xyz"], timeout=5)
+    assert proc.returncode == 127
+
+
+# --- _parse_check_runs: real `gh` output shapes ------------------------------
+def test_parse_check_runs_valid_list():
+    assert _parse_check_runs('[{"conclusion": "failure"}]') == [{"conclusion": "failure"}]
+
+
+def test_parse_check_runs_empty_string_is_empty():
+    assert _parse_check_runs("") == []
+
+
+def test_parse_check_runs_invalid_json_is_empty():
+    assert _parse_check_runs("not json") == []
+
+
+def test_parse_check_runs_non_list_is_empty():
+    assert _parse_check_runs('{"check_runs": 1}') == []
+
+
+# --- DetectorConfig is threaded through both detectors -----------------------
+def test_detectors_accept_explicit_config(tmp_path):
+    cfg = DetectorConfig(
+        git_timeout_s=5.0, gh_timeout_s=5.0, failing_conclusions=frozenset({"cancelled"})
+    )
+    repo = _init_repo(tmp_path / "r")
+    sha = _commit(repo, "a.txt", "v1", "add a")
+    _git(repo, "revert", "--no-edit", sha)
+    assert GitRevertDetector(repo, cfg).was_reverted(sha, SINCE) is True
+    # custom failing set + no repo -> still fails safe to False (no network)
+    assert GitHubChecksFailureAttributor(None, cfg).caused_failure(sha, SINCE) is False
 
 
 # --- GitHubChecksFailureAttributor fail-safe --------------------------------
