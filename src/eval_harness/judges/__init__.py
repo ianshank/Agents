@@ -98,7 +98,7 @@ class OpenAIJudge(Judge):
     ):
         try:
             import openai
-        except ImportError as exc:
+        except ImportError as exc:  # pragma: no cover - openai is a required extra; not reachable when installed
             raise RuntimeError(
                 "OpenAIJudge requires openai. Install with: pip install 'langfuse-eval-harness[openai]'"
             ) from exc

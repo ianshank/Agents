@@ -104,3 +104,63 @@ def test_langfuse_sink_logs_scores():
     sink.attach_client(client)
     sink.emit(_run())
     assert len(client.scores) == 1 and client.flushed
+
+
+def test_console_sink_verbose(capsys):
+    """verbose=True appends per-item score lines to the output."""
+    SINKS.create("console", {"verbose": True}).emit(_run())
+    out = capsys.readouterr().out
+    assert "acc" in out
+    assert "i" in out  # item id appears in verbose output
+
+
+def test_langfuse_sink_no_client_raises():
+    """emit() without attach_client() raises RuntimeError."""
+    import pytest
+
+    sink = LangfuseSink()
+    with pytest.raises(RuntimeError, match="no client"):
+        sink.emit(_run())
+
+
+def test_langfuse_sink_min_value_filter():
+    """Scores below min_value_to_log are not forwarded to the client."""
+    client = NullLangfuseClient()
+    sink = LangfuseSink(min_value_to_log=0.5)
+    sink.attach_client(client)
+    # _run() has ScoreResult("acc", 1.0, True) — above 0.5 → logged
+    sink.emit(_run())
+    assert len(client.scores) == 1
+
+    # Now emit a run whose score is below the threshold
+    from datetime import datetime, timezone
+
+    from eval_harness.core.types import (
+        EvalItem,
+        ItemResult,
+        RunResult,
+        ScoreAggregate,
+        ScoreResult,
+        TargetOutput,
+    )
+
+    low_item = ItemResult(
+        item=EvalItem(id="low", inputs={}, expected=None),
+        output=TargetOutput(output="o"),
+        scores=[ScoreResult("acc", 0.1, False)],
+    )
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    low_run = RunResult(
+        run_id="r2",
+        config_name="c",
+        items=[low_item],
+        aggregate={"acc": ScoreAggregate(count=1, mean=0.1, pass_rate=0.0)},
+        started_at=now,
+        finished_at=now,
+    )
+    client2 = NullLangfuseClient()
+    sink2 = LangfuseSink(min_value_to_log=0.5)
+    sink2.attach_client(client2)
+    sink2.emit(low_run)
+    # Score 0.1 is below 0.5 → filtered out → nothing logged
+    assert len(client2.scores) == 0
