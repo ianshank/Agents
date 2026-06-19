@@ -13,9 +13,9 @@
 
 ## Immediate (Pre-v1.2.0)
 
-- [ ] **Rotate Leaked Credentials** — The Langfuse keys `sk-lf-e220d788...` and
-  `pk-lf-ad617cfc...` were committed in git history. Rotate them in the Langfuse
-  dashboard and update `.env` files.
+- [ ] **Rotate Leaked Credentials** — A Langfuse secret/public key pair was committed
+  in git history. Rotate the affected keys in the Langfuse dashboard and update `.env`
+  files. (Key material intentionally omitted here; see the original incident record.)
 - [ ] **Pin Vulnerable Dependencies** — Upgrade `urllib3>=2.7.0`, `idna>=3.15`,
   `pygments>=2.20.0`, `requests>=2.33.0` per Snyk scan results.
 - [ ] **Enable Snyk Code (SAST)** — Upgrade the Snyk org plan to enable static

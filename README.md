@@ -112,7 +112,9 @@ python scripts/check_protected_changes.py --base-ref origin/main
 - **Auto-fix loop** (`F-008`) is intentionally **disabled** design-only scaffolding; see
   [`docs/decisions/0004-auto-fix-loop.md`](docs/decisions/0004-auto-fix-loop.md).
 
-All three run in `.github/workflows/quality-gates.yml`.
+The regression gate and protected-path guard run in
+`.github/workflows/quality-gates.yml`. The auto-fix loop (`F-008`) is disabled and is
+**not** wired into CI.
 
 ## Security Scanning
 
