@@ -221,6 +221,6 @@ features:
       - "canary separates gold from no-op by >= min_canary_margin (Wilson bounds, not AUROC)"
       - "oracle κ-gate passes an agreeing oracle and blocks a disagreeing one (co-determinate, power-aware)"
     validation_command: "python scripts/validations/F_013.py"
-    implemented_in: "8a73716de0d22a8757cf1918c22b9c4d964663c1"
+    implemented_in: "27004a9e869953b385b24bd0f1a6c3d0ec1879d9"
     depends_on: ["F-011", "F-012"]
     notes: "Phase 1. MockPolicy seam keeps flows deterministic/offline; reliability below power_min_sample is directional-only and cannot gate. Agent-core bumped to 1.3.0 for the OutcomeRecord.agent_version keying field (additive, backwards-compatible)."
