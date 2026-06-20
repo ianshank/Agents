@@ -246,8 +246,7 @@ class AnthropicJudge(Judge):  # pragma: no cover - requires anthropic SDK + netw
             import anthropic
         except ImportError as exc:
             raise RuntimeError(
-                "AnthropicJudge requires anthropic. Install with: "
-                "pip install 'langfuse-eval-harness[anthropic]'"
+                "AnthropicJudge requires anthropic. Install with: pip install 'langfuse-eval-harness[anthropic]'"
             ) from exc
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
