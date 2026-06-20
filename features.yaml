@@ -259,3 +259,22 @@ features:
     implemented_in: "4b1398bb69de9560310816212551f9dcfac4e971"
     depends_on: ["F-013", "F-014"]
     notes: "Phase 4 rotation slice — completes the MVP (Phases 0-2 + Phase 4 rotation). Phases 3/5/6 (metamorphic oracle, taxonomy, trust decay) remain as follow-ups."
+
+  - id: "F-016"
+    epic: "Behavioral Regression Detection"
+    name: "Calibrated behavioral-regression detector (offline, ship/hold/escalate)"
+    description: "A self-contained sibling package (behavioral-regression) that answers a contested behavioral question — did model v2 drift (e.g. more sycophantic) vs v1? — with calibrated confidence. A seeded synthetic paired-response generator and a deliberately-imperfect contested judge feed an oracle-kappa validation step (the judge is advisory until it clears min_judge_kappa with enough power), a calibrated detector (Wilson + bootstrap delta CI, Brier reliability, an explicit can't-tell bucket), a discrimination canary (inject a known regression + known null and assert separation), and a SHIP/HOLD/ESCALATE gate that fails safe to ESCALATE. Reuses agent_core calibration/cohen_kappa and flow_corpus bootstrap_delta_ci/validate_oracle/canary primitives rather than reimplementing them. Emits a deterministic JSON report + a self-contained HTML reliability diagram; an optional Streamlit shell and an optional live AnthropicJudge (eval_harness) are gated behind extras. Offline and byte-reproducible from (BRConfig, seed)."
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "generation, judging, and the full run are deterministic and offline (byte-identical to_dict() for a fixed (BRConfig, seed); no network on the validation path)"
+      - "an unvalidated judge (kappa below min_judge_kappa, or below power) is advisory only and cannot gate"
+      - "the detector separates a known-regression arm from a known-null arm (canary), and reports a can't-tell bucket when the delta CI includes zero or the sample is below power"
+      - "the gate fails safe to ESCALATE on any untrusted apparatus (canary not separated, judge not validated, or can't-tell); HOLDs a real regression; SHIPs only validated, separable, below-risk changes"
+      - "all thresholds live on BRConfig (no hard-coded values in decision logic); 95% branch coverage; strict mypy"
+    validation_command: "python scripts/validations/F_016.py"
+    implemented_in: "PENDING"
+    depends_on: ["F-005", "F-013"]
+    notes: "New sibling package behavioral-regression depending on agent_core + flow_protocol + flow_corpus (acyclic; never imports eval_harness). The optional live AnthropicJudge lives in eval_harness.judges behind the [anthropic] extra; the sibling stays offline. See ADR 0006."

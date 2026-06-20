@@ -217,3 +217,66 @@ class OpenAIJudge(Judge):
                 logger.info("Successfully attached SDKLangfuseClient and enabled Langfuse OpenAI tracing.")
             except ImportError:
                 logger.warning("Could not import langfuse.openai.OpenAI. Tracing is disabled.")
+
+
+@JUDGES.register("anthropic", aliases=("claude",))
+class AnthropicJudge(Judge):  # pragma: no cover - requires anthropic SDK + network
+    """LLM-as-judge over the Anthropic Messages API. Model id comes from config.
+
+    The optional live path for the behavioral-regression demo's "wire a real model"
+    toggle. Default model is the latest Claude (``claude-opus-4-8``), overridable via
+    config — never hard-coded at a call site.
+
+    Note: ``temperature`` is omitted by default. Sampling parameters are rejected
+    (HTTP 400) on Opus 4.8 / 4.7; only set ``temperature`` for older models that accept
+    it. The API key is read from ``ANTHROPIC_API_KEY`` (or passed explicitly), never
+    embedded in source.
+    """
+
+    def __init__(
+        self,
+        model: str = "claude-opus-4-8",
+        api_key: str | None = None,
+        max_tokens: int = 1024,
+        temperature: float | None = None,
+        system: str | None = None,
+        score_field: str = "score",
+    ):
+        try:
+            import anthropic
+        except ImportError as exc:
+            raise RuntimeError(
+                "AnthropicJudge requires anthropic. Install with: "
+                "pip install 'langfuse-eval-harness[anthropic]'"
+            ) from exc
+        self.client = anthropic.Anthropic(api_key=api_key)
+        self.model = model
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.system = system or 'Respond ONLY with JSON: {"score": <0..1>, "reasoning": <str>}.'
+        self.score_field = score_field
+
+    def _extract_json(self, text: str) -> dict[str, Any]:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if not match:
+            raise ValueError("Could not extract JSON from the Anthropic response.")
+        return json.loads(match.group(0))  # type: ignore[no-any-return]
+
+    def evaluate(self, prompt: str, context: dict[str, Any] | None = None) -> JudgeVerdict:
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "system": self.system,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        # Only forward temperature when explicitly set — it 400s on Opus 4.8 / 4.7.
+        if self.temperature is not None:
+            kwargs["temperature"] = self.temperature
+        resp = self.client.messages.create(**kwargs)
+        text = "".join(block.text for block in resp.content if block.type == "text")
+        parsed = self._extract_json(text)
+        return JudgeVerdict(
+            score=float(parsed[self.score_field]),
+            reasoning=str(parsed.get("reasoning", "")),
+            raw=parsed,
+        )

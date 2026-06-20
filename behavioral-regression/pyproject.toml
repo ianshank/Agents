@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "behavioral-regression"
+dynamic = ["version"]
+description = "Calibrated, offline behavioral-regression detector: did model v2 drift (e.g. more sycophantic) vs v1? Composes agent_core calibration + flow_corpus oracle/bootstrap primitives into a ship/hold/escalate gate."
+requires-python = ">=3.10"
+dependencies = ["agent-core", "flow-protocol", "flow-corpus"]
+
+[project.optional-dependencies]
+dashboard = ["streamlit>=1.30"]
+dev = ["pytest>=8", "pytest-cov>=5", "hypothesis>=6.100", "ruff>=0.15", "mypy>=1.11"]
+
+[project.scripts]
+bregress = "behavioral_regression.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "behavioral_regression.version.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["behavioral_regression*"]
+
+[tool.setuptools.package-data]
+behavioral_regression = ["py.typed"]
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers --strict-config"
+testpaths = ["tests"]
+markers = [
+    "slow: long-running tests (deselect with -m 'not slow')",
+    "property: Hypothesis property-based tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["behavioral_regression"]
+# dashboard requires the optional streamlit extra; cli/__main__ are thin entrypoints
+# exercised via subprocess in the F-016 validation rather than unit coverage.
+omit = [
+    "behavioral_regression/__init__.py",
+    "behavioral_regression/dashboard.py",
+    "behavioral_regression/__main__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 95
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+    "if __name__ == .__main__.:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B905"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+disallow_incomplete_defs = false
