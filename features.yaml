@@ -239,7 +239,7 @@ features:
       - "a sub-power slice is directional-only and cannot gate"
       - "confidence cross-check returns a signed, bootstrap-significance-tested result vs a flow-type indicator"
     validation_command: "python scripts/validations/F_014.py"
-    implemented_in: "77ea2a2696434832b6028df5569bd9798f449f8a"
+    implemented_in: "4b1398bb69de9560310816212551f9dcfac4e971"
     depends_on: ["F-013"]
     notes: "Phase 2. Single split authority (HoldoutManager owns the golden._bucket partition; the model builder does not re-split). DeLong deferred to post-MVP in favour of the bootstrap."
 
@@ -256,6 +256,6 @@ features:
       - "task perturbation does NOT re-key the agent; an impl/config change DOES re-key"
       - "holdout rotation produces >= k folds and a Brier-reliability stability spread gated by threshold"
     validation_command: "python scripts/validations/F_015.py"
-    implemented_in: "77ea2a2696434832b6028df5569bd9798f449f8a"
+    implemented_in: "4b1398bb69de9560310816212551f9dcfac4e971"
     depends_on: ["F-013", "F-014"]
     notes: "Phase 4 rotation slice — completes the MVP (Phases 0-2 + Phase 4 rotation). Phases 3/5/6 (metamorphic oracle, taxonomy, trust decay) remain as follow-ups."
