@@ -11,6 +11,8 @@ on:
     paths:
       - "src/eval_harness/**"
       - "agent-core/**"
+      - "flow-protocol/**"
+      - "flow-corpus/**"
       - "architecture.yaml"
       - "architecture.mmd"
       - "skills/architecture-drift-guard/scripts/**"
@@ -19,6 +21,8 @@ on:
     paths:
       - "src/eval_harness/**"
       - "agent-core/**"
+      - "flow-protocol/**"
+      - "flow-corpus/**"
       - "architecture.yaml"
       - "architecture.mmd"
       - "skills/architecture-drift-guard/scripts/**"
