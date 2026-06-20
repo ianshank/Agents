@@ -19,6 +19,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from agent_core.calibration import auroc
+from agent_core.logging_util import get_logger
 
 from flow_corpus.config import CorpusConfig
 from flow_corpus.partition import bucket
@@ -27,6 +28,8 @@ from flow_corpus.validation.resampling import BootstrapCI, bootstrap_delta_ci
 
 # Neutral base rate for a flow type unseen in the fit partition (binary outcome).
 _NEUTRAL_RATE = 0.5
+
+_log = get_logger("flow_corpus.crosscheck.confidence")
 
 
 @dataclass(frozen=True)
@@ -78,6 +81,10 @@ def confidence_cross_check(
     outcomes = [r.outcome for r in measure]
     if len(measure) == 0 or len(set(outcomes)) < 2:
         # AUROC undefined without both classes present in the held-out slice.
+        _log.info(
+            "confidence cross-check directional-only (degenerate measure partition) n_measured=%d",
+            len(measure),
+        )
         return CrossCheckReport(None, None, None, False, len(measure), directional_only=True)
 
     conf_scores = [r.confidence for r in measure]
@@ -95,6 +102,16 @@ def confidence_cross_check(
         seed=seed,
     )
     adds_signal = (not directional) and ci.point > 0.0 and ci.excludes_zero
+    _log.info(
+        "confidence cross-check auroc_confidence=%.4f auroc_flow_indicator=%.4f "
+        "delta=%.4f excludes_zero=%s n_measured=%d adds_signal=%s",
+        auroc_conf,
+        auroc_ind,
+        ci.point,
+        ci.excludes_zero,
+        len(measure),
+        adds_signal,
+    )
     return CrossCheckReport(
         auroc_confidence=auroc_conf,
         auroc_flow_indicator=auroc_ind,

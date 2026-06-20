@@ -10,9 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from agent_core.logging_util import get_logger
 from flow_protocol.version import PROTOCOL_VERSION
 
 from .version import HARNESS_VERSION_PIN, PROTOCOL_VERSION_PIN
+
+_log = get_logger("flow_corpus.pinning")
 
 
 class PinMismatchError(RuntimeError):
@@ -55,6 +58,14 @@ def verify_pins() -> PinReport:
     """Raise :class:`PinMismatchError` if either live version differs from its pin."""
     report = check_pins()
     if not report.ok:
+        _log.error(
+            "version pin mismatch protocol_expected=%s protocol_actual=%s "
+            "harness_expected=%s harness_actual=%s",
+            report.protocol_expected,
+            report.protocol_actual,
+            report.harness_expected,
+            report.harness_actual,
+        )
         raise PinMismatchError(
             "flow-corpus version pin mismatch: "
             f"protocol expected {report.protocol_expected!r} got {report.protocol_actual!r}; "

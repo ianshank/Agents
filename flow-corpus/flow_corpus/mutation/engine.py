@@ -18,7 +18,11 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
+from agent_core.logging_util import debug_span, get_logger
+
 from flow_corpus.suites.base import TaskInstance, TaskSuite
+
+_log = get_logger("flow_corpus.mutation.engine")
 
 
 @dataclass(frozen=True)
@@ -60,9 +64,17 @@ class MutationEngine:
             raise ValueError("n_variants must be >= 1")
         rng = random.Random(seed)
         mutated: list[TaskInstance] = []
-        for instance in suite.instances:
-            for k in range(n_variants):
-                mutated.append(self.mutate_instance(instance, rng, f"m{k}"))
+        with debug_span(
+            _log,
+            "mutate_suite",
+            domain=suite.domain,
+            n_instances=len(suite.instances),
+            n_variants=n_variants,
+            seed=seed,
+        ):
+            for instance in suite.instances:
+                for k in range(n_variants):
+                    mutated.append(self.mutate_instance(instance, rng, f"m{k}"))
         return TaskSuite(domain=suite.domain, instances=tuple(mutated))
 
 

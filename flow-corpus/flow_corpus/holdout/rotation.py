@@ -15,9 +15,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from agent_core.logging_util import debug_span, get_logger
+
 from flow_corpus.config import CorpusConfig
 
 from .manager import HoldoutManager, Sample
+
+_log = get_logger("flow_corpus.holdout.rotation")
 
 
 @dataclass(frozen=True)
@@ -63,22 +67,35 @@ class RotationManager:
 
         reliabilities: list[float] = []
         directional = 0
-        for fold in range(k_folds):
-            manager = HoldoutManager(self.cfg, seed=base_seed + fold)
-            report = manager.evaluate(samples_by_type, held_out_type)
-            rel = report.instance_holdout.reliability
-            if rel is None:
-                # No measurable instances this fold — treat as a degenerate fold.
-                directional += 1
-                continue
-            if report.instance_holdout.directional_only:
-                directional += 1
-            reliabilities.append(rel)
+        with debug_span(
+            _log, "rotate", held_out_type=held_out_type, k_folds=k_folds, base_seed=base_seed
+        ):
+            for fold in range(k_folds):
+                manager = HoldoutManager(self.cfg, seed=base_seed + fold)
+                report = manager.evaluate(samples_by_type, held_out_type)
+                rel = report.instance_holdout.reliability
+                if rel is None:
+                    # No measurable instances this fold — treat as a degenerate fold.
+                    directional += 1
+                    continue
+                if report.instance_holdout.directional_only:
+                    directional += 1
+                reliabilities.append(rel)
+                _log.debug("fold=%d reliability=%.6f", fold, rel)
 
         if not reliabilities:
             raise ValueError("no fold produced a measurable instance-holdout reliability")
 
         spread, stable = _spread_and_stable(reliabilities, self.cfg.rotation_stability_threshold)
+        _log.info(
+            "rotation complete held_out_type=%s measurable_folds=%d directional_folds=%d "
+            "spread=%.6f stable=%s",
+            held_out_type,
+            len(reliabilities),
+            directional,
+            spread,
+            stable,
+        )
         return RotationReport(
             per_fold_reliability=tuple(reliabilities),
             spread=spread,

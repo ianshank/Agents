@@ -15,6 +15,7 @@ import random
 from dataclasses import dataclass
 
 from agent_core.calibration import selective_risk_coverage
+from agent_core.logging_util import debug_span, get_logger
 from agent_core.outcome_store import OutcomeRecord
 from flow_protocol import FlowResult, OracleResult
 
@@ -25,6 +26,8 @@ from flow_corpus.suites.base import TaskSuite
 
 from .metrics import aurc
 from .reliability import ReliabilityReport, brier_reliability
+
+_log = get_logger("flow_corpus.validation.runner")
 
 _MERGED_AT = "1970-01-01T00:00:00+00:00"  # corpus runs are synthetic; timestamp is fixed/inert
 # Corpus outcomes are labeled by an oracle, NOT an unbiased human-audit sample. Use a
@@ -78,41 +81,67 @@ def run_suite(
     outcomes: list[int] = []
     n_indeterminate = 0
 
-    for instance in suite.instances:
-        fr = specimen.run(instance, rng).model_copy(update={"seed": seed})
-        verdict = oracle.judge(instance, fr)
-        flow_results.append(fr)
-        oracle_results.append(verdict)
+    agent_version = specimen.agent_version
+    with debug_span(
+        _log,
+        "run_suite",
+        flow_type=specimen.flow_type,
+        agent_version=agent_version,
+        domain=suite.domain,
+        n_instances=len(suite.instances),
+        seed=seed,
+    ):
+        for instance in suite.instances:
+            fr = specimen.run(instance, rng).model_copy(update={"seed": seed})
+            verdict = oracle.judge(instance, fr)
+            flow_results.append(fr)
+            oracle_results.append(verdict)
 
-        if verdict.verdict is None:
-            n_indeterminate += 1
-            continue  # never synthesise an outcome from an abstention
+            if verdict.verdict is None:
+                n_indeterminate += 1
+                continue  # never synthesise an outcome from an abstention
 
-        outcome = 1 if verdict.verdict else 0
-        outcomes.append(outcome)
-        if fr.raw_confidence is not None:
-            confidences.append(fr.raw_confidence)
-            conf_outcomes.append(outcome)
-            records.append(
-                OutcomeRecord(
-                    change_id=instance.instance_id,
-                    domain=instance.domain,
-                    raw_confidence=fr.raw_confidence,
-                    merged_at=_MERGED_AT,
-                    label=verdict.verdict,
-                    label_source=_ORACLE_LABEL_SOURCE,
-                    labeled_at=_MERGED_AT,
-                    agent_version=specimen.agent_version,
+            outcome = 1 if verdict.verdict else 0
+            outcomes.append(outcome)
+            if fr.raw_confidence is not None:
+                confidences.append(fr.raw_confidence)
+                conf_outcomes.append(outcome)
+                records.append(
+                    OutcomeRecord(
+                        change_id=instance.instance_id,
+                        domain=instance.domain,
+                        raw_confidence=fr.raw_confidence,
+                        merged_at=_MERGED_AT,
+                        label=verdict.verdict,
+                        label_source=_ORACLE_LABEL_SOURCE,
+                        labeled_at=_MERGED_AT,
+                        agent_version=agent_version,
+                    )
                 )
-            )
 
-    reliability = brier_reliability(confidences, conf_outcomes, cfg)
-    # Discrimination: area under the risk-coverage curve over confidence-bearing
-    # outcomes. Undefined (None) when the flow reports no confidences.
-    aurc_value = aurc(selective_risk_coverage(confidences, conf_outcomes)) if confidences else None
+        reliability = brier_reliability(confidences, conf_outcomes, cfg)
+        # Discrimination: area under the risk-coverage curve over confidence-bearing
+        # outcomes. Undefined (None) when the flow reports no confidences.
+        aurc_value = (
+            aurc(selective_risk_coverage(confidences, conf_outcomes)) if confidences else None
+        )
+
+    n_total = len(suite.instances)
+    _log.info(
+        "run_suite complete flow_type=%s agent_version=%s domain=%s "
+        "n_total=%d n_indeterminate=%d indeterminate_rate=%.4f reliability=%s aurc=%s",
+        specimen.flow_type,
+        agent_version,
+        suite.domain,
+        n_total,
+        n_indeterminate,
+        (n_indeterminate / n_total if n_total else 0.0),
+        reliability.reliability,
+        aurc_value,
+    )
 
     return RunResult(
-        agent_version=specimen.agent_version,
+        agent_version=agent_version,
         domain=suite.domain,
         flow_results=tuple(flow_results),
         oracle_results=tuple(oracle_results),
