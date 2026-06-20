@@ -19,6 +19,8 @@ from agent_core.calibration import brier_decomposition
 
 from flow_corpus.config import CorpusConfig
 
+from .power import is_directional_only
+
 
 @dataclass(frozen=True)
 class ReliabilityReport:
@@ -43,12 +45,14 @@ def brier_reliability(
     Callers must pass only confidence-bearing, *determinate* outcomes — indeterminate
     oracle verdicts are never fed here (the gate is given no guesses).
     """
+    if len(confidences) != len(outcomes):
+        raise ValueError("confidences and outcomes must be of equal length")
     n = len(confidences)
     if n == 0:
         return ReliabilityReport(None, None, 0, directional_only=True, may_gate=False)
 
     decomp = brier_decomposition(confidences, outcomes, cfg.n_bins)
-    directional = n < cfg.power_min_sample
+    directional = is_directional_only(n, cfg.power_min_sample)
     may_gate = (not directional) and decomp.reliability <= cfg.max_brier_reliability
     return ReliabilityReport(
         reliability=decomp.reliability,

@@ -224,3 +224,38 @@ features:
     implemented_in: "27004a9e869953b385b24bd0f1a6c3d0ec1879d9"
     depends_on: ["F-011", "F-012"]
     notes: "Phase 1. MockPolicy seam keeps flows deterministic/offline; reliability below power_min_sample is directional-only and cannot gate. Agent-core bumped to 1.3.0 for the OutcomeRecord.agent_version keying field (additive, backwards-compatible)."
+
+  - id: "F-014"
+    epic: "Flow Calibration Corpus"
+    name: "Phase 2: ReAct type-holdout + honest instance/type holdout + confidence cross-check"
+    description: "ReAct is introduced as a type-holdout flow. A single-authority HoldoutManager reports instance-holdout (seen flow types, unseen tasks — the primary calibration number) and type-holdout (unseen flow type — generalization) as SEPARATE numbers, with an extrapolation-fraction caveat on the type-holdout. A power helper marks sub-power slices directional-only. The confidence cross-check ablates raw confidence against a flow-type indicator on a held-out partition and tests significance with a seeded bootstrap CI on the AUROC delta (DeLong deferred)."
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "instance-holdout and type-holdout reported separately, never merged"
+      - "type-holdout carries an extrapolation-fraction caveat (held-out confidences outside seen support)"
+      - "a sub-power slice is directional-only and cannot gate"
+      - "confidence cross-check returns a signed, bootstrap-significance-tested result vs a flow-type indicator"
+    validation_command: "python scripts/validations/F_014.py"
+    implemented_in: "77ea2a2696434832b6028df5569bd9798f449f8a"
+    depends_on: ["F-013"]
+    notes: "Phase 2. Single split authority (HoldoutManager owns the golden._bucket partition; the model builder does not re-split). DeLong deferred to post-MVP in favour of the bootstrap."
+
+  - id: "F-015"
+    epic: "Flow Calibration Corpus"
+    name: "Phase 4 (MVP slice): mutation engine + holdout rotation + reliability stability"
+    description: "A seeded mutation engine perturbs the SDLC suite into an instance distribution (difficulty/tool/noise), preserving task identity and — crucially — NOT re-keying the agent (task is the population axis, excluded from the key). A RotationManager rotates the held-out instance partition across k folds and gates on the spread of the primary metric (Brier reliability) staying within the configured stability threshold."
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "mutation engine is deterministic and preserves task identity (solution_space/correct)"
+      - "task perturbation does NOT re-key the agent; an impl/config change DOES re-key"
+      - "holdout rotation produces >= k folds and a Brier-reliability stability spread gated by threshold"
+    validation_command: "python scripts/validations/F_015.py"
+    implemented_in: "77ea2a2696434832b6028df5569bd9798f449f8a"
+    depends_on: ["F-013", "F-014"]
+    notes: "Phase 4 rotation slice — completes the MVP (Phases 0-2 + Phase 4 rotation). Phases 3/5/6 (metamorphic oracle, taxonomy, trust decay) remain as follow-ups."

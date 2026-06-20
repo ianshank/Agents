@@ -7,7 +7,7 @@ import random
 import pytest
 
 from flow_corpus.policy import MockPolicy
-from flow_corpus.specimens import SPECIMENS, BaselineSpecimen, MCTSSpecimen
+from flow_corpus.specimens import SPECIMENS, BaselineSpecimen, MCTSSpecimen, ReActSpecimen
 from flow_corpus.suites.base import TaskInstance
 
 INSTANCE = TaskInstance(
@@ -49,10 +49,25 @@ def test_task_does_not_rekey_but_config_does() -> None:
     assert spec2.agent_version != spec.agent_version
 
 
+def test_react_is_deterministic_and_emits_channel() -> None:
+    spec = ReActSpecimen(MockPolicy(skill=0.6), max_steps=3)
+    r1 = spec.run(INSTANCE, random.Random(0))
+    r2 = spec.run(INSTANCE, random.Random(0))
+    assert r1 == r2
+    assert r1.flow_type == "react"
+    assert r1.confidence_channel is not None and len(r1.confidence_channel.per_step) >= 1
+
+
+def test_react_rejects_nonpositive_steps() -> None:
+    with pytest.raises(ValueError, match="max_steps must be >= 1"):
+        ReActSpecimen(MockPolicy(), max_steps=0)
+
+
 def test_registry_lookup() -> None:
     assert SPECIMENS.get("baseline") is BaselineSpecimen
     assert SPECIMENS.get("mcts") is MCTSSpecimen
-    assert set(SPECIMENS.names()) == {"baseline", "mcts"}
+    assert SPECIMENS.get("react") is ReActSpecimen
+    assert set(SPECIMENS.names()) == {"baseline", "mcts", "react"}
 
 
 def test_registry_rejects_duplicate_and_unknown() -> None:

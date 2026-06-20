@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from agent_core.golden import cohen_kappa
 
 from flow_corpus.config import CorpusConfig
+from flow_corpus.validation.power import is_directional_only
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,7 @@ def validate_oracle(
         )
 
     kappa = cohen_kappa([o for o, _ in pairs], [h for _, h in pairs])
-    directional = n_co < cfg.power_min_sample
+    directional = is_directional_only(n_co, cfg.power_min_sample)
     may_gate = (not directional) and kappa >= cfg.min_oracle_kappa
     return KappaReport(
         kappa=kappa,

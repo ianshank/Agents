@@ -23,6 +23,8 @@ def test_derived_rate_is_not_stored_literal() -> None:
 @pytest.mark.parametrize(
     "kwargs",
     [
+        {"declared_n_per_domain": 0},
+        {"power_min_sample": 0},
         {"corpus_volume_per_cycle": 0},
         {"audit_capacity_per_cycle": -1},
         {"min_oracle_kappa": 1.5},

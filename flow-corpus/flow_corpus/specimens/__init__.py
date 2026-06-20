@@ -10,6 +10,7 @@ from __future__ import annotations
 from .base import Registry, Specimen, SpecimenBase
 from .baseline import BaselineSpecimen
 from .mcts import MCTSSpecimen
+from .react import ReActSpecimen
 
 # Specimen classes register here by name; config selects them without code edits.
 # (Constructors differ — e.g. MCTS takes n_rollouts — so the registry holds the
@@ -17,11 +18,13 @@ from .mcts import MCTSSpecimen
 SPECIMENS: Registry[type[SpecimenBase]] = Registry("specimen")
 SPECIMENS.register("baseline", BaselineSpecimen)
 SPECIMENS.register("mcts", MCTSSpecimen)
+SPECIMENS.register("react", ReActSpecimen)
 
 __all__ = [
     "SPECIMENS",
     "BaselineSpecimen",
     "MCTSSpecimen",
+    "ReActSpecimen",
     "Registry",
     "Specimen",
     "SpecimenBase",

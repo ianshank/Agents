@@ -63,4 +63,6 @@ def load_suite(path: Path | None = None) -> TaskSuite:
     instances = tuple(
         TaskInstance.model_validate(json.loads(line)) for line in text.splitlines() if line.strip()
     )
+    if not instances:
+        raise ValueError(f"no valid task instances found in {source}")
     return TaskSuite(domain=instances[0].domain, instances=instances)

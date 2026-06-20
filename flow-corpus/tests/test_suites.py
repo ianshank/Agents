@@ -47,3 +47,10 @@ def test_suite_jsonl_roundtrip(tmp_path) -> None:
     path = save_suite(suite, tmp_path / "sdlc.jsonl")
     loaded = load_suite(path)
     assert loaded.instances == suite.instances
+
+
+def test_load_suite_rejects_empty_file(tmp_path) -> None:
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("\n  \n", encoding="utf-8")
+    with pytest.raises(ValueError, match="no valid task instances"):
+        load_suite(empty)

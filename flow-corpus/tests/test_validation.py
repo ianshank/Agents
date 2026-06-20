@@ -36,6 +36,11 @@ def test_reliability_empty_is_none() -> None:
     assert report.reliability is None and report.passes is False
 
 
+def test_reliability_length_mismatch_raises() -> None:
+    with pytest.raises(ValueError, match="equal length"):
+        brier_reliability([0.5, 0.6], [1], CFG)
+
+
 def test_aurc_matches_manual_trapezoid() -> None:
     points = selective_risk_coverage([0.9, 0.8, 0.2, 0.1], [1, 1, 0, 0])
     value = aurc(points)

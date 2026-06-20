@@ -58,7 +58,8 @@ def run_suite(
     """Run *specimen* across *suite*, judge with *oracle*, and key outcomes.
 
     Stochastic specimens draw from a per-run ``random.Random(seed)`` so a run is
-    byte-reproducible; the seed is recorded on each FlowResult, not in the key.
+    byte-reproducible. The run seed is stamped onto each FlowResult for provenance;
+    it is deliberately NOT part of the version key (which is impl + agent_config only).
     """
     rng = random.Random(seed)
     flow_results: list[FlowResult] = []
@@ -70,7 +71,7 @@ def run_suite(
     n_indeterminate = 0
 
     for instance in suite.instances:
-        fr = specimen.run(instance, rng)
+        fr = specimen.run(instance, rng).model_copy(update={"seed": seed})
         verdict = oracle.judge(instance, fr)
         flow_results.append(fr)
         oracle_results.append(verdict)

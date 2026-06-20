@@ -35,6 +35,9 @@ class CorpusConfig:
     n_bins: int = 10
     """Bin count for the Brier (Murphy) decomposition."""
 
+    rotation_stability_threshold: float = 0.05
+    """Max allowed spread (max-min) in Brier reliability across holdout rotations."""
+
     wilson_z: float = 1.96
     """z for Wilson intervals (1.96 ≈ 95%)."""
 
@@ -46,6 +49,10 @@ class CorpusConfig:
     """Total instances judged per cycle."""
 
     def __post_init__(self) -> None:
+        if self.declared_n_per_domain <= 0:
+            raise ValueError("declared_n_per_domain must be > 0")
+        if self.power_min_sample <= 0:
+            raise ValueError("power_min_sample must be > 0")
         if self.corpus_volume_per_cycle <= 0:
             raise ValueError("corpus_volume_per_cycle must be > 0")
         if self.audit_capacity_per_cycle < 0:

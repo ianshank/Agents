@@ -9,6 +9,7 @@ Checks, all deterministic:
      would be insufficient — we prove the guard actually trips, then remove the fixture.
 """
 import os
+import shutil
 import subprocess
 import sys
 
@@ -16,12 +17,18 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 SKILL_DIR = os.path.join(PROJECT_ROOT, "skills", "architecture-drift-guard")
 DRIFT_CHECK = os.path.join(SKILL_DIR, "scripts", "drift_check.py")
 MANIFEST = os.path.join(PROJECT_ROOT, "architecture.yaml")
+GRIMP_CACHE = os.path.join(PROJECT_ROOT, ".grimp_cache")
 PROBE = os.path.join(PROJECT_ROOT, "flow-corpus", "flow_corpus", "_airgap_probe.py")
 
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "flow-protocol"))
 
 
 def _drift_exit() -> int:
+    # Clear grimp's on-disk cache before each run: this negative test adds/removes a
+    # source file between invocations, and a stale cache would make the probe run miss
+    # the new edge (or the clean run see a removed one). A fresh parse each time makes
+    # the airgap check hermetic and deterministic across environments.
+    shutil.rmtree(GRIMP_CACHE, ignore_errors=True)
     res = subprocess.run(
         [sys.executable, DRIFT_CHECK, "--manifest", MANIFEST],
         cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=180,

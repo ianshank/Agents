@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .version import PROTOCOL_VERSION
 
@@ -52,6 +52,13 @@ class ConfidenceChannel(BaseModel):
         default_factory=dict,
         description="Named scalar confidence signals (e.g. 'self_consistency').",
     )
+
+    @field_validator("per_step")
+    @classmethod
+    def _per_step_in_unit_interval(cls, v: tuple[float, ...]) -> tuple[float, ...]:
+        if any(not 0.0 <= x <= 1.0 for x in v):
+            raise ValueError("each confidence in per_step must be in [0, 1]")
+        return v
 
 
 class FlowResult(BaseModel):

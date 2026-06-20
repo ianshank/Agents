@@ -70,3 +70,14 @@ def test_extra_fields_forbidden() -> None:
 def test_oracle_tier_constrained() -> None:
     with pytest.raises(ValidationError):
         OracleResult(instance_id="i1", verdict=True, oracle_tier="psychic", oracle_id="o1")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("bad_step", [-0.1, 1.5])
+def test_confidence_channel_per_step_range_enforced(bad_step: float) -> None:
+    with pytest.raises(ValidationError):
+        ConfidenceChannel(per_step=(0.5, bad_step))
+
+
+def test_confidence_channel_per_step_valid_range_accepted() -> None:
+    ch = ConfidenceChannel(per_step=(0.0, 0.5, 1.0))
+    assert ch.per_step == (0.0, 0.5, 1.0)
