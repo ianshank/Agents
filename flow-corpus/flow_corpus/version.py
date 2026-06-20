@@ -20,4 +20,4 @@ __version__ = "0.1.0"  # corpus distribution version
 # What this corpus build was authored against. Bump deliberately, with a passing
 # verify_pins(), when intentionally adopting a new contract/harness version.
 PROTOCOL_VERSION_PIN = "1.0.0"
-HARNESS_VERSION_PIN = "1.2.0"
+HARNESS_VERSION_PIN = "1.3.0"

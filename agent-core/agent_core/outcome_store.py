@@ -41,6 +41,10 @@ class OutcomeRecord:
     label: bool | None = None  # True=correct, False=incorrect, None=pending
     label_source: str | None = None
     labeled_at: str | None = None
+    # Optional keying axis for the flow-calibration corpus: hash(impl + agent_config).
+    # Defaults to None so pre-1.3.0 JSONL lines (no field) still load via from_json.
+    # The merge gate's per-domain models ignore this; corpus tooling groups by it.
+    agent_version: str | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), sort_keys=True)

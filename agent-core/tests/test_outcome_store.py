@@ -35,6 +35,33 @@ def test_record_json_roundtrip():
     assert OutcomeRecord.from_json(r.to_json()) == r
 
 
+def test_record_agent_version_defaults_none_and_roundtrips():
+    # New optional keying field defaults to None and survives a round-trip.
+    r = _rec("c1", "core", 0.9, True, LabelSource.HUMAN_AUDIT)
+    assert r.agent_version is None
+    keyed = OutcomeRecord(
+        change_id="c2",
+        domain="sdlc",
+        raw_confidence=0.8,
+        merged_at="2026-01-01T00:00:00+00:00",
+        agent_version="abc123",
+    )
+    assert OutcomeRecord.from_json(keyed.to_json()) == keyed
+    assert keyed.agent_version == "abc123"
+
+
+def test_record_loads_pre_1_3_0_json_without_agent_version():
+    # A JSONL line written before the field existed must still construct (defaults None).
+    legacy = (
+        '{"change_id": "c1", "domain": "core", "raw_confidence": 0.9, '
+        '"merged_at": "2026-01-01T00:00:00+00:00", "label": null, '
+        '"label_source": null, "labeled_at": null}'
+    )
+    rec = OutcomeRecord.from_json(legacy)
+    assert rec.agent_version is None
+    assert rec.change_id == "c1"
+
+
 def test_store_empty_returns_nothing(tmp_path):
     store = OutcomeStore(tmp_path / "s.jsonl")
     assert store.all() == []
