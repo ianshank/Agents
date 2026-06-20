@@ -26,6 +26,13 @@ def test_build_config_rejects_bad_override():
         cli._build_config(["noequals"])
 
 
+def test_build_config_unknown_key_raises_config_error():
+    from behavioral_regression.config import ConfigError
+
+    with pytest.raises(ConfigError, match="unknown config keys"):
+        cli._build_config(["bogus_field=1"])
+
+
 def test_main_writes_json_and_html(tmp_path):
     out = tmp_path / "r.json"
     html = tmp_path / "r.html"

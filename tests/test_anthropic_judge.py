@@ -56,6 +56,17 @@ def test_temperature_omitted_by_default(monkeypatch):
     assert "temperature" not in kwargs  # rejected on Opus 4.8 / 4.7
 
 
+def test_malformed_json_returns_default_verdict(monkeypatch):
+    judge = _judge_with_fake_sdk(monkeypatch)
+    resp = MagicMock()
+    resp.content = [_text_block("no json here")]
+    judge.client.messages.create.return_value = resp
+
+    verdict = judge.evaluate("prompt")
+    assert verdict.score == 0.0
+    assert "Failed to parse" in verdict.reasoning
+
+
 def test_temperature_forwarded_when_set(monkeypatch):
     judge = _judge_with_fake_sdk(monkeypatch, temperature=0.0)
     resp = MagicMock()

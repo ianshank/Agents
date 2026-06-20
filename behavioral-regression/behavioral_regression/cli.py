@@ -42,7 +42,9 @@ def _build_config(overrides: Sequence[str]) -> BRConfig:
             raise ValueError(f"--set expects key=value, got {item!r}")
         key, raw = item.split("=", 1)
         fields[key.strip()] = _coerce(raw.strip())
-    return BRConfig(**fields)
+    # from_dict validates unknown keys and migrates, so a bad --set yields a clean
+    # ConfigError instead of a raw TypeError traceback.
+    return BRConfig.from_dict(fields)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

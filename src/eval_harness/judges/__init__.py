@@ -273,9 +273,19 @@ class AnthropicJudge(Judge):  # pragma: no cover - requires anthropic SDK + netw
             kwargs["temperature"] = self.temperature
         resp = self.client.messages.create(**kwargs)
         text = "".join(block.text for block in resp.content if block.type == "text")
-        parsed = self._extract_json(text)
-        return JudgeVerdict(
-            score=float(parsed[self.score_field]),
-            reasoning=str(parsed.get("reasoning", "")),
-            raw=parsed,
-        )
+        try:
+            parsed = self._extract_json(text)
+            return JudgeVerdict(
+                score=float(parsed[self.score_field]),
+                reasoning=str(parsed.get("reasoning", "")),
+                raw=parsed,
+            )
+        except Exception as exc:
+            # Mirror OpenAIJudge: a malformed/incomplete response yields a default
+            # failure verdict rather than crashing the whole evaluation run.
+            logger.warning("Returning default failure verdict due to parsing error: %s", exc)
+            return JudgeVerdict(
+                score=0.0,
+                reasoning=f"Failed to parse Anthropic output: {exc}. Output was: {text}",
+                raw={"content": text},
+            )
