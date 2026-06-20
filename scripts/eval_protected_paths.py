@@ -28,6 +28,10 @@ PROTECTED_PATTERNS: tuple[str, ...] = (
     "src/eval_harness/judges/**",
     "tests/**",
     ".github/**",
+    # The architecture manifest is the airgap's enforcement surface: editing its
+    # declared component edges could quietly let the corpus and harness import each
+    # other. Treat edge changes as eval-integrity changes requiring human review.
+    "architecture.yaml",
 )
 
 

@@ -170,3 +170,36 @@ features:
     validation_command: "python scripts/validations/F_010.py"
     depends_on: ["F-007"]
     notes: "DESIGN + opt-in CI, default-off. Pure subsystem under agent_core with strict mypy + 95% coverage; the merge workflow auto-merges nothing until a human enables it and audit data accumulates."
+
+  - id: "F-011"
+    epic: "Flow Calibration Corpus"
+    name: "flow_protocol contract + structural airgap"
+    description: "New flow-protocol package: Pydantic v2 frozen FlowResult/OracleResult/ConfidenceChannel contract with semver + migration chain, the ONLY shared surface between the corpus and the harness. The airgap (flow_corpus must never import eval_harness, and vice versa) is enforced deterministically by the existing grimp architecture-drift gate via new components/edges in architecture.yaml."
+    category: "infrastructure"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "FlowResult/OracleResult round-trip via JSON; raw_confidence optional; verdict None=indeterminate"
+      - "drift gate passes clean (exit 0) with flow_protocol/flow_corpus declared"
+      - "NEGATIVE: a forbidden flow_corpus->eval_harness import trips drift_check.py (exit 1), proving the airgap fires"
+      - "architecture.mmd regenerated and fresh"
+    validation_command: "python scripts/validations/F_011.py"
+    depends_on: ["F-009"]
+    notes: "Airgap-bound critical path (Phase 0). flow-protocol carries pydantic only; flow_corpus depends on flow_protocol + agent_core, never eval_harness."
+
+  - id: "F-012"
+    epic: "Flow Calibration Corpus"
+    name: "Two-way version pin + forced-mismatch negative test"
+    description: "flow_corpus pins the flow_protocol contract version and the agent_core (harness) version it was built against; verify_pins() raises PinMismatch on any live/pinned divergence. In a single repo this is a deliberate-bump tripwire rather than a true cross-repo skew guard."
+    category: "infrastructure"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "verify_pins() passes when live flow_protocol/agent_core versions match the pins"
+      - "NEGATIVE: a forced protocol-version mismatch raises PinMismatch (build fails)"
+      - "NEGATIVE: a forced harness-version mismatch raises PinMismatch (build fails)"
+    validation_command: "python scripts/validations/F_012.py"
+    depends_on: ["F-011"]
+    notes: "Phase 0. The negative cases are the point: a wrong pin must fail the build, else the skew tripwire is dead."
