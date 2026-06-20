@@ -15,7 +15,7 @@ import random
 from dataclasses import dataclass
 
 from agent_core.calibration import selective_risk_coverage
-from agent_core.outcome_store import LabelSource, OutcomeRecord
+from agent_core.outcome_store import OutcomeRecord
 from flow_protocol import FlowResult, OracleResult
 
 from flow_corpus.config import CorpusConfig
@@ -27,6 +27,11 @@ from .metrics import aurc
 from .reliability import ReliabilityReport, brier_reliability
 
 _MERGED_AT = "1970-01-01T00:00:00+00:00"  # corpus runs are synthetic; timestamp is fixed/inert
+# Corpus outcomes are labeled by an oracle, NOT an unbiased human-audit sample. Use a
+# distinct source string (never LabelSource.HUMAN_AUDIT) so that if these records ever reach
+# agent_core's merge-gate store, build_domain_models / resolved() correctly exclude them from
+# the authoritative auto-merge calibration.
+_ORACLE_LABEL_SOURCE = "corpus_oracle"
 
 
 @dataclass(frozen=True)
@@ -95,7 +100,7 @@ def run_suite(
                     raw_confidence=fr.raw_confidence,
                     merged_at=_MERGED_AT,
                     label=verdict.verdict,
-                    label_source=LabelSource.HUMAN_AUDIT.value,
+                    label_source=_ORACLE_LABEL_SOURCE,
                     labeled_at=_MERGED_AT,
                     agent_version=specimen.agent_version,
                 )

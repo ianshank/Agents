@@ -23,14 +23,26 @@ from .manager import HoldoutManager, Sample
 @dataclass(frozen=True)
 class RotationReport:
     per_fold_reliability: tuple[float, ...]
-    spread: float  # max - min across folds
-    stable: bool  # spread <= cfg.rotation_stability_threshold
+    spread: float  # max - min across measurable folds
+    stable: bool  # >= 2 measurable folds AND spread <= cfg.rotation_stability_threshold
     n_folds: int
-    directional_folds: int  # folds whose instance-holdout was below power
+    directional_folds: int  # folds whose instance-holdout was below power / unmeasurable
 
     @property
     def passes(self) -> bool:
         return self.stable
+
+
+def _spread_and_stable(reliabilities: list[float], threshold: float) -> tuple[float, bool]:
+    """Spread and stability verdict over per-fold reliabilities.
+
+    Stability is *undefined* with fewer than two measurable folds — a single value has a
+    trivially-zero spread, which must NOT be reported as stable. So <2 folds → not stable.
+    """
+    if len(reliabilities) < 2:
+        return (0.0, False)
+    spread = max(reliabilities) - min(reliabilities)
+    return (spread, spread <= threshold)
 
 
 class RotationManager:
@@ -66,11 +78,11 @@ class RotationManager:
         if not reliabilities:
             raise ValueError("no fold produced a measurable instance-holdout reliability")
 
-        spread = max(reliabilities) - min(reliabilities)
+        spread, stable = _spread_and_stable(reliabilities, self.cfg.rotation_stability_threshold)
         return RotationReport(
             per_fold_reliability=tuple(reliabilities),
             spread=spread,
-            stable=spread <= self.cfg.rotation_stability_threshold,
+            stable=stable,
             n_folds=k_folds,
             directional_folds=directional,
         )

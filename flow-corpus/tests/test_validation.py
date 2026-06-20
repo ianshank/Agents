@@ -61,6 +61,10 @@ def test_runner_keys_outcomes_and_is_reproducible() -> None:
     assert all(rec.agent_version == spec.agent_version for rec in r1.outcome_records)
     assert all(rec.domain == "sdlc" for rec in r1.outcome_records)
     assert r1.reliability.reliability is not None
+    # Oracle-derived labels must NOT masquerade as the unbiased human-audit sample, or they
+    # would contaminate agent_core's auto-merge calibration if ever routed into its store.
+    assert all(rec.label_source == "corpus_oracle" for rec in r1.outcome_records)
+    assert all(rec.label_source != "human_audit" for rec in r1.outcome_records)
 
 
 def test_runner_does_not_record_outcome_only_flow_confidence() -> None:

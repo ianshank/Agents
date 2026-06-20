@@ -40,7 +40,12 @@ def validate_f015() -> bool:
     checks["mutation deterministic + identity-preserving"] = (
         a.instances == b.instances
         and len(a) == len(suite) * 3
-        and all(v.solution_space == base.solution_space and v.correct == base.correct for v in variants)
+        # Assert the expected variant count first, so the all(...) below can't pass vacuously
+        # on an empty list if the suffixing scheme ever changes.
+        and len(variants) == 3
+        and all(
+            v.solution_space == base.solution_space and v.correct == base.correct for v in variants
+        )
     )
 
     # 2. Re-key semantics: task perturbation does NOT re-key; config change DOES.

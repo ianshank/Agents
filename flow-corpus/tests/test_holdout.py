@@ -100,6 +100,18 @@ def test_rotation_all_degenerate_raises() -> None:
         RotationManager(cfg).rotate({"react": []}, "react", k_folds=2)
 
 
+def test_single_measurable_fold_is_not_stable() -> None:
+    # Stability is undefined with < 2 measurable folds: a lone value has spread 0 but must
+    # NOT be reported stable (would be a vacuous pass).
+    from flow_corpus.holdout.rotation import _spread_and_stable
+
+    assert _spread_and_stable([0.04], threshold=0.05) == (0.0, False)
+    spread, stable = _spread_and_stable([0.10, 0.12], threshold=0.05)
+    assert spread == pytest.approx(0.02) and stable is True
+    spread, stable = _spread_and_stable([0.10, 0.30], threshold=0.05)
+    assert stable is False
+
+
 def test_samples_from_run_skips_indeterminate_and_confidence_free() -> None:
     from flow_corpus.canary import NoOpSpecimen
 
