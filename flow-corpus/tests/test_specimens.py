@@ -63,6 +63,31 @@ def test_react_rejects_nonpositive_steps() -> None:
         ReActSpecimen(MockPolicy(), max_steps=0)
 
 
+def test_react_confidence_threshold_rekeys_and_validates() -> None:
+    a = ReActSpecimen(MockPolicy(0.7), max_steps=3, confidence_threshold=0.5)
+    b = ReActSpecimen(MockPolicy(0.7), max_steps=3, confidence_threshold=0.8)
+    assert a.agent_version != b.agent_version  # threshold is in the key
+    with pytest.raises(ValueError, match="confidence_threshold"):
+        ReActSpecimen(MockPolicy(), confidence_threshold=1.5)
+
+
+class _ConfidenceFreePolicy:
+    """Policy that returns no confidence, exercising the confidence-None branches."""
+
+    def decide(self, instance, rng: random.Random):
+        from flow_corpus.policy.base import PolicyDecision
+
+        return PolicyDecision(candidate=instance.solution_space[0], confidence=None)
+
+
+def test_mcts_handles_confidence_free_policy() -> None:
+    spec = MCTSSpecimen(_ConfidenceFreePolicy(), n_rollouts=4)
+    r = spec.run(INSTANCE, random.Random(0))
+    # No per-step confidences collected -> no ConfidenceChannel; vote fraction still set.
+    assert r.confidence_channel is None
+    assert r.raw_confidence is not None
+
+
 def test_registry_lookup() -> None:
     assert SPECIMENS.get("baseline") is BaselineSpecimen
     assert SPECIMENS.get("mcts") is MCTSSpecimen

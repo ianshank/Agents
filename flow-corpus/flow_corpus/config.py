@@ -41,6 +41,17 @@ class CorpusConfig:
     wilson_z: float = 1.96
     """z for Wilson intervals (1.96 ≈ 95%)."""
 
+    # --- holdout / cross-check partition --------------------------------------
+    holdout_fit_fraction: float = 0.5
+    """Fraction of instances on the fit/seen side of the holdout & cross-check split."""
+
+    # --- bootstrap (significance of metric deltas) ----------------------------
+    bootstrap_resamples: int = 2000
+    """Default resample count for bootstrap CIs (e.g. the confidence cross-check)."""
+
+    bootstrap_alpha: float = 0.05
+    """Two-sided alpha for bootstrap CIs (0.05 ≈ 95% interval)."""
+
     # --- audit budget (derives the indeterminate cap) -------------------------
     audit_capacity_per_cycle: int = 30
     """Human-audit labels affordable per cycle (the scarce resource)."""
@@ -61,6 +72,12 @@ class CorpusConfig:
             raise ValueError("min_oracle_kappa must be in [0, 1]")
         if self.n_bins < 1:
             raise ValueError("n_bins must be >= 1")
+        if not 0.0 < self.holdout_fit_fraction < 1.0:
+            raise ValueError("holdout_fit_fraction must be in (0, 1)")
+        if self.bootstrap_resamples < 1:
+            raise ValueError("bootstrap_resamples must be >= 1")
+        if not 0.0 < self.bootstrap_alpha < 1.0:
+            raise ValueError("bootstrap_alpha must be in (0, 1)")
 
     @property
     def max_indeterminate_rate(self) -> float:

@@ -75,6 +75,31 @@ def test_rotation_requires_two_folds() -> None:
         RotationManager(CFG).rotate(_samples_by_type(), "react", k_folds=1)
 
 
+def test_rotation_passes_property_mirrors_stable() -> None:
+    report = RotationManager(CFG).rotate(_samples_by_type(), "react", k_folds=3)
+    assert report.passes == report.stable
+
+
+def test_rotation_counts_degenerate_folds() -> None:
+    # A high power_min_sample makes the tiny measured partitions directional; a fold whose
+    # measured side is empty yields None reliability. Exercises the degenerate-fold branches.
+    cfg = CorpusConfig(declared_n_per_domain=200, power_min_sample=10_000, n_bins=10)
+    tiny = {
+        "baseline": [Sample(instance_id=f"b{i}", confidence=0.5, outcome=i % 2) for i in range(4)],
+        "react": [Sample(instance_id=f"r{i}", confidence=0.5, outcome=i % 2) for i in range(4)],
+    }
+    report = RotationManager(cfg).rotate(tiny, "react", k_folds=3, base_seed=0)
+    assert report.directional_folds >= 1
+    assert report.passes in (True, False)
+
+
+def test_rotation_all_degenerate_raises() -> None:
+    # No samples on the seen side at all -> every fold measures nothing -> raise.
+    cfg = CorpusConfig(declared_n_per_domain=200, power_min_sample=1)
+    with pytest.raises(ValueError, match="no fold produced"):
+        RotationManager(cfg).rotate({"react": []}, "react", k_folds=2)
+
+
 def test_samples_from_run_skips_indeterminate_and_confidence_free() -> None:
     from flow_corpus.canary import NoOpSpecimen
 

@@ -21,17 +21,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from agent_core.golden import _bucket
-
 from flow_corpus.config import CorpusConfig
+from flow_corpus.partition import bucket
 from flow_corpus.validation.reliability import ReliabilityReport, brier_reliability
 
 if TYPE_CHECKING:
     from flow_corpus.validation.runner import RunResult
-
-# Instances whose bucket is below this edge are the "fit/seen-task" side; the rest are
-# the held-out (measured) tasks. A 50/50 split keeps both sides well-powered.
-_FIT_EDGE = 0.5
 
 
 @dataclass(frozen=True)
@@ -75,7 +70,8 @@ class HoldoutManager:
 
     def _measured_instances(self, samples: Sequence[Sample]) -> list[Sample]:
         """The held-out (unseen-task) partition of *samples*, owned solely here."""
-        return [s for s in samples if _bucket(self.seed, s.instance_id) >= _FIT_EDGE]
+        edge = self.cfg.holdout_fit_fraction
+        return [s for s in samples if bucket(self.seed, s.instance_id) >= edge]
 
     def evaluate(
         self,

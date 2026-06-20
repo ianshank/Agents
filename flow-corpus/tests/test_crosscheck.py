@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import random
 
+import pytest
+
 from flow_corpus.config import CorpusConfig
 from flow_corpus.crosscheck import CrossCheckRow, confidence_cross_check
 from flow_corpus.validation.resampling import bootstrap_delta_ci
@@ -70,3 +72,49 @@ def test_bootstrap_ci_excludes_zero_property() -> None:
     )
     assert ci.point == 3.0
     assert ci.excludes_zero is True
+
+
+def test_bootstrap_delta_ci_length_mismatch_raises() -> None:
+    with pytest.raises(ValueError, match="aligned"):
+        bootstrap_delta_ci([1.0], [0.0, 0.0], [1, 0], lambda s, o: sum(s))
+
+
+def test_bootstrap_delta_ci_empty_raises() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        bootstrap_delta_ci([], [], [], lambda s, o: sum(s))
+
+
+def test_bootstrap_delta_ci_all_degenerate_raises() -> None:
+    # Succeeds for the two point-estimate calls, then raises on every resample call,
+    # so the point is computed but all resamples are skipped -> final raise.
+    calls = {"n": 0}
+
+    def _ok_then_raises(scores, outcomes):
+        calls["n"] += 1
+        if calls["n"] <= 2:  # the two point-estimate calls
+            return float(sum(scores))
+        raise ValueError("degenerate resample")
+
+    with pytest.raises(ValueError, match="all bootstrap resamples were degenerate"):
+        bootstrap_delta_ci([0.1, 0.2], [0.3, 0.4], [1, 0], _ok_then_raises, n_resamples=10)
+
+
+def test_crosscheck_degenerate_measure_partition_is_directional() -> None:
+    # All measured outcomes identical -> single class -> AUROC undefined -> early return.
+    rows = [
+        CrossCheckRow(flow_type="baseline", instance_id=f"i{i}", confidence=0.6, outcome=1)
+        for i in range(40)
+    ]
+    report = confidence_cross_check(rows, CFG, seed=2)
+    assert report.directional_only is True
+    assert report.auroc_confidence is None
+    assert report.delta_ci is None
+    assert report.confidence_adds_signal is False
+
+
+def test_crosscheck_uses_config_bootstrap_resamples() -> None:
+    # n_resamples=None -> sourced from cfg.bootstrap_resamples.
+    cfg = CorpusConfig(power_min_sample=40, bootstrap_resamples=64)
+    report = confidence_cross_check(_rows_confidence_informative(), cfg, seed=2)
+    assert report.delta_ci is not None
+    assert report.delta_ci.n_resamples <= 64  # degenerate resamples may be skipped

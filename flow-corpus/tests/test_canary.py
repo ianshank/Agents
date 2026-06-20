@@ -55,3 +55,10 @@ def test_noop_is_outcome_only_no_confidence() -> None:
 def test_separation_empty_outcomes_raises() -> None:
     with pytest.raises(ValueError, match="empty"):
         canary_separation([], [0], CFG)
+
+
+def test_separation_passes_property_mirrors_separated() -> None:
+    gold = _outcomes(GoldSpecimen())
+    noop = _outcomes(NoOpSpecimen())
+    report = canary_separation(gold, noop, CFG)
+    assert report.passes == report.separated

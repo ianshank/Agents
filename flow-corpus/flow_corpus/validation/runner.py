@@ -14,6 +14,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
+from agent_core.calibration import selective_risk_coverage
 from agent_core.outcome_store import LabelSource, OutcomeRecord
 from flow_protocol import FlowResult, OracleResult
 
@@ -22,6 +23,7 @@ from flow_corpus.oracles.base import Oracle
 from flow_corpus.specimens.base import Specimen
 from flow_corpus.suites.base import TaskSuite
 
+from .metrics import aurc
 from .reliability import ReliabilityReport, brier_reliability
 
 _MERGED_AT = "1970-01-01T00:00:00+00:00"  # corpus runs are synthetic; timestamp is fixed/inert
@@ -35,6 +37,7 @@ class RunResult:
     oracle_results: tuple[OracleResult, ...]
     outcome_records: tuple[OutcomeRecord, ...]
     reliability: ReliabilityReport
+    aurc: float | None  # area under risk-coverage (discrimination); None if no confidences
     outcomes: tuple[int, ...]  # per determinate instance: 1 correct / 0 incorrect
     n_indeterminate: int
     n_total: int
@@ -99,6 +102,9 @@ def run_suite(
             )
 
     reliability = brier_reliability(confidences, conf_outcomes, cfg)
+    # Discrimination: area under the risk-coverage curve over confidence-bearing
+    # outcomes. Undefined (None) when the flow reports no confidences.
+    aurc_value = aurc(selective_risk_coverage(confidences, conf_outcomes)) if confidences else None
 
     return RunResult(
         agent_version=specimen.agent_version,
@@ -107,6 +113,7 @@ def run_suite(
         oracle_results=tuple(oracle_results),
         outcome_records=tuple(records),
         reliability=reliability,
+        aurc=aurc_value,
         outcomes=tuple(outcomes),
         n_indeterminate=n_indeterminate,
         n_total=len(suite.instances),

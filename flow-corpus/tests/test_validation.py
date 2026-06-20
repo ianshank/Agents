@@ -70,8 +70,21 @@ def test_runner_does_not_record_outcome_only_flow_confidence() -> None:
     # No-op is confidence-free: no OutcomeRecords, reliability undefined, but outcomes exist.
     assert r.outcome_records == ()
     assert r.reliability.reliability is None
+    assert r.aurc is None  # no confidences -> AURC undefined
     assert len(r.outcomes) == len(SUITE.instances)
     assert sum(r.outcomes) == 0  # all wrong
+
+
+def test_runner_computes_aurc_for_confidence_bearing_flow() -> None:
+    from agent_core.calibration import selective_risk_coverage
+
+    spec = BaselineSpecimen(MockPolicy(skill=0.75, confidence_quality=1.0))
+    r = run_suite(spec, SUITE, PropertyOracle(), CFG, seed=3)
+    assert r.aurc is not None and 0.0 <= r.aurc <= 1.0
+    # Matches a direct computation over the same confidence-bearing pairs.
+    confs = [fr.raw_confidence for fr in r.flow_results if fr.raw_confidence is not None]
+    expected = aurc(selective_risk_coverage(confs, list(r.outcomes)))
+    assert r.aurc == pytest.approx(expected)
 
 
 def test_well_calibrated_agent_has_lower_reliability_than_noisy_one() -> None:

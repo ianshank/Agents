@@ -29,6 +29,11 @@ def test_derived_rate_is_not_stored_literal() -> None:
         {"audit_capacity_per_cycle": -1},
         {"min_oracle_kappa": 1.5},
         {"n_bins": 0},
+        {"holdout_fit_fraction": 0.0},
+        {"holdout_fit_fraction": 1.0},
+        {"bootstrap_resamples": 0},
+        {"bootstrap_alpha": 0.0},
+        {"bootstrap_alpha": 1.0},
     ],
 )
 def test_invalid_config_rejected(kwargs: dict) -> None:

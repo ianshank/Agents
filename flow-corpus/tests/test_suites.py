@@ -54,3 +54,33 @@ def test_load_suite_rejects_empty_file(tmp_path) -> None:
     empty.write_text("\n  \n", encoding="utf-8")
     with pytest.raises(ValueError, match="no valid task instances"):
         load_suite(empty)
+
+
+def test_suite_rejects_duplicate_instance_ids() -> None:
+    a = TaskInstance(instance_id="dup", domain="x", solution_space=("a", "b"), correct=("a",))
+    b = TaskInstance(instance_id="dup", domain="x", solution_space=("a", "b"), correct=("b",))
+    with pytest.raises(ValidationError):
+        TaskSuite(domain="x", instances=(a, b))
+
+
+def test_committed_snapshot_matches_generator() -> None:
+    # Locks the committed data/suites/sdlc.jsonl to the generator's default output, so a
+    # generator refactor that drifts the RNG sequence is caught.
+    from flow_corpus.config import CorpusConfig
+
+    assert build_sdlc_suite(CorpusConfig()).instances == load_suite().instances
+
+
+def test_build_sdlc_suite_parameterised() -> None:
+    cfg = CorpusConfig(declared_n_per_domain=10)
+    suite = build_sdlc_suite(cfg, seed=1, space_size=6, max_difficulty=0.5)
+    assert all(len(i.solution_space) == 6 for i in suite.instances)
+    assert max(i.difficulty for i in suite.instances) <= 0.5
+
+
+def test_build_sdlc_suite_validates_args() -> None:
+    cfg = CorpusConfig(declared_n_per_domain=5)
+    with pytest.raises(ValueError, match="space_size must be >= 2"):
+        build_sdlc_suite(cfg, space_size=1)
+    with pytest.raises(ValueError, match="max_difficulty"):
+        build_sdlc_suite(cfg, max_difficulty=1.5)

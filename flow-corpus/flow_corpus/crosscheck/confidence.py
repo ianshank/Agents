@@ -19,13 +19,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from agent_core.calibration import auroc
-from agent_core.golden import _bucket
 
 from flow_corpus.config import CorpusConfig
+from flow_corpus.partition import bucket
 from flow_corpus.validation.power import is_directional_only
 from flow_corpus.validation.resampling import BootstrapCI, bootstrap_delta_ci
 
-_FIT_EDGE = 0.5
+# Neutral base rate for a flow type unseen in the fit partition (binary outcome).
+_NEUTRAL_RATE = 0.5
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,7 @@ class CrossCheckReport:
 
 
 def _row_bucket(seed: int, row: CrossCheckRow) -> float:
-    return float(_bucket(seed, f"{row.flow_type}:{row.instance_id}"))
+    return bucket(seed, f"{row.flow_type}:{row.instance_id}")
 
 
 def confidence_cross_check(
@@ -55,14 +56,19 @@ def confidence_cross_check(
     cfg: CorpusConfig,
     *,
     seed: int = 0,
-    n_resamples: int = 2000,
+    n_resamples: int | None = None,
 ) -> CrossCheckReport:
-    """Run the held-out, ablated, significance-tested confidence cross-check."""
-    fit = [r for r in rows if _row_bucket(seed, r) < _FIT_EDGE]
-    measure = [r for r in rows if _row_bucket(seed, r) >= _FIT_EDGE]
+    """Run the held-out, ablated, significance-tested confidence cross-check.
+
+    ``n_resamples`` defaults to ``cfg.bootstrap_resamples`` when not overridden.
+    """
+    resamples = cfg.bootstrap_resamples if n_resamples is None else n_resamples
+    edge = cfg.holdout_fit_fraction
+    fit = [r for r in rows if _row_bucket(seed, r) < edge]
+    measure = [r for r in rows if _row_bucket(seed, r) >= edge]
 
     # Flow-type indicator learned on the FIT partition only (no leakage into measure).
-    global_rate = (sum(r.outcome for r in fit) / len(fit)) if fit else 0.5
+    global_rate = (sum(r.outcome for r in fit) / len(fit)) if fit else _NEUTRAL_RATE
     by_type: dict[str, list[int]] = {}
     for r in fit:
         by_type.setdefault(r.flow_type, []).append(r.outcome)
@@ -80,7 +86,13 @@ def confidence_cross_check(
     auroc_conf = auroc(conf_scores, outcomes)
     auroc_ind = auroc(indicator_scores, outcomes)
     ci = bootstrap_delta_ci(
-        conf_scores, indicator_scores, outcomes, auroc, n_resamples=n_resamples, seed=seed
+        conf_scores,
+        indicator_scores,
+        outcomes,
+        auroc,
+        n_resamples=resamples,
+        alpha=cfg.bootstrap_alpha,
+        seed=seed,
     )
     adds_signal = (not directional) and ci.point > 0.0 and ci.excludes_zero
     return CrossCheckReport(

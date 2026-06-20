@@ -22,19 +22,35 @@ from flow_corpus.suites.base import TaskInstance, TaskSuite
 
 DOMAIN = "sdlc"
 _DATA_PATH = Path(__file__).resolve().parents[3] / "data" / "suites" / "sdlc.jsonl"
-_SPACE_SIZE = 4  # candidates per instance: 1 correct + 3 wrong
+_DEFAULT_SPACE_SIZE = 4  # candidates per instance: 1 correct + (space_size-1) wrong
+_DEFAULT_MAX_DIFFICULTY = 0.8  # top of the difficulty sweep (keeps outcomes mixed)
 
 
-def build_sdlc_suite(cfg: CorpusConfig, *, seed: int = 1729) -> TaskSuite:
-    """Deterministically build a suite of ``cfg.declared_n_per_domain`` instances."""
+def build_sdlc_suite(
+    cfg: CorpusConfig,
+    *,
+    seed: int = 1729,
+    space_size: int = _DEFAULT_SPACE_SIZE,
+    max_difficulty: float = _DEFAULT_MAX_DIFFICULTY,
+) -> TaskSuite:
+    """Deterministically build a suite of ``cfg.declared_n_per_domain`` instances.
+
+    ``space_size`` and ``max_difficulty`` are parameters (with the original defaults,
+    so the committed snapshot is unchanged) to make the generator reusable for other
+    discrete-choice domains. The ``rng.randrange`` call order is preserved.
+    """
+    if space_size < 2:
+        raise ValueError("space_size must be >= 2 (need at least one wrong answer)")
+    if not 0.0 <= max_difficulty <= 1.0:
+        raise ValueError("max_difficulty must be in [0, 1]")
     rng = random.Random(seed)
     instances: list[TaskInstance] = []
     n = cfg.declared_n_per_domain
     for i in range(n):
-        # Difficulty sweeps [0, 0.8] so outcomes are neither all-pass nor all-fail.
-        difficulty = round(0.8 * i / max(1, n - 1), 4)
-        space = tuple(f"cand_{i}_{j}" for j in range(_SPACE_SIZE))
-        correct_idx = rng.randrange(_SPACE_SIZE)
+        # Difficulty sweeps [0, max_difficulty] so outcomes are neither all-pass nor all-fail.
+        difficulty = round(max_difficulty * i / max(1, n - 1), 4)
+        space = tuple(f"cand_{i}_{j}" for j in range(space_size))
+        correct_idx = rng.randrange(space_size)
         instances.append(
             TaskInstance(
                 instance_id=f"sdlc-{i:04d}",
