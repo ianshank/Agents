@@ -275,6 +275,6 @@ features:
       - "the gate fails safe to ESCALATE on any untrusted apparatus (canary not separated, judge not validated, or can't-tell); HOLDs a real regression; SHIPs only validated, separable, below-risk changes"
       - "all thresholds live on BRConfig (no hard-coded values in decision logic); 95% branch coverage; strict mypy"
     validation_command: "python scripts/validations/F_016.py"
-    implemented_in: "PENDING"
+    implemented_in: "08b1b8bf48175e40fee50560c2828c913dab3f05"
     depends_on: ["F-005", "F-013"]
     notes: "New sibling package behavioral-regression depending on agent_core + flow_protocol + flow_corpus (acyclic; never imports eval_harness). The optional live AnthropicJudge lives in eval_harness.judges behind the [anthropic] extra; the sibling stays offline. See ADR 0006."
