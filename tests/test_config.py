@@ -85,3 +85,55 @@ def test_load_config_from_file(tmp_path):
     )
     cfg = load_config(p)
     assert cfg.dataset.type == "inline"
+
+
+def test_coerce_scalar_yamlor_error():
+    from eval_harness.config import _coerce_scalar
+
+    # Malformed YAML (unterminated mapping) falls back to string
+    assert _coerce_scalar("{") == "{"
+
+
+def test_apply_overrides_malformed():
+    with pytest.raises(ConfigError, match="must be of form"):
+        apply_overrides({}, ["invalid_override"])
+
+
+def test_apply_overrides_non_mapping():
+    raw = {"run": "not_a_dict"}
+    with pytest.raises(ConfigError, match="is not a mapping"):
+        apply_overrides(raw, ["run.sample_rate=0.5"])
+
+
+def test_load_config_non_dict(tmp_path):
+    p = tmp_path / "c_bad.yaml"
+    p.write_text("not_a_mapping", encoding="utf-8")
+    with pytest.raises(ConfigError, match="did not parse to a mapping"):
+        load_config(p)
+
+
+def test_migration_cycle_raises():
+    from eval_harness.config.migrations import MIGRATIONS, migrate_to_current
+
+    # set up a cycle
+    MIGRATIONS["test-cycle"] = ("test-cycle", lambda x: x)
+    try:
+        with pytest.raises(ConfigError, match="migration cycle detected"):
+            migrate_to_current({"schema_version": "test-cycle"})
+    finally:
+        MIGRATIONS.pop("test-cycle", None)
+
+
+def test_gate_rule_invalid_metric():
+    from eval_harness.config.models import GateRule
+
+    with pytest.raises(ValueError, match="metric must be 'mean' or 'pass_rate'"):
+        GateRule(score="accuracy", metric="median")
+
+
+def test_eval_config_invalid_schema_version():
+    from eval_harness.config.models import EvalConfig
+
+    bad_base = dict(BASE, schema_version="999.0")
+    with pytest.raises(ValueError, match="EvalConfig expects schema_version"):
+        EvalConfig.model_validate(bad_base)

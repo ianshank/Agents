@@ -3,6 +3,7 @@
 Validates real inference calls to NVIDIA NIM API via the OpenAIJudge,
 including streaming reasoning extraction and JSON parsing from real LLM output.
 """
+
 from __future__ import annotations
 
 import logging
@@ -46,6 +47,7 @@ def _make_nvidia_judge(api_key: str, *, stream: bool = True) -> OpenAIJudge:
 # Basic inference
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.slow
 class TestNemotronInference:
@@ -54,12 +56,7 @@ class TestNemotronInference:
     def test_evaluates_simple_qa(self, nvidia_api_key: str) -> None:
         """Judge correctly evaluates a simple Q&A pair with a valid score."""
         judge = _make_nvidia_judge(nvidia_api_key)
-        prompt = (
-            "Question: What is 2+2?\n"
-            "Expected answer: 4\n"
-            "Actual answer: 4\n\n"
-            "Rate the actual answer's correctness."
-        )
+        prompt = "Question: What is 2+2?\nExpected answer: 4\nActual answer: 4\n\nRate the actual answer's correctness."
         verdict = judge.evaluate(prompt)
 
         logger.info("Verdict: score=%.2f reasoning=%s", verdict.score, verdict.reasoning[:200])
@@ -90,9 +87,7 @@ class TestNemotronInference:
             pytest.param("Capital of France?", "Paris", "Paris is the capital", id="capital-verbose-correct"),
         ],
     )
-    def test_parametrized_evaluations(
-        self, nvidia_api_key: str, question: str, expected: str, actual: str
-    ) -> None:
+    def test_parametrized_evaluations(self, nvidia_api_key: str, question: str, expected: str, actual: str) -> None:
         """Parametrized test: judge evaluates multiple Q&A pairs."""
         judge = _make_nvidia_judge(nvidia_api_key)
         prompt = f"Question: {question}\nExpected: {expected}\nActual: {actual}\nRate correctness."
@@ -105,6 +100,7 @@ class TestNemotronInference:
 # ---------------------------------------------------------------------------
 # Streaming & reasoning
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.slow
@@ -143,6 +139,7 @@ class TestNemotronStreaming:
 # ---------------------------------------------------------------------------
 # JSON extraction from real output
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.slow

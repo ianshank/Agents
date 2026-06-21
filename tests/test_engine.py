@@ -141,3 +141,70 @@ def test_gate_max_violated_fails():
     result = evaluate_gate(config.gate, engine.run())
     assert not result.passed
     assert any("above max" in f for f in result.failures)
+
+
+def test_engine_scorer_exception_handling():
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from eval_harness.core.interfaces import Scorer
+
+    # 1. Without fail_fast
+    cfg = dict(CONFIG)
+    cfg["run"] = {"name": "test-fail-fast-false", "fail_fast": False}
+    bad_scorer = MagicMock(spec=Scorer)
+    bad_scorer.name = "broken_scorer"
+    bad_scorer.score.side_effect = ValueError("simulated scorer failure")
+
+    config = load_config_dict(cfg)
+    engine = EvalEngine.from_config(config, langfuse_client=NullLangfuseClient())
+    engine.scorers = [bad_scorer]
+
+    run = engine.run()
+    assert len(run.items) == 2
+    for item in run.items:
+        score = item.scores[0]
+        assert score.name == "broken_scorer"
+        assert score.value == 0.0
+        assert not score.passed
+        assert "scorer error: simulated scorer failure" in score.comment
+
+    # 2. With fail_fast=True
+    cfg_fast = dict(CONFIG)
+    cfg_fast["run"] = {"name": "test-fail-fast-true", "fail_fast": True}
+    config_fast = load_config_dict(cfg_fast)
+    engine_fast = EvalEngine.from_config(config_fast, langfuse_client=NullLangfuseClient())
+    engine_fast.scorers = [bad_scorer]
+
+    with pytest.raises(ValueError, match="simulated scorer failure"):
+        engine_fast.run()
+
+
+def test_engine_links_trace_to_dataset_item():
+    from unittest.mock import MagicMock, patch
+
+    with patch("eval_harness.langfuse_client.langfuse_context.get_current_trace_id", return_value="trace-123"):
+        # Case A: run_id is set
+        cfg = dict(CONFIG)
+        cfg["run"] = {"name": "test-run", "run_id": "custom-run-id"}
+        config = load_config_dict(cfg)
+        mock_client = MagicMock()
+        engine = EvalEngine.from_config(config, langfuse_client=mock_client)
+        engine.run()
+
+        assert mock_client.link_dataset_item.call_count == 2
+        mock_client.link_dataset_item.assert_any_call(item_id="1", trace_id="trace-123", run_name="custom-run-id")
+
+        # Case B: run_id is None -> fallback to name
+        cfg_no_id = dict(CONFIG)
+        cfg_no_id["run"] = {"name": "test-fallback-name", "run_id": None}
+        config_no_id = load_config_dict(cfg_no_id)
+        mock_client_no_id = MagicMock()
+        engine_no_id = EvalEngine.from_config(config_no_id, langfuse_client=mock_client_no_id)
+        engine_no_id.run()
+
+        assert mock_client_no_id.link_dataset_item.call_count == 2
+        mock_client_no_id.link_dataset_item.assert_any_call(
+            item_id="1", trace_id="trace-123", run_name="test-fallback-name"
+        )

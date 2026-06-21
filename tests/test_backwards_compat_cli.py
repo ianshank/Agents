@@ -77,3 +77,30 @@ def test_cli_run_gate_fail(tmp_path, monkeypatch):
         ]
     )
     assert code == 1
+
+
+def test_cli_run_online(tmp_path, monkeypatch):
+    from unittest.mock import patch
+
+    monkeypatch.setenv("OUT_DIR", str(tmp_path))
+    with patch("eval_harness.langfuse_client.SDKLangfuseClient") as mock_sdk_client:
+        code = main(["run", "--config", str(CONFIG_DIR / "eval.example.yaml")])
+        assert code == 0
+        mock_sdk_client.assert_called_once()
+
+
+def test_cli_run_no_console_sink(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("OUT_DIR", str(tmp_path))
+    code = main(
+        [
+            "run",
+            "--config",
+            str(CONFIG_DIR / "eval.example.yaml"),
+            "--offline",
+            "--set",
+            "sinks=[{type: json, params: {path: ${OUT_DIR}/results.json}}]",
+        ]
+    )
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "helpfulness: mean=" in out

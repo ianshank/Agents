@@ -3,6 +3,7 @@
 Validates that @observe() creates real traces, attach_client() enables
 OpenAI tracing, and dataset run items are properly linked.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,12 +20,14 @@ logger = logging.getLogger(__name__)
 # @observe() decorator
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 class TestObserveDecorator:
     """Validate that @observe() creates real traces in Langfuse."""
 
     def test_observe_creates_trace(self, langfuse_sdk: Any) -> None:
         """A function decorated with @observe() should create a trace in Langfuse."""
+
         @observe(name="e2e-observe-test")
         def _traced_function(x: int) -> int:
             return x * 2
@@ -41,6 +44,7 @@ class TestObserveDecorator:
 
     def test_observe_preserves_return_value(self) -> None:
         """@observe() should not alter the function's return value."""
+
         @observe(name="e2e-return-test")
         def _compute(a: int, b: int) -> int:
             return a + b
@@ -49,6 +53,7 @@ class TestObserveDecorator:
 
     def test_observe_preserves_exceptions(self) -> None:
         """@observe() should not swallow exceptions from the decorated function."""
+
         @observe(name="e2e-exception-test")
         def _failing() -> None:
             msg = "intentional test failure"
@@ -61,6 +66,7 @@ class TestObserveDecorator:
 # ---------------------------------------------------------------------------
 # langfuse_context
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 class TestLangfuseContext:
@@ -77,14 +83,13 @@ class TestLangfuseContext:
 # attach_client tracing
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.slow
 class TestAttachClientTracing:
     """Validate OpenAIJudge.attach_client() enables Langfuse tracing."""
 
-    def test_attach_client_wraps_openai(
-        self, nvidia_api_key: str, sdk_langfuse_client: SDKLangfuseClient
-    ) -> None:
+    def test_attach_client_wraps_openai(self, nvidia_api_key: str, sdk_langfuse_client: SDKLangfuseClient) -> None:
         """attach_client() with SDKLangfuseClient replaces OpenAI client with traced version."""
         import os
 
@@ -118,9 +123,7 @@ class TestAttachClientTracing:
         # If not, it stays the same (graceful fallback)
         assert judge.client is not None
 
-    def test_attach_client_still_evaluates(
-        self, nvidia_api_key: str, sdk_langfuse_client: SDKLangfuseClient
-    ) -> None:
+    def test_attach_client_still_evaluates(self, nvidia_api_key: str, sdk_langfuse_client: SDKLangfuseClient) -> None:
         """After attach_client, judge can still evaluate prompts."""
         import os
 

@@ -85,7 +85,8 @@ def load_config_dict(
     raw = migrate_to_current(raw)
     raw = interpolate(raw, env)
     if overrides:
-        raw = apply_overrides(raw, overrides)
+        interpolated_overrides = [interpolate(o, env) for o in overrides]
+        raw = apply_overrides(raw, interpolated_overrides)
     return EvalConfig.model_validate(raw)
 
 

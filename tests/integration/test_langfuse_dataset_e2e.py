@@ -3,6 +3,7 @@
 Validates the full Langfuse loop: dataset creation → eval engine loading →
 score emission back to Langfuse via LangfuseSink.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,13 +26,12 @@ logger = logging.getLogger(__name__)
 # Dataset source
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 class TestLangfuseDatasetSource:
     """Validate LangfuseDataset loads items from real Langfuse."""
 
-    def test_load_dataset_from_langfuse(
-        self, langfuse_sdk: Any, sdk_langfuse_client: SDKLangfuseClient
-    ) -> None:
+    def test_load_dataset_from_langfuse(self, langfuse_sdk: Any, sdk_langfuse_client: SDKLangfuseClient) -> None:
         """LangfuseDataset.load() returns items from a real Langfuse dataset."""
         dataset_name = f"e2e-dataset-source-{int(time.time())}"
 
@@ -78,13 +78,12 @@ class TestLangfuseDatasetSource:
 # Langfuse sink
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 class TestLangfuseSink:
     """Validate LangfuseSink emits scores to real Langfuse."""
 
-    def test_sink_emits_to_langfuse(
-        self, sdk_langfuse_client: SDKLangfuseClient, tmp_path: Any
-    ) -> None:
+    def test_sink_emits_to_langfuse(self, sdk_langfuse_client: SDKLangfuseClient, tmp_path: Any) -> None:
         """LangfuseSink.emit() sends scores that appear in Langfuse API."""
         import uuid
         from datetime import datetime, timezone
@@ -125,8 +124,12 @@ class TestLangfuseSink:
         sink = LangfuseSink()
         now = datetime.now(timezone.utc)
         dummy_result = RunResult(
-            run_id="test", config_name="test", items=[], aggregate={},
-            started_at=now, finished_at=now,
+            run_id="test",
+            config_name="test",
+            items=[],
+            aggregate={},
+            started_at=now,
+            finished_at=now,
         )
         with pytest.raises(RuntimeError):
             sink.emit(dummy_result)
@@ -136,14 +139,13 @@ class TestLangfuseSink:
 # Full Langfuse loop
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.slow
 class TestFullLangfuseLoop:
     """Validate Langfuse dataset → eval → Langfuse sink end-to-end."""
 
-    def test_langfuse_dataset_to_langfuse_sink(
-        self, langfuse_sdk: Any, sdk_langfuse_client: SDKLangfuseClient
-    ) -> None:
+    def test_langfuse_dataset_to_langfuse_sink(self, langfuse_sdk: Any, sdk_langfuse_client: SDKLangfuseClient) -> None:
         """Full loop: create dataset in Langfuse → eval with mock judge → emit scores back."""
         dataset_name = f"e2e-full-loop-{int(time.time())}"
 

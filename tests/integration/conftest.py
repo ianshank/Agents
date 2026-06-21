@@ -3,12 +3,14 @@
 All integration tests require real API credentials set via environment variables.
 Tests are automatically skipped when credentials are absent.
 """
+
 from __future__ import annotations
 
 # Inject system certificate store before any SSL connections are made.
 # Fixes CERTIFICATE_VERIFY_FAILED on Windows with corporate proxies.
 try:
     import truststore
+
     truststore.inject_into_ssl()
 except ImportError:
     pass  # truststore not installed — rely on default cert bundle

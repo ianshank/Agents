@@ -7,5 +7,9 @@ def summarize(inputs: dict) -> str:
     return f"summary: {inputs.get('text', '')}"
 
 
+def summarize_item(item) -> str:
+    return f"summary_item: {item.inputs.get('text', '')}"
+
+
 def boom(inputs: dict) -> str:
     raise ValueError("kaboom")

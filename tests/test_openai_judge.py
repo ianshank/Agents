@@ -165,3 +165,76 @@ def test_openai_judge_attach_client_langfuse_import_error(mock_openai):
         judge.attach_client(sdk_client)  # must not raise
 
     assert judge.client is original_client
+
+
+def test_openai_judge_validation_errors(mock_openai):
+    with pytest.raises(ValueError, match="max_tokens must be >= 1"):
+        OpenAIJudge(model="test", max_tokens=0)
+
+    with pytest.raises(ValueError, match="temperature must be >= 0"):
+        OpenAIJudge(model="test", temperature=-0.5)
+
+    with pytest.raises(ValueError, match="top_p must be > 0"):
+        OpenAIJudge(model="test", top_p=0.0)
+
+    with pytest.raises(ValueError, match="failure_score must be >= 0"):
+        OpenAIJudge(model="test", failure_score=-1.0)
+
+    with pytest.raises(ValueError, match="retry_attempts must be >= 1"):
+        OpenAIJudge(model="test", retry_attempts=0)
+
+    with pytest.raises(ValueError, match="retry_wait_multiplier_seconds must be > 0"):
+        OpenAIJudge(model="test", retry_wait_multiplier_seconds=-1.0)
+
+    with pytest.raises(ValueError, match="retry_wait_min_seconds must be >= 0"):
+        OpenAIJudge(model="test", retry_wait_min_seconds=-1.0)
+
+    with pytest.raises(ValueError, match="retry_wait_max_seconds must be >= 0"):
+        OpenAIJudge(model="test", retry_wait_max_seconds=-1.0)
+
+    with pytest.raises(ValueError, match="retry_wait_min_seconds must be <= retry_wait_max_seconds"):
+        OpenAIJudge(model="test", retry_wait_min_seconds=5.0, retry_wait_max_seconds=2.0)
+
+    with pytest.raises(ValueError, match="score_field must not be empty"):
+        OpenAIJudge(model="test", score_field="")
+
+    with pytest.raises(ValueError, match="langfuse_openai_module must not be empty"):
+        OpenAIJudge(model="test", langfuse_openai_module="")
+
+
+def test_openai_judge_non_streaming(mock_openai):
+    judge = OpenAIJudge(model="test-model", stream=False)
+
+    mock_message = MagicMock()
+    mock_message.content = '{"score": 0.9, "reasoning": "great job"}'
+    mock_message.reasoning_content = "thinking non-stream"
+
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+
+    mock_completion = MagicMock()
+    mock_completion.choices = [mock_choice]
+
+    judge.client.chat.completions.create.return_value = mock_completion
+
+    verdict = judge.evaluate("test non-stream")
+    assert verdict.score == 0.9
+    assert "thinking non-stream" in verdict.reasoning
+    assert "great job" in verdict.reasoning
+
+
+def test_collect_completion_message_edges(mock_openai):
+    judge = OpenAIJudge(model="test-model", stream=False)
+
+    # 1. No choices
+    mock_completion = MagicMock()
+    mock_completion.choices = []
+    content, reasoning = judge._collect_completion_message(mock_completion)
+    assert content == "" and reasoning == ""
+
+    # 2. Choice message is None
+    mock_choice = MagicMock()
+    mock_choice.message = None
+    mock_completion.choices = [mock_choice]
+    content, reasoning = judge._collect_completion_message(mock_completion)
+    assert content == "" and reasoning == ""

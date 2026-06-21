@@ -3,6 +3,7 @@
 Validates real connectivity, dataset CRUD, score logging, and flush
 against the live Langfuse API. All credentials sourced from env vars.
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Connectivity
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 class TestLangfuseConnectivity:
@@ -45,6 +47,7 @@ class TestLangfuseConnectivity:
 # ---------------------------------------------------------------------------
 # Dataset operations
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 class TestLangfuseDatasets:
@@ -96,6 +99,7 @@ class TestLangfuseDatasets:
 # Score logging
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 class TestLangfuseScoring:
     """Validate score logging to Langfuse."""
@@ -118,9 +122,7 @@ class TestLangfuseScoring:
         sdk_langfuse_client.flush()
         logger.info("Logged score to trace %s — no exceptions", trace_id)
 
-    def test_link_dataset_item(
-        self, sdk_langfuse_client: SDKLangfuseClient, langfuse_sdk: Any
-    ) -> None:
+    def test_link_dataset_item(self, sdk_langfuse_client: SDKLangfuseClient, langfuse_sdk: Any) -> None:
         """link_dataset_item() creates a dataset run item linkage."""
         import uuid
 
@@ -162,6 +164,7 @@ class TestLangfuseScoring:
 # Flush behavior
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 class TestLangfuseFlush:
     """Validate flush semantics."""
@@ -179,6 +182,7 @@ class TestLangfuseFlush:
 # ---------------------------------------------------------------------------
 # Null client parity
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 class TestNullClientComparison:

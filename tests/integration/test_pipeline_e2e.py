@@ -3,6 +3,7 @@
 Validates the complete evaluation pipeline from config to results using
 real API calls. Tests both programmatic (EvalEngine) and CLI interfaces.
 """
+
 from __future__ import annotations
 
 import json
@@ -26,6 +27,7 @@ VENV_PYTHON = str(PROJECT_ROOT / ".venv" / "Scripts" / "python")
 # ---------------------------------------------------------------------------
 # Engine-level E2E
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.slow
@@ -125,6 +127,7 @@ sinks:
 # CLI-level E2E
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 class TestCLIPipeline:
     """Validate the eval-harness CLI entry point."""
@@ -133,7 +136,9 @@ class TestCLIPipeline:
         """eval-harness --help exits 0."""
         result = subprocess.run(
             [VENV_PYTHON, "-m", "eval_harness.cli", "--help"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         assert result.returncode == 0
         assert "eval-harness" in result.stdout or "usage" in result.stdout.lower()
@@ -142,7 +147,9 @@ class TestCLIPipeline:
         """eval-harness list-plugins shows registered components."""
         result = subprocess.run(
             [VENV_PYTHON, "-m", "eval_harness.cli", "list-plugins"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         assert result.returncode == 0
         assert "mock" in result.stdout.lower() or "echo" in result.stdout.lower()
@@ -155,7 +162,9 @@ class TestCLIPipeline:
 
         result = subprocess.run(
             [VENV_PYTHON, "-m", "eval_harness.cli", "run", "--config", str(config_path), "--offline"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         logger.info("CLI stdout: %s", result.stdout[:500])
         if result.stderr:
@@ -176,7 +185,9 @@ class TestCLIPipeline:
         cli_timeout = int(os.environ.get("E2E_CLI_TIMEOUT_SECONDS", "300"))
         result = subprocess.run(
             [VENV_PYTHON, "-m", "eval_harness.cli", "run", "--config", str(config_path), "--offline"],
-            capture_output=True, text=True, timeout=cli_timeout,
+            capture_output=True,
+            text=True,
+            timeout=cli_timeout,
             env=env,
         )
         logger.info("Nemotron CLI stdout: %s", result.stdout[:500])
@@ -186,6 +197,8 @@ class TestCLIPipeline:
         """CLI with non-existent config gives clear error."""
         result = subprocess.run(
             [VENV_PYTHON, "-m", "eval_harness.cli", "run", "--config", "nonexistent.yaml"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         assert result.returncode != 0
