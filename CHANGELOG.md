@@ -4,6 +4,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — Flow Calibration Corpus
+
+A calibration corpus of agentic flow variants that gives the validation harness a diverse,
+oracle-backed, *populated* sample to calibrate against and to prove it generalizes beyond a
+single flow shape. Built as two new packages whose isolation from the harness is enforced
+**structurally** by the existing grimp drift gate.
+
+### Added
+- **Contract + structural airgap (F-011):** new `flow-protocol/` package — the *only* shared
+  surface between corpus and harness: frozen Pydantic v2 `FlowResult` / `OracleResult` /
+  `ConfidenceChannel` with a `PROTOCOL_VERSION` semver + migration chain. `architecture.yaml`
+  declares `flow_protocol`/`flow_corpus` components with the only edges being
+  `flow_corpus → {flow_protocol, agent_core}`; a negative test proves a forbidden
+  `flow_corpus → eval_harness` import trips `drift_check.py`. `architecture.yaml` added to the
+  eval-integrity protected paths.
+- **Two-way version pin (F-012):** `flow_corpus.pinning.verify_pins()` pins the `flow_protocol`
+  and `agent_core` versions it was built against and raises `PinMismatchError` on skew (an
+  in-repo deliberate-bump tripwire); forced-mismatch negative tests.
+- **SDLC oracle domain — baseline + MCTS, canary, κ-gate (F-013):** policy-injected specimens
+  (a mandatory single-agent baseline control + MCTS) run a declared-N, deterministic SDLC suite
+  judged by a pure property oracle (abstains on uninterpretable output). Outcomes are keyed by
+  `(agent_version, domain)` with the task **excluded** from the key (`agent-core` 1.3.0 adds the
+  additive `OutcomeRecord.agent_version`). **Brier reliability** (Murphy decomposition) is the
+  primary metric; a discrimination canary separates a gold from a no-op agent by a Wilson-bounded
+  pass-rate margin (not AUROC); the oracle **Cohen's-κ gate** validates over co-determinate pairs
+  only and is power-aware. A seeded `MockPolicy` keeps every run offline and reproducible.
+- **Honest holdout + confidence cross-check (F-014):** ReAct introduced as a *type-holdout* flow;
+  a single-authority `HoldoutManager` reports instance-holdout (primary) and type-holdout
+  (generalization) separately with an extrapolation caveat; the confidence cross-check ablates raw
+  confidence against a flow-type indicator on a held-out partition with a seeded bootstrap-CI
+  significance test.
+- **Mutation engine + rotation (F-015):** a seeded mutation engine perturbs the suite into an
+  instance distribution (preserving task identity and *not* re-keying the agent); a
+  `RotationManager` gates on Brier-reliability stability across folds (undefined with <2 measurable
+  folds).
+
+### Changed
+- **Hardening:** removed cross-package private coupling (a corpus-owned `flow_corpus.partition.bucket`
+  replaces the private `agent_core.golden._bucket`); all behaviour-shaping values are config-/
+  parameter-driven (`CorpusConfig.holdout_fit_fraction` / `bootstrap_resamples` / `bootstrap_alpha`,
+  ReAct `confidence_threshold`, parameterised SDLC generator); the AURC discrimination metric is
+  wired into `RunResult`.
+- **Observability:** structured logging + `debug_span` instrumentation across the corpus (runner,
+  rotation, cross-check, κ-gate, pinning, mutation), reusing `agent_core`'s public
+  `get_logger`/`debug_span` (no new deps, no hardcoded levels).
+
+### Fixed
+- Corpus `OutcomeRecord`s are labeled `"corpus_oracle"` (not `HUMAN_AUDIT`), since the labels are
+  oracle-derived, not an unbiased human sample — preventing contamination of `agent_core`'s
+  auto-merge calibration if they ever reach its store.
+- Rotation no longer reports a vacuous `stable=True` on a single measurable fold; the F-015
+  identity-preservation check asserts the expected variant count first (no vacuous `all([])`).
+
+### Notes
+- `flow-protocol` 100% coverage; `flow-corpus` 100% coverage (gate ≥95); both strict-mypy + ruff
+  clean across py3.10–3.12 via `.github/workflows/flow-corpus-ci.yml`. Property-based (Hypothesis)
+  tests cover the pure functions.
+
 ## [Unreleased] — Quality & Eval-Integrity Gates
 
 ### Added

@@ -32,7 +32,10 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip "setuptools>=68"
       - run: pip install -e "./agent-core"
-      - run: pip install -e ".[dev,langfuse,openai]"
+      # archguard pulls grimp (pinned): F-011's airgap negative test shells out to
+      # drift_check.py, which needs grimp to build the import graph. (F-011..F-015 add
+      # flow-protocol/flow-corpus to sys.path themselves, so no editable install needed.)
+      - run: pip install -e ".[dev,langfuse,openai,archguard]"
       # Feature ledger: schema + DAG + git provenance + tier-fast validation commands.
       - run: python scripts/validate.py --tier fast
       # Coverage gate for the quality-gate tooling itself (separate from the library's

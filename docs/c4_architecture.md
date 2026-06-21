@@ -137,6 +137,56 @@ C4Component
     Rel(detectors, gha, "gh api check-runs")
 ```
 
+## Level 3 — Component: Flow Calibration Corpus (F-011…F-015, airgap seam)
+
+A calibration corpus of agentic flow variants (`flow-corpus`) that emits results across a
+versioned contract (`flow-protocol`) for the harness to calibrate against. The corpus reuses
+`agent_core`'s metric primitives (Murphy decomposition, Cohen's κ, Wilson intervals,
+selective risk-coverage, `OutcomeRecord`) but **never** imports `eval_harness`. `flow-protocol`
+is the *only* shared surface; the airgap is enforced deterministically by the grimp drift gate
+(`architecture.yaml` declares only `flow_corpus → {flow_protocol, agent_core}` — no
+corpus↔harness edge), and a two-way version pin (`verify_pins`) trips on `flow_protocol`/
+`agent_core` skew.
+
+```mermaid
+C4Component
+    title Component Diagram: Flow Calibration Corpus (airgap seam)
+
+    Container_Boundary(proto, "flow-protocol (shared contract)") {
+        Component(contract, "contract", "Pydantic v2 (frozen)", "FlowResult / OracleResult / ConfidenceChannel")
+        Component(pver, "version", "semver", "PROTOCOL_VERSION + migrate_protocol")
+    }
+
+    Container_Boundary(corpus, "flow-corpus") {
+        Component(specimens, "specimens", "Policy-injected flows", "baseline (control), MCTS, ReAct (type-holdout) + MockPolicy seam")
+        Component(suites, "suites/sdlc", "task population", "declared-N deterministic suite + snapshot")
+        Component(oracles, "oracles", "property + kappa_gate", "deterministic verdict; Cohen's-κ validation (co-determinate, power-aware)")
+        Component(runner, "validation.runner", "orchestrator", "keyed OutcomeRecords + Brier reliability + AURC")
+        Component(holdout, "holdout", "manager + rotation", "instance- vs type-holdout (single split authority); rotation stability")
+        Component(crosscheck, "crosscheck", "ablation", "confidence vs flow-type indicator + bootstrap-CI significance")
+        Component(keying, "keying + partition", "deterministic hashing", "version_key (impl+config; task excluded); bucket()")
+        Component(pinning, "pinning", "tripwire", "verify_pins(): protocol + harness version pins")
+        Component(ccfg, "config", "CorpusConfig", "all thresholds; derived max_indeterminate_rate")
+    }
+
+    System_Ext(ac, "agent_core (public API)", "calibration, golden.cohen_kappa, OutcomeRecord, logging_util")
+
+    Rel(specimens, contract, "emit FlowResult")
+    Rel(oracles, contract, "emit OracleResult")
+    Rel(runner, specimens, "run over suite")
+    Rel(runner, oracles, "judge")
+    Rel(runner, ac, "brier_decomposition / selective_risk_coverage / OutcomeRecord")
+    Rel(oracles, ac, "cohen_kappa")
+    Rel(holdout, keying, "bucket() partitions")
+    Rel(pinning, pver, "PROTOCOL_VERSION pin")
+    Rel(pinning, ac, "agent_core __version__ pin")
+```
+
+Reliability (the Brier/Murphy *reliability* term) is the primary, gating calibration metric;
+ECE is diagnostic only. Any metric below a power-derived minimum sample is *directional only* and
+cannot gate. Corpus `OutcomeRecord`s use a `"corpus_oracle"` label source (never `HUMAN_AUDIT`) so
+they can never be mistaken for the harness's unbiased human-audit sample.
+
 ## Quality & Eval-Integrity Gates
 
 These gates run in CI (`.github/workflows/quality-gates.yml`) and guard the harness

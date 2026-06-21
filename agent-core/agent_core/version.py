@@ -13,8 +13,8 @@ import warnings
 from collections.abc import Callable
 from typing import Any
 
-__version__ = "1.2.0"  # package (distribution) version — single source of truth
-SCHEMA_VERSION = "1.2.0"  # config-schema version; may diverge from __version__ later
+__version__ = "1.3.0"  # package (distribution) version — single source of truth
+SCHEMA_VERSION = "1.3.0"  # config-schema version; may diverge from __version__ later
 
 # --- config migrations -------------------------------------------------------
 # Each migration maps an *input* version to a callable that returns a dict at
@@ -47,9 +47,23 @@ def _migrate_1_1_0_to_1_2_0(data: ConfigDict) -> ConfigDict:
     return data
 
 
+def _migrate_1_2_0_to_1_3_0(data: ConfigDict) -> ConfigDict:
+    """v1.2.0 → v1.3.0: additive ``OutcomeRecord.agent_version`` keying field.
+
+    Purely a record-level surface change (a new optional field that defaults to None,
+    so old JSONL lines keep loading via ``from_json``). No config section changed, so
+    this is a version-stamp-only migration — present so configs pinned at 1.2.0 still
+    chain cleanly to the current schema version.
+    """
+    data = dict(data)
+    data["version"] = "1.3.0"
+    return data
+
+
 MIGRATIONS: dict[str, Migration] = {
     "1.0.0": _migrate_1_0_0_to_1_1_0,
     "1.1.0": _migrate_1_1_0_to_1_2_0,
+    "1.2.0": _migrate_1_2_0_to_1_3_0,
 }
 
 

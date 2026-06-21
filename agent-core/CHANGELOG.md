@@ -29,6 +29,24 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 - 100% coverage on the new modules; agent-core gate (ruff / ruff-format / mypy --strict /
   branch coverage ≥95%) green. Tests are mock-free (real temp git repos, real check-run payloads).
 
+## [1.3.0] – 2026-06-20
+
+### Added
+- `OutcomeRecord.agent_version: str | None = None` — an optional keying axis used by the
+  flow-calibration corpus to group outcomes by `(agent_version, domain)`. Additive and
+  backwards compatible: the field defaults to `None`, so pre-1.3.0 JSONL lines (written
+  without it) still load via `OutcomeRecord.from_json`. The merge gate ignores the field;
+  `build_domain_models` keys by `domain` as before.
+
+### Changed
+- `SCHEMA_VERSION`/`__version__` → `1.3.0`; added the `1.2.0 → 1.3.0` config migration
+  (a version-stamp only — no config section changed; the record-level default provides the
+  JSONL back-compat) so configs pinned at 1.2.0 keep loading.
+
+### Notes
+- No behavior change to existing subsystems; purely an additive surface for downstream keying.
+  Strict mypy + branch coverage ≥95% green.
+
 ## [1.2.0] – 2026-06-18
 
 ### Added (B1)

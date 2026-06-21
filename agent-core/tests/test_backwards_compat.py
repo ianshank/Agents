@@ -71,5 +71,13 @@ def test_decoupled_versions_contract() -> None:
 
     assert isinstance(__version__, str) and __version__
     assert isinstance(SCHEMA_VERSION, str) and SCHEMA_VERSION
-    assert __version__ == "1.2.0"
-    assert SCHEMA_VERSION == "1.2.0"
+    assert __version__ == "1.3.0"
+    assert SCHEMA_VERSION == "1.3.0"
+
+
+def test_migrates_1_2_0_to_1_3_0() -> None:
+    """A 1.2.0 config migrates to 1.3.0 (version-stamp only; agent_version is a record field)."""
+    old = {"version": "1.2.0", "loop": {"max_cycles": 3}}
+    cfg = FrameworkConfig.from_dict(old)
+    assert cfg.loop.max_cycles == 3
+    assert cfg.version == agent_core.SCHEMA_VERSION == "1.3.0"
