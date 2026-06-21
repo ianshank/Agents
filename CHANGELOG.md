@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] — Quality & Eval-Integrity Gates
 
 ### Added
+- **E2E Integration Tests (F-005 Phase 1-3):** Live connectivity tests under `tests/integration/` verifying E2E connections to Langfuse Cloud and NVIDIA NIM (Nemotron 550B). Includes test cases for live dataset creation/retrieval, score logging/verification, observe decorator tracing, and CLI integration run.
 - **Calibrated auto-merge gate (F-010, opt-in / default-off):** a pure `agent_core`
   subsystem — `merge_gate.py` (deterministic `decide()`: mechanical-failure REJECT →
   protected-path ESCALATE → risk-derived `tau` + calibrator health + Wilson bin floor →
@@ -27,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repositories and real check-run payloads.
 
 ### Fixed
+- **Windows SSL Verification (truststore):** Added conditional import of `truststore` in `tests/integration/conftest.py` to support corporate proxy environments on Windows.
+- **CLI Subprocess Timeout Config:** Made CLI integration test timeout configurable via `E2E_CLI_TIMEOUT_SECONDS` (defaults to 300s) to support slow LLM-as-judge calls (e.g. Nemotron 550B).
 - **Calibrated merge gate (review follow-ups):** `calibrated-merge-gate.yml`'s decide step
   now fails on `REJECT` *and* on `merge_gate_ci`'s internal-error (`1`) / usage (`2`) exit
   codes — previously only `20` mapped to failure, so an error silently passed the gate.

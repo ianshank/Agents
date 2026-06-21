@@ -239,6 +239,11 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
 
 
 def main() -> int:
+    # Ensure virtual environment python takes precedence in subprocesses
+    venv_bin = os.path.dirname(sys.executable)
+    if venv_bin:
+        os.environ["PATH"] = venv_bin + os.pathsep + os.environ.get("PATH", "")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--skill", default=".")
     ap.add_argument("--evals", default="evals/evals.json")

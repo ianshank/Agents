@@ -130,7 +130,10 @@ def grade(
     if t == "exit_zero":
         if not has_run:
             return res(False, "exit_zero asserted but eval has no 'run' — nothing executed")
-        return res(run_rc == 0, f"run exit={run_rc}")
+        evidence = f"run exit={run_rc}"
+        if run_rc != 0:
+            evidence += f"\nOutput:\n{run_out}"
+        return res(run_rc == 0, evidence)
     if t == "output_contains":
         if not has_run:
             return res(False, "output_contains asserted but eval has no 'run'")
@@ -239,6 +242,11 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
 
 
 def main() -> int:
+    # Ensure virtual environment python takes precedence in subprocesses
+    venv_bin = os.path.dirname(sys.executable)
+    if venv_bin:
+        os.environ["PATH"] = venv_bin + os.pathsep + os.environ.get("PATH", "")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--skill", default=".")
     ap.add_argument("--evals", default="evals/evals.json")

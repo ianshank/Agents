@@ -279,6 +279,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run all validation steps and return an exit code."""
+    import os
+    # Ensure virtual environment python takes precedence in subprocesses
+    venv_bin = os.path.dirname(sys.executable)
+    if venv_bin:
+        os.environ["PATH"] = venv_bin + os.pathsep + os.environ.get("PATH", "")
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+
     parser = build_parser()
     args = parser.parse_args(argv)
 

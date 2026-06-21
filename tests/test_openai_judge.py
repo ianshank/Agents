@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from eval_harness.judges import OpenAIJudge
-from eval_harness.langfuse_client import SDKLangfuseClient
 
 
 @pytest.fixture

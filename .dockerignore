@@ -17,11 +17,10 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 .benchmarks/
-
-# Skill validation
+.grimp_cache/
+.hypothesis/
 .skill-validation/
 grading.json
-
 # IDE
 .vscode/
 .idea/
