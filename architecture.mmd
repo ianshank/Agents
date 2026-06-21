@@ -3,6 +3,7 @@ C4Component
 
     Component(agent_core, "agent_core", "Component")
     Component(agent_core_adapter, "agent_core_adapter", "Component")
+    Component(behavioral_regression, "behavioral_regression", "Component")
     Component(cli, "cli", "Component")
     Component(config, "config", "Component")
     Component(core, "core", "Component")
@@ -20,6 +21,8 @@ C4Component
 
     Rel(agent_core_adapter, agent_core, "")
     Rel(agent_core_adapter, core, "")
+    Rel(behavioral_regression, agent_core, "")
+    Rel(behavioral_regression, flow_corpus, "")
     Rel(cli, config, "")
     Rel(cli, engine, "")
     Rel(cli, gating, "")
