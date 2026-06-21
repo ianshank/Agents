@@ -33,9 +33,16 @@ eval-harness = "eval_harness.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+eval_harness = ["py.typed"]
+
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+markers = [
+    "integration: marks tests requiring live API credentials (deselect with '-m not integration')",
+    "slow: marks tests that take >5s (deselect with '-m not slow')",
+]
 
 [tool.ruff]
 target-version = "py310"

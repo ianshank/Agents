@@ -4,11 +4,11 @@
 Creates a virtual-environment (if it does not already exist), installs the
 project with ``[dev,openai]`` extras, and prints *baseline ready* on success.
 
-Idempotent – safe to run multiple times.
+Idempotent - safe to run multiple times.
 
 Exit codes:
-    0 – success
-    1 – a step failed
+    0 - success
+    1 - a step failed
 """
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ import logging
 import platform
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Sequence
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -109,7 +109,7 @@ def _install_deps(venv_dir: Path, project_root: Path) -> bool:
 # CLI
 # ---------------------------------------------------------------------------
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Run initialisation steps and return an exit code."""
     logging.basicConfig(
         level=logging.INFO,

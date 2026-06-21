@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Validation script for Feature F-005: Langfuse Tracing Integration."""
 import os
-import sys
 import subprocess
+import sys
+
 
 def validate_f005() -> bool:
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     test_file = os.path.join(project_root, "tests", "test_langfuse_integration.py")
-    
+
     if not os.path.isfile(test_file):
         print(f"FAIL: test_langfuse_integration.py not found at {test_file}")
         return False
-        
+
     cmd = [
         sys.executable,
         "-m",
@@ -19,7 +20,7 @@ def validate_f005() -> bool:
         test_file,
         "-v"
     ]
-    
+
     print(f"Running command: {' '.join(cmd)}")
     try:
         res = subprocess.run(
@@ -34,7 +35,7 @@ def validate_f005() -> bool:
         print(res.stdout)
         print("STDERR:")
         print(res.stderr)
-        
+
         if res.returncode == 0:
             print("OK: F-005 validation passed.")
             return True

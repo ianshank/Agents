@@ -164,3 +164,39 @@ def test_langfuse_sink_min_value_filter():
     sink2.emit(low_run)
     # Score 0.1 is below 0.5 → filtered out → nothing logged
     assert len(client2.scores) == 0
+
+
+def test_echo_target_no_key():
+    t = TARGETS.create("echo", {})
+    inputs = {"q": "hi", "other": 1}
+    assert t.run(EvalItem(id="1", inputs=inputs)).output == inputs
+
+
+def test_callable_target_invalid_path():
+    import pytest
+
+    t = TARGETS.create("callable", {"path": "invalidpath"})
+    with pytest.raises(ValueError, match="must be 'module:function'"):
+        t.run(EvalItem(id="1", inputs={}))
+
+
+def test_callable_target_pass_item():
+    t = TARGETS.create("callable", {"path": "tests._sut:summarize_item", "pass_item": True})
+    out = t.run(EvalItem(id="1", inputs={"text": "x"}))
+    assert out.output == "summary_item: x"
+
+
+def test_entry_point_plugins_loading():
+    from unittest.mock import MagicMock, patch
+
+    from eval_harness.plugins import load_entry_point_plugins
+
+    mock_ep = MagicMock()
+    mock_ep.name = "mock_plugin"
+
+    mock_eps = MagicMock()
+    mock_eps.select.return_value = [mock_ep]
+
+    with patch("importlib.metadata.entry_points", return_value=mock_eps):
+        load_entry_point_plugins()
+        mock_ep.load.assert_called_once()

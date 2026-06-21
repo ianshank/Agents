@@ -18,3 +18,10 @@ pytest-cov>=5
 mypy
 ruff
 jsonschema>=4.0
+
+# Transitive dependency security pins (Snyk / SAST mitigation)
+urllib3>=2.7.0
+idna>=3.15
+pygments>=2.20.0
+requests>=2.33.0
+

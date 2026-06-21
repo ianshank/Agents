@@ -24,19 +24,46 @@ from __future__ import annotations
 
 import json
 import logging
+from importlib import import_module
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from eval_harness.core.interfaces import Judge
 from eval_harness.core.types import EvalItem
 
-try:
-    from agent_core.protocols import CycleResult, CycleState
-except ImportError as _exc:  # pragma: no cover
-    raise ImportError(
-        "agent-core is required for eval_harness.agent_core_adapter. "
-        "Install it from the monorepo: pip install -e './agent-core'"
-    ) from _exc
+if TYPE_CHECKING:
+
+    class CycleState:
+        cycle_index: int
+        unresolved: tuple[str, ...]
+
+    class CycleResult:
+        cost: float
+        new_unresolved: tuple[str, ...]
+        max_conf_delta: float
+        new_evidence: bool
+        detail: str
+
+        def __init__(
+            self,
+            *,
+            cost: float,
+            new_unresolved: tuple[str, ...],
+            max_conf_delta: float,
+            new_evidence: bool,
+            detail: str = "",
+        ) -> None: ...
+else:
+    try:
+        _agent_core_protocols = import_module("agent_core.protocols")
+        CycleResult = _agent_core_protocols.CycleResult
+        CycleState = _agent_core_protocols.CycleState
+    except ImportError as _exc:  # pragma: no cover
+        raise ImportError(
+            "agent-core is required for eval_harness.agent_core_adapter. "
+            "Install it from the monorepo: pip install -e './agent-core'"
+        ) from _exc
 
 __all__ = [
     "AdapterConfig",

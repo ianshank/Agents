@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from eval_harness.langfuse_client import NullLangfuseClient, SDKLangfuseClient, langfuse_context, observe
+from eval_harness.langfuse_client import (  # type: ignore[import-not-found]
+    NullLangfuseClient,
+    SDKLangfuseClient,
+    langfuse_context,
+    observe,
+)
 
 
 @patch("langfuse.Langfuse")
@@ -151,3 +156,85 @@ def test_langfuse_context_returns_none_without_sdk():
     result = langfuse_context.get_current_trace_id()
     # When langfuse is installed it may return None anyway (no active trace)
     assert result is None or isinstance(result, str)
+
+
+def test_langfuse_context_with_mocked_decorators():
+    from importlib import import_module
+    from unittest.mock import MagicMock, patch
+
+    mock_decorators = MagicMock()
+    mock_decorators.langfuse_context.get_current_trace_id.return_value = "mocked-trace-id-123"
+
+    def custom_import(name, package=None):
+        if name == "langfuse.decorators":
+            return mock_decorators
+        return import_module(name, package)
+
+    with patch("eval_harness.langfuse_client.import_module", side_effect=custom_import):
+        result = langfuse_context.get_current_trace_id()
+        assert result == "mocked-trace-id-123"
+
+
+def test_observe_with_mocked_decorators():
+    from unittest.mock import MagicMock, patch
+
+    mock_decorators = MagicMock()
+    mock_observe = MagicMock()
+    mock_decorators.observe = mock_observe
+
+    def custom_import(name, package=None):
+        if name == "langfuse.decorators":
+            return mock_decorators
+        from importlib import import_module
+
+        return import_module(name, package)
+
+    with patch("eval_harness.langfuse_client.import_module", side_effect=custom_import):
+        res = observe("arg1", kwarg="val")
+        mock_observe.assert_called_once_with("arg1", kwarg="val")
+        assert res is mock_observe.return_value
+
+
+def test_sdk_client_import_error():
+    from unittest.mock import patch
+
+    import pytest
+
+    from eval_harness.langfuse_client import SDKLangfuseClient
+
+    def custom_import(name, package=None):
+        if name == "langfuse":
+            raise ImportError("mocked import error")
+        from importlib import import_module
+
+        return import_module(name, package)
+
+    with (
+        patch("eval_harness.langfuse_client.import_module", side_effect=custom_import),
+        pytest.raises(RuntimeError, match="The 'langfuse' package is required"),
+    ):
+        SDKLangfuseClient()
+
+
+@patch("langfuse.Langfuse")
+def test_link_dataset_item_exception(mock_langfuse_class, caplog):
+    import logging
+
+    mock_lf_instance = mock_langfuse_class.return_value
+    mock_lf_instance.api.dataset_run_items.create.side_effect = RuntimeError("api error")
+
+    client = SDKLangfuseClient()
+
+    with caplog.at_level(logging.ERROR):
+        client.link_dataset_item(
+            item_id="item-123",
+            trace_id="trace-456",
+            run_name="my-run",
+        )
+    assert "Failed to link trace to dataset item" in caplog.text
+
+
+def test_null_client_link_dataset_item():
+    client = NullLangfuseClient()
+    # Should be a no-op and not raise any exceptions
+    client.link_dataset_item(item_id="1", trace_id="2", run_name="3")

@@ -222,6 +222,8 @@ def run_pytest(tree: Path, test_paths: Sequence[str], *, timeout: int) -> set[st
         *test_paths,
         "-p",
         "no:cacheprovider",
+        "-m",
+        "not integration",
         "-q",
         f"--junitxml={junit}",
     ]

@@ -17,7 +17,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +25,9 @@ BEHAVIORAL_TYPES: set[str] = {"exit_zero", "output_contains", "file_contains", "
 WORKDIR: str = ".skill-validation"
 
 
-def parse_frontmatter(skill_md: str) -> tuple[Optional[dict[str, str]], int]:
+def parse_frontmatter(skill_md: str) -> tuple[dict[str, str] | None, int]:
     """Return (frontmatter_dict_or_None, line_count). Prefer real YAML; fall back tolerantly."""
-    with open(skill_md, "r", encoding="utf-8") as f:
+    with open(skill_md, encoding="utf-8") as f:
         text = f.read()
     nlines = len(text.splitlines())
     m = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.S)
@@ -42,32 +42,33 @@ def parse_frontmatter(skill_md: str) -> tuple[Optional[dict[str, str]], int]:
     except Exception:
         pass
     fm: dict[str, str] = {}
-    key: Optional[str] = None
+    key: str | None = None
     for line in block.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         if not line[0].isspace() and ":" in line:
-            key, val = line.split(":", 1)
-            key = key.strip()
-            fm[key] = val.strip()
+            raw_key, val = line.split(":", 1)
+            parsed_key = raw_key.strip()
+            key = parsed_key
+            fm[parsed_key] = val.strip()
         elif key and line[0].isspace():           # folded continuation
             fm[key] = (fm[key] + " " + line.strip()).strip()
     return fm, nlines
 
 
-def load_evals(skill_dir: str, evals_path: str, errs: list[str]) -> Optional[dict[str, Any]]:
+def load_evals(skill_dir: str, evals_path: str, errs: list[str]) -> dict[str, Any] | None:
     path = evals_path if os.path.isabs(evals_path) else os.path.join(skill_dir, evals_path)
     if not os.path.isfile(path):
         return None
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)  # type: ignore[no-any-return]
     except (json.JSONDecodeError, OSError) as e:
         errs.append(f"cannot parse {evals_path}: {e}")
         return None
 
 
-def first_path_token(cmd: str) -> Optional[str]:
+def first_path_token(cmd: str) -> str | None:
     for tok in cmd.split():
         if "/" in tok and not tok.startswith("-"):
             return tok
@@ -114,6 +115,35 @@ def check_structural(skill_dir: str, evals_path: str) -> tuple[list[str], list[s
     return errs, warns
 
 
+def _safe_run(
+    cmd_str: str,
+    cwd: str,
+    timeout: int,
+) -> subprocess.CompletedProcess:
+    import shlex
+    try:
+        cmd_parts = shlex.split(cmd_str)
+        if cmd_parts and cmd_parts[0] == "python":
+            cmd_parts[0] = sys.executable
+    except Exception:
+        cmd_parts = []
+
+    # Check for shell metacharacters
+    shell_chars = {"|", "&", ";", "<", ">", "$", "*", "?", "[", "]", "(", ")"}
+    use_shell = not cmd_parts or any(c in cmd_str for c in shell_chars)
+
+    return subprocess.run(
+        cmd_str if use_shell else cmd_parts,
+        shell=use_shell,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
+
+
 def grade(
     a: dict[str, Any],
     run_rc: int,
@@ -129,7 +159,10 @@ def grade(
     if t == "exit_zero":
         if not has_run:
             return res(False, "exit_zero asserted but eval has no 'run' — nothing executed")
-        return res(run_rc == 0, f"run exit={run_rc}")
+        evidence = f"run exit={run_rc}"
+        if run_rc != 0:
+            evidence += f"\nOutput:\n{run_out}"
+        return res(run_rc == 0, evidence)
     if t == "output_contains":
         if not has_run:
             return res(False, "output_contains asserted but eval has no 'run'")
@@ -142,7 +175,7 @@ def grade(
     if t == "file_contains":
         p = os.path.join(skill_dir, a["path"])
         try:
-            with open(p, "r", encoding="utf-8", errors="replace") as f:
+            with open(p, encoding="utf-8", errors="replace") as f:
                 body = f.read()
         except OSError as e:
             return res(False, f"cannot read {a['path']}: {e}")
@@ -150,16 +183,7 @@ def grade(
         return res(needle in body, f"{a['path']} {'contains' if needle in body else 'lacks'} {needle!r}")
     if t == "command_exit_zero":
         try:
-            r = subprocess.run(
-                a["cmd"],
-                shell=True,
-                cwd=skill_dir,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-            )
+            r = _safe_run(a["cmd"], cwd=skill_dir, timeout=timeout)
             return res(r.returncode == 0, f"`{a['cmd']}` exit={r.returncode}")
         except subprocess.TimeoutExpired:
             return res(False, f"`{a['cmd']}` timed out after {timeout}s")
@@ -189,16 +213,7 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
             errs.append(f"eval {eid}: only existence checks — add a behavioral assertion")
         if ev.get("setup"):
             try:
-                sp = subprocess.run(
-                    ev["setup"],
-                    shell=True,
-                    cwd=skill_dir,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=timeout,
-                )
+                sp = _safe_run(ev["setup"], cwd=skill_dir, timeout=timeout)
             except subprocess.TimeoutExpired:
                 errs.append(f"eval {eid}: setup timed out after {timeout}s")
                 continue
@@ -209,16 +224,7 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
         run_rc, run_out = 0, ""
         if has_run:
             try:
-                r = subprocess.run(
-                    ev["run"],
-                    shell=True,
-                    cwd=skill_dir,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=timeout,
-                )
+                r = _safe_run(ev["run"], cwd=skill_dir, timeout=timeout)
                 run_rc, run_out = r.returncode, (r.stdout + r.stderr)
             except subprocess.TimeoutExpired:
                 run_rc, run_out = 124, f"[timeout after {timeout}s]"
@@ -238,6 +244,11 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
 
 
 def main() -> int:
+    # Ensure virtual environment python takes precedence in subprocesses
+    venv_bin = os.path.dirname(sys.executable)
+    if venv_bin:
+        os.environ["PATH"] = venv_bin + os.pathsep + os.environ.get("PATH", "")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--skill", default=".")
     ap.add_argument("--evals", default="evals/evals.json")
@@ -253,8 +264,8 @@ def main() -> int:
         warns += w
     if "behavioral" in tiers:
         errs += check_behavioral(args.skill, args.evals, args.timeout)
-    for w in warns:
-        print(f"[warn] {w}")
+    for warn in warns:
+        print(f"[warn] {warn}")
     if errs:
         print("SKILL VALIDATION FAILED:\n  - " + "\n  - ".join(errs))
         return 1

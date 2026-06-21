@@ -1,5 +1,19 @@
 # Progress Log — langfuse-eval-harness
 
+## 2026-06-19 — Session 004
+**Features worked:** test coverage hardening (no new features)
+**Status changes:** coverage gaps → closed
+**Structural changes:**
+- Added 18 new test cases across `test_components.py`, `test_engine.py`, and
+  `test_openai_judge.py` targeting previously uncovered branches in `gating/`,
+  `sinks/`, and `judges/`.
+- Added `# pragma: no cover` to the unreachable `ImportError` branch in
+  `judges/__init__.py` (openai is a required install extra).
+**Validation evidence:** `ruff check src/ tests/` clean; `mypy src/eval_harness/` 0 issues;
+`pytest --cov=eval_harness` 152 passed, total coverage **96.49%** (up from 93.8%).
+**Next:** Merge to main; proceed with v1.2.0 milestone items (parallel execution,
+dynamic version, CSV/Parquet dataset source).
+
 ## 2026-06-15 — Session 003
 **Features worked:** F-003, F-004, F-005
 **Status changes:** F-003 todo -> done, F-004 todo -> done, F-005 todo -> done

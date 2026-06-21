@@ -8,6 +8,8 @@ harness is extensible without editing this package.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from typing import Any, cast
 
 from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
 from .core.registry import Registry
@@ -40,9 +42,10 @@ def load_entry_point_plugins() -> None:
         from importlib.metadata import entry_points
 
         eps = entry_points()
-        selected = (
-            eps.select(group=ENTRY_POINT_GROUP) if hasattr(eps, "select") else eps.get(ENTRY_POINT_GROUP, [])  # type: ignore[arg-type]  # pragma: no cover - py<3.10 shim
-        )
+        if hasattr(eps, "select"):
+            selected = eps.select(group=ENTRY_POINT_GROUP)
+        else:  # pragma: no cover - py<3.10 shim
+            selected = cast(Mapping[str, Any], eps).get(ENTRY_POINT_GROUP, [])
         for ep in selected:
             try:
                 ep.load()

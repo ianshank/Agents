@@ -7,14 +7,27 @@ Acts as a standalone CLI wrapping OpenAIJudge, supporting both mock mode
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import sys
+from pathlib import Path
+
+
+def _load_openai_judge():
+    """Load OpenAIJudge without requiring eval_harness on the static analysis path."""
+    for parent in Path(__file__).resolve().parents:
+        src_dir = parent / "src"
+        if (src_dir / "eval_harness").is_dir():
+            sys.path.insert(0, str(src_dir))
+            break
+
+    return importlib.import_module("eval_harness.judges").OpenAIJudge
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run OpenAI-compatible LLM judge.")
-    parser.add_argument("--model", default="nvidia/nemotron-3-ultra-550b-a55b")
-    parser.add_argument("--base-url", default="https://integrate.api.nvidia.com/v1")
+    parser.add_argument("--model", default=os.environ.get("JUDGE_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"))
+    parser.add_argument("--base-url", default=os.environ.get("JUDGE_BASE_URL", "https://integrate.api.nvidia.com/v1"))
     parser.add_argument("--api-key")
     parser.add_argument("--prompt", required=True, help="Path to input prompt file.")
     parser.add_argument("--rubric", required=True, help="Path to grading rubric file.")
@@ -24,9 +37,9 @@ def main() -> int:
 
     # Read inputs
     try:
-        with open(args.prompt, "r", encoding="utf-8") as f:
+        with open(args.prompt, encoding="utf-8") as f:
             prompt_content = f.read()
-        with open(args.rubric, "r", encoding="utf-8") as f:
+        with open(args.rubric, encoding="utf-8") as f:
             rubric_content = f.read()
     except Exception as e:
         print(f"Error reading input files: {e}", file=sys.stderr)
@@ -50,15 +63,15 @@ def main() -> int:
 
     # Live API mode: imports from eval_harness
     try:
-        from eval_harness.judges import OpenAIJudge
-    except ImportError:
+        openai_judge_cls = _load_openai_judge()
+    except (ImportError, AttributeError):
         print("Error: langfuse-eval-harness must be installed to run this skill in live mode.", file=sys.stderr)
         return 1
 
     try:
         # Combine prompt and rubric
         full_prompt = f"Prompt:\n{prompt_content}\n\nRubric:\n{rubric_content}"
-        judge = OpenAIJudge(
+        judge = openai_judge_cls(
             model=args.model,
             base_url=args.base_url,
             api_key=args.api_key or os.environ.get("NVIDIA_API_KEY"),

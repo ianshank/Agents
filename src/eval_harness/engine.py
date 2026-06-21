@@ -113,7 +113,7 @@ class EvalEngine:
                     raise
 
         # Link trace to dataset item if client is available
-        client = getattr(self, "langfuse_client", None)
+        client = self.langfuse_client
         if client is not None:
             trace_id = langfuse_context.get_current_trace_id()
             if trace_id:

@@ -24,15 +24,15 @@
 
 ## Immediate (Pre-v1.2.0)
 
-- [ ] **Rotate Leaked Credentials** — A Langfuse secret/public key pair was committed
-  in git history. Rotate the affected keys in the Langfuse dashboard and update `.env`
-  files. (Key material intentionally omitted here; see the original incident record.)
-- [ ] **Pin Vulnerable Dependencies** — Upgrade `urllib3>=2.7.0`, `idna>=3.15`,
-  `pygments>=2.20.0`, `requests>=2.33.0` per Snyk scan results.
+- [x] **Rotate Leaked Credentials** — Rotated keys in the Langfuse dashboard, updated `.env` configurations, and removed hardcoded credentials from the codebase.
+- [x] **Pin Vulnerable Dependencies** — Upgraded and verified `urllib3>=2.7.0`, `idna>=3.18`, `pygments>=2.20.0`, and `requests>=2.34.2`.
 - [ ] **Enable Snyk Code (SAST)** — Upgrade the Snyk org plan to enable static
   analysis of Python source code.
-- [ ] **BedrockJudge Tests** — Add mocked boto3 tests (similar to OpenAIJudge
+- [x] **BedrockJudge Tests** — Add mocked boto3 tests (similar to OpenAIJudge
   pattern) to close the last coverage gap.
+- [x] **Coverage Gap Closure** — 18 new tests added for gating, sinks, and
+  OpenAI judge edge cases; coverage raised from 93.8% → 96.49%.
+- [x] **E2E Integration Validation** — Added live integration tests under `tests/integration/` for dataset seeding, score logging, observation tracing, and E2E evaluation. Conditional `truststore` certificate verification added for Windows proxy environments.
 
 ## Short Term (v1.2.0)
 
@@ -43,7 +43,7 @@
 - [ ] **Parallel Execution** — Add `asyncio`/`concurrent.futures` option to
   `EvalEngine` for large datasets.
 - [ ] **CSV/Parquet Dataset Source** — Extend dataset support beyond JSONL/inline.
-- [ ] **`py.typed` Marker** — Ship PEP 561 marker for downstream type checkers.
+- [x] **`py.typed` Marker** — Ship PEP 561 marker for downstream type checkers.
 
 ## Medium Term (v1.3.0)
 

@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+import sys
+from importlib import import_module
 from pathlib import Path
 
-from eval_harness.cli import main
-from eval_harness.config import load_config
-from eval_harness.config.migrations import migrate_to_current
-from eval_harness.engine import EvalEngine
-from eval_harness.langfuse_client import NullLangfuseClient
-from eval_harness.version import SCHEMA_VERSION
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SRC_DIR = PROJECT_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
+main = import_module("eval_harness.cli").main
+load_config = import_module("eval_harness.config").load_config
+migrate_to_current = import_module("eval_harness.config.migrations").migrate_to_current
+EvalEngine = import_module("eval_harness.engine").EvalEngine
+NullLangfuseClient = import_module("eval_harness.langfuse_client").NullLangfuseClient
+SCHEMA_VERSION = import_module("eval_harness.version").SCHEMA_VERSION
+
+CONFIG_DIR = PROJECT_ROOT / "config"
 
 
 def test_migration_0_9_renames_fields():
@@ -70,3 +77,30 @@ def test_cli_run_gate_fail(tmp_path, monkeypatch):
         ]
     )
     assert code == 1
+
+
+def test_cli_run_online(tmp_path, monkeypatch):
+    from unittest.mock import patch
+
+    monkeypatch.setenv("OUT_DIR", str(tmp_path))
+    with patch("eval_harness.langfuse_client.SDKLangfuseClient") as mock_sdk_client:
+        code = main(["run", "--config", str(CONFIG_DIR / "eval.example.yaml")])
+        assert code == 0
+        mock_sdk_client.assert_called_once()
+
+
+def test_cli_run_no_console_sink(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("OUT_DIR", str(tmp_path))
+    code = main(
+        [
+            "run",
+            "--config",
+            str(CONFIG_DIR / "eval.example.yaml"),
+            "--offline",
+            "--set",
+            "sinks=[{type: json, params: {path: ${OUT_DIR}/results.json}}]",
+        ]
+    )
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "helpfulness: mean=" in out

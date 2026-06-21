@@ -21,11 +21,12 @@ def _run(script, *args):
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
     )
 
 
 def _manifest(tmp_path, *, fixture_sub, pkg, dependencies: str) -> str:
-    src_dir = os.path.join(FIXTURES, fixture_sub)
+    src_dir = os.path.join(FIXTURES, fixture_sub).replace("\\", "/")
     body = textwrap.dedent(
         f"""
         schema_version: "1.0.0"

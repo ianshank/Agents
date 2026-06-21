@@ -91,7 +91,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         committed = normalize_text(committed_file.read_text(encoding="utf-8"))
         if committed != rendered:
             print(
-                f"error: {out_path} is stale — regenerate it from {args.manifest} and commit.",
+                f"error: {out_path} is stale - regenerate it from {args.manifest} and commit.",
                 file=sys.stderr,
             )
             logger.error("freshness check failed for %s", out_path)

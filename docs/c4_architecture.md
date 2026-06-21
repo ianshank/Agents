@@ -48,6 +48,7 @@ C4Container
     Container_Boundary(integration, "Integrations") {
         Container(lf_client, "LangfuseClient", "Python", "Interface + NullClient + SDKClient adapter")
         Container(skill_fw, "Skill Framework", "Python", "validate_skill.py — structural + behavioral validation")
+        Container(integration_tests, "Integration Tests", "pytest", "Verifies live connectivity to Langfuse Cloud and NVIDIA NIM endpoints")
     }
 
     System_Ext(langfuse, "Langfuse Cloud", "")
@@ -66,6 +67,9 @@ C4Container
     Rel(engine, lf_client, "log_score(), link_dataset_item()")
     Rel(lf_client, langfuse, "HTTPS")
     Rel(judges, llm_api, "chat.completions.create()")
+    Rel(integration_tests, lf_client, "Uses")
+    Rel(integration_tests, langfuse, "Verifies uploads/retrievals via HTTPS")
+    Rel(integration_tests, llm_api, "Verifies live judge responses via HTTPS")
 ```
 
 ## Level 3 — Component: EvalEngine

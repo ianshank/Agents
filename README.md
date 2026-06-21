@@ -38,6 +38,7 @@ pip install -e '.[dev]'      # pytest, coverage, ruff, mypy
 | `LANGFUSE_BASE_URL` | For Langfuse features | Langfuse API endpoint (e.g. `https://us.cloud.langfuse.com`) |
 | `NVIDIA_API_KEY` | For Nemotron judge | NVIDIA API key |
 | `OPENAI_API_KEY` | For OpenAI judge | OpenAI API key |
+| `E2E_CLI_TIMEOUT_SECONDS` | Optional | Timeout for E2E integration validation CLI runs (default: 300) |
 
 Create a `.env` file from the template:
 ```bash
@@ -79,8 +80,11 @@ Reference it from config: `{type: length_ok, params: {max_chars: 140}}`.
 ## Test
 
 ```bash
-# Full suite with coverage
-pytest --cov=eval_harness --cov-report=term-missing
+# Full suite with coverage (excluding live integration tests)
+pytest --cov=eval_harness --cov-report=term-missing -m "not integration"
+
+# Run live integration tests (requires real credentials in .env)
+pytest tests/integration/ -m integration
 
 # Lint and type checks
 ruff check src/ tests/
@@ -154,6 +158,8 @@ scripts/
 
 skills/
   openai-judge/     skill: OpenAI-compatible LLM judge evaluation
+  architecture-drift-guard/ skill: C4 architecture component drift detector
+  eval-corpus-forge/ skill: dynamic dataset packaging and validation
 
 docs/
   c4_architecture.md  C4 context/container/component diagrams
@@ -166,7 +172,7 @@ docs/
 ```yaml
 # GitHub Actions example
 - name: Test
-  run: pytest --cov=eval_harness --cov-report=term-missing --cov-fail-under=85
+  run: pytest --cov=eval_harness --cov-report=term-missing --cov-fail-under=96
 
 - name: Lint
   run: ruff check src/ tests/

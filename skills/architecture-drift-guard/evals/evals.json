@@ -17,7 +17,7 @@
       "assertions": [
         { "type": "output_contains", "contains": "core -> api", "text": "names the undocumented edge" },
         { "type": "output_contains", "contains": "architecture drift", "text": "explains the failure" },
-        { "type": "command_exit_zero", "cmd": "python scripts/drift_check.py --manifest evals/fixtures/drift/architecture.yaml >/dev/null 2>&1; test $? -eq 1", "text": "the gate exits non-zero on drift" }
+        { "type": "command_exit_zero", "cmd": "python -c \"import subprocess, sys; sys.exit(0 if subprocess.run([sys.executable, 'scripts/drift_check.py', '--manifest', 'evals/fixtures/drift/architecture.yaml'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 1 else 1)\"", "text": "the gate exits non-zero on drift" }
       ]
     },
     {
@@ -27,7 +27,7 @@
       "assertions": [
         { "type": "exit_zero", "text": "emit-actual succeeds" },
         { "type": "output_contains", "contains": "dependencies:", "text": "prints a dependencies block" },
-        { "type": "command_exit_zero", "cmd": "python scripts/drift_check.py --manifest evals/fixtures/clean/architecture.yaml --emit-actual 2>/dev/null | python -c 'import sys,yaml; d=yaml.safe_load(sys.stdin); assert \"dependencies\" in d'", "text": "emitted block is valid YAML with a dependencies key" }
+        { "type": "command_exit_zero", "cmd": "python -c \"import subprocess, sys, yaml; p = subprocess.run([sys.executable, 'scripts/drift_check.py', '--manifest', 'evals/fixtures/clean/architecture.yaml', '--emit-actual'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True); d = yaml.safe_load(p.stdout); assert 'dependencies' in d\"", "text": "emitted block is valid YAML with a dependencies key" }
       ]
     },
     {
@@ -45,7 +45,7 @@
       "run": "python scripts/mermaid_gen.py --manifest evals/fixtures/stale/architecture.yaml --check -o evals/fixtures/stale/architecture.mmd",
       "assertions": [
         { "type": "output_contains", "contains": "stale", "text": "reports the diagram is stale" },
-        { "type": "command_exit_zero", "cmd": "python scripts/mermaid_gen.py --manifest evals/fixtures/stale/architecture.yaml --check -o evals/fixtures/stale/architecture.mmd >/dev/null 2>&1; test $? -eq 1", "text": "the freshness gate exits non-zero when stale" }
+        { "type": "command_exit_zero", "cmd": "python -c \"import subprocess, sys; sys.exit(0 if subprocess.run([sys.executable, 'scripts/mermaid_gen.py', '--manifest', 'evals/fixtures/stale/architecture.yaml', '--check', '-o', 'evals/fixtures/stale/architecture.mmd'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 1 else 1)\"", "text": "the freshness gate exits non-zero when stale" }
       ]
     },
     {
