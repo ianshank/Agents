@@ -192,7 +192,16 @@ def _run_validation_command(feat: dict[str, Any]) -> str | None:
         return f"{fid}: status=done but no validation_command"
 
     logger.info("Running validation for %s: %s", fid, cmd)
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    import shlex
+    import sys
+    cmd_parts = shlex.split(cmd)
+    if cmd_parts and cmd_parts[0] == "python":
+        cmd_parts[0] = sys.executable
+        use_shell = False
+    else:
+        use_shell = False
+
+    result = subprocess.run(cmd_parts, shell=use_shell, capture_output=True, text=True)
     if result.returncode != 0:
         tail = (result.stdout + result.stderr).strip().splitlines()[-3:]
         msg = f"{fid}: validation_command failed ({result.returncode})"

@@ -21,6 +21,12 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Try to delegate to the central repository validator to avoid code duplication/drift
+_central_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "scripts", "validate_skill.py"))
+if os.path.isfile(_central_path):
+    _result = subprocess.run([sys.executable, _central_path] + sys.argv[1:])
+    sys.exit(_result.returncode)
+
 BEHAVIORAL_TYPES: set[str] = {"exit_zero", "output_contains", "file_contains", "command_exit_zero"}
 WORKDIR: str = ".skill-validation"
 

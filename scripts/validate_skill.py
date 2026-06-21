@@ -115,6 +115,35 @@ def check_structural(skill_dir: str, evals_path: str) -> tuple[list[str], list[s
     return errs, warns
 
 
+def _safe_run(
+    cmd_str: str,
+    cwd: str,
+    timeout: int,
+) -> subprocess.CompletedProcess:
+    import shlex
+    try:
+        cmd_parts = shlex.split(cmd_str)
+        if cmd_parts and cmd_parts[0] == "python":
+            cmd_parts[0] = sys.executable
+    except Exception:
+        cmd_parts = []
+
+    # Check for shell metacharacters
+    shell_chars = {"|", "&", ";", "<", ">", "$", "*", "?", "[", "]", "(", ")"}
+    use_shell = not cmd_parts or any(c in cmd_str for c in shell_chars)
+
+    return subprocess.run(
+        cmd_str if use_shell else cmd_parts,
+        shell=use_shell,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
+
+
 def grade(
     a: dict[str, Any],
     run_rc: int,
@@ -154,16 +183,7 @@ def grade(
         return res(needle in body, f"{a['path']} {'contains' if needle in body else 'lacks'} {needle!r}")
     if t == "command_exit_zero":
         try:
-            r = subprocess.run(
-                a["cmd"],
-                shell=True,
-                cwd=skill_dir,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-            )
+            r = _safe_run(a["cmd"], cwd=skill_dir, timeout=timeout)
             return res(r.returncode == 0, f"`{a['cmd']}` exit={r.returncode}")
         except subprocess.TimeoutExpired:
             return res(False, f"`{a['cmd']}` timed out after {timeout}s")
@@ -193,16 +213,7 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
             errs.append(f"eval {eid}: only existence checks — add a behavioral assertion")
         if ev.get("setup"):
             try:
-                sp = subprocess.run(
-                    ev["setup"],
-                    shell=True,
-                    cwd=skill_dir,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=timeout,
-                )
+                sp = _safe_run(ev["setup"], cwd=skill_dir, timeout=timeout)
             except subprocess.TimeoutExpired:
                 errs.append(f"eval {eid}: setup timed out after {timeout}s")
                 continue
@@ -213,16 +224,7 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
         run_rc, run_out = 0, ""
         if has_run:
             try:
-                r = subprocess.run(
-                    ev["run"],
-                    shell=True,
-                    cwd=skill_dir,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=timeout,
-                )
+                r = _safe_run(ev["run"], cwd=skill_dir, timeout=timeout)
                 run_rc, run_out = r.returncode, (r.stdout + r.stderr)
             except subprocess.TimeoutExpired:
                 run_rc, run_out = 124, f"[timeout after {timeout}s]"

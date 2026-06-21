@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import random
+
+    from .interfaces import Judge
 
 
 @dataclass
@@ -115,7 +120,7 @@ class RunContext:
     """
 
     config: Any
-    judge: Any = None
-    rng: Any = None
+    judge: Judge | None = None
+    rng: random.Random | None = None
     now: datetime | None = None
     extra: dict[str, Any] = field(default_factory=dict)

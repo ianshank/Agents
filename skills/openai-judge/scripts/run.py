@@ -26,8 +26,8 @@ def _load_openai_judge():
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run OpenAI-compatible LLM judge.")
-    parser.add_argument("--model", default="nvidia/nemotron-3-ultra-550b-a55b")
-    parser.add_argument("--base-url", default="https://integrate.api.nvidia.com/v1")
+    parser.add_argument("--model", default=os.environ.get("JUDGE_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"))
+    parser.add_argument("--base-url", default=os.environ.get("JUDGE_BASE_URL", "https://integrate.api.nvidia.com/v1"))
     parser.add_argument("--api-key")
     parser.add_argument("--prompt", required=True, help="Path to input prompt file.")
     parser.add_argument("--rubric", required=True, help="Path to grading rubric file.")
