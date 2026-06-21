@@ -7,6 +7,7 @@ root_packages:
   - agent_core
   - flow_protocol
   - flow_corpus
+  - behavioral_regression
 
 # Resolved relative to this manifest's directory (the repo root), so the gate is
 # portable — it can be run from any working directory.
@@ -15,6 +16,7 @@ sys_path:
   - "agent-core"
   - "flow-protocol"
   - "flow-corpus"
+  - "behavioral-regression"
 
 # Component model — mirrors docs/c4_architecture.md (L3 Component view). Each
 # component owns one package prefix; modules resolve to the longest match.
@@ -39,6 +41,11 @@ components:
   # of those edges below is the structural airgap.
   flow_protocol: [flow_protocol]
   flow_corpus: [flow_corpus]
+  # Behavioral-regression detector — a sibling consumer of the corpus + harness
+  # primitives. It depends on flow_corpus and agent_core but NEVER on eval_harness
+  # (the airgap holds for this consumer too). The optional live judge edge stays
+  # inside eval_harness.judges; this package stays offline.
+  behavioral_regression: [behavioral_regression]
 
 # Declared DIRECT component edges. Seeded from `drift_check.py --emit-actual` and
 # reviewed: core depends on nothing; dependencies flow inward; no layering
@@ -46,6 +53,7 @@ components:
 dependencies:
   agent_core_adapter: [agent_core, core]
   flow_corpus: [flow_protocol, agent_core]
+  behavioral_regression: [agent_core, flow_corpus]
   cli: [config, engine, gating, langfuse_client, plugins]
   datasets: [core, langfuse_client, plugins]
   engine: [config, core, langfuse_client, plugins]
