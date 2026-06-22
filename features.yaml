@@ -126,7 +126,7 @@ features:
     description: "Inert, unit-tested skeleton of a bounded auto-fix loop with an OS-layer scope guard that cannot write to protected eval-defining paths. Disabled by default; enabling is human-gated per ADR 0004."
     category: "infrastructure"
     priority: "medium"
-    status: "in_progress"
+    status: "deferred"
     tier: "fast"
     verification:
       - "FIX_ENABLED defaults to False; loop refuses to run while disabled or unguarded"
@@ -135,7 +135,7 @@ features:
       - "ADR 0004 documents the design and the human enable-checklist"
     validation_command: "python scripts/validations/F_008.py"
     depends_on: ["F-007"]
-    notes: "DESIGN ONLY. No CI hook, no default-on path, no live-judge/Langfuse coupling. Tests run via the normal offline suite (tests/test_fix_loop.py)."
+    notes: "Deferred: ADR 0004 human checklist pending. Will be activated after audit label accumulation strategy is defined."
 
   - id: "F-009"
     epic: "Skills Framework"
@@ -278,3 +278,57 @@ features:
     implemented_in: "08b1b8bf48175e40fee50560c2828c913dab3f05"
     depends_on: ["F-005", "F-013"]
     notes: "New sibling package behavioral-regression depending on agent_core + flow_protocol + flow_corpus (acyclic; never imports eval_harness). The optional live AnthropicJudge lives in eval_harness.judges behind the [anthropic] extra; the sibling stays offline. See ADR 0006."
+
+  - id: "F-018"
+    epic: "Performance"
+    name: "Parallel item execution"
+    description: "ThreadPoolExecutor-based parallel item evaluation with configurable max_workers. Sequential fallback at max_workers=1 preserves identical behaviour to the legacy engine. Per-item deterministic RNG, submission-order result collection, structured per-thread logging, and fail_fast executor shutdown."
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "Offline pytest"
+      - "Identical sequential/parallel aggregates"
+    validation_command: "python scripts/validations/F_018.py"
+    implemented_in: null
+    depends_on: ["F-001"]
+    notes: "See ADR 0008. Langfuse per-item trace linking unavailable in parallel mode (graceful degradation). Scorers must be stateless or thread-safe."
+
+  - id: "F-017"
+    epic: "Foundation"
+    name: "Dynamic versioning"
+    description: "Replace hardcoded __version__ with importlib.metadata dynamic lookup, falling back to '0.0.0-dev' for editable/source installs. Decouples SCHEMA_VERSION from package version."
+    category: "infrastructure"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "version.py uses importlib.metadata.version(), not a hardcoded string"
+      - "__version__ is importable from eval_harness and eval_harness.version"
+      - "SCHEMA_VERSION remains '1.0' and is re-exported from __init__.py"
+      - "_DIST_NAME matches the distribution name in pyproject.toml"
+      - "Fallback to '0.0.0-dev' when package is not pip-installed"
+    validation_command: "python scripts/validations/F_017.py"
+    implemented_in: null
+    depends_on: ["F-001"]
+    notes: "Backwards compatible — all existing imports of __version__ and SCHEMA_VERSION continue to work."
+
+  - id: "F-019"
+    epic: "Core"
+    name: "CSV/Parquet dataset sources"
+    description: "Adds CsvDataset (registered as 'csv' with alias 'csv_file') and ParquetDataset (registered as 'parquet' with alias 'parquet_file') with configurable column mappings, path confinement via DATA_ROOT, and BOM-safe encoding."
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "CsvDataset loads CSV files with default and custom column mappings"
+      - "ParquetDataset loads Parquet files via lazy pyarrow import"
+      - "_validate_dataset_path rejects path traversal and enforces DATA_ROOT"
+      - "Both sources registered with primary name and alias"
+      - "Existing InlineDataset, JsonlDataset, LangfuseDataset unchanged"
+    validation_command: "python scripts/validations/F_019.py"
+    implemented_in: null
+    depends_on: ["F-001"]
+    notes: "pyarrow is an optional dependency — ParquetDataset raises a descriptive ImportError if missing."

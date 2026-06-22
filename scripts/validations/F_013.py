@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Validation script for Feature F-013: Phase-1 corpus — baseline+MCTS, SDLC oracle,
-canary, oracle κ-gate, version keyer.
+canary, oracle kappa-gate, version keyer.
 
 Deterministic and offline. Asserts the Phase-1 exit gates:
   1. The SDLC suite ships the DECLARED N instances (power is declared, not guessed).
@@ -9,7 +9,7 @@ Deterministic and offline. Asserts the Phase-1 exit gates:
   4. The property oracle's indeterminate rate is within the derived cap.
   5. Brier reliability is computed via the Murphy decomposition (primary metric path).
   6. The discrimination canary separates gold from no-op by the configured margin.
-  7. The oracle κ-gate blocks a disagreeing oracle and passes an agreeing one
+  7. The oracle kappa-gate blocks a disagreeing oracle and passes an agreeing one
      (co-determinate pairs only, power-aware).
 """
 import os
@@ -84,12 +84,12 @@ def validate_f013() -> bool:
     )
     checks["canary separates gold from no-op"] = sep.separated and sep.margin >= cfg.min_canary_margin
 
-    # 7. Oracle κ-gate: blocks disagreement, passes agreement (>= power_min_sample pairs).
+    # 7. Oracle kappa-gate: blocks disagreement, passes agreement (>= power_min_sample pairs).
     agree = [True, False, True, True, False] * 40  # 200 perfectly-agreeing pairs
     disagree_o = [True, False] * 100
     disagree_h = [False, True] * 100
-    checks["oracle κ-gate passes an agreeing oracle"] = validate_oracle(agree, agree, cfg).passes
-    checks["oracle κ-gate blocks a disagreeing oracle"] = (
+    checks["oracle kappa-gate passes an agreeing oracle"] = validate_oracle(agree, agree, cfg).passes
+    checks["oracle kappa-gate blocks a disagreeing oracle"] = (
         validate_oracle(disagree_o, disagree_h, cfg).passes is False
     )
 

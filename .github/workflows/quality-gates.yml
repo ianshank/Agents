@@ -3,10 +3,26 @@ name: quality gates
 on:
   push:
     branches: [main]
+    paths:
+      - "features.yaml"
+      - "scripts/validations/**"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/quality-gates.yml"
   pull_request:
     # 'labeled'/'unlabeled' so adding the eval-change-approved label re-runs the
     # protected-path guard and clears the check (default types don't fire on labels).
     types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - "features.yaml"
+      - "scripts/validations/**"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/quality-gates.yml"
   workflow_dispatch:
 
 permissions:
@@ -35,7 +51,7 @@ jobs:
       # archguard pulls grimp (pinned): F-011's airgap negative test shells out to
       # drift_check.py, which needs grimp to build the import graph. (F-011..F-015 add
       # flow-protocol/flow-corpus to sys.path themselves, so no editable install needed.)
-      - run: pip install -e ".[dev,langfuse,openai,archguard]"
+      - run: pip install -e ".[dev,langfuse,openai,archguard,parquet]"
       # Feature ledger: schema + DAG + git provenance + tier-fast validation commands.
       - run: python scripts/validate.py --tier fast
       # Coverage gate for the quality-gate tooling itself (separate from the library's

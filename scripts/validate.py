@@ -191,7 +191,11 @@ def _run_validation_command(feat: Dict[str, Any]) -> Optional[str]:
         return f"{fid}: status=done but no validation_command"
 
     logger.info("Running validation for %s: %s", fid, cmd)
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)  # noqa: S602
+    # Ensure subprocess runs using the current virtual environment's python interpreter
+    actual_cmd = cmd
+    if cmd.startswith("python "):
+        actual_cmd = cmd.replace("python ", f'"{sys.executable}" ', 1)
+    result = subprocess.run(actual_cmd, shell=True, capture_output=True, text=True)  # noqa: S602
     if result.returncode != 0:
         tail = (result.stdout + result.stderr).strip().splitlines()[-3:]
         msg = f"{fid}: validation_command failed ({result.returncode})"

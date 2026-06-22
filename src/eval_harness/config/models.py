@@ -27,6 +27,16 @@ class RunSettings(BaseModel):
     seed: int = 0
     sample_rate: float = 1.0
     fail_fast: bool = False
+    max_workers: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Maximum number of concurrent worker threads for item evaluation. "
+            "1 = sequential (default, identical to legacy behaviour). "
+            ">1 = parallel via ThreadPoolExecutor. Note: Langfuse per-item "
+            "trace linking is unavailable in parallel mode."
+        ),
+    )
 
     @field_validator("sample_rate")
     @classmethod
