@@ -43,7 +43,7 @@
   from `version.py` and eliminate duplication in `pyproject.toml`.
 - [ ] **Parallel Execution** — Add `asyncio`/`concurrent.futures` option to
   `EvalEngine` for large datasets.
-- [ ] **CSV/Parquet Dataset Source** — Extend dataset support beyond JSONL/inline.
+- [x] **CSV/Parquet Dataset Source** — Extend dataset support beyond JSONL/inline.
 - [x] **`py.typed` Marker** — Ship PEP 561 marker for downstream type checkers.
 
 ## Medium Term (v1.3.0)

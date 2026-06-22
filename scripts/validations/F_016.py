@@ -20,13 +20,12 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 for rel in ("flow-protocol", "flow-corpus", "agent-core", "behavioral-regression"):
     sys.path.insert(0, os.path.join(PROJECT_ROOT, rel))
 
-from flow_corpus.oracles.kappa_gate import KappaReport  # noqa: E402
-from flow_corpus.validation.resampling import BootstrapCI  # noqa: E402
-
 from behavioral_regression import BRConfig, run_pipeline  # noqa: E402
 from behavioral_regression.canary import CanaryReport, run_canary  # noqa: E402
 from behavioral_regression.detector import RegressionEstimate  # noqa: E402
 from behavioral_regression.gate import ShipDecision, decide_ship  # noqa: E402
+from flow_corpus.oracles.kappa_gate import KappaReport  # noqa: E402
+from flow_corpus.validation.resampling import BootstrapCI  # noqa: E402
 
 
 def _estimate(*, point, low, high, p_regression, cant_tell):

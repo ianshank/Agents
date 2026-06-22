@@ -79,3 +79,21 @@ def test_version_conforms_to_pep440_or_dev():
         r"(?:\.dev\d+)?$"  # optional dev segment
     )
     assert pep440.match(__version__) or __version__ == "0.0.0-dev"
+
+
+def test_version_fallback_with_mock(monkeypatch):
+    """Confirm __version__ defaults to '0.0.0-dev' when package is not installed."""
+    import importlib
+    import sys
+
+    def mock_version(name):
+        raise importlib.metadata.PackageNotFoundError
+
+    monkeypatch.setattr(importlib.metadata, "version", mock_version)
+
+    if "eval_harness.version" in sys.modules:
+        del sys.modules["eval_harness.version"]
+
+    import eval_harness.version
+
+    assert eval_harness.version.__version__ == "0.0.0-dev"

@@ -11,8 +11,10 @@ import json
 import os
 import sys
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run OpenAI-compatible LLM judge.")
+    parser.add_argument("--judge-type", choices=["openai", "anthropic", "bedrock"], default="openai", help="Type of judge to use.")
     parser.add_argument("--model", default="nvidia/nemotron-3-ultra-550b-a55b")
     parser.add_argument("--base-url", default="https://integrate.api.nvidia.com/v1")
     parser.add_argument("--api-key")
@@ -24,9 +26,9 @@ def main() -> int:
 
     # Read inputs
     try:
-        with open(args.prompt, "r", encoding="utf-8") as f:
+        with open(args.prompt, encoding="utf-8") as f:
             prompt_content = f.read()
-        with open(args.rubric, "r", encoding="utf-8") as f:
+        with open(args.rubric, encoding="utf-8") as f:
             rubric_content = f.read()
     except Exception as e:
         print(f"Error reading input files: {e}", file=sys.stderr)
@@ -50,7 +52,7 @@ def main() -> int:
 
     # Live API mode: imports from eval_harness
     try:
-        from eval_harness.judges import OpenAIJudge
+        from eval_harness.judges import AnthropicJudge, BedrockJudge, OpenAIJudge
     except ImportError:
         print("Error: langfuse-eval-harness must be installed to run this skill in live mode.", file=sys.stderr)
         return 1
@@ -58,11 +60,25 @@ def main() -> int:
     try:
         # Combine prompt and rubric
         full_prompt = f"Prompt:\n{prompt_content}\n\nRubric:\n{rubric_content}"
-        judge = OpenAIJudge(
-            model=args.model,
-            base_url=args.base_url,
-            api_key=args.api_key or os.environ.get("NVIDIA_API_KEY"),
-        )
+
+        if args.judge_type == "openai":
+            judge = OpenAIJudge(
+                model=args.model,
+                base_url=args.base_url,
+                api_key=args.api_key or os.environ.get("NVIDIA_API_KEY") or os.environ.get("OPENAI_API_KEY"),
+            )
+        elif args.judge_type == "anthropic":
+            judge = AnthropicJudge(
+                model=args.model if args.model != "nvidia/nemotron-3-ultra-550b-a55b" else "claude-3-opus-20240229",
+                api_key=args.api_key or os.environ.get("ANTHROPIC_API_KEY"),
+            )
+        elif args.judge_type == "bedrock":
+            judge = BedrockJudge(
+                model=args.model if args.model != "nvidia/nemotron-3-ultra-550b-a55b" else "anthropic.claude-3-opus-20240229-v1:0"
+            )
+        else:
+            raise ValueError(f"Unknown judge type: {args.judge_type}")
+
         res = judge.evaluate(full_prompt)
         verdict = {
             "status": "ok",

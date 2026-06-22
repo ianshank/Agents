@@ -13,8 +13,8 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def _project_root() -> Path:
 # Main
 # ---------------------------------------------------------------------------
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Run pytest for the OpenAI judge tests and return the exit code."""
     logging.basicConfig(
         level=logging.INFO,

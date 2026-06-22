@@ -19,7 +19,6 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,7 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _check(condition: bool, msg: str, errors: List[str]) -> bool:
+def _check(condition: bool, msg: str, errors: list[str]) -> bool:
     """Log and track a check result."""
     if not condition:
         errors.append(msg)
@@ -54,7 +53,7 @@ def main() -> int:
         format="%(levelname)-8s %(name)s: %(message)s",
     )
 
-    errors: List[str] = []
+    errors: list[str] = []
 
     # 1. CsvDataset class exists and is registered
     try:

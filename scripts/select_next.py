@@ -18,8 +18,9 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Sequence
+from typing import Any
 
 import yaml
 
@@ -28,7 +29,7 @@ import yaml
 # ---------------------------------------------------------------------------
 
 DEFAULT_FEATURES_PATH: str = "features.yaml"
-PRIORITY_ORDER: Dict[str, int] = {
+PRIORITY_ORDER: dict[str, int] = {
     "critical": 0,
     "high": 1,
     "medium": 2,
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 # Core logic
 # ---------------------------------------------------------------------------
 
-def _load_features(path: Path) -> List[Dict[str, Any]]:
+def _load_features(path: Path) -> list[dict[str, Any]]:
     """Load features list from a YAML file."""
     with path.open("r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
@@ -51,12 +52,12 @@ def _load_features(path: Path) -> List[Dict[str, Any]]:
     return data["features"]
 
 
-def _priority_key(feature: Dict[str, Any]) -> int:
+def _priority_key(feature: dict[str, Any]) -> int:
     """Return a numeric sort key for a feature's priority (lower = higher priority)."""
     return PRIORITY_ORDER.get(feature.get("priority", "low"), 99)
 
 
-def select_next(features: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def select_next(features: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Pick the next actionable feature.
 
     Returns
@@ -64,7 +65,7 @@ def select_next(features: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     dict or None
         The selected feature, or *None* if all are blocked / complete.
     """
-    done_ids: Set[str] = {
+    done_ids: set[str] = {
         f["id"] for f in features if f.get("status") == "done"
     }
 
@@ -83,13 +84,13 @@ def select_next(features: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         return selected
 
     # 2. Filter todo features whose deps are all done
-    ready: List[Dict[str, Any]] = []
-    blocked: List[Dict[str, Any]] = []
+    ready: list[dict[str, Any]] = []
+    blocked: list[dict[str, Any]] = []
 
     for feat in features:
         if feat.get("status") != "todo":
             continue
-        deps: List[str] = feat.get("depends_on", [])
+        deps: list[str] = feat.get("depends_on", [])
         missing = [d for d in deps if d not in done_ids]
         if missing:
             blocked.append(feat)
@@ -145,7 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Entry-point: select next feature and print its ID."""
     parser = build_parser()
     args = parser.parse_args(argv)

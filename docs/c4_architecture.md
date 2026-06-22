@@ -38,8 +38,8 @@ C4Container
 
     Container_Boundary(components, "Pluggable Components") {
         Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, llm_judge")
-        Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible)")
-        Container(datasets, "Datasets", "Python", "inline, jsonl, langfuse")
+        Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible), anthropic")
+        Container(datasets, "Datasets", "Python", "inline, jsonl, langfuse, csv, parquet")
         Container(targets, "Targets", "Python", "echo, callable (dynamic import)")
         Container(sinks, "Sinks", "Python", "console, json_file, langfuse")
         Container(gating, "Quality Gate", "Python", "Config-driven pass/fail for CI")

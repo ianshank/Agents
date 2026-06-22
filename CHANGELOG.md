@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0-dev] — Unreleased
 
+### Added
+- **Judges**: Added Anthropic Judge (`AnthropicJudge`) and hardened Bedrock Judge (`BedrockJudge`) with robust error handling for JSON parsing failures.
+- **Datasets**: Added Parquet (`ParquetDataset`) and CSV (`CSVDataset`) datasets support to complement the JSONL and inline datasets.
+- **Integration Tests**: Added full end-to-end integration test suite (`tests/integration/`) for judges and datasets.
+
 ### Fixed
 - Aligned `pyproject.toml` coverage gate (`fail_under`) with CI enforcement (85→96).
 - Closed test coverage gaps: 93.8% → 100% (merged `feat/coverage-gaps`).
