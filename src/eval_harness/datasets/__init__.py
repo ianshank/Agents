@@ -33,9 +33,7 @@ def _to_item(record: dict, fallback_id: int) -> EvalItem:
     )
 
 
-def _validate_dataset_path(
-    path: str | Path, *, allow_absolute: bool = False
-) -> Path:
+def _validate_dataset_path(path: str | Path, *, allow_absolute: bool = False) -> Path:
     """Validate and resolve a dataset file path.
 
     Rejects path traversal attempts and optionally restricts to relative paths.
@@ -47,9 +45,7 @@ def _validate_dataset_path(
     if data_root_env:
         data_root = Path(data_root_env).resolve()
         if not str(resolved).startswith(str(data_root)):
-            raise ValueError(
-                f"Dataset path {resolved} is outside DATA_ROOT {data_root}"
-            )
+            raise ValueError(f"Dataset path {resolved} is outside DATA_ROOT {data_root}")
 
     # Reject obvious traversal in the raw string
     raw = str(path)
@@ -61,8 +57,7 @@ def _validate_dataset_path(
 
     if not allow_absolute and Path(path).is_absolute() and not data_root_env:
         logger.warning(
-            "Absolute dataset path %s used without DATA_ROOT. "
-            "Consider setting DATA_ROOT for path confinement.",
+            "Absolute dataset path %s used without DATA_ROOT. Consider setting DATA_ROOT for path confinement.",
             path,
         )
 
@@ -182,15 +177,11 @@ class CsvDataset(DatasetSource):
 
             for i, row in enumerate(reader):
                 item_id = str(row.get(self.id_column, i))
-                inputs: dict[str, Any] = {
-                    col: row[col] for col in self.input_columns
-                }
+                inputs: dict[str, Any] = {col: row[col] for col in self.input_columns}
                 expected = row.get(self.expected_column)
                 metadata: dict[str, Any] = {}
                 if self.metadata_columns:
-                    metadata = {
-                        col: row.get(col) for col in self.metadata_columns
-                    }
+                    metadata = {col: row.get(col) for col in self.metadata_columns}
                 items.append(
                     EvalItem(
                         id=item_id,
@@ -241,10 +232,7 @@ class ParquetDataset(DatasetSource):
         try:
             import pyarrow.parquet as pq
         except ImportError as exc:
-            raise ImportError(
-                "pyarrow is required for ParquetDataset. "
-                "Install it with: pip install pyarrow"
-            ) from exc
+            raise ImportError("pyarrow is required for ParquetDataset. Install it with: pip install pyarrow") from exc
 
         table = pq.read_table(str(self.path))
         columns = set(table.column_names)
@@ -263,17 +251,11 @@ class ParquetDataset(DatasetSource):
 
         for i in range(n_rows):
             item_id = str(rows[self.id_column][i]) if self.id_column in columns else str(i)
-            inputs: dict[str, Any] = {
-                col: rows[col][i] for col in self.input_columns
-            }
+            inputs: dict[str, Any] = {col: rows[col][i] for col in self.input_columns}
             expected = rows[self.expected_column][i] if self.expected_column in columns else None
             metadata: dict[str, Any] = {}
             if self.metadata_columns:
-                metadata = {
-                    col: rows[col][i]
-                    for col in self.metadata_columns
-                    if col in columns
-                }
+                metadata = {col: rows[col][i] for col in self.metadata_columns if col in columns}
             items.append(
                 EvalItem(
                     id=item_id,

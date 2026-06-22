@@ -81,9 +81,7 @@ def csv_header_only(tmp_path: Path) -> Path:
 def csv_bom(tmp_path: Path) -> Path:
     """CSV with UTF-8 BOM."""
     p = tmp_path / "bom.csv"
-    p.write_bytes(
-        b"\xef\xbb\xbfid,input,expected\r\na,hello,world\r\n"
-    )
+    p.write_bytes(b"\xef\xbb\xbfid,input,expected\r\na,hello,world\r\n")
     return p
 
 
@@ -223,12 +221,14 @@ class TestParquetDataset:
         except ImportError:
             pytest.skip("pyarrow not installed")
 
-        table = pa.table({
-            "id": ["x", "y"],
-            "input": ["hello", "world"],
-            "expected": ["hi", "earth"],
-            "source": ["test", "test2"],
-        })
+        table = pa.table(
+            {
+                "id": ["x", "y"],
+                "input": ["hello", "world"],
+                "expected": ["hi", "earth"],
+                "source": ["test", "test2"],
+            }
+        )
         p = tmp_path / "data.parquet"
         pq.write_table(table, str(p))
         return p
@@ -270,6 +270,7 @@ class TestParquetImportError:
 
         # Patch the import inside load()
         import builtins
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
@@ -277,8 +278,11 @@ class TestParquetImportError:
                 raise ImportError("No module named 'pyarrow'")
             return real_import(name, *args, **kwargs)
 
-        with patch.object(builtins, "__import__", side_effect=mock_import), pytest.raises(ImportError, match="pyarrow is required"):
-                ds.load()
+        with (
+            patch.object(builtins, "__import__", side_effect=mock_import),
+            pytest.raises(ImportError, match="pyarrow is required"),
+        ):
+            ds.load()
 
 
 # ---------------------------------------------------------------------------
@@ -322,9 +326,7 @@ class TestPathConfinement:
         with pytest.raises(ValueError, match="outside DATA_ROOT"):
             _validate_dataset_path(str(outside))
 
-    def test_absolute_path_warning_without_data_root(
-        self, tmp_path: Path, monkeypatch, caplog
-    ) -> None:
+    def test_absolute_path_warning_without_data_root(self, tmp_path: Path, monkeypatch, caplog) -> None:
         """Absolute path without DATA_ROOT emits a warning."""
         monkeypatch.delenv("DATA_ROOT", raising=False)
         abs_path = tmp_path / "data.csv"

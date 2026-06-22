@@ -41,12 +41,7 @@ def _make_config(extra_run=None):
         "run": run,
         "dataset": {
             "type": "inline",
-            "params": {
-                "items": [
-                    {"id": str(i), "inputs": {"q": f"q{i}"}, "expected": f"q{i}"}
-                    for i in range(10)
-                ]
-            },
+            "params": {"items": [{"id": str(i), "inputs": {"q": f"q{i}"}, "expected": f"q{i}"} for i in range(10)]},
         },
         "target": {"type": "echo", "params": {"output_key": "q"}},
         "scorers": [{"type": "exact_match", "params": {"name": "acc"}}],

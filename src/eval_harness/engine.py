@@ -155,27 +155,21 @@ class EvalEngine:
 
         return ItemResult(item=item, output=output, scores=scores)
 
-    def _run_one_safe(
-        self, index: int, item: EvalItem, ctx: RunContext
-    ) -> tuple[int, ItemResult | Exception]:
+    def _run_one_safe(self, index: int, item: EvalItem, ctx: RunContext) -> tuple[int, ItemResult | Exception]:
         """Thread-safe wrapper around ``_run_one``.
 
         Returns ``(index, result)`` on success or ``(index, exception)`` on
         failure, so the caller can reconstruct submission-order results and
         handle errors without losing track of which item failed.
         """
-        item_logger = logging.LoggerAdapter(
-            logger, {"item_id": item.id, "item_index": index}
-        )
+        item_logger = logging.LoggerAdapter(logger, {"item_id": item.id, "item_index": index})
         try:
             item_logger.debug("Starting item %s (index=%d)", item.id, index)
             result = self._run_one(item, ctx)
             item_logger.debug("Completed item %s (index=%d)", item.id, index)
             return (index, result)
         except Exception as exc:
-            item_logger.error(
-                "Item %s (index=%d) failed: %s", item.id, index, exc
-            )
+            item_logger.error("Item %s (index=%d) failed: %s", item.id, index, exc)
             return (index, exc)
 
     @staticmethod
@@ -197,9 +191,7 @@ class EvalEngine:
             )
         return aggregate
 
-    def _run_parallel(
-        self, items: list[EvalItem], started: datetime
-    ) -> list[ItemResult]:
+    def _run_parallel(self, items: list[EvalItem], started: datetime) -> list[ItemResult]:
         """Execute items in parallel via ``ThreadPoolExecutor``.
 
         Each item gets a per-item ``RunContext`` with a deterministic RNG seeded
@@ -210,7 +202,8 @@ class EvalEngine:
         base_seed = self.config.run.seed
         logger.info(
             "Parallel execution: %d items with max_workers=%d",
-            len(items), max_workers,
+            len(items),
+            max_workers,
         )
 
         collected: list[tuple[int, ItemResult]] = []
@@ -227,9 +220,7 @@ class EvalEngine:
                     now=started,
                     item_index=idx,
                 )
-                futures.append(
-                    executor.submit(self._run_one_safe, idx, item, ctx)
-                )
+                futures.append(executor.submit(self._run_one_safe, idx, item, ctx))
 
             for future in futures:
                 index, result_or_exc = future.result()
@@ -284,4 +275,3 @@ class EvalEngine:
         for sink in self.sinks:
             sink.emit(run)
         return run
-
