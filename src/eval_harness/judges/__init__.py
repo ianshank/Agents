@@ -276,7 +276,8 @@ class AnthropicJudge(Judge):  # pragma: no cover - requires anthropic SDK + netw
         try:
             parsed = self._extract_json(text)
             return JudgeVerdict(
-                score=float(parsed[self.score_field]),
+                # Mirror OpenAIJudge: a missing score is a clean 0.0 verdict, not a parse failure.
+                score=float(parsed.get(self.score_field, 0.0)),
                 reasoning=str(parsed.get("reasoning", "")),
                 raw=parsed,
             )

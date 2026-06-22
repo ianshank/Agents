@@ -67,6 +67,19 @@ def test_malformed_json_returns_default_verdict(monkeypatch):
     assert "Failed to parse" in verdict.reasoning
 
 
+def test_missing_score_key_is_clean_zero_verdict(monkeypatch):
+    # Parseable JSON without a score mirrors OpenAIJudge: a 0.0 verdict, not a parse failure.
+    judge = _judge_with_fake_sdk(monkeypatch)
+    resp = MagicMock()
+    resp.content = [_text_block('{"reasoning": "no score field"}')]
+    judge.client.messages.create.return_value = resp
+
+    verdict = judge.evaluate("prompt")
+    assert verdict.score == 0.0
+    assert verdict.reasoning == "no score field"
+    assert "Failed to parse" not in verdict.reasoning
+
+
 def test_temperature_forwarded_when_set(monkeypatch):
     judge = _judge_with_fake_sdk(monkeypatch, temperature=0.0)
     resp = MagicMock()
