@@ -18,7 +18,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import List
 
 import yaml
 
@@ -34,7 +33,7 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _check_file_exists(root: Path, rel_path: str, errors: List[str]) -> bool:
+def _check_file_exists(root: Path, rel_path: str, errors: list[str]) -> bool:
     """Assert that *rel_path* exists under *root*. Append to *errors* on failure."""
     full = root / rel_path
     if not full.exists():
@@ -58,7 +57,7 @@ def main() -> int:
     )
 
     root = _project_root()
-    errors: List[str] = []
+    errors: list[str] = []
 
     # 1. HARNESS_SPEC.md
     _check_file_exists(root, "HARNESS_SPEC.md", errors)

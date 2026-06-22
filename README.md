@@ -26,6 +26,8 @@ pip install -e .            # core (pydantic, pyyaml)
 pip install -e '.[langfuse]' # add the real Langfuse SDK
 pip install -e '.[openai]'   # add OpenAI + tenacity for judge
 pip install -e '.[bedrock]'  # add boto3 for the Bedrock judge
+pip install -e '.[anthropic]' # add anthropic for the Anthropic judge
+pip install -e '.[data]'     # add pandas/pyarrow for CSV/Parquet datasets
 pip install -e '.[dev]'      # pytest, coverage, ruff, mypy
 ```
 
@@ -38,6 +40,7 @@ pip install -e '.[dev]'      # pytest, coverage, ruff, mypy
 | `LANGFUSE_BASE_URL` | For Langfuse features | Langfuse API endpoint (e.g. `https://us.cloud.langfuse.com`) |
 | `NVIDIA_API_KEY` | For Nemotron judge | NVIDIA API key |
 | `OPENAI_API_KEY` | For OpenAI judge | OpenAI API key |
+| `ANTHROPIC_API_KEY` | For Anthropic judge | Anthropic API key |
 
 Create a `.env` file from the template:
 ```bash
@@ -133,10 +136,10 @@ src/eval_harness/
   config/          versioned models, migrations, env-interpolating loader
   core/            types, interfaces, generic registry
   scorers/         exact_match, regex_match, contains, json_keys, llm_judge
-  datasets/        inline, jsonl, langfuse
+  datasets/        inline, jsonl, langfuse, csv, parquet
   targets/         echo, callable (dynamic import)
   sinks/           console, json_file, langfuse
-  judges/          mock (deterministic), openai (Nemotron/GPT), bedrock
+  judges/          mock (deterministic), openai (Nemotron/GPT), bedrock, anthropic
   langfuse_client/ interface + null + SDK adapter
   gating/          config-driven quality gate
   engine.py        orchestration

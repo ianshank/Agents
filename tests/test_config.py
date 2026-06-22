@@ -85,3 +85,31 @@ def test_load_config_from_file(tmp_path):
     )
     cfg = load_config(p)
     assert cfg.dataset.type == "inline"
+
+
+def test_coerce_scalar_yamlexc():
+    from unittest.mock import patch
+
+    import yaml
+
+    from eval_harness.config import _coerce_scalar
+
+    with patch("yaml.safe_load", side_effect=yaml.YAMLError):
+        assert _coerce_scalar("invalid: {") == "invalid: {"
+
+
+def test_apply_overrides_invalid_format():
+    with pytest.raises(ConfigError, match="must be of form"):
+        apply_overrides({}, ["no_equals_sign"])
+
+
+def test_apply_overrides_not_a_mapping():
+    with pytest.raises(ConfigError, match="is not a mapping"):
+        apply_overrides({"run": "not_a_dict"}, ["run.sample_rate=0.5"])
+
+
+def test_load_config_not_mapping(tmp_path):
+    p = tmp_path / "not_mapping.yaml"
+    p.write_text("[]\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="did not parse to a mapping"):
+        load_config(p)

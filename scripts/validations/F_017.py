@@ -18,7 +18,6 @@ import logging
 import re
 import sys
 from pathlib import Path
-from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _check(condition: bool, msg: str, errors: List[str]) -> bool:
+def _check(condition: bool, msg: str, errors: list[str]) -> bool:
     """Log and track a check result."""
     if not condition:
         errors.append(msg)
@@ -54,7 +53,7 @@ def main() -> int:
     )
 
     root = _project_root()
-    errors: List[str] = []
+    errors: list[str] = []
 
     # 1. version.py uses importlib.metadata, not a hardcoded string
     version_path = root / "src" / "eval_harness" / "version.py"
@@ -115,7 +114,8 @@ def main() -> int:
 
     # 5. __init__.py re-exports both symbols
     try:
-        from eval_harness import __version__ as pkg_v, SCHEMA_VERSION as pkg_sv
+        from eval_harness import SCHEMA_VERSION as pkg_sv
+        from eval_harness import __version__ as pkg_v
         _check(
             pkg_v == __version__,
             "eval_harness.__version__ matches version.__version__",
