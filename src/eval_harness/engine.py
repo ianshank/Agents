@@ -251,6 +251,18 @@ class EvalEngine:
         started = self.clock()
         items = self._sample(list(self.dataset.load()))
 
+        # Check for duplicate item IDs
+        seen_ids = set()
+        for item in items:
+            if item.id in seen_ids:
+                logger.warning(
+                    "Duplicate item ID detected in dataset: %s. "
+                    "This may cause tracing, aggregation, or reporting issues.",
+                    item.id,
+                )
+            else:
+                seen_ids.add(item.id)
+
         max_workers = self.config.run.max_workers
 
         if max_workers == 1:

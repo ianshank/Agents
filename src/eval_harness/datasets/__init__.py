@@ -86,7 +86,7 @@ class JsonlDataset(DatasetSource):
     """Dataset loaded from a JSON Lines file."""
 
     def __init__(self, path: str):
-        self.path = Path(path)
+        self.path = _validate_dataset_path(path)
 
     def load(self) -> Iterable[EvalItem]:
         """Parse each non-empty line as JSON and yield :class:`EvalItem`."""
@@ -162,6 +162,17 @@ class CsvDataset(DatasetSource):
             reader = csv.DictReader(fh)
             if reader.fieldnames is None:
                 return items
+
+            # Check for duplicate column names
+            if len(set(reader.fieldnames)) < len(reader.fieldnames):
+                seen_cols = set()
+                dups = []
+                for col in reader.fieldnames:
+                    if col in seen_cols:
+                        dups.append(col)
+                    else:
+                        seen_cols.add(col)
+                raise ValueError(f"CSV {self.path} contains duplicate column names: {sorted(set(dups))}")
 
             # Validate required columns exist in the header
             header_set = set(reader.fieldnames)

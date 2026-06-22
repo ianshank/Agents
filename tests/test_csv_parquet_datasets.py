@@ -13,10 +13,12 @@ from __future__ import annotations
 import logging
 import textwrap
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
 
+from eval_harness.core.types import EvalItem
 from eval_harness.datasets import (
     CsvDataset,
     InlineDataset,
@@ -398,3 +400,80 @@ class TestBackwardsCompatibility:
 
     def test_langfuse_in_registry(self) -> None:
         assert "langfuse" in DATASETS
+
+
+class TestDatasetEdgeCases:
+    """Tests for dataset edge cases, duplicate columns/IDs, encodings, and traversal."""
+
+    def test_csv_duplicate_columns(self, tmp_path: Path) -> None:
+        p = tmp_path / "dup_cols.csv"
+        p.write_text("id,input,input\na,hello,world\n", encoding="utf-8")
+        ds = CsvDataset(path=str(p))
+        with pytest.raises(ValueError, match="duplicate column names"):
+            ds.load()
+
+    def test_csv_latin1_encoding(self, tmp_path: Path) -> None:
+        p = tmp_path / "latin1.csv"
+        # accent character in latin-1
+        p.write_bytes(b"id,input,expected\r\na,h\xe9llo,world\r\n")
+        ds = CsvDataset(path=str(p), encoding="latin-1")
+        items = list(ds.load())
+        assert len(items) == 1
+        assert items[0].inputs == {"input": "héllo"}
+
+    def test_csv_quoted_newlines(self, tmp_path: Path) -> None:
+        p = tmp_path / "newlines.csv"
+        p.write_bytes(b'id,input,expected\na,"hello\nworld",ok\n')
+        ds = CsvDataset(path=str(p))
+        items = list(ds.load())
+        assert len(items) == 1
+        assert items[0].inputs == {"input": "hello\nworld"}
+
+    def test_jsonl_path_confinement(self, monkeypatch) -> None:
+        """Reject '../../../etc/passwd' traversal in JsonlDataset."""
+        monkeypatch.delenv("DATA_ROOT", raising=False)
+        with pytest.raises(ValueError, match="Path traversal"):
+            JsonlDataset("../../../etc/passwd")
+
+    def test_engine_duplicate_ids_warning(self, caplog) -> None:
+        """Engine should log a warning when duplicate item IDs are found in a dataset."""
+        from eval_harness.config.models import EvalConfig
+        from eval_harness.core.interfaces import TargetRunner
+        from eval_harness.engine import EvalEngine
+
+        config = EvalConfig.model_validate(
+            {
+                "schema_version": "1.0",
+                "run": {"name": "test-dup-ids", "seed": 42},
+                "dataset": {"type": "inline", "params": {}},
+                "target": {"type": "echo", "params": {}},
+                "scorers": [],
+                "sinks": [],
+            }
+        )
+
+        # Create an InlineDataset containing duplicate IDs
+        ds = InlineDataset(
+            items=[
+                {"id": "dup", "inputs": {"input": "x"}},
+                {"id": "dup", "inputs": {"input": "y"}},
+            ]
+        )
+
+        # Simple mock target
+        class MockTarget(TargetRunner):
+            def run(self, item: EvalItem) -> Any:
+                return "output"
+
+        engine = EvalEngine(
+            config,
+            dataset=ds,
+            target=MockTarget(),
+            scorers=[],
+            sinks=[],
+        )
+
+        with caplog.at_level(logging.WARNING):
+            engine.run()
+
+        assert any("Duplicate item ID detected in dataset: dup" in record.message for record in caplog.records)
