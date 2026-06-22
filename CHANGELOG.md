@@ -4,7 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — Flow Calibration Corpus
+## [1.2.0-dev] — Unreleased
+
+### Fixed
+- Aligned `pyproject.toml` coverage gate (`fail_under`) with CI enforcement (85→96).
+- Closed test coverage gaps: 93.8% → 100% (merged `feat/coverage-gaps`).
+
+### Flow Calibration Corpus
 
 A calibration corpus of agentic flow variants that gives the validation harness a diverse,
 oracle-backed, *populated* sample to calibrate against and to prove it generalizes beyond a
@@ -62,7 +68,7 @@ single flow shape. Built as two new packages whose isolation from the harness is
   clean across py3.10–3.12 via `.github/workflows/flow-corpus-ci.yml`. Property-based (Hypothesis)
   tests cover the pure functions.
 
-## [Unreleased] — Quality & Eval-Integrity Gates
+### Quality & Eval-Integrity Gates
 
 ### Added
 - **Calibrated auto-merge gate (F-010, opt-in / default-off):** a pure `agent_core`

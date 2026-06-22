@@ -3,10 +3,26 @@ name: quality gates
 on:
   push:
     branches: [main]
+    paths:
+      - "features.yaml"
+      - "scripts/validations/**"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/quality-gates.yml"
   pull_request:
     # 'labeled'/'unlabeled' so adding the eval-change-approved label re-runs the
     # protected-path guard and clears the check (default types don't fire on labels).
     types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - "features.yaml"
+      - "scripts/validations/**"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/quality-gates.yml"
   workflow_dispatch:
 
 permissions:

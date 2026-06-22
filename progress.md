@@ -1,5 +1,28 @@
 # Progress Log — langfuse-eval-harness
 
+---
+## Session 005 — 2026-06-22
+
+### Features
+- Phase 0 infrastructure hardening (no new features)
+- F-008 formally deferred pending ADR 0004 human checklist
+
+### Changes
+- pyproject.toml: coverage gate aligned with CI (85→96), mypy/ruff pinned
+- CHANGELOG.md: consolidated unreleased sections into [1.2.0-dev]
+- NEXT_STEPS.md: marked completed items, added audit label strategy
+- CI workflows: extended path triggers for eval-harness-ci and quality-gates
+- .env.example: documented 7 previously undocumented env vars
+- .gitignore/.dockerignore: added generated report and merge-gate artifact patterns
+- requirements.txt: aligned transitive dependency pins
+- features.yaml: F-008 status → deferred
+
+### Metrics
+- Tests: 271+ passing
+- Coverage: 100% (eval_harness)
+- Ruff: clean
+- Mypy: clean
+
 ## 2026-06-15 — Session 003
 **Features worked:** F-003, F-004, F-005
 **Status changes:** F-003 todo -> done, F-004 todo -> done, F-005 todo -> done

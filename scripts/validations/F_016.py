@@ -73,27 +73,27 @@ def validate_f016() -> bool:
 
     # 2. Unvalidated judge cannot gate.
     ok_est = _estimate(point=0.3, low=0.1, high=0.5, p_regression=0.8, cant_tell=False)
-    checks["unvalidated judge ⇒ ESCALATE"] = (
+    checks["unvalidated judge => ESCALATE"] = (
         decide_ship(ok_est, _kappa(False), _canary(True), cfg) is ShipDecision.ESCALATE
     )
 
     # 3. Canary separation + can't-tell on the null run.
     can = run_canary(cfg, seed=7)
-    null_run = run_pipeline(BRConfig(n_pairs=400), seed=7)  # v1 == v2 ⇒ null
+    null_run = run_pipeline(BRConfig(n_pairs=400), seed=7)  # v1 == v2 => null
     checks["canary separates known regression from null"] = (
         can.regressed_p > can.null_p and can.separated
     )
     checks["null run reports can't-tell"] = null_run.estimate.cant_tell
 
     # 4. Gate truth table: fail-safe, HOLD, SHIP.
-    checks["canary not separated ⇒ ESCALATE"] = (
+    checks["canary not separated => ESCALATE"] = (
         decide_ship(ok_est, _kappa(True), _canary(False), cfg) is ShipDecision.ESCALATE
     )
-    checks["real regression ⇒ HOLD"] = (
+    checks["real regression => HOLD"] = (
         decide_ship(ok_est, _kappa(True), _canary(True), cfg) is ShipDecision.HOLD
     )
     safe_est = _estimate(point=-0.2, low=-0.4, high=-0.05, p_regression=0.2, cant_tell=False)
-    checks["validated, separable, below-risk ⇒ SHIP"] = (
+    checks["validated, separable, below-risk => SHIP"] = (
         decide_ship(safe_est, _kappa(True), _canary(True), cfg) is ShipDecision.SHIP
     )
 

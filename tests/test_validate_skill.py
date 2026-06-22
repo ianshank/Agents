@@ -197,7 +197,7 @@ def test_check_behavioral_failing_setup(tmp_path):
                 "evals": [
                     {
                         "id": "test",
-                        "setup": "echo boom 1>&2; exit 3",
+                        "setup": "python -c \"import sys; print('boom', file=sys.stderr); sys.exit(3)\"",
                         "run": "python -c \"print('success')\"",
                         "assertions": [{"type": "exit_zero"}],
                     }

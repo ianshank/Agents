@@ -1,10 +1,18 @@
-"""Single source of truth for package and config-schema versions."""
+"""Version metadata for langfuse-eval-harness."""
 
 from __future__ import annotations
 
-__version__ = "1.0.0"
+import importlib.metadata
 
-# Current configuration schema version. Older configs are migrated up to this
-# value at load time (see eval_harness.config.migrations), which is what makes
-# the harness backwards compatible with previously authored config files.
+# Distribution name as registered in pyproject.toml — NOT __name__
+_DIST_NAME = "langfuse-eval-harness"
+
+try:
+    __version__: str = importlib.metadata.version(_DIST_NAME)
+except importlib.metadata.PackageNotFoundError:
+    # Editable install or running from source without pip install
+    __version__ = "0.0.0-dev"
+
+# Config schema version — decoupled from package version.
+# Bumped only when the YAML config format changes.
 SCHEMA_VERSION = "1.0"

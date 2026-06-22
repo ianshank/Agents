@@ -118,4 +118,5 @@ class RunContext:
     judge: Any = None
     rng: Any = None
     now: datetime | None = None
+    item_index: int = 0
     extra: dict[str, Any] = field(default_factory=dict)

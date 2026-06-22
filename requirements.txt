@@ -18,3 +18,7 @@ pytest-cov>=5
 mypy
 ruff
 jsonschema>=4.0
+
+# Transitive safety pins (Snyk / CVE)
+idna>=3.18
+requests>=2.34.2
