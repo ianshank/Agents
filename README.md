@@ -87,6 +87,11 @@ ruff check src/ tests/
 mypy src/eval_harness/
 ```
 
+Every package and skill enforces a **≥95% coverage floor** (the root harness gate is 96%;
+the quality-gate tooling stays at 85% — its `git worktree`/subprocess paths are impractical
+to cover further, see [ADR 0009](docs/decisions/0009-tech-debt-audit-and-compat-surface.md)).
+Each sub-package runs its own `ruff` + `mypy` + `pytest --cov` in CI across Python 3.10–3.12.
+
 ## Quality Gates
 
 Because this is an **evaluation harness**, the cheapest way to make a check "pass" is to
@@ -148,12 +153,14 @@ src/eval_harness/
   cli.py           entry point
 
 scripts/
+  _cli.py                 shared CLI helpers (configure_logging)
   validate.py             spec-driven project validation
-  validate_skill.py       skill structural + behavioral validation
+  validate_skill.py       skill structural + behavioral validation (canonical copy)
   select_next.py          feature priority selector
   regression_gate.py      net-new lint/test diff vs an isolated HEAD baseline
   eval_protected_paths.py single source of truth for protected eval-defining paths
-  check_protected_changes.py  CI guard: flags protected changes lacking approval
+  check_protected_changes.py   CI guard: flags protected changes lacking approval
+  check_skill_script_drift.py  CI guard: vendored skill scripts == canonical copy
   fix_loop.py             auto-fix loop scaffolding (DESIGN-ONLY, disabled)
   validations/            per-feature validation scripts (F_0NN.py)
 
