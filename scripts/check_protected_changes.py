@@ -30,6 +30,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 
+from _cli import configure_logging
 from eval_protected_paths import matched_protected
 
 logger = logging.getLogger(__name__)
@@ -113,10 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(levelname)-8s %(name)s: %(message)s",
-    )
+    configure_logging(args.verbose)
 
     try:
         changed = resolve_changed_files(args)

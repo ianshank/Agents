@@ -10,14 +10,17 @@ Exit codes:
     0 – success
     1 – a step failed
 """
+
 from __future__ import annotations
 
 import logging
 import platform
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Sequence
+
+from _cli import configure_logging
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -33,6 +36,7 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _project_root() -> Path:
     """Return the project root (parent of the ``scripts/`` directory)."""
     return Path(__file__).resolve().parent.parent
@@ -43,13 +47,6 @@ def _venv_python(venv_dir: Path) -> Path:
     if platform.system() == "Windows":
         return venv_dir / "Scripts" / "python.exe"
     return venv_dir / "bin" / "python"
-
-
-def _venv_pip(venv_dir: Path) -> Path:
-    """Return the path to the venv's pip, per platform."""
-    if platform.system() == "Windows":
-        return venv_dir / "Scripts" / "pip.exe"
-    return venv_dir / "bin" / "pip"
 
 
 def _activate_hint(venv_dir: Path) -> str:
@@ -86,7 +83,6 @@ def _install_deps(venv_dir: Path, project_root: Path) -> bool:
 
     Returns *True* on success.
     """
-    pip = str(_venv_pip(venv_dir))
     python = str(_venv_python(venv_dir))
 
     # Prefer using the venv python -m pip for robustness
@@ -109,12 +105,10 @@ def _install_deps(venv_dir: Path, project_root: Path) -> bool:
 # CLI
 # ---------------------------------------------------------------------------
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+
+def main(argv: Sequence[str] | None = None) -> int:
     """Run initialisation steps and return an exit code."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)-8s %(name)s: %(message)s",
-    )
+    configure_logging()
 
     project_root = _project_root()
     venv_dir = project_root / VENV_DIR

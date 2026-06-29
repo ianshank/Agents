@@ -17,11 +17,13 @@ import json
 import logging
 import subprocess
 import sys
+from collections.abc import Sequence
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Sequence
+from typing import Any
 
 import yaml
+from _cli import configure_logging
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -30,7 +32,7 @@ import yaml
 DEFAULT_FEATURES_PATH: str = "features.yaml"
 DEFAULT_SCHEMA_PATH: str = "features.schema.json"
 DEFAULT_TIERS: str = "fast"
-PRIORITY_ORDER: Dict[str, int] = {
+PRIORITY_ORDER: dict[str, int] = {
     "critical": 0,
     "high": 1,
     "medium": 2,
@@ -52,16 +54,16 @@ class _Colour(Enum):
 
 
 def _detect_cycles(
-    adj: Dict[str, List[str]],
-    all_ids: Set[str],
-) -> List[List[str]]:
+    adj: dict[str, list[str]],
+    all_ids: set[str],
+) -> list[list[str]]:
     """Return a list of cycles found in the DAG via DFS colouring.
 
     Each cycle is represented as a list of feature IDs forming the loop.
     """
-    colour: Dict[str, _Colour] = {fid: _Colour.WHITE for fid in all_ids}
-    parent: Dict[str, Optional[str]] = {fid: None for fid in all_ids}
-    cycles: List[List[str]] = []
+    colour: dict[str, _Colour] = {fid: _Colour.WHITE for fid in all_ids}
+    parent: dict[str, str | None] = {fid: None for fid in all_ids}
+    cycles: list[list[str]] = []
 
     def _dfs(node: str) -> None:
         colour[node] = _Colour.GREY
@@ -93,19 +95,19 @@ def _detect_cycles(
 # Validation helpers
 # ---------------------------------------------------------------------------
 
-def _load_features(path: Path) -> Dict[str, Any]:
+def _load_features(path: Path) -> dict[str, Any]:
     """Load and return the features YAML document."""
     logger.info("Loading features from %s", path)
     with path.open("r", encoding="utf-8") as fh:
-        data: Dict[str, Any] = yaml.safe_load(fh)
+        data: dict[str, Any] = yaml.safe_load(fh)
     if not isinstance(data, dict) or "features" not in data:
         raise ValueError(f"{path} must be a YAML mapping with a top-level 'features' key")
     return data
 
 
-def _validate_schema(data: Dict[str, Any], schema_path: Path) -> List[str]:
+def _validate_schema(data: dict[str, Any], schema_path: Path) -> list[str]:
     """Validate *data* against *schema_path*. Returns list of error messages."""
-    errors: List[str] = []
+    errors: list[str] = []
     if not schema_path.exists():
         logger.warning("Schema file %s not found – skipping schema validation", schema_path)
         return errors
@@ -114,7 +116,7 @@ def _validate_schema(data: Dict[str, Any], schema_path: Path) -> List[str]:
         schema = json.load(fh)
 
     try:
-        import jsonschema  # noqa: WPS433 – optional dependency
+        import jsonschema
     except ImportError:
         logger.warning("jsonschema not installed – skipping schema validation")
         return errors
@@ -127,15 +129,15 @@ def _validate_schema(data: Dict[str, Any], schema_path: Path) -> List[str]:
     return errors
 
 
-def _check_dag(features: List[Dict[str, Any]]) -> List[str]:
+def _check_dag(features: list[dict[str, Any]]) -> list[str]:
     """Check for missing dependency edges and cycles. Returns error messages."""
-    errors: List[str] = []
-    all_ids: Set[str] = {f["id"] for f in features}
-    adj: Dict[str, List[str]] = {}
+    errors: list[str] = []
+    all_ids: set[str] = {f["id"] for f in features}
+    adj: dict[str, list[str]] = {}
 
     for feat in features:
         fid: str = feat["id"]
-        deps: List[str] = feat.get("depends_on", [])
+        deps: list[str] = feat.get("depends_on", [])
         adj[fid] = deps
         for dep in deps:
             if dep not in all_ids:
@@ -152,10 +154,10 @@ def _check_dag(features: List[Dict[str, Any]]) -> List[str]:
 
 
 def _check_git_refs(
-    features: List[Dict[str, Any]],
+    features: list[dict[str, Any]],
     *,
     strict: bool = False,
-) -> List[str]:
+) -> list[str]:
     """Verify each implemented_in ref resolves to a real commit.
 
     Parameters
@@ -164,9 +166,9 @@ def _check_git_refs(
         When *True*, unresolvable refs are reported as errors.
         When *False* (default), they are warnings only.
     """
-    errors: List[str] = []
+    errors: list[str] = []
     for feat in features:
-        ref: Optional[str] = feat.get("implemented_in")
+        ref: str | None = feat.get("implemented_in")
         if not ref:
             continue
         result = subprocess.run(
@@ -183,10 +185,10 @@ def _check_git_refs(
     return errors
 
 
-def _run_validation_command(feat: Dict[str, Any]) -> Optional[str]:
+def _run_validation_command(feat: dict[str, Any]) -> str | None:
     """Run a single feature's validation_command. Return error message or None."""
     fid: str = feat["id"]
-    cmd: Optional[str] = feat.get("validation_command")
+    cmd: str | None = feat.get("validation_command")
     if not cmd:
         return f"{fid}: status=done but no validation_command"
 
@@ -195,7 +197,7 @@ def _run_validation_command(feat: Dict[str, Any]) -> Optional[str]:
     actual_cmd = cmd
     if cmd.startswith("python "):
         actual_cmd = cmd.replace("python ", f'"{sys.executable}" ', 1)
-    result = subprocess.run(actual_cmd, shell=True, capture_output=True, text=True)  # noqa: S602
+    result = subprocess.run(actual_cmd, shell=True, capture_output=True, text=True)
     if result.returncode != 0:
         tail = (result.stdout + result.stderr).strip().splitlines()[-3:]
         msg = f"{fid}: validation_command failed ({result.returncode})"
@@ -206,15 +208,15 @@ def _run_validation_command(feat: Dict[str, Any]) -> Optional[str]:
 
 
 def _run_validation_commands(
-    features: List[Dict[str, Any]],
+    features: list[dict[str, Any]],
     *,
-    selected_tiers: Set[str],
-) -> tuple[List[str], int, int]:
+    selected_tiers: set[str],
+) -> tuple[list[str], int, int]:
     """Execute validation_command for done, tier-matching features.
 
     Returns (errors, ran_count, skipped_count).
     """
-    errors: List[str] = []
+    errors: list[str] = []
     ran = 0
     skipped = 0
     for feat in features:
@@ -280,19 +282,16 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Run all validation steps and return an exit code."""
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(levelname)-8s %(name)s: %(message)s",
-    )
+    configure_logging(args.verbose)
 
     features_path = Path(args.features)
     schema_path = Path(args.schema)
-    selected_tiers: Set[str] = {t.strip() for t in args.tier.split(",")}
+    selected_tiers: set[str] = {t.strip() for t in args.tier.split(",")}
 
     if not features_path.exists():
         print(f"Features file not found: {features_path}")
@@ -305,7 +304,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"Failed to load features: {exc}")
         return 2
 
-    features: List[Dict[str, Any]] = data["features"]
+    features: list[dict[str, Any]] = data["features"]
 
     # --check: single feature mode
     if args.check:
@@ -321,7 +320,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     # Collect all errors across phases
-    all_errors: List[str] = []
+    all_errors: list[str] = []
 
     # 2. Schema
     all_errors.extend(_validate_schema(data, schema_path))
