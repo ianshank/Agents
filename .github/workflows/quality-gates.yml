@@ -54,15 +54,20 @@ jobs:
       - run: pip install -e ".[dev,langfuse,openai,archguard,parquet]"
       # Feature ledger: schema + DAG + git provenance + tier-fast validation commands.
       - run: python scripts/validate.py --tier fast
+      # Vendored skill-script copies must stay byte-identical to their canonical source.
+      - name: Skill-script drift guard
+        run: python scripts/check_skill_script_drift.py
       # Coverage gate for the quality-gate tooling itself (separate from the library's
       # eval_harness coverage, since scripts/ is omitted from that config).
       - name: Quality-gate tooling coverage (>=85%)
         run: >-
           python -m pytest
           tests/test_regression_gate.py tests/test_protected_paths.py tests/test_fix_loop.py
+          tests/test_skill_script_drift.py tests/test_cli_logging.py
           --override-ini addopts=""
           --cov=regression_gate --cov=eval_protected_paths
           --cov=check_protected_changes --cov=fix_loop
+          --cov=check_skill_script_drift --cov=_cli
           --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
       # Net-new lint/test regressions vs the PR base (or main on push). Blocks on net-new.
       - name: Regression gate
