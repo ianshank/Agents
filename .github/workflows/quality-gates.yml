@@ -68,7 +68,7 @@ jobs:
           --cov=regression_gate --cov=eval_protected_paths
           --cov=check_protected_changes --cov=fix_loop
           --cov=check_skill_script_drift --cov=_cli
-          --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
+          --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
       # Net-new lint/test regressions vs the PR base (or main on push). Blocks on net-new.
       - name: Regression gate
         run: >-

@@ -87,10 +87,12 @@ ruff check src/ tests/
 mypy src/eval_harness/
 ```
 
-Every package and skill enforces a **≥95% coverage floor** (the root harness gate is 96%;
-the quality-gate tooling stays at 85% — its `git worktree`/subprocess paths are impractical
-to cover further, see [ADR 0009](docs/decisions/0009-tech-debt-audit-and-compat-surface.md)).
-Each sub-package runs its own `ruff` + `mypy` + `pytest --cov` in CI across Python 3.10–3.12.
+Every package and skill enforces a **≥95% branch-coverage floor** (the root harness gate is
+96%; the quality-gate tooling stays at 85% — its `git worktree`/subprocess paths are
+impractical to cover further, see
+[ADR 0009](docs/decisions/0009-tech-debt-audit-and-compat-surface.md)). Coverage is measured
+with `branch = true` across the board. Each sub-package runs its own `ruff` + `mypy` +
+`pytest --cov` in CI across Python 3.10–3.12.
 
 ## Quality Gates
 

@@ -59,6 +59,7 @@ disallow_untyped_defs = false
 ignore_missing_imports = true
 
 [tool.coverage.run]
+branch = true
 source = ["eval_harness"]
 omit = ["*/tests/*", "*/scripts/*"]
 
@@ -69,4 +70,7 @@ exclude_lines = [
     "pragma: no cover",
     "if __name__ ==",
     "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "^\\s*\\.\\.\\.$",
 ]

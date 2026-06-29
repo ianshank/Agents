@@ -46,7 +46,7 @@ jobs:
       # the repo root copy and is intentionally excluded).
       - run: ruff check scripts/forge scripts/run_eval_corpus_forge.py tests
       # Unit + e2e tests with coverage gate on the forge library.
-      - run: python -m pytest tests --cov=forge --cov-report=term-missing --cov-fail-under=95
+      - run: python -m pytest tests --cov=forge --cov-branch --cov-report=term-missing --cov-fail-under=95
       # The skill's own end-to-end self-check (structural + behavioral evals).
       - run: python scripts/validate_skill.py --skill . --tier structural,behavioral
 
@@ -78,6 +78,6 @@ jobs:
       # deliberate "unused" imports and are excluded via the skill ruff.toml).
       - run: ruff check scripts/adguard scripts/drift_check.py scripts/mermaid_gen.py tests
       # Unit + e2e tests with coverage gate on the adguard library.
-      - run: python -m pytest tests --cov=adguard --cov-report=term-missing --cov-fail-under=95
+      - run: python -m pytest tests --cov=adguard --cov-branch --cov-report=term-missing --cov-fail-under=95
       # The skill's own end-to-end self-check (structural + behavioral evals).
       - run: python scripts/validate_skill.py --skill . --tier structural,behavioral

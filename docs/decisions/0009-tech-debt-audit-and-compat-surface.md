@@ -57,12 +57,22 @@ imported by `validate.py`, `regression_gate.py`, `select_next.py`, `init.py`, an
 `check_protected_changes.py`. A dead `_venv_pip` helper (and its only, unused caller) in
 `scripts/init.py` was removed.
 
-### 4. Uniform 95% coverage floor
+### 4. Uniform 95% branch-coverage floor
 
 The two skills (`eval-corpus-forge`, `architecture-drift-guard`) had a 90% gate while the
 core packages were at ≥95%. Both skills were already above 95% in practice; their gates in
 `skills-ci.yml` are raised to **95%** and margin tests were added for the previously
 uncovered validation/interpolation branches (forge 98%, adguard 100%).
+
+**Branch coverage** is now enabled everywhere it was not already on. The sub-packages
+(`agent-core`, `flow-protocol`, `flow-corpus`, `behavioral-regression`) already ran with
+`branch = true`; the root harness (`pyproject.toml`), the skills, and the quality-gate
+tooling job now do too (`--cov-branch`). Enabling it on the root surfaced partial branches
+that line coverage hid; these were closed with targeted tests in `tests/test_branch_coverage.py`
+(engine sampling + per-scorer error handling, echo/callable targets, the Langfuse
+missing-client guard, and the CLI offline path), and the root `exclude_lines` was aligned with
+the sub-packages' (abstract/`Protocol` `...` stubs, `raise NotImplementedError`). Root holds at
+96% with branch coverage on.
 
 The **quality-gate tooling** coverage stays at **85%** by design. That set
 (`regression_gate.py`, `check_protected_changes.py`, `fix_loop.py`, …) is dominated by
