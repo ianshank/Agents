@@ -98,6 +98,36 @@ def test_callable_target_pass_item_receives_whole_item():
     assert out.output == "item: abc"
 
 
+def test_callable_target_caches_resolved_function():
+    from eval_harness.targets import CallableTarget
+
+    target = CallableTarget("tests._sut:summarize")
+    first = target._resolve()
+    # Second call must hit the cached-_fn branch rather than re-importing.
+    assert target._resolve() is first
+
+
+# --- version: PackageNotFoundError falls back to the source-tree sentinel ------
+
+
+def test_version_falls_back_when_distribution_missing(monkeypatch):
+    import importlib
+    import importlib.metadata as md
+
+    import eval_harness.version as ver
+
+    def _raise(_name):
+        raise md.PackageNotFoundError("not installed")
+
+    monkeypatch.setattr(md, "version", _raise)
+    try:
+        reloaded = importlib.reload(ver)
+        assert reloaded.__version__ == "0.0.0-dev"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(ver)  # restore the real version for other tests
+
+
 # --- CLI: offline run prints aggregates and reports the gate result -----------
 
 
