@@ -27,7 +27,7 @@ import json
 import logging
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from _cli import configure_logging
@@ -130,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     failures = [r for r in results if not r.ok]
 
     if args.json:
-        print(json.dumps([r.__dict__ for r in results], indent=2, sort_keys=True))
+        print(json.dumps([asdict(r) for r in results], indent=2, sort_keys=True))
     elif not results:
         print("skill-drift: OK - no duplicated scripts tracked.")
     elif not failures:

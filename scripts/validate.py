@@ -185,6 +185,23 @@ def _check_git_refs(
     return errors
 
 
+# Interpreter prefixes that should be rebound to the active interpreter.
+_PYTHON_PREFIXES: tuple[str, ...] = ("python ", "python3 ")
+
+
+def _route_to_active_python(cmd: str, executable: str = sys.executable) -> str:
+    """Rebind a leading bare ``python``/``python3`` to *executable*.
+
+    Validation commands written as ``python ...`` (or ``python3 ...``) must run under the
+    active virtual environment rather than whatever ``python`` happens to be on PATH. Any
+    other command is returned unchanged.
+    """
+    for prefix in _PYTHON_PREFIXES:
+        if cmd.startswith(prefix):
+            return cmd.replace(prefix, f'"{executable}" ', 1)
+    return cmd
+
+
 def _run_validation_command(feat: dict[str, Any]) -> str | None:
     """Run a single feature's validation_command. Return error message or None."""
     fid: str = feat["id"]
@@ -193,10 +210,7 @@ def _run_validation_command(feat: dict[str, Any]) -> str | None:
         return f"{fid}: status=done but no validation_command"
 
     logger.info("Running validation for %s: %s", fid, cmd)
-    # Ensure subprocess runs using the current virtual environment's python interpreter
-    actual_cmd = cmd
-    if cmd.startswith("python "):
-        actual_cmd = cmd.replace("python ", f'"{sys.executable}" ', 1)
+    actual_cmd = _route_to_active_python(cmd)
     result = subprocess.run(actual_cmd, shell=True, capture_output=True, text=True)
     if result.returncode != 0:
         tail = (result.stdout + result.stderr).strip().splitlines()[-3:]
