@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0-dev] — Unreleased
 
+### Tech-debt cleanup
+- **Skill-script drift guard:** new `scripts/check_skill_script_drift.py` pins the canonical
+  `scripts/validate_skill.py` and fails CI if any vendored skill copy diverges (SHA-256
+  compare; declarative `TRACKED_DUPLICATES`). Wired into `quality-gates.yml`. The skill copies
+  remain duplicated **by design** for portability — see
+  [ADR 0009](docs/decisions/0009-tech-debt-audit-and-compat-surface.md).
+- **Uniform 95% branch-coverage floor:** raised both skills' gates 90 → 95 in `skills-ci.yml`
+  with margin tests (eval-corpus-forge 98%, architecture-drift-guard 100%). Enabled
+  `branch = true` on the root harness, skills, and tooling job (sub-packages already had it);
+  closed the partial branches it surfaced via `tests/test_branch_coverage.py` and aligned the
+  root `exclude_lines` with the sub-packages'. The quality-gate tooling stays at 85% by design
+  (ADR 0009).
+- **Reusable CLI logging:** extracted the duplicated `logging.basicConfig` block into
+  `scripts/_cli.py` (`configure_logging`), reused across `validate.py`, `regression_gate.py`,
+  `select_next.py`, `init.py`, and `check_protected_changes.py`. Removed the dead `_venv_pip`
+  helper in `init.py`.
+- **Robustness:** `validate.py` now routes both `python ` and `python3 ` validation commands
+  through the active interpreter (`_route_to_active_python`); `check_skill_script_drift.py`
+  serializes via `dataclasses.asdict`. Modernised typing in the touched scripts (ruff `UP`).
+
 ### Fixed
 - Aligned `pyproject.toml` coverage gate (`fail_under`) with CI enforcement (85→96).
 - Closed test coverage gaps: 93.8% → 100% (merged `feat/coverage-gaps`).

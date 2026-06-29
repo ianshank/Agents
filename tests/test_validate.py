@@ -272,3 +272,37 @@ class TestSingleFeatureCheck:
         result = _run_validate(tmp_path, "--check F-999")
         assert result.returncode == 1
         assert "unknown" in result.stdout.lower() or "F-999" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# _route_to_active_python: bare python/python3 is rebound to the active interpreter
+# ---------------------------------------------------------------------------
+
+
+class TestRouteToActivePython:
+    def test_python_prefix_rebound(self):
+        import validate
+
+        assert validate._route_to_active_python("python -m pytest", "/venv/bin/python") == (
+            '"/venv/bin/python" -m pytest'
+        )
+
+    def test_python3_prefix_rebound(self):
+        import validate
+
+        assert validate._route_to_active_python("python3 scripts/x.py", "/venv/bin/python") == (
+            '"/venv/bin/python" scripts/x.py'
+        )
+
+    def test_only_leading_occurrence_replaced(self):
+        import validate
+
+        out = validate._route_to_active_python("python a.py python b.py", "/p")
+        assert out == '"/p" a.py python b.py'
+
+    def test_non_python_command_unchanged(self):
+        import validate
+
+        assert validate._route_to_active_python("pytest -q", "/p") == "pytest -q"
+        # A command that merely contains 'python' later is not rebound.
+        assert validate._route_to_active_python("echo python", "/p") == "echo python"

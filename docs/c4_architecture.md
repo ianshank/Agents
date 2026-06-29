@@ -195,6 +195,7 @@ flowchart TB
     PR --> COV[Tooling coverage gate<br/>>=85% on gate modules]
     PR --> REG[regression_gate.py]
     PR --> GUARD[check_protected_changes.py]
+    PR --> DRIFT[check_skill_script_drift.py<br/>vendored skill copies == canonical]
     PR --> MG[calibrated-merge-gate.yml<br/>F-010 — default-off]
 
     subgraph Regression Gate F-006

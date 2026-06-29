@@ -2,6 +2,10 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Skill-script drift guard** — CI guard that pins vendored skill copies of
+  `validate_skill.py` to the canonical repo-root copy (`scripts/check_skill_script_drift.py`);
+  uniform 95% coverage floor across all packages and skills; shared `scripts/_cli.py` logging
+  helper. Rationale + kept compatibility surface recorded in ADR 0009.
 - [x] **Regression Gate (F-006)** — net-new ruff/offline-test diff vs an isolated HEAD
   worktree baseline (`scripts/regression_gate.py`).
 - [x] **Protected-Path Guard (F-007)** — CODEOWNERS + label-checked CI guard over the

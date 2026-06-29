@@ -9,3 +9,8 @@ def summarize(inputs: dict) -> str:
 
 def boom(inputs: dict) -> str:
     raise ValueError("kaboom")
+
+
+def echo_item(item: object) -> str:
+    """Receives the whole EvalItem (used to exercise CallableTarget(pass_item=True))."""
+    return f"item: {getattr(item, 'id', '?')}"
