@@ -126,7 +126,7 @@ class HtmlFileSink(ResultSink):
         return (
             f'<svg class="metric-bar" width="{self.bar_width_px}" height="{self._BAR_HEIGHT_PX}" '
             f'viewBox="0 0 {self.bar_width_px} {self._BAR_HEIGHT_PX}" '
-            'xmlns="http://www.w3.org/2000/svg" role="img">'
+            'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
             f'<rect width="{self.bar_width_px}" height="{self._BAR_HEIGHT_PX}" fill="{self._COLOR_BAR_BG}"/>'
             f'<rect width="{fill:.2f}" height="{self._BAR_HEIGHT_PX}" fill="{self._COLOR_BAR_FILL}"/></svg>'
         )

@@ -167,6 +167,13 @@ def test_missing_path_reported(tmp_path, monkeypatch):
     assert any("missing a 'path'" in e for e in errs)
 
 
+def test_missing_name_reported(tmp_path, monkeypatch):
+    monkeypatch.setattr(mkt, "_repo_root", lambda: str(tmp_path))
+    reg = _write_registry(tmp_path, [{"version": "1.0.0", "path": "demo"}])
+    errs = mkt.validate_registry(reg, _SCHEMA)
+    assert any("missing a 'name'" in e for e in errs)
+
+
 def test_non_dict_entry_reported_in_validate(tmp_path, monkeypatch):
     monkeypatch.setattr(mkt, "_repo_root", lambda: str(tmp_path))
     reg = tmp_path / "marketplace.yaml"

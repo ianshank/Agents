@@ -136,7 +136,10 @@ def validate_registry(registry_path: str, schema_path: str) -> list[str]:
         if not isinstance(entry, dict):
             errors.append(f"malformed registry entry (expected a mapping): {entry!r}")
             continue
-        name = entry.get("name", "<unnamed>")
+        name = entry.get("name")
+        if not name:
+            errors.append("registry entry is missing a 'name'")
+            continue
         if name in seen:
             errors.append(f"{name}: duplicate skill name in registry")
             continue
