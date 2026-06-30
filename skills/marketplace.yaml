@@ -21,3 +21,8 @@ skills:
     path: skills/eval-corpus-forge
     description: Build, validate, and package reusable evaluation datasets for agent and LLM systems.
     compatibility: python>=3.10
+  - name: model-bench
+    version: 1.0.0
+    path: skills/model-bench
+    description: Benchmark and A/B-test multiple LLMs on one dataset (multi-model comparison + A/B campaigns).
+    compatibility: python>=3.10, langfuse-eval-harness

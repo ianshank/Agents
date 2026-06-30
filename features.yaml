@@ -525,3 +525,22 @@ features:
     implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
     depends_on: ["F-022"]
     notes: "agent_core imported lazily (offline path unchanged). clock/sleeper injected (default time.monotonic/time.sleep) so tests use no real time. In block mode the wait holds the wrapper lock, throttling the run globally (intended for a shared endpoint limit). 100% branch coverage on the adapter. See ADR 0016."
+
+  - id: "F-029"
+    epic: "Skills"
+    name: "model-bench marketplace skill (wraps F-024/F-025)"
+    description: "A new v2.0-convention marketplace skill that packages multi-model comparison (F-024) and A/B eval campaigns (F-025) as a discoverable 'benchmark/A-B-test several models' capability. scripts/run.py is a thin forwarder over the eval-harness compare/campaign CLI (eval_harness.cli.main) - no orchestration is re-implemented; it reuses run_comparison/record_run/analyze. Offline echo-target fixtures make the behavioral evals deterministic; with the F-027 model target the same configs benchmark real models. Full v2.0 layout (tests/, ruff.toml, validator_version, vendored validate_skill.py), a dedicated skills-ci.yml job (installs the repo packages since it wraps them), and a marketplace.yaml entry with a matching version."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "skills/model-bench has the v2.0 layout (validator_version:'2.0', tests/, ruff.toml, vendored validate_skill.py) and passes validate_skill.py structural,behavioral over echo-target fixtures (offline)"
+      - "run.py forwards compare/campaign to eval_harness.cli.main; no-args/unknown-subcommand exit 2; missing harness install exits 1"
+      - "compare ranks the better echo model first and writes a JSON report; campaign record then analyze accumulates counts and prints a decision"
+      - "registered in marketplace.yaml with a version matching SKILL.md (semver match enforced by skill_marketplace.py); vendored validate_skill.py matches the canonical copy (drift guard)"
+      - "no harness/config-schema change; reuses run_comparison/record_run/analyze and agent_core wilson_interval via the existing edges"
+    validation_command: "python scripts/validations/F_029.py"
+    implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
+    depends_on: ["F-024", "F-025", "F-027"]
+    notes: "Thin wrapper - the runner adds packaging/docs/fixtures, not orchestration. Its CI job is not import-isolated like the other skills because wrapping the harness is the point. 100% coverage on the runner. See ADR 0015."

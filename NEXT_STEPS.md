@@ -64,7 +64,11 @@
 - [x] **Skills brought up to date** — `openai-judge` (the last old-convention
   skill) modernized to the v2.0 standard: `tests/` with a ≥95% coverage gate,
   `ruff.toml`, `validator_version: '2.0'` frontmatter, and a dedicated
-  `skills-ci.yml` job (F-028, ADR 0014). All three skills now share one bar.
+  `skills-ci.yml` job (F-028, ADR 0014). All skills now share one bar.
+- [x] **model-bench marketplace skill** — packages multi-model comparison
+  (F-024) and A/B campaigns (F-025) as a discoverable skill that thinly forwards
+  to the `eval-harness compare`/`campaign` CLI; offline echo fixtures, drives
+  real models via the F-027 target (F-029, ADR 0015).
 - [x] **Weighted/Ensemble Scoring** — Support composite scores from multiple
   scorers with configurable weights (F-020: `weighted` CompositeScorer).
 - [x] **Dashboard Export** — Rich HTML report generation from `RunResult`

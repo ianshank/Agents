@@ -7,12 +7,14 @@ on:
       - "skills/eval-corpus-forge/**"
       - "skills/architecture-drift-guard/**"
       - "skills/openai-judge/**"
+      - "skills/model-bench/**"
       - ".github/workflows/skills-ci.yml"
   pull_request:
     paths:
       - "skills/eval-corpus-forge/**"
       - "skills/architecture-drift-guard/**"
       - "skills/openai-judge/**"
+      - "skills/model-bench/**"
       - ".github/workflows/skills-ci.yml"
   workflow_dispatch:
 
@@ -109,6 +111,36 @@ jobs:
       - run: pip install pytest pytest-cov "pyyaml>=6" ruff
       # Lint the runner and tests (the vendored validate_skill.py mirrors the repo
       # root copy and is excluded via the skill ruff.toml).
+      - run: ruff check scripts/run.py tests
+      # Unit tests with coverage gate on the runner.
+      - run: python -m pytest tests --cov=run --cov-branch --cov-report=term-missing --cov-fail-under=95
+      # The skill's own end-to-end self-check (structural + behavioral evals).
+      - run: python scripts/validate_skill.py --skill . --tier structural,behavioral
+
+  model-bench:
+    name: model-bench py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: skills/model-bench
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      # Unlike the other skills, model-bench wraps the harness, so it installs the
+      # repo packages (the eval engine + agent_core for the campaign's Wilson stats).
+      # The fixtures use echo targets, so no provider extras / credentials are needed.
+      - run: pip install pytest pytest-cov ruff -e ../.. -e ../../agent-core
+      # Lint the runner and tests (vendored validate_skill.py excluded via ruff.toml).
       - run: ruff check scripts/run.py tests
       # Unit tests with coverage gate on the runner.
       - run: python -m pytest tests --cov=run --cov-branch --cov-report=term-missing --cov-fail-under=95

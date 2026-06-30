@@ -10,6 +10,23 @@
   the v2.0 standard (tests/, ruff.toml, validator_version, CI job); status todo → done
 - F-030 (time-windowed judge rate limiting): the throttling deferred from F-022 — a
   sliding-window limiter on BudgetedJudge with an injected clock/sleeper; status todo → done
+- F-029 (model-bench marketplace skill): packages F-024/F-025 as a discoverable skill that
+  thinly forwards to the harness compare/campaign CLI; status todo → done
+
+### Changes (F-029)
+- skills/model-bench: new v2.0 skill — `scripts/run.py` (thin forwarder to
+  `eval_harness.cli.main` for compare/campaign, no orchestration re-implemented), vendored
+  `validate_skill.py`, `evals/evals.json` + echo-target fixtures (compare + campaign),
+  `references/usage.md`, `tests/` (100% on the runner), `ruff.toml`, `.gitignore`
+- skills/marketplace.yaml: model-bench entry (v1.0.0); .github/workflows/skills-ci.yml:
+  model-bench job (installs the repo packages since it wraps them) + path triggers
+- ADR 0015; F_029 validator (offline, drives compare over echo fixtures)
+
+### Validation evidence (F-029)
+- `python scripts/validations/F_029.py` exits 0 (offline)
+- `validate_skill.py --skill skills/model-bench --tier structural,behavioral` passes;
+  `skill_marketplace.py validate` passes; `check_skill_script_drift.py` matches (4 copies)
+- runner coverage 100% branch; ruff clean
 
 ### Changes (F-030)
 - eval_harness config: `JudgeBudgetConfig` gains additive optional `max_per_window` /
