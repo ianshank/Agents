@@ -506,3 +506,22 @@ features:
     implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
     depends_on: ["F-003", "F-023"]
     notes: "No behaviour change to run.py beyond import-order/open()-mode lint fixes. Live-mode tests inject a fake eval_harness.judges into sys.modules so the job stays isolated (no repo packages). See ADR 0014."
+
+  - id: "F-030"
+    epic: "Cost-control"
+    name: "Time-windowed judge rate limiting"
+    description: "Adds an optional sliding-window rate limit to the judge budget (F-022 deferred this, shipping only a cumulative cap). JudgeBudgetConfig gains additive optional max_per_window/window_seconds/on_rate_limited fields (validator requires the two window fields together). A small _SlidingWindowLimiter in agent_core_adapter (deque of admit timestamps, injected clock+sleeper for determinism) gates each BudgetedJudge.evaluate BEFORE the cost reservation: block waits via the sleeper until a slot frees, skip returns the existing sentinel verdict. The window and the cumulative cap are independent constraints; agent_core.BudgetLedger stays the cap owner (no reimplementation). Off and byte-identical when the window fields are absent; SCHEMA_VERSION unchanged."
+    category: "functional"
+    priority: "low"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "JudgeBudgetConfig.max_per_window/window_seconds/on_rate_limited are additive+optional; validator requires the two window fields together; on_rate_limited is block|skip; SCHEMA_VERSION unchanged"
+      - "block mode throttles: with a fake clock, N calls fill the window and call N+1 sleeps exactly one window before admission; recovers without sleeping once the caller's clock passes the window"
+      - "skip mode returns the sentinel verdict for an over-rate call without sleeping"
+      - "the rate limit and the cumulative cap trip independently; agent_core.BudgetLedger remains the cap owner (no reimplementation)"
+      - "absent window fields -> no limiter attached and behaviour is byte-identical; engine.from_config wires the limiter from config"
+    validation_command: "python scripts/validations/F_030.py"
+    implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
+    depends_on: ["F-022"]
+    notes: "agent_core imported lazily (offline path unchanged). clock/sleeper injected (default time.monotonic/time.sleep) so tests use no real time. In block mode the wait holds the wrapper lock, throttling the run globally (intended for a shared endpoint limit). 100% branch coverage on the adapter. See ADR 0016."

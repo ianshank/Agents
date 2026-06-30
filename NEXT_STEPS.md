@@ -72,6 +72,11 @@
 - [x] **Rate Limit Budget** — Configurable token/request budgets for judge calls
   (F-022: `JudgeBudgetConfig` + `BudgetedJudge`, cumulative cap via agent_core
   `BudgetLedger`; time-windowed throttling deferred).
+- [x] **Time-windowed Rate Limiting** — The throttling deferred from F-022:
+  optional `max_per_window`/`window_seconds`/`on_rate_limited` on
+  `JudgeBudgetConfig` drive a sliding-window limiter in `BudgetedJudge` with an
+  injected clock/sleeper (block-or-skip), independent of the cumulative cap
+  (F-030, ADR 0016). Additive, off by default, `SCHEMA_VERSION` unchanged.
 
 ## Long Term
 

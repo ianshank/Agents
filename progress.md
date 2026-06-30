@@ -8,6 +8,24 @@
   completion to be scored, unblocking F-024/F-025 against real models; status todo → done
 - F-028 (openai-judge skill modernization): brought the last old-convention skill up to
   the v2.0 standard (tests/, ruff.toml, validator_version, CI job); status todo → done
+- F-030 (time-windowed judge rate limiting): the throttling deferred from F-022 — a
+  sliding-window limiter on BudgetedJudge with an injected clock/sleeper; status todo → done
+
+### Changes (F-030)
+- eval_harness config: `JudgeBudgetConfig` gains additive optional `max_per_window` /
+  `window_seconds` / `on_rate_limited` (validator requires the two window fields together);
+  `SCHEMA_VERSION` unchanged
+- eval_harness agent_core_adapter: new `_SlidingWindowLimiter` (deque + injected
+  clock/sleeper) consulted in `BudgetedJudge.evaluate` BEFORE the cost reservation
+  (block waits, skip returns the sentinel); `build_budgeted_judge` builds it from config
+  with stdlib defaults. agent_core.BudgetLedger stays the cap owner; window + cap are
+  independent. Absent fields → no limiter (byte-identical)
+- ADR 0016; F_030 validator (fake clock, no real sleep); tests in tests/test_budgeted_judge.py
+
+### Validation evidence (F-030)
+- `python scripts/validations/F_030.py` exits 0 (offline, fake clock)
+- adapter coverage 100% branch (test_budgeted_judge + test_agent_core_adapter);
+  ruff + format clean; mypy clean on the adapter
 
 ### Changes (F-028)
 - skills/openai-judge: added `tests/` (`conftest.py` + `test_run.py`) covering `run.py`

@@ -184,3 +184,108 @@ def test_attach_client_noop_when_inner_lacks_it():
     j = build_budgeted_judge(MockJudge(), _budget(cap=1.0))
     j.attach_client("ignored")  # should not raise
     assert j.evaluate("p").score == 1.0
+
+
+# --------------------------------------------------------------------------
+# F-030 — time-windowed rate limiting (additive on top of the cumulative cap)
+# --------------------------------------------------------------------------
+
+
+class _FakeClock:
+    """Deterministic monotonic clock; ``sleep`` advances it (no real waiting)."""
+
+    def __init__(self) -> None:
+        self.t = 0.0
+
+    def __call__(self) -> float:
+        return self.t
+
+    def sleep(self, secs: float) -> None:
+        self.t += secs
+
+
+def _rl_judge(clock, *, max_per_window=2, window_seconds=10.0, on_rate_limited="block", cap=1000.0):
+    budget = _budget(
+        cap=cap,
+        max_per_window=max_per_window,
+        window_seconds=window_seconds,
+        on_rate_limited=on_rate_limited,
+    )
+    return build_budgeted_judge(MockJudge(default_score=1.0), budget, clock=clock, sleeper=clock.sleep)
+
+
+def test_window_fields_must_be_set_together():
+    with pytest.raises(ValueError, match="set together"):
+        JudgeBudgetConfig(enabled=True, cap=1.0, max_per_window=5)  # missing window_seconds
+    with pytest.raises(ValueError, match="set together"):
+        JudgeBudgetConfig(enabled=True, cap=1.0, window_seconds=1.0)  # missing max_per_window
+
+
+def test_invalid_on_rate_limited_rejected_at_config():
+    with pytest.raises(ValueError, match="on_rate_limited"):
+        JudgeBudgetConfig(enabled=True, cap=1.0, max_per_window=2, window_seconds=1.0, on_rate_limited="bogus")
+
+
+def test_no_limiter_when_window_absent():
+    j = build_budgeted_judge(MockJudge(), _budget(cap=5.0))
+    assert j._limiter is None
+
+
+def test_block_mode_throttles_then_admits_after_window():
+    clock = _FakeClock()
+    j = _rl_judge(clock, max_per_window=2, window_seconds=10.0)
+
+    # Two calls fit the window with no waiting (clock stays at 0).
+    j.evaluate("p")
+    j.evaluate("p")
+    assert clock.t == 0.0
+
+    # Third call must wait for the oldest event to age out of the 10s window.
+    j.evaluate("p")
+    assert clock.t == 10.0  # slept exactly once, for the full window
+
+
+def test_block_mode_recovers_without_sleep_once_window_passes():
+    clock = _FakeClock()
+    j = _rl_judge(clock, max_per_window=1, window_seconds=5.0)
+
+    j.evaluate("p")  # admitted at t=0
+    clock.t = 5.0  # caller's own time advances past the window
+    j.evaluate("p")  # admitted with no sleep needed
+    assert clock.t == 5.0
+
+
+def test_skip_mode_returns_sentinel_when_rate_exceeded():
+    clock = _FakeClock()
+    j = _rl_judge(clock, max_per_window=2, window_seconds=10.0, on_rate_limited="skip")
+
+    assert j.evaluate("p").score == 1.0
+    assert j.evaluate("p").score == 1.0
+    sentinel = j.evaluate("p")  # over the rate → skipped, no waiting
+    assert "rate limit" in sentinel.reasoning
+    assert clock.t == 0.0
+
+
+def test_rate_limit_and_cap_are_independent():
+    clock = _FakeClock()
+    # Generous rate window but a hard cap of 2 calls.
+    j = _rl_judge(clock, max_per_window=100, window_seconds=1.0, cap=2.0)
+    j.evaluate("p")
+    j.evaluate("p")
+    with pytest.raises(BudgetExceededError):
+        j.evaluate("p")  # cap trips even though the rate window has room
+
+
+def test_invalid_on_rate_limited_rejected_in_wrapper():
+    from agent_core import BudgetConfig, BudgetLedger, FrameworkConfig
+
+    ledger = BudgetLedger(FrameworkConfig(budget=BudgetConfig(cap_units=1.0, reserve_fraction=0.0)))
+    with pytest.raises(ValueError, match="on_rate_limited"):
+        BudgetedJudge(MockJudge(), ledger, cost_per_call=1.0, on_rate_limited="nope")
+
+
+def test_engine_wires_rate_limit_from_config():
+    cfg = _engine_cfg(judge_budget=_budget(cap=5.0, max_per_window=3, window_seconds=2.0, on_rate_limited="skip"))
+    engine = EvalEngine.from_config(cfg)
+    assert isinstance(engine.judge, BudgetedJudge)
+    assert engine.judge._limiter is not None
