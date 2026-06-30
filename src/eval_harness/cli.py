@@ -40,6 +40,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="use an in-memory Langfuse client (no network)",
     )
 
+    compare = sub.add_parser("compare", help="run a multi-model comparison from a config with a 'comparison' block")
+    compare.add_argument("--config", required=True, help="path to the eval config YAML")
+    compare.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="KEY.PATH=VALUE",
+        help="override a config value (repeatable)",
+    )
+    compare.add_argument("--offline", action="store_true", help="use an in-memory Langfuse client")
+    compare.add_argument("--html", dest="html_out", help="write the comparison report here (HTML)")
+    compare.add_argument("--json", dest="json_out", help="write the comparison result here (JSON)")
+
     sub.add_parser("list-plugins", help="list all registered components")
     return parser
 
@@ -71,6 +85,33 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 1
 
 
+def _cmd_compare(args: argparse.Namespace) -> int:
+    import json as _json
+
+    from .comparison import run_comparison
+
+    config = load_config(args.config, overrides=args.overrides)
+    if config.comparison is None:
+        print("ERROR: config has no 'comparison' block; nothing to compare", file=sys.stderr)
+        return 2
+    client: LangfuseClient = NullLangfuseClient()
+    if not args.offline:
+        from .langfuse_client import SDKLangfuseClient
+
+        client = SDKLangfuseClient()
+
+    result = run_comparison(config, langfuse_client=client)
+    if args.html_out:
+        with open(args.html_out, "w", encoding="utf-8") as fh:
+            fh.write(result.to_html(title=config.run.name))
+    if args.json_out:
+        with open(args.json_out, "w", encoding="utf-8") as fh:
+            _json.dump(result.to_dict(), fh, indent=2, sort_keys=True)
+
+    print(f"ranked by {result.rank_by} ({result.rank_metric}): {' > '.join(result.overall_ranking)}")
+    return 0
+
+
 def _cmd_list(_: argparse.Namespace) -> int:
     from .plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS
 
@@ -84,6 +125,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "run":
         return _cmd_run(args)
+    if args.command == "compare":
+        return _cmd_compare(args)
     if args.command == "list-plugins":
         return _cmd_list(args)
     return 2  # pragma: no cover - argparse enforces a command

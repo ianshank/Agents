@@ -71,8 +71,11 @@
 
 ## Long Term
 
-- [ ] **Multi-model Comparison** — Run the same dataset against multiple models
-  and produce comparative reports.
+- [x] **Multi-model Comparison** — Run the same dataset against multiple targets
+  and produce a comparative report (F-024: `ComparisonConfig` + `run_comparison`
+  reusing `EvalEngine` per model, the shared `compare_metric` primitive, a
+  self-contained HTML/JSON report, and an `eval-harness compare` CLI; ADR 0011).
+  Note: a real model-backed target (beyond echo/callable) is a follow-up.
 - [ ] **A/B Eval Campaigns** — Persistent eval campaigns with statistical
   significance testing.
 - [x] **Langfuse Prompt Management** — Pull judge prompts from the Langfuse prompt

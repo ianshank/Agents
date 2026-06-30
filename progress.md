@@ -1,6 +1,33 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 009 — 2026-06-30
+
+### Features
+- F-024 (multi-model comparison): run one dataset against several targets and
+  emit a comparative report; status todo → done
+
+### Changes
+- eval_harness: new `comparison.py` — `run_comparison` (reuses `EvalEngine`
+  per model, target swapped only), the shared `compare_metric` primitive
+  (values + baseline deltas + ranking, None ranked last; reused by F-025), and
+  `ComparisonResult.to_dict/to_html` (self-contained deterministic report,
+  reusing the F-021 html approach)
+- eval_harness config: additive `ModelSpec` + `ComparisonConfig` +
+  optional `EvalConfig.comparison` (SCHEMA_VERSION unchanged)
+- eval_harness CLI: `eval-harness compare --config … [--offline] [--html] [--json]`
+- ADR 0011; F_024 validator (offline, echo targets); tests/test_comparison.py
+
+### Validation evidence
+- `python scripts/validations/F_024.py` exits 0 (offline)
+- eval_harness: `pytest --cov=eval_harness --cov-fail-under=96` → 97%
+  (comparison.py 96%); ruff + format clean on changed src/tests; mypy clean on
+  new files; architecture drift_check still matches the manifest (no new edges)
+
+### Next
+- Track 3: F-025 A/B campaigns (reuse compare_metric + agent_core wilson_interval)
+- Track 5 step 3 (optional): new skill wrapping F-024/F-025
+
 ## Session 008 — 2026-06-30
 
 ### Features

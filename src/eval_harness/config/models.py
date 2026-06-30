@@ -144,6 +144,44 @@ class GateConfig(BaseModel):
     rules: list[GateRule] = Field(default_factory=list)
 
 
+class ModelSpec(BaseModel):
+    """A named target (model / system-under-test) in a multi-model comparison (F-024)."""
+
+    name: str
+    target: ComponentSpec
+
+
+class ComparisonConfig(BaseModel):
+    """Run the same dataset/scorers against several targets and compare them (F-024).
+
+    Additive and optional, so ``SCHEMA_VERSION`` is unchanged. ``baseline`` (a model
+    name) defines the reference for per-metric deltas; ``rank_by`` selects the score
+    used to rank models (defaults to the first aggregate score), with ``rank_metric``
+    choosing mean vs pass_rate.
+    """
+
+    models: list[ModelSpec] = Field(min_length=2)
+    baseline: str | None = None
+    rank_by: str | None = None
+    rank_metric: str = "mean"
+
+    @field_validator("rank_metric")
+    @classmethod
+    def _check_rank_metric(cls, v: str) -> str:
+        if v not in ("mean", "pass_rate"):
+            raise ValueError("rank_metric must be 'mean' or 'pass_rate'")
+        return v
+
+    @model_validator(mode="after")
+    def _check_models(self) -> ComparisonConfig:
+        names = [m.name for m in self.models]
+        if len(names) != len(set(names)):
+            raise ValueError("comparison model names must be unique")
+        if self.baseline is not None and self.baseline not in names:
+            raise ValueError(f"comparison.baseline {self.baseline!r} is not one of the model names")
+        return self
+
+
 class EvalConfig(BaseModel):
     schema_version: str
     run: RunSettings = Field(default_factory=RunSettings)
@@ -155,6 +193,7 @@ class EvalConfig(BaseModel):
     judge_prompt: PromptSourceConfig | None = None
     sinks: list[ComponentSpec] = Field(default_factory=list)
     gate: GateConfig | None = None
+    comparison: ComparisonConfig | None = None
 
     @field_validator("schema_version")
     @classmethod
