@@ -52,8 +52,9 @@
 
 ## Medium Term (v1.3.0)
 
-- [ ] **Skill Marketplace** — Centralized registry for community-contributed
-  skills with versioned SKILL.md validation.
+- [x] **Skill Marketplace** — Centralized registry for community-contributed
+  skills with versioned SKILL.md validation (F-023: `skills/marketplace.yaml` +
+  schema + `scripts/skill_marketplace.py`, reusing `validate_skill.py` read-only).
 - [x] **Weighted/Ensemble Scoring** — Support composite scores from multiple
   scorers with configurable weights (F-020: `weighted` CompositeScorer).
 - [x] **Dashboard Export** — Rich HTML report generation from `RunResult`

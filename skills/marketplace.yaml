@@ -1,0 +1,23 @@
+# Skill Marketplace registry.
+#
+# A centralized, schema-validated index of community-contributed skills. Each
+# entry's `version` must match the SKILL.md frontmatter `version` (semver), and
+# every registered skill must pass structural validation (scripts/validate_skill.py).
+# Validate with: python scripts/skill_marketplace.py validate
+registry_version: 1.0.0
+skills:
+  - name: openai-judge
+    version: 1.0.0
+    path: skills/openai-judge
+    description: LLM-as-a-judge evaluations over OpenAI-compatible APIs.
+    compatibility: python>=3.10
+  - name: architecture-drift-guard
+    version: 1.0.0
+    path: skills/architecture-drift-guard
+    description: Detect and block architecture drift in CI against a declared C4 component model.
+    compatibility: python>=3.10, grimp, pyyaml
+  - name: eval-corpus-forge
+    version: 1.0.0
+    path: skills/eval-corpus-forge
+    description: Build, validate, and package reusable evaluation datasets for agent and LLM systems.
+    compatibility: python>=3.10

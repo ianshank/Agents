@@ -333,6 +333,25 @@ features:
     depends_on: ["F-001"]
     notes: "pyarrow is an optional dependency — ParquetDataset raises a descriptive ImportError if missing."
 
+  - id: "F-023"
+    epic: "Skills Framework"
+    name: "Skill marketplace registry with versioned SKILL.md validation"
+    description: "Adds a centralized, schema-validated skill registry (skills/marketplace.yaml + marketplace.schema.json) and a scripts/skill_marketplace.py CLI (validate/verify/list). The CLI reuses scripts/validate_skill.py read-only (parse_frontmatter, check_structural) and enforces marketplace rules on top: a semver 'version' in each SKILL.md frontmatter that matches the registry entry, matching and unique names, and a real skill directory. Existing skills gain an additive 'version:' frontmatter key."
+    category: "infrastructure"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "skills/marketplace.yaml parses and validates against marketplace.schema.json"
+      - "every registered skill exists and passes validate_skill.check_structural"
+      - "SKILL.md frontmatter 'version' is enforced as semver and must match the registry entry"
+      - "duplicate names, name/version mismatches, and missing paths are reported"
+      - "validate_skill default mode is unchanged (no 'version' requirement); the drift guard stays green"
+    validation_command: "python scripts/validations/F_023.py"
+    implemented_in: null
+    depends_on: ["F-003"]
+    notes: "validate_skill.py is reused read-only (not edited), so the skill-script drift guard is unaffected. Semver enforcement lives in skill_marketplace.py. Tooling under scripts/ (93% branch coverage, above the 85% tooling floor)."
+
   - id: "F-022"
     epic: "Judge"
     name: "Judge budget cap (per-run token/request budget)"

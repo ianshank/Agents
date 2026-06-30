@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Skill marketplace (F-023):** new centralized, schema-validated skill registry
+  (`skills/marketplace.yaml` + `skills/marketplace.schema.json`) and a
+  `scripts/skill_marketplace.py` CLI (`validate`/`verify`/`list`). The CLI reuses
+  `scripts/validate_skill.py` **read-only** (`parse_frontmatter`, `check_structural`) and adds
+  marketplace rules on top: a semver `version` in each `SKILL.md` frontmatter that matches the
+  registry entry, matching and unique names, and a real skill directory. Existing skills gain an
+  additive `version:` frontmatter key. `validate_skill.py` is not modified, so the skill-script
+  drift guard is unaffected.
 - **Judge budget cap (F-022):** new `BudgetedJudge` + `build_budgeted_judge` in
   `agent_core_adapter` wrap a `Judge` with a cumulative per-run cost cap enforced via the
   existing `agent_core.BudgetLedger` (no reimplementation). Each `evaluate` **reserves**
