@@ -57,3 +57,9 @@ class CallableTarget(TargetRunner):
         except Exception as exc:  # surface target failures as scored errors
             latency = (time.perf_counter() - start) * 1000
             return TargetOutput(output=None, error=str(exc), latency_ms=latency)
+
+
+# Importing the module runs the ``@TARGETS.register("model")`` decorator. Kept at
+# the bottom so the simple targets above register first; ``# noqa: E402,F401``
+# because this is an intentional register-on-import side effect, not unused.
+from . import model  # noqa: E402, F401

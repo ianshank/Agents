@@ -1,0 +1,54 @@
+schema_version: "1.0"
+
+# Example: evaluate a REAL model-backed target (F-027).
+#
+# The `model` target sends each item's prompt to a live LLM and returns its
+# completion to be scored. Everything below is config-driven and every secret /
+# environment-specific value is sourced from an env var via ${VAR:-default}
+# interpolation — there are no hard-coded credentials, endpoints, or model ids.
+#
+# Run (needs the relevant provider creds in your environment / .env):
+#   eval-harness run --config config/model_target.yaml
+
+run:
+  name: "model-target-smoke"
+  seed: 7
+
+dataset:
+  type: inline
+  params:
+    items:
+      - id: q1
+        inputs: { prompt: "Reply with the single word: pong" }
+        expected: "pong"
+
+target:
+  type: model
+  params:
+    provider: ${EVAL_PROVIDER:-openai}     # openai | bedrock | anthropic
+    model: ${EVAL_MODEL}                    # required — no default literal
+    base_url: ${EVAL_BASE_URL:-}            # openai-compatible endpoint (LM Studio, Nemotron, …)
+    api_key: ${EVAL_API_KEY:-}              # optional; SDK also reads the provider env var
+    region: ${AWS_REGION:-}                 # bedrock only
+    prompt_template: "{prompt}"             # str.format over item.inputs
+    max_tokens: ${EVAL_MAX_TOKENS:-256}
+    temperature: ${EVAL_TEMPERATURE:-0.0}
+
+scorers:
+  - type: contains
+    params: { name: says_pong, substring: "pong" }
+  - type: llm_judge
+    params:
+      name: answer_quality
+      threshold: ${JUDGE_THRESHOLD:-0.6}
+
+# The judge is independent of the target — here a deterministic mock so the
+# example is runnable offline; swap to `openai`/`bedrock`/`anthropic` for a real grade.
+judge:
+  type: mock
+  params:
+    default_score: 0.9
+
+sinks:
+  - type: console
+    params: { verbose: true }

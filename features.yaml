@@ -468,3 +468,22 @@ features:
     implemented_in: "5fb0e91c928571ac26857b7363d44ed3e8b9878c"
     depends_on: ["F-024"]
     notes: "Reuses agent_core wilson_interval via the permitted eval_harness->agent_core edge (no flow_corpus import -> airgap preserved); campaign store follows the OutcomeStore JSONL pattern (agent_core.persistence is shape-specific). Additive/opt-in. See ADR 0012."
+
+  - id: "F-027"
+    epic: "Targets"
+    name: "Real model-backed target"
+    description: "ModelTarget (registered as 'model', alias 'llm') sends each item's prompt to a real LLM and returns the completion text as TargetOutput, so multi-model comparison (F-024) and A/B campaigns (F-025) can run against real models, not just echo/callable. Supports three providers (openai-compatible incl. Nemotron/LM Studio, Amazon Bedrock, Anthropic) chosen by a config discriminator. It reuses the judges' client-construction + tenacity retry + streamed-delta patterns WITHOUT importing the judges component (architecture manifest keeps targets->[core,plugins]; judges is a protected path), so the airgap and drift gate hold. No engine or config-schema change: target.type='model' wires automatically via the registry and SCHEMA_VERSION stays 1.0. All values are config-driven; credentials are env-only; a client= DI seam keeps the whole path offline-testable. See ADR 0013."
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "ModelTarget registered as 'model' with alias 'llm'; built via TARGETS.create from config params"
+      - "openai provider streams and joins content; bedrock invoke_model returns the first text block; anthropic joins text blocks and omits temperature when None"
+      - "run() returns TargetOutput(output=text, latency_ms set, metadata={provider,model}); model/transport failures and missing prompt-template keys are surfaced as TargetOutput.error, never raised"
+      - "prompt_template formats from item.inputs; invalid provider rejected at construction"
+      - "no new component edge (drift_check still matches the manifest); EvalConfig accepts target.type='model'; SCHEMA_VERSION unchanged; no new dependency (reuses existing openai/bedrock/anthropic extras)"
+    validation_command: "python scripts/validations/F_027.py"
+    implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
+    depends_on: ["F-002", "F-018"]
+    notes: "Additive/opt-in; existing echo/callable targets untouched. Provider-client lines are deliberately self-contained (not imported from judges) to preserve targets->[core,plugins] and avoid editing the protected judges path - same intentional-duplication rationale as the vendored skill scripts (ADR 0009). Drops straight into F-024 ModelSpec.target and F-025 arms. See ADR 0013."

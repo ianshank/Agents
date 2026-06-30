@@ -1,6 +1,37 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 011 — 2026-06-30
+
+### Features
+- F-027 (real model-backed target): `ModelTarget` calls a live LLM and returns its
+  completion to be scored, unblocking F-024/F-025 against real models; status todo → done
+
+### Changes
+- eval_harness: new `targets/model.py` — `ModelTarget` registered as `model` (alias
+  `llm`), supporting `openai` / `bedrock` / `anthropic` providers selected by a config
+  discriminator. Reuses the judges' client-construction + tenacity retry + streamed-delta
+  patterns WITHOUT importing the judges component (keeps `targets -> [core, plugins]`,
+  leaves the protected judges path untouched). Returns `TargetOutput(output=text,
+  latency_ms, metadata={provider,model})`; failures + missing prompt-template keys are
+  surfaced as `TargetOutput.error`. `client=` DI seam keeps the whole path offline.
+- eval_harness: `targets/__init__.py` imports the new module so the decorator registers.
+  No engine or config-schema change — `target.type='model'` wires via the registry,
+  `SCHEMA_VERSION` unchanged. No new dependency (reuses the existing
+  openai/bedrock/anthropic extras).
+- config/model_target.yaml example (env-interpolated, no secrets); ADR 0013;
+  F_027 validator (offline, stub client); tests/test_model_target.py
+
+### Validation evidence
+- `python scripts/validations/F_027.py` exits 0 (offline, stub client)
+- eval_harness: `pytest --cov=eval_harness --cov-fail-under=96` → 96.3% overall;
+  `targets/model.py` 100% (branch); ruff + format clean on changed src/tests; mypy clean
+  on the new module; `scripts/drift_check.py` still matches the manifest (no new edge)
+
+### Next
+- F-028 openai-judge skill modernization; F-030 time-windowed rate limiting;
+  F-029 model-bench marketplace skill (wraps F-024/F-025, uses the real target)
+
 ## Session 010 — 2026-06-30
 
 ### Features

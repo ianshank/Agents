@@ -75,7 +75,13 @@
   and produce a comparative report (F-024: `ComparisonConfig` + `run_comparison`
   reusing `EvalEngine` per model, the shared `compare_metric` primitive, a
   self-contained HTML/JSON report, and an `eval-harness compare` CLI; ADR 0011).
-  Note: a real model-backed target (beyond echo/callable) is a follow-up.
+- [x] **Real Model-backed Target** — `ModelTarget` (`type: model`, alias `llm`)
+  calls a live OpenAI-compatible / Bedrock / Anthropic endpoint and returns the
+  completion to be scored, so F-024/F-025 run against real models (F-027,
+  `src/eval_harness/targets/model.py`, ADR 0013). Reuses the judges' client +
+  retry patterns without importing the judges component (airgap preserved); no
+  schema bump, no new dependency, credentials env-only, `client=` DI seam keeps
+  it offline-testable.
 - [x] **A/B Eval Campaigns** — Persistent eval campaigns with statistical
   significance testing (F-025: `ABCampaignConfig` + `CampaignStore` accumulating
   per-arm counts across runs, `analyze` deciding via `agent_core.wilson_interval`
