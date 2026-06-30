@@ -43,11 +43,15 @@
 
 - [x] **CI/CD Pipeline** — GitHub Actions workflows for test, lint, type-check,
   feature validation, regression + eval-integrity gates, and Snyk scan on every PR.
-- [ ] **Dynamic Version** — Use `setuptools.dynamic.version` to derive version
-  from `version.py` and eliminate duplication in `pyproject.toml`.
-- [ ] **Parallel Execution** — Add `asyncio`/`concurrent.futures` option to
-  `EvalEngine` for large datasets.
-- [ ] **CSV/Parquet Dataset Source** — Extend dataset support beyond JSONL/inline.
+- [x] **Dynamic Version** — Derive `__version__` dynamically via
+  `importlib.metadata`, with a `0.0.0-dev` fallback for editable/source installs;
+  `SCHEMA_VERSION` decoupled from the package version (F-017).
+- [x] **Parallel Execution** — `ThreadPoolExecutor`-based parallel item execution
+  with configurable `max_workers`; `max_workers=1` preserves byte-identical
+  sequential behaviour (F-018, ADR 0008).
+- [x] **CSV/Parquet Dataset Source** — `CsvDataset` (`csv`/`csv_file`) and
+  `ParquetDataset` (`parquet`/`parquet_file`) with column mappings and `DATA_ROOT`
+  path confinement (F-019).
 - [x] **`py.typed` Marker** — Ship PEP 561 marker for downstream type checkers.
 
 ## Medium Term (v1.3.0)

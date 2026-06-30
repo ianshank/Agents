@@ -1,6 +1,33 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 006 — 2026-06-30
+
+### Features
+- Track 0 spec hygiene (no new features): reconciled the registry with NEXT_STEPS.md
+- F-009 (architecture drift-guard) status `in_progress` → `done` after green
+  validator + drift + freshness checks
+
+### Changes
+- features.yaml: F-009 → done; backfilled `implemented_in` provenance SHAs for the
+  seven previously-null features (F-017, F-018, F-019, F-020, F-021, F-022, F-023)
+  from each feature's landing commit
+- NEXT_STEPS.md: checked Dynamic Version (F-017), Parallel Execution (F-018), and
+  CSV/Parquet (F-019) under Short Term, with as-built notes replacing the original
+  intent text
+- progress.md: this entry
+
+### Validation evidence
+- `python scripts/validations/F_009.py` exits 0 (skill structural+behavioral,
+  drift_check matches manifest, mermaid_gen --check fresh)
+- `python scripts/validate.py --tier fast` exits 0 (all fast-tier features pass)
+- features.yaml validates against features.schema.json (F-001 green)
+
+### Next
+- Track 1: close the F-010 merge-gate seam (merge-time `OutcomeRecord` seeding)
+- Tracks 2–4: F-024 multi-model comparison, F-025 A/B campaigns, F-026 Langfuse
+  prompt management
+
 ## Session 005 — 2026-06-22
 
 ### Features
