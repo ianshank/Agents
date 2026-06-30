@@ -27,6 +27,7 @@ from pathlib import Path
 
 from .logging_util import configure_logging, get_logger
 from .merge_gate import ChangeContext, GateDecision, GatePolicyConfig, decide
+from .merge_seed import seed_pending
 from .outcome_store import LabelSource, OutcomeStore, build_domain_models
 
 logger = get_logger(__name__)
@@ -114,6 +115,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--raw-confidence", type=float, default=0.0)
     ap.add_argument("--domain", default="")
     ap.add_argument("--audit-log", help="append the decision record here (JSONL)")
+    # Default-off F-010 seam: when --seed-store is given and the gate AUTO_MERGEs,
+    # write the initial pending OutcomeRecord so the labeller/audit sampler have
+    # data to resolve. Absent flag -> behaviour is byte-identical to before.
+    ap.add_argument("--seed-store", help="seed a pending OutcomeRecord here on AUTO_MERGE")
+    ap.add_argument("--change-id", dest="change_id", help="change id for --seed-store")
+    ap.add_argument("--merged-at", dest="merged_at", help="ISO-8601 merge time for --seed-store")
+    ap.add_argument("--agent-version", dest="agent_version", help="keying hash for --seed-store")
     ap.set_defaults(mech_pass=False, touches_protected=False)
     args = ap.parse_args(argv)
 
@@ -123,6 +131,15 @@ def main(argv: list[str] | None = None) -> int:
         decision, why = run(ctx, OutcomeStore(args.store), GatePolicyConfig())
         if args.audit_log:
             _append_audit(args.audit_log, ctx, decision, why)
+        if args.seed_store and args.change_id and decision == GateDecision.AUTO_MERGE:
+            seed_pending(
+                OutcomeStore(args.seed_store),
+                args.change_id,
+                ctx.domain,
+                ctx.raw_confidence,
+                merged_at=args.merged_at,
+                agent_version=args.agent_version,
+            )
     except Exception as exc:  # unexpected -> exit 1, never silently pass
         print(f"merge-gate internal error: {exc}", file=sys.stderr)
         return 1

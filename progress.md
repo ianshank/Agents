@@ -1,6 +1,40 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 007 — 2026-06-30
+
+### Features
+- F-010 (calibrated auto-merge gate): closed the last open seam from ADR 0005
+  (merge-time `OutcomeRecord` seeding); status `in_progress` → `done`
+
+### Changes
+- agent-core: new `agent_core/merge_seed.py` — `seed_pending()` + `already_seeded()`
+  + a `python -m agent_core.merge_seed` CLI that writes the initial pending
+  `OutcomeRecord` (label=None) at merge time. Reuses `OutcomeStore`/`OutcomeRecord`;
+  idempotent (no double-seed); `merged_at` defaults to now-UTC and is injectable
+- agent-core: `merge_gate_ci.py` gains default-off `--seed-store`/`--change-id`/
+  `--merged-at`/`--agent-version`; seeds only on AUTO_MERGE when the flags are
+  present, so absent flags keep behaviour byte-identical
+- ADR 0005: marked the seam CLOSED, added the "Audit-label accumulation strategy"
+  section (cadence / domain scope / reviewer assignment / exit criterion), checked
+  the seeding checklist item
+- scripts/validations/F_010.py: added a seam assertion (seed → human-audit resolve)
+- features.yaml: F-010 → done with a seam verification clause
+- NEXT_STEPS.md: checked the seam + audit-strategy items
+
+### Validation evidence
+- `python scripts/validations/F_010.py` exits 0 (all 7 checks incl. the seam)
+- agent-core: `pytest --cov=agent_core --cov-fail-under=95` → 98% (merge_seed.py and
+  merge_gate_ci.py at 100%); new `tests/test_merge_seed.py` + merge_gate_ci seeding
+  tests pass; ruff + ruff format + strict mypy clean on changed files
+- Pre-existing, unrelated: `test_detectors.py::test_resolve_repo_from_https_remote`
+  fails in this sandbox (git remote resolution); fails on clean HEAD too, not a
+  regression from this change
+
+### Next
+- Tracks 2–4: F-024 multi-model comparison, F-025 A/B campaigns, F-026 Langfuse
+  prompt management
+
 ## Session 006 — 2026-06-30
 
 ### Features

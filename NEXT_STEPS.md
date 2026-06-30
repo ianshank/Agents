@@ -20,12 +20,14 @@
 - [ ] **Make gates required** — add `quality-gates` jobs to branch-protection required
   checks once they have soaked.
 - [ ] **Enable auto-fix loop** — only after the ADR 0004 human checklist is complete.
-- [ ] **Seed merge-gate records (F-010 seam)** — write the initial pending `OutcomeRecord`
-  (`change_id` / `domain` / `raw_confidence` / `merged_at`) at merge time so the labeller and
-  audit sampler have data to resolve (the only seam left open by ADR 0005; detection is wired).
+- [x] **Seed merge-gate records (F-010 seam)** — `agent_core/merge_seed.py` writes the initial
+  pending `OutcomeRecord` (`change_id` / `domain` / `raw_confidence` / `merged_at`) at merge
+  time (idempotent, default-off integration in `merge_gate_ci`); closes the only seam ADR 0005
+  left open. Detection was already wired.
 - [ ] **Accumulate audit labels** — run `audit_sampler` to build per-domain HUMAN_AUDIT
   history before any domain can leave cold-start ESCALATE, then enable per the ADR 0005 checklist.
-- [ ] **Audit label accumulation strategy** — define cadence, domain scope, and reviewer assignment for building HUMAN_AUDIT history (prerequisite for F-010 activation per ADR 0005).
+- [x] **Audit label accumulation strategy** — cadence, domain scope, and reviewer assignment
+  defined in ADR 0005 ("Audit-label accumulation strategy" section).
 
 ## Immediate (Pre-v1.2.0)
 

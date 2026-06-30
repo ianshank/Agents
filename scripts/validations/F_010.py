@@ -13,6 +13,10 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "agent-core"))
 
+import tempfile  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from agent_core.audit_sampler import record_verdict  # noqa: E402
 from agent_core.merge_gate import (  # noqa: E402
     CalibratorHealth,
     ChangeContext,
@@ -21,11 +25,40 @@ from agent_core.merge_gate import (  # noqa: E402
     decide,
 )
 from agent_core.merge_gate_ci import EXIT  # noqa: E402
+from agent_core.merge_seed import seed_pending  # noqa: E402
+from agent_core.outcome_store import LabelSource, OutcomeStore  # noqa: E402
 
 
 class _Const:
     def predict(self, raw_score: float) -> float:
         return 0.99
+
+
+def _seam_closes_audit_data_gap() -> bool:
+    """The F-010 seam (ADR 0005): a merge-time pending record must let the audit
+    sampler attach a HUMAN_AUDIT verdict that the gate's models can then read.
+    Without seeding, record_verdict raises KeyError and tau stays None forever.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        store = OutcomeStore(Path(tmp) / "s.jsonl")
+        # before seeding: nothing to resolve
+        try:
+            record_verdict(store, "c1", correct=True)
+            return False  # should have raised KeyError
+        except KeyError:
+            pass
+        # seeding writes a pending record (label=None); idempotent on retry
+        rec = seed_pending(store, "c1", "core", 0.91)
+        if rec is None or rec.label is not None:
+            return False
+        if seed_pending(store, "c1", "core", 0.91) is not None:
+            return False  # second seed must be a no-op
+        # after seeding: a human audit verdict resolves authoritatively
+        audit = record_verdict(store, "c1", correct=True)
+        return (
+            audit.label is True
+            and store.resolved()["c1"].label_source == LabelSource.HUMAN_AUDIT.value
+        )
 
 
 def validate_f010() -> bool:
@@ -52,6 +85,7 @@ def validate_f010() -> bool:
         ),
         "exit-code contract complete": set(EXIT.values()) == {0, 10, 20},
         "protected auto-merge off by default": cfg.protected_auto_merge is False,
+        "merge-time seeding closes the audit-data seam": _seam_closes_audit_data_gap(),
     }
     ok = True
     for name, passed in checks.items():
