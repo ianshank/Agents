@@ -58,7 +58,9 @@
   scorers with configurable weights (F-020: `weighted` CompositeScorer).
 - [x] **Dashboard Export** — Rich HTML report generation from `RunResult`
   (F-021: self-contained `html_file` sink, inline SVG, deterministic).
-- [ ] **Rate Limit Budget** — Configurable token/request budgets for judge calls.
+- [x] **Rate Limit Budget** — Configurable token/request budgets for judge calls
+  (F-022: `JudgeBudgetConfig` + `BudgetedJudge`, cumulative cap via agent_core
+  `BudgetLedger`; time-windowed throttling deferred).
 
 ## Long Term
 

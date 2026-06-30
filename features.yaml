@@ -333,6 +333,25 @@ features:
     depends_on: ["F-001"]
     notes: "pyarrow is an optional dependency — ParquetDataset raises a descriptive ImportError if missing."
 
+  - id: "F-022"
+    epic: "Judge"
+    name: "Judge budget cap (per-run token/request budget)"
+    description: "Adds BudgetedJudge + build_budgeted_judge in agent_core_adapter that wrap a Judge with a cumulative per-run cost cap enforced via agent_core.BudgetLedger. Each evaluate reserves cost_per_call before delegating, under a lock, so the cap holds under parallel execution; on exhaustion it raises BudgetExceededError or returns a sentinel verdict per on_exceeded. Wired in EvalEngine.from_config behind the optional JudgeBudgetConfig (default-off)."
+    category: "non-functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "BudgetedJudge admits calls under the cap and raises BudgetExceededError once exhausted"
+      - "ledger built with reserve_fraction=0 so usable budget equals the configured cap"
+      - "on_exceeded='skip' returns a sentinel verdict instead of raising"
+      - "parallel execution never exceeds the cap and never retroactively rejects an admitted call"
+      - "judge is wrapped only when JudgeBudgetConfig.enabled; absent/disabled leaves the judge and offline deps unchanged"
+    validation_command: "python scripts/validations/F_022.py"
+    implemented_in: null
+    depends_on: ["F-002"]
+    notes: "Reuses agent_core.BudgetLedger (no reimplementation). Cumulative budget cap, not time-windowed rate limiting (deferred). No live token signal exists at the judge call site, so cost_per_call is a configured per-call estimate. agent_core imported lazily; the offline path stays dependency-free. SCHEMA_VERSION unchanged (judge_budget is optional)."
+
   - id: "F-020"
     epic: "Scoring"
     name: "Weighted / ensemble scoring"

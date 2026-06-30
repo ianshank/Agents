@@ -51,12 +51,12 @@ components:
 # reviewed: core depends on nothing; dependencies flow inward; no layering
 # inversions. Add an edge here only when a new dependency is intended.
 dependencies:
-  agent_core_adapter: [agent_core, core]
+  agent_core_adapter: [agent_core, config, core]
   flow_corpus: [flow_protocol, agent_core]
   behavioral_regression: [agent_core, flow_corpus]
   cli: [config, engine, gating, langfuse_client, plugins]
   datasets: [core, langfuse_client, plugins]
-  engine: [config, core, langfuse_client, plugins]
+  engine: [agent_core_adapter, config, core, langfuse_client, plugins]
   gating: [config, core]
   judges: [core, langfuse_client, plugins]
   plugins: [core, datasets, judges, scorers, sinks, targets]

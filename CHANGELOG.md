@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Judge budget cap (F-022):** new `BudgetedJudge` + `build_budgeted_judge` in
+  `agent_core_adapter` wrap a `Judge` with a cumulative per-run cost cap enforced via the
+  existing `agent_core.BudgetLedger` (no reimplementation). Each `evaluate` **reserves**
+  `cost_per_call` before delegating, under a lock, so the cap holds under parallel execution and
+  no admitted call is retroactively rejected. On exhaustion it raises `BudgetExceededError` or
+  returns a sentinel verdict, per `on_exceeded`. Configured via the optional, default-off
+  `JudgeBudgetConfig` and wired in `EvalEngine.from_config`; agent_core is imported lazily so the
+  offline path stays dependency-free. This is a cumulative budget cap, not time-windowed rate
+  limiting (deferred); since no live token signal exists at the judge call site, `cost_per_call`
+  is a configured per-call estimate. `SCHEMA_VERSION` unchanged.
 - **Weighted / ensemble scoring (F-020):** new `CompositeScorer` (registered as `weighted`,
   aliases `composite`/`ensemble`) owns child scorers built once from the registry and combines
   their values as a weight-normalised mean (`Σ wᵢ·vᵢ / Σ wᵢ`) into one `ScoreResult`, recording
