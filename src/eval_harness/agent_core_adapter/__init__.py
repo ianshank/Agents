@@ -319,9 +319,7 @@ class BudgetedJudge(Judge):
             if self._limiter is not None:
                 if self._on_rate_limited == "skip":
                     if not self._limiter.try_acquire():
-                        return JudgeVerdict(
-                            score=self._skip_score, reasoning="judge rate limit exceeded (skipped)"
-                        )
+                        return JudgeVerdict(score=self._skip_score, reasoning="judge rate limit exceeded (skipped)")
                 else:  # block until a slot frees
                     self._limiter.acquire_blocking()
             try:
