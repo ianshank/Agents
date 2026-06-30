@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0-dev] — Unreleased
+
+### Added
+- **HTML dashboard export sink (F-021):** new `HtmlFileSink` (registered as `html_file`,
+  alias `html`) renders a `RunResult` into a single self-contained HTML report — inline CSS
+  and inline-SVG metric bars, no external assets or CDN links. Output is a pure function of the
+  `RunResult` (byte-identical for a fixed run); user output is HTML-escaped; `pass_rate=None`
+  renders `n/a`. Configured via existing `ComponentSpec` params (`path`/`title`/`embed_items`/
+  `bar_width_px`) — no config-schema change, `SCHEMA_VERSION` unchanged. Reuses the
+  dependency-free string-built rendering approach from `behavioral_regression.report.to_html`.
+
 ## [1.2.0-dev] — Unreleased
 
 ### Tech-debt cleanup

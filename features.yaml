@@ -332,3 +332,22 @@ features:
     implemented_in: null
     depends_on: ["F-001"]
     notes: "pyarrow is an optional dependency — ParquetDataset raises a descriptive ImportError if missing."
+
+  - id: "F-021"
+    epic: "Reporting"
+    name: "HTML dashboard export sink"
+    description: "Adds HtmlFileSink (registered as 'html_file' with alias 'html') that renders a RunResult into a single self-contained, deterministic HTML report (inline CSS + inline SVG, no external assets or CDN). Reuses the dependency-free string-built rendering approach from behavioral-regression's report.to_html."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "html_file sink registered with alias 'html'"
+      - "emit writes a single self-contained HTML file with no external script/link/@import/url(http) references"
+      - "report contains the run_id and each aggregate score name"
+      - "rendering the same RunResult twice is byte-identical (determinism)"
+      - "pass_rate=None renders 'n/a'; user output is HTML-escaped; existing sinks unchanged"
+    validation_command: "python scripts/validations/F_021.py"
+    implemented_in: null
+    depends_on: ["F-001"]
+    notes: "Pure ResultSink plugin configured via ComponentSpec params (path/title/embed_items/bar_width_px); no config-schema change, SCHEMA_VERSION unchanged. Soft data-dependency on F-020 for composite breakdown rows."
