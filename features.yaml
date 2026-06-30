@@ -430,3 +430,22 @@ features:
     implemented_in: "dd1dcf938be460568f35cd3222248ee3273276e4"
     depends_on: ["F-005"]
     notes: "Gated behind the optional [langfuse] extra; the offline path is unchanged. judge_prompt applies to judges accepting a 'system' param (openai/bedrock/anthropic). LangfuseClient.get_prompt is non-abstract so third-party subclasses keep working. See ADR 0010."
+
+  - id: "F-024"
+    epic: "Reporting"
+    name: "Multi-model comparison"
+    description: "Runs the same dataset/scorers/judge against several targets and produces a comparative result: per-metric values, deltas vs a baseline, and a ranking. ComparisonConfig (>=2 named ModelSpecs, optional baseline/rank_by, rank_metric mean|pass_rate) drives run_comparison, which reuses EvalEngine per model (identical scoring/aggregation to a single run). The shared compare_metric primitive (values + deltas + ranking, None ranked last) is reused by F-025. ComparisonResult.to_dict/to_html emit a self-contained deterministic report (reusing the F-021 html approach); an 'eval-harness compare' CLI subcommand writes HTML/JSON."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "ComparisonConfig requires >=2 models with unique names; baseline must be a model; rank_metric is mean|pass_rate"
+      - "run_comparison reuses EvalEngine per model (target swapped only) and ranks models by the chosen score/metric"
+      - "compare_metric returns per-model values, baseline deltas, and a ranking with None values ranked last"
+      - "ComparisonResult.to_dict is JSON-serialisable; to_html is deterministic and self-contained (no external assets)"
+      - "EvalConfig.comparison is additive and optional; SCHEMA_VERSION unchanged; single-run path untouched"
+    validation_command: "python scripts/validations/F_024.py"
+    implemented_in: "a0d12957264f1c348343930013df3833ddc54463"
+    depends_on: ["F-018", "F-021"]
+    notes: "Additive/opt-in; no model-backed target exists yet (only echo/callable) so F-024 is the comparison orchestration + report, with a real model target as a separate follow-up. compare_metric is the shared primitive for F-025. See ADR 0011."
