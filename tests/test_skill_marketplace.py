@@ -160,6 +160,28 @@ def test_cli_list_missing_registry():
     assert rc == 2
 
 
+def test_missing_path_reported(tmp_path, monkeypatch):
+    monkeypatch.setattr(mkt, "_repo_root", lambda: str(tmp_path))
+    reg = _write_registry(tmp_path, [{"name": "demo", "version": "1.0.0", "path": ""}])
+    errs = mkt.validate_registry(reg, _SCHEMA)
+    assert any("missing a 'path'" in e for e in errs)
+
+
+def test_non_dict_entry_reported_in_validate(tmp_path, monkeypatch):
+    monkeypatch.setattr(mkt, "_repo_root", lambda: str(tmp_path))
+    reg = tmp_path / "marketplace.yaml"
+    reg.write_text(yaml.safe_dump({"registry_version": "1.0.0", "skills": ["oops"]}), encoding="utf-8")
+    errs = mkt.validate_registry(str(reg), _SCHEMA)
+    assert any("malformed registry entry" in e for e in errs)
+
+
+def test_non_dict_entry_reported_in_list(tmp_path):
+    reg = tmp_path / "marketplace.yaml"
+    reg.write_text(yaml.safe_dump({"registry_version": "1.0.0", "skills": ["oops"]}), encoding="utf-8")
+    rc = mkt.main(["--registry", str(reg), "list"])
+    assert rc == 1
+
+
 def test_schema_pattern_is_valid_json():
     with open(_SCHEMA, encoding="utf-8") as f:
         schema = json.load(f)

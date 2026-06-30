@@ -144,6 +144,16 @@ def test_unknown_child_type_raises():
         SCORERS.create("weighted", {"components": [{"type": "does_not_exist"}]})
 
 
+def test_non_dict_component_raises():
+    with pytest.raises(ValueError, match="must be a mapping"):
+        SCORERS.create("weighted", {"components": ["not-a-dict"]})
+
+
+def test_component_missing_type_raises():
+    with pytest.raises(ValueError, match="must specify a 'type'"):
+        SCORERS.create("weighted", {"components": [{"params": {}}]})
+
+
 def test_empty_components_raises():
     with pytest.raises(ValueError, match="at least one component"):
         SCORERS.create("weighted", {"components": []})

@@ -87,6 +87,10 @@ def validate_entry(entry: dict, root: str, errors: list[str]) -> None:
     version = entry.get("version", "")
     rel_path = entry.get("path", "")
 
+    if not rel_path:
+        errors.append(f"{name}: registry entry is missing a 'path'")
+        return
+
     if not SEMVER_RE.match(str(version)):
         errors.append(f"{name}: registry version {version!r} is not semver (MAJOR.MINOR.PATCH)")
 
@@ -129,6 +133,9 @@ def validate_registry(registry_path: str, schema_path: str) -> list[str]:
     seen: set[str] = set()
     root = _repo_root()
     for entry in skills:
+        if not isinstance(entry, dict):
+            errors.append(f"malformed registry entry (expected a mapping): {entry!r}")
+            continue
         name = entry.get("name", "<unnamed>")
         if name in seen:
             errors.append(f"{name}: duplicate skill name in registry")
@@ -160,6 +167,9 @@ def _cmd_list(args: argparse.Namespace) -> int:
         logger.error("%s", exc)
         return 2
     for entry in registry.get("skills", []):
+        if not isinstance(entry, dict):
+            logger.error("malformed registry entry (expected a mapping): %r", entry)
+            return 1
         print(f"{entry.get('name', '<unnamed>')}\t{entry.get('version', '?')}\t{entry.get('path', '?')}")
     return 0
 

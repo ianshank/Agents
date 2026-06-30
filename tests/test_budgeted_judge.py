@@ -104,9 +104,24 @@ def test_cost_per_call_must_be_positive():
         JudgeBudgetConfig(enabled=True, cap=1.0, cost_per_call=0)
 
 
-def test_build_raises_when_cap_missing():
+def test_cap_required_when_enabled_at_config_level():
+    # Pydantic model validator fails fast at parse time.
     with pytest.raises(ValueError, match="cap must be set"):
-        build_budgeted_judge(MockJudge(), JudgeBudgetConfig(enabled=True))
+        JudgeBudgetConfig(enabled=True)
+
+
+def test_disabled_without_cap_is_valid():
+    # Disabled budgets don't require a cap.
+    cfg = JudgeBudgetConfig(enabled=False)
+    assert cfg.cap is None
+
+
+def test_build_guard_when_cap_missing():
+    # Defense-in-depth: bypass validation via model_construct and confirm the
+    # builder still refuses a capless enabled budget.
+    bad = JudgeBudgetConfig.model_construct(enabled=True, cap=None, cost_per_call=1.0, on_exceeded="raise")
+    with pytest.raises(ValueError, match="cap must be set"):
+        build_budgeted_judge(MockJudge(), bad)
 
 
 def test_invalid_on_exceeded_rejected_in_wrapper():

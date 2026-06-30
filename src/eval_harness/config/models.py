@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..version import SCHEMA_VERSION
 
@@ -79,6 +79,13 @@ class JudgeBudgetConfig(BaseModel):
         if v not in ("raise", "skip"):
             raise ValueError("on_exceeded must be 'raise' or 'skip'")
         return v
+
+    @model_validator(mode="after")
+    def _require_cap_when_enabled(self) -> JudgeBudgetConfig:
+        # Fail fast at config-parse time rather than at engine construction.
+        if self.enabled and self.cap is None:
+            raise ValueError("judge_budget.cap must be set (> 0) when judge budget is enabled")
+        return self
 
 
 class GateRule(BaseModel):

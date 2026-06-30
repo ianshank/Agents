@@ -135,7 +135,11 @@ class CompositeScorer(Scorer):
         # Build children once; record the resolved label and weight alongside.
         self._children: list[tuple[str, float, Scorer]] = []
         for spec in specs:
-            ctype = spec["type"]
+            if not isinstance(spec, dict):
+                raise ValueError(f"each CompositeScorer component must be a mapping; got {type(spec).__name__}")
+            ctype = spec.get("type")
+            if not ctype:
+                raise ValueError("each CompositeScorer component must specify a 'type'")
             child = SCORERS.create(ctype, spec.get("params", {}))
             label = spec.get("name") or child.name
             weight = float(spec.get("weight", 1.0))
