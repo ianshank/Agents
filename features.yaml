@@ -411,3 +411,22 @@ features:
     implemented_in: "b38424e1f659edb37c13ad333084191041eac0a3"
     depends_on: ["F-001"]
     notes: "Pure ResultSink plugin configured via ComponentSpec params (path/title/embed_items/bar_width_px); no config-schema change, SCHEMA_VERSION unchanged. Soft data-dependency on F-020 for composite breakdown rows."
+
+  - id: "F-026"
+    epic: "Tracing"
+    name: "Langfuse judge-prompt management"
+    description: "Adds an optional prompt-source seam so a judge's system prompt can be pulled from the Langfuse prompt registry instead of inline config YAML. PromptSourceConfig (source yaml|langfuse, name/version/label, fallback text) drives resolve_prompt(); LangfuseClient.get_prompt is a non-abstract, fail-safe method (SDK impl returns None on any error); EvalConfig.judge_prompt is additive and resolved into the judge's system param in engine.from_config before construction. Config-driven fallback to YAML keeps offline runs working."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "PromptSourceConfig validates: yaml requires text, langfuse requires name, source must be yaml|langfuse"
+      - "resolve_prompt returns inline text for yaml; returns registry text for langfuse when available"
+      - "langfuse source falls back to inline text when the prompt is unavailable or no client is wired"
+      - "SDKLangfuseClient.get_prompt fails safe to None on SDK/network error; NullLangfuseClient.get_prompt defaults to None"
+      - "engine.from_config injects the resolved prompt as the judge system param; absent judge_prompt leaves params untouched; SCHEMA_VERSION unchanged"
+    validation_command: "python scripts/validations/F_026.py"
+    implemented_in: "dd1dcf938be460568f35cd3222248ee3273276e4"
+    depends_on: ["F-005"]
+    notes: "Gated behind the optional [langfuse] extra; the offline path is unchanged. judge_prompt applies to judges accepting a 'system' param (openai/bedrock/anthropic). LangfuseClient.get_prompt is non-abstract so third-party subclasses keep working. See ADR 0010."
