@@ -1,0 +1,35 @@
+{
+  "skill": "model-bench",
+  "evals": [
+    {
+      "id": "compare",
+      "prompt": "Rank two models on one dataset and emit a comparative report.",
+      "run": "python scripts/run.py compare --config evals/fixtures/compare.yaml --offline --json .skill-validation/compare_result.json",
+      "assertions": [
+        { "type": "exit_zero", "text": "comparison runs" },
+        { "type": "output_contains", "contains": "good-model > bad-model", "text": "ranks the better model first" },
+        { "type": "file_contains", "path": ".skill-validation/compare_result.json", "contains": "good-model", "text": "json report carries per-model runs" }
+      ]
+    },
+    {
+      "id": "campaign-record",
+      "prompt": "Record one A/B campaign run, accumulating per-arm counts.",
+      "run": "python scripts/run.py campaign --config evals/fixtures/campaign.yaml --store .skill-validation/store.jsonl --mode record --offline",
+      "assertions": [
+        { "type": "exit_zero", "text": "campaign record runs" },
+        { "type": "output_contains", "contains": "candidate: 1/1", "text": "candidate arm passes" },
+        { "type": "file_exists", "path": ".skill-validation/store.jsonl", "text": "store is written" }
+      ]
+    },
+    {
+      "id": "campaign-analyze",
+      "prompt": "Analyze the accumulated campaign and emit a decision.",
+      "run": "python scripts/run.py campaign --config evals/fixtures/campaign.yaml --store .skill-validation/store.jsonl --mode analyze --offline --json .skill-validation/analysis.json",
+      "assertions": [
+        { "type": "exit_zero", "text": "campaign analyze runs" },
+        { "type": "output_contains", "contains": "decision:", "text": "prints a decision" },
+        { "type": "file_contains", "path": ".skill-validation/analysis.json", "contains": "decision", "text": "json analysis carries the decision" }
+      ]
+    }
+  ]
+}

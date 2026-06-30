@@ -78,6 +78,19 @@ class JudgeBudgetConfig(BaseModel):
         le=1.0,
         description="Sentinel verdict score returned when the budget is exhausted and on_exceeded='skip'.",
     )
+    # --- Optional time-windowed rate limit (F-030), additive on top of the cap. ---
+    max_per_window: int | None = Field(
+        default=None,
+        gt=0,
+        description="Max judge calls admitted per sliding time window. Enables rate limiting "
+        "when set together with window_seconds. Independent of the cumulative cap.",
+    )
+    window_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        description="Length of the sliding rate-limit window in seconds (set with max_per_window).",
+    )
+    on_rate_limited: str = "block"  # "block" | "skip"
 
     @field_validator("on_exceeded")
     @classmethod
@@ -86,11 +99,25 @@ class JudgeBudgetConfig(BaseModel):
             raise ValueError("on_exceeded must be 'raise' or 'skip'")
         return v
 
+    @field_validator("on_rate_limited")
+    @classmethod
+    def _check_on_rate_limited(cls, v: str) -> str:
+        if v not in ("block", "skip"):
+            raise ValueError("on_rate_limited must be 'block' or 'skip'")
+        return v
+
     @model_validator(mode="after")
     def _require_cap_when_enabled(self) -> JudgeBudgetConfig:
         # Fail fast at config-parse time rather than at engine construction.
         if self.enabled and self.cap is None:
             raise ValueError("judge_budget.cap must be set (> 0) when judge budget is enabled")
+        return self
+
+    @model_validator(mode="after")
+    def _require_window_fields_together(self) -> JudgeBudgetConfig:
+        # The two rate-limit fields are meaningless apart; require both or neither.
+        if (self.max_per_window is None) != (self.window_seconds is None):
+            raise ValueError("judge_budget.max_per_window and window_seconds must be set together (or both omitted)")
         return self
 
 

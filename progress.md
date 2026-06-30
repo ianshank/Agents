@@ -1,6 +1,84 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 011 — 2026-06-30
+
+### Features
+- F-027 (real model-backed target): `ModelTarget` calls a live LLM and returns its
+  completion to be scored, unblocking F-024/F-025 against real models; status todo → done
+- F-028 (openai-judge skill modernization): brought the last old-convention skill up to
+  the v2.0 standard (tests/, ruff.toml, validator_version, CI job); status todo → done
+- F-030 (time-windowed judge rate limiting): the throttling deferred from F-022 — a
+  sliding-window limiter on BudgetedJudge with an injected clock/sleeper; status todo → done
+- F-029 (model-bench marketplace skill): packages F-024/F-025 as a discoverable skill that
+  thinly forwards to the harness compare/campaign CLI; status todo → done
+
+### Changes (F-029)
+- skills/model-bench: new v2.0 skill — `scripts/run.py` (thin forwarder to
+  `eval_harness.cli.main` for compare/campaign, no orchestration re-implemented), vendored
+  `validate_skill.py`, `evals/evals.json` + echo-target fixtures (compare + campaign),
+  `references/usage.md`, `tests/` (100% on the runner), `ruff.toml`, `.gitignore`
+- skills/marketplace.yaml: model-bench entry (v1.0.0); .github/workflows/skills-ci.yml:
+  model-bench job (installs the repo packages since it wraps them) + path triggers
+- ADR 0015; F_029 validator (offline, drives compare over echo fixtures)
+
+### Validation evidence (F-029)
+- `python scripts/validations/F_029.py` exits 0 (offline)
+- `validate_skill.py --skill skills/model-bench --tier structural,behavioral` passes;
+  `skill_marketplace.py validate` passes; `check_skill_script_drift.py` matches (4 copies)
+- runner coverage 100% branch; ruff clean
+
+### Changes (F-030)
+- eval_harness config: `JudgeBudgetConfig` gains additive optional `max_per_window` /
+  `window_seconds` / `on_rate_limited` (validator requires the two window fields together);
+  `SCHEMA_VERSION` unchanged
+- eval_harness agent_core_adapter: new `_SlidingWindowLimiter` (deque + injected
+  clock/sleeper) consulted in `BudgetedJudge.evaluate` BEFORE the cost reservation
+  (block waits, skip returns the sentinel); `build_budgeted_judge` builds it from config
+  with stdlib defaults. agent_core.BudgetLedger stays the cap owner; window + cap are
+  independent. Absent fields → no limiter (byte-identical)
+- ADR 0016; F_030 validator (fake clock, no real sleep); tests in tests/test_budgeted_judge.py
+
+### Validation evidence (F-030)
+- `python scripts/validations/F_030.py` exits 0 (offline, fake clock)
+- adapter coverage 100% branch (test_budgeted_judge + test_agent_core_adapter);
+  ruff + format clean; mypy clean on the adapter
+
+### Changes (F-028)
+- skills/openai-judge: added `tests/` (`conftest.py` + `test_run.py`) covering `run.py`
+  `--mock`, file-error, and live paths (live path via a fake `eval_harness.judges`
+  injected into `sys.modules` — no network); `ruff.toml` (extends repo config, excludes
+  the vendored validate_skill.py); `validator_version:'2.0'` frontmatter; version bump
+  1.0.0 → 1.1.0 matched in `skills/marketplace.yaml`; `.gitignore`
+- .github/workflows/skills-ci.yml: new isolated `openai-judge` job (lint + coverage-gated
+  tests + structural/behavioral self-check) and path triggers
+- ADR 0014; F_028 validator (reuses validate_skill.py read-only)
+
+### Changes
+- eval_harness: new `targets/model.py` — `ModelTarget` registered as `model` (alias
+  `llm`), supporting `openai` / `bedrock` / `anthropic` providers selected by a config
+  discriminator. Reuses the judges' client-construction + tenacity retry + streamed-delta
+  patterns WITHOUT importing the judges component (keeps `targets -> [core, plugins]`,
+  leaves the protected judges path untouched). Returns `TargetOutput(output=text,
+  latency_ms, metadata={provider,model})`; failures + missing prompt-template keys are
+  surfaced as `TargetOutput.error`. `client=` DI seam keeps the whole path offline.
+- eval_harness: `targets/__init__.py` imports the new module so the decorator registers.
+  No engine or config-schema change — `target.type='model'` wires via the registry,
+  `SCHEMA_VERSION` unchanged. No new dependency (reuses the existing
+  openai/bedrock/anthropic extras).
+- config/model_target.yaml example (env-interpolated, no secrets); ADR 0013;
+  F_027 validator (offline, stub client); tests/test_model_target.py
+
+### Validation evidence
+- `python scripts/validations/F_027.py` exits 0 (offline, stub client)
+- eval_harness: `pytest --cov=eval_harness --cov-fail-under=96` → 96.3% overall;
+  `targets/model.py` 100% (branch); ruff + format clean on changed src/tests; mypy clean
+  on the new module; `scripts/drift_check.py` still matches the manifest (no new edge)
+
+### Next
+- F-028 openai-judge skill modernization; F-030 time-windowed rate limiting;
+  F-029 model-bench marketplace skill (wraps F-024/F-025, uses the real target)
+
 ## Session 010 — 2026-06-30
 
 ### Features

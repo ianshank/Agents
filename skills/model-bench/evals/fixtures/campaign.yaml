@@ -1,0 +1,33 @@
+schema_version: "1.0"
+
+# Deterministic A/B campaign fixture (F-025) — two arms over a tiny inline
+# dataset, scored by exact_match. Offline and reproducible; arm B always matches
+# and arm A never does, so accumulated counts separate once powered. Swap the echo
+# targets for `type: model` (F-027) to A/B-test real models.
+
+run:
+  name: "model-bench-campaign"
+  seed: 7
+
+dataset:
+  type: inline
+  params:
+    items:
+      - id: "1"
+        inputs: { good: "x", bad: "y" }
+        expected: "x"
+
+target:
+  type: echo
+  params: {}
+
+scorers:
+  - type: exact_match
+    params: {}
+
+ab_campaign:
+  campaign_id: "bench-ab"
+  arm_a: { name: "control", target: { type: echo, params: { output_key: "bad" } } }
+  arm_b: { name: "candidate", target: { type: echo, params: { output_key: "good" } } }
+  score: "exact_match"
+  min_sample: 1

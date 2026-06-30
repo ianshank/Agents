@@ -25,6 +25,9 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
+from collections import deque
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -208,6 +211,57 @@ class FixedCostEstimator:
         return len(state.unresolved) * self._config.tokens_per_claim * self._config.per_token_rate
 
 
+class _SlidingWindowLimiter:
+    """A deterministic sliding-window rate limiter (F-030).
+
+    Admits at most ``max_per_window`` events per ``window_seconds``. Time is read
+    from an injected ``clock`` and waiting goes through an injected ``sleeper`` so
+    the whole thing is testable without real time. Not internally locked — the
+    caller (``BudgetedJudge``) already serialises access under its own lock.
+    """
+
+    def __init__(
+        self,
+        max_per_window: int,
+        window_seconds: float,
+        *,
+        clock: Callable[[], float],
+        sleeper: Callable[[float], None],
+    ) -> None:
+        self._max = int(max_per_window)
+        self._window = float(window_seconds)
+        self._clock = clock
+        self._sleeper = sleeper
+        self._events: deque[float] = deque()
+
+    def _evict(self, now: float) -> None:
+        boundary = now - self._window
+        while self._events and self._events[0] <= boundary:
+            self._events.popleft()
+
+    def try_acquire(self) -> bool:
+        """Non-blocking: record and return True if a slot is free, else False."""
+        now = self._clock()
+        self._evict(now)
+        if len(self._events) >= self._max:
+            return False
+        self._events.append(now)
+        return True
+
+    def acquire_blocking(self) -> None:
+        """Block (via the injected sleeper) until a slot frees, then record it."""
+        while True:
+            now = self._clock()
+            self._evict(now)
+            if len(self._events) < self._max:
+                self._events.append(now)
+                return
+            # _evict removed every event at/under (now - window), so the oldest
+            # survivor is strictly inside the window and wait is always > 0.
+            wait = self._events[0] + self._window - now
+            self._sleeper(wait)
+
+
 class BudgetedJudge(Judge):
     """Wraps a :class:`Judge` with a cumulative per-run cost cap (F-022).
 
@@ -219,8 +273,12 @@ class BudgetedJudge(Judge):
     is exhausted the wrapper either re-raises ``BudgetExceededError`` or returns a
     sentinel verdict, per ``on_exceeded``.
 
-    This is a cumulative budget cap, not a time-windowed rate limit. ``ledger`` is
-    built with ``reserve_fraction=0`` by :func:`build_budgeted_judge` so the
+    The cumulative cap can be paired with an **optional** time-windowed rate limit
+    (F-030): when a ``limiter`` is supplied, each call is gated by the sliding
+    window *before* the cost reservation — blocking until a slot frees
+    (``on_rate_limited='block'``) or returning a sentinel verdict
+    (``on_rate_limited='skip'``). The cap and the window are independent. ``ledger``
+    is built with ``reserve_fraction=0`` by :func:`build_budgeted_judge` so the
     configured cap maps 1:1 to spendable units. All tunables are injected; nothing
     is hard-coded.
     """
@@ -232,9 +290,13 @@ class BudgetedJudge(Judge):
         cost_per_call: float,
         on_exceeded: str = "raise",
         skip_score: float = 0.0,
+        limiter: _SlidingWindowLimiter | None = None,
+        on_rate_limited: str = "block",
     ) -> None:
         if on_exceeded not in ("raise", "skip"):
             raise ValueError("on_exceeded must be 'raise' or 'skip'")
+        if on_rate_limited not in ("block", "skip"):
+            raise ValueError("on_rate_limited must be 'block' or 'skip'")
         self._inner = inner
         self._ledger = ledger
         self._cost_per_call = float(cost_per_call)
@@ -243,12 +305,23 @@ class BudgetedJudge(Judge):
         # Defaults to the same 0.0 fail-safe the OpenAI/Anthropic judges use for an
         # unparseable response; overridable via JudgeBudgetConfig.skip_score.
         self._skip_score = float(skip_score)
+        self._limiter = limiter
+        self._on_rate_limited = on_rate_limited
         self._lock = threading.Lock()
 
     def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict:
         from agent_core import BudgetExceededError
 
         with self._lock:
+            # Rate limit first (F-030), then the cumulative cost cap (F-022). Both
+            # run under the lock so window bookkeeping and the reservation stay
+            # consistent under parallel execution; the inner call runs outside it.
+            if self._limiter is not None:
+                if self._on_rate_limited == "skip":
+                    if not self._limiter.try_acquire():
+                        return JudgeVerdict(score=self._skip_score, reasoning="judge rate limit exceeded (skipped)")
+                else:  # block until a slot frees
+                    self._limiter.acquire_blocking()
             try:
                 self._ledger.record(self._cost_per_call)
             except BudgetExceededError:
@@ -265,7 +338,13 @@ class BudgetedJudge(Judge):
             attach(client)
 
 
-def build_budgeted_judge(inner: Judge, budget: JudgeBudgetConfig) -> Judge:
+def build_budgeted_judge(
+    inner: Judge,
+    budget: JudgeBudgetConfig,
+    *,
+    clock: Callable[[], float] | None = None,
+    sleeper: Callable[[float], None] | None = None,
+) -> Judge:
     """Wrap ``inner`` in a :class:`BudgetedJudge` from a ``JudgeBudgetConfig``.
 
     Imports agent_core lazily so the offline path never pulls it in when budgeting
@@ -273,16 +352,32 @@ def build_budgeted_judge(inner: Judge, budget: JudgeBudgetConfig) -> Judge:
     ``on_exceeded`` attributes (an ``eval_harness.config.models.JudgeBudgetConfig``).
     The ledger is constructed with ``reserve_fraction=0`` so the cap is fully
     spendable, and spend is recorded against the cap.
+
+    When ``budget.max_per_window`` / ``window_seconds`` are set, a sliding-window
+    rate limiter (F-030) is also attached. ``clock``/``sleeper`` are injectable for
+    determinism in tests and default to ``time.monotonic`` / ``time.sleep``.
     """
     from agent_core import BudgetConfig, BudgetLedger, FrameworkConfig
 
     if budget.cap is None:
         raise ValueError("JudgeBudgetConfig.cap must be set (> 0) when the judge budget is enabled")
     ledger = BudgetLedger(FrameworkConfig(budget=BudgetConfig(cap_units=float(budget.cap), reserve_fraction=0.0)))
+
+    limiter: _SlidingWindowLimiter | None = None
+    if budget.max_per_window is not None and budget.window_seconds is not None:
+        limiter = _SlidingWindowLimiter(
+            budget.max_per_window,
+            budget.window_seconds,
+            clock=clock or time.monotonic,
+            sleeper=sleeper or time.sleep,
+        )
+
     return BudgetedJudge(
         inner,
         ledger,
         cost_per_call=budget.cost_per_call,
         on_exceeded=budget.on_exceeded,
         skip_score=budget.skip_score,
+        limiter=limiter,
+        on_rate_limited=budget.on_rate_limited,
     )
