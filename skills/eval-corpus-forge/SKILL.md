@@ -3,6 +3,7 @@ name: eval-corpus-forge
 description: 'Build, validate, and package reusable evaluation datasets for agent and LLM systems from prompts, traces, tool-call logs, metadata, and expected outcomes. Use this when the user asks to gather eval data, create benchmark datasets, normalize traces, define reusable ground truth, bootstrap eval suites, or produce retrieval, tool-invocation, response, or end-to-end evaluation artifacts.'
 validator_version: '2.0'
 compatibility: python>=3.10
+version: 1.0.0
 ---
 
 # Eval Corpus Forge

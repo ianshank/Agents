@@ -332,3 +332,79 @@ features:
     implemented_in: null
     depends_on: ["F-001"]
     notes: "pyarrow is an optional dependency — ParquetDataset raises a descriptive ImportError if missing."
+
+  - id: "F-023"
+    epic: "Skills Framework"
+    name: "Skill marketplace registry with versioned SKILL.md validation"
+    description: "Adds a centralized, schema-validated skill registry (skills/marketplace.yaml + marketplace.schema.json) and a scripts/skill_marketplace.py CLI (validate/verify/list). The CLI reuses scripts/validate_skill.py read-only (parse_frontmatter, check_structural) and enforces marketplace rules on top: a semver 'version' in each SKILL.md frontmatter that matches the registry entry, matching and unique names, and a real skill directory. Existing skills gain an additive 'version:' frontmatter key."
+    category: "infrastructure"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "skills/marketplace.yaml parses and validates against marketplace.schema.json"
+      - "every registered skill exists and passes validate_skill.check_structural"
+      - "SKILL.md frontmatter 'version' is enforced as semver and must match the registry entry"
+      - "duplicate names, name/version mismatches, and missing paths are reported"
+      - "validate_skill default mode is unchanged (no 'version' requirement); the drift guard stays green"
+    validation_command: "python scripts/validations/F_023.py"
+    implemented_in: null
+    depends_on: ["F-003"]
+    notes: "validate_skill.py is reused read-only (not edited), so the skill-script drift guard is unaffected. Semver enforcement lives in skill_marketplace.py. Tooling under scripts/ (93% branch coverage, above the 85% tooling floor)."
+
+  - id: "F-022"
+    epic: "Judge"
+    name: "Judge budget cap (per-run token/request budget)"
+    description: "Adds BudgetedJudge + build_budgeted_judge in agent_core_adapter that wrap a Judge with a cumulative per-run cost cap enforced via agent_core.BudgetLedger. Each evaluate reserves cost_per_call before delegating, under a lock, so the cap holds under parallel execution; on exhaustion it raises BudgetExceededError or returns a sentinel verdict per on_exceeded. Wired in EvalEngine.from_config behind the optional JudgeBudgetConfig (default-off)."
+    category: "non-functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "BudgetedJudge admits calls under the cap and raises BudgetExceededError once exhausted"
+      - "ledger built with reserve_fraction=0 so usable budget equals the configured cap"
+      - "on_exceeded='skip' returns a sentinel verdict instead of raising"
+      - "parallel execution never exceeds the cap and never retroactively rejects an admitted call"
+      - "judge is wrapped only when JudgeBudgetConfig.enabled; absent/disabled leaves the judge and offline deps unchanged"
+    validation_command: "python scripts/validations/F_022.py"
+    implemented_in: null
+    depends_on: ["F-002"]
+    notes: "Reuses agent_core.BudgetLedger (no reimplementation). Cumulative budget cap, not time-windowed rate limiting (deferred). No live token signal exists at the judge call site, so cost_per_call is a configured per-call estimate. agent_core imported lazily; the offline path stays dependency-free. SCHEMA_VERSION unchanged (judge_budget is optional)."
+
+  - id: "F-020"
+    epic: "Scoring"
+    name: "Weighted / ensemble scoring"
+    description: "Adds CompositeScorer (registered as 'weighted' with aliases 'composite'/'ensemble') that owns child scorers built from the registry and combines their values as a weight-normalised mean into one ScoreResult, recording the per-child breakdown in ScoreResult.metadata. RunResult.to_dict now serialises score metadata so the breakdown reaches the JSON/HTML sinks."
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "weighted scorer registered with aliases composite/ensemble"
+      - "weighted mean of child values computed from configured weights (default 1.0)"
+      - "per-child breakdown stored in ScoreResult.metadata['components']"
+      - "pass_threshold drives the composite passed flag; absent threshold aggregates child verdicts"
+      - "composite breakdown survives RunResult.to_dict() round-trip; existing scorers unchanged"
+    validation_command: "python scripts/validations/F_020.py"
+    implemented_in: null
+    depends_on: ["F-001"]
+    notes: "Children built once at construction via SCORERS.create; an llm_judge child still receives ctx.judge. Configured via ComponentSpec params; no config-schema change, SCHEMA_VERSION unchanged. to_dict gains an additive 'metadata' key per score (backwards-compatible)."
+
+  - id: "F-021"
+    epic: "Reporting"
+    name: "HTML dashboard export sink"
+    description: "Adds HtmlFileSink (registered as 'html_file' with alias 'html') that renders a RunResult into a single self-contained, deterministic HTML report (inline CSS + inline SVG, no external assets or CDN). Reuses the dependency-free string-built rendering approach from behavioral-regression's report.to_html."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "html_file sink registered with alias 'html'"
+      - "emit writes a single self-contained HTML file with no external script/link/@import/url(http) references"
+      - "report contains the run_id and each aggregate score name"
+      - "rendering the same RunResult twice is byte-identical (determinism)"
+      - "pass_rate=None renders 'n/a'; user output is HTML-escaped; existing sinks unchanged"
+    validation_command: "python scripts/validations/F_021.py"
+    implemented_in: null
+    depends_on: ["F-001"]
+    notes: "Pure ResultSink plugin configured via ComponentSpec params (path/title/embed_items/bar_width_px); no config-schema change, SCHEMA_VERSION unchanged. Soft data-dependency on F-020 for composite breakdown rows."

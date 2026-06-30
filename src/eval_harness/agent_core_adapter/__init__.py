@@ -24,11 +24,18 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from eval_harness.core.interfaces import Judge
-from eval_harness.core.types import EvalItem
+from eval_harness.core.types import EvalItem, JudgeVerdict
+
+if TYPE_CHECKING:
+    from agent_core import BudgetLedger
+
+    from eval_harness.config.models import JudgeBudgetConfig
 
 try:
     from agent_core.protocols import CycleResult, CycleState
@@ -40,9 +47,11 @@ except ImportError as _exc:  # pragma: no cover
 
 __all__ = [
     "AdapterConfig",
+    "BudgetedJudge",
     "FixedCostEstimator",
     "HarnessJudgeRunner",
     "ItemStore",
+    "build_budgeted_judge",
 ]
 
 log = logging.getLogger(__name__)
@@ -197,3 +206,83 @@ class FixedCostEstimator:
 
     def project(self, state: CycleState) -> float:
         return len(state.unresolved) * self._config.tokens_per_claim * self._config.per_token_rate
+
+
+class BudgetedJudge(Judge):
+    """Wraps a :class:`Judge` with a cumulative per-run cost cap (F-022).
+
+    Each :meth:`evaluate` **reserves** ``cost_per_call`` against an injected
+    ``agent_core.BudgetLedger`` *before* delegating to the inner judge. The
+    reservation happens under a lock, so under parallel item execution the cap is
+    never overshot and no in-flight call is retroactively rejected — the inner
+    judge call itself runs outside the lock and still parallelises. When the cap
+    is exhausted the wrapper either re-raises ``BudgetExceededError`` or returns a
+    sentinel verdict, per ``on_exceeded``.
+
+    This is a cumulative budget cap, not a time-windowed rate limit. ``ledger`` is
+    built with ``reserve_fraction=0`` by :func:`build_budgeted_judge` so the
+    configured cap maps 1:1 to spendable units. All tunables are injected; nothing
+    is hard-coded.
+    """
+
+    def __init__(
+        self,
+        inner: Judge,
+        ledger: BudgetLedger,
+        cost_per_call: float,
+        on_exceeded: str = "raise",
+        skip_score: float = 0.0,
+    ) -> None:
+        if on_exceeded not in ("raise", "skip"):
+            raise ValueError("on_exceeded must be 'raise' or 'skip'")
+        self._inner = inner
+        self._ledger = ledger
+        self._cost_per_call = float(cost_per_call)
+        self._on_exceeded = on_exceeded
+        # Sentinel verdict score when the budget is exhausted and on_exceeded='skip'.
+        # Defaults to the same 0.0 fail-safe the OpenAI/Anthropic judges use for an
+        # unparseable response; overridable via JudgeBudgetConfig.skip_score.
+        self._skip_score = float(skip_score)
+        self._lock = threading.Lock()
+
+    def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict:
+        from agent_core import BudgetExceededError
+
+        with self._lock:
+            try:
+                self._ledger.record(self._cost_per_call)
+            except BudgetExceededError:
+                if self._on_exceeded == "skip":
+                    return JudgeVerdict(score=self._skip_score, reasoning="judge budget exhausted (skipped)")
+                raise
+        # Budget reserved; call outside the lock so judge calls still parallelise.
+        return self._inner.evaluate(prompt, context)
+
+    def attach_client(self, client: object) -> None:
+        """Delegate client attachment to the inner judge if it supports it."""
+        attach = getattr(self._inner, "attach_client", None)
+        if callable(attach):
+            attach(client)
+
+
+def build_budgeted_judge(inner: Judge, budget: JudgeBudgetConfig) -> Judge:
+    """Wrap ``inner`` in a :class:`BudgetedJudge` from a ``JudgeBudgetConfig``.
+
+    Imports agent_core lazily so the offline path never pulls it in when budgeting
+    is disabled. ``budget`` must have ``cap`` (> 0), ``cost_per_call`` and
+    ``on_exceeded`` attributes (an ``eval_harness.config.models.JudgeBudgetConfig``).
+    The ledger is constructed with ``reserve_fraction=0`` so the cap is fully
+    spendable, and spend is recorded against the cap.
+    """
+    from agent_core import BudgetConfig, BudgetLedger, FrameworkConfig
+
+    if budget.cap is None:
+        raise ValueError("JudgeBudgetConfig.cap must be set (> 0) when the judge budget is enabled")
+    ledger = BudgetLedger(FrameworkConfig(budget=BudgetConfig(cap_units=float(budget.cap), reserve_fraction=0.0)))
+    return BudgetedJudge(
+        inner,
+        ledger,
+        cost_per_call=budget.cost_per_call,
+        on_exceeded=budget.on_exceeded,
+        skip_score=budget.skip_score,
+    )

@@ -20,6 +20,7 @@ C4Component
     Component(targets, "targets", "Component")
 
     Rel(agent_core_adapter, agent_core, "")
+    Rel(agent_core_adapter, config, "")
     Rel(agent_core_adapter, core, "")
     Rel(behavioral_regression, agent_core, "")
     Rel(behavioral_regression, flow_corpus, "")
@@ -31,6 +32,7 @@ C4Component
     Rel(datasets, core, "")
     Rel(datasets, langfuse_client, "")
     Rel(datasets, plugins, "")
+    Rel(engine, agent_core_adapter, "")
     Rel(engine, config, "")
     Rel(engine, core, "")
     Rel(engine, langfuse_client, "")

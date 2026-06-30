@@ -6,13 +6,10 @@ import json
 import re
 from typing import Any
 
+from ..core._serialize import as_text as _as_text
 from ..core.interfaces import Scorer
 from ..core.types import EvalItem, RunContext, ScoreResult, TargetOutput
 from ..plugins import SCORERS
-
-
-def _as_text(value: Any) -> str:
-    return value if isinstance(value, str) else json.dumps(value, sort_keys=True, default=str)
 
 
 @SCORERS.register("exact_match", aliases=("exact",))
@@ -97,6 +94,82 @@ class JsonKeysScorer(Scorer):
             value=value,
             passed=value == 1.0,
             comment=None if not missing else f"missing keys: {missing}",
+        )
+
+
+@SCORERS.register("weighted", aliases=("composite", "ensemble"))
+class CompositeScorer(Scorer):
+    """Combines several child scorers into one weighted composite score.
+
+    Each ``components`` entry is ``{type, params?, weight?, name?}``. Children are
+    built once at construction via the same registry the engine uses, so an
+    ``llm_judge`` child still receives ``ctx.judge`` when scored. The composite
+    value is the weight-normalised mean of child values
+    (``Σ wᵢ·vᵢ / Σ wᵢ``); the per-child breakdown is recorded in
+    ``ScoreResult.metadata['components']``. Nothing is hardcoded — weights and the
+    optional ``pass_threshold`` come from config; omitted weights default to 1.0.
+    """
+
+    default_name = "weighted"
+
+    _STRATEGIES = ("weighted_mean",)
+
+    def __init__(
+        self,
+        name: str | None = None,
+        components: list[dict] | None = None,
+        strategy: str = "weighted_mean",
+        pass_threshold: float | None = None,
+    ):
+        super().__init__(name)
+        if strategy not in self._STRATEGIES:
+            raise ValueError(f"unknown strategy {strategy!r}; supported: {list(self._STRATEGIES)}")
+        self.strategy = strategy
+        self.pass_threshold = None if pass_threshold is None else float(pass_threshold)
+        specs = components or []
+        if not specs:
+            raise ValueError("CompositeScorer requires at least one component")
+        # Build children once; record the resolved label and weight alongside.
+        self._children: list[tuple[str, float, Scorer]] = []
+        for spec in specs:
+            if not isinstance(spec, dict):
+                raise ValueError(f"each CompositeScorer component must be a mapping; got {type(spec).__name__}")
+            ctype = spec.get("type")
+            if not ctype:
+                raise ValueError("each CompositeScorer component must specify a 'type'")
+            child = SCORERS.create(ctype, spec.get("params", {}))
+            label = spec.get("name") or child.name
+            weight = float(spec.get("weight", 1.0))
+            if weight < 0:
+                raise ValueError(f"component weight must be >= 0; got {weight} for {label!r}")
+            self._children.append((label, weight, child))
+        if sum(w for _, w, _ in self._children) <= 0:
+            raise ValueError("CompositeScorer total weight must be > 0")
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        breakdown: list[dict[str, Any]] = []
+        weighted_sum = 0.0
+        total_weight = 0.0
+        child_passed: list[bool | None] = []
+        for label, weight, child in self._children:
+            res = child.score(item, output, ctx)
+            weighted_sum += weight * res.value
+            total_weight += weight
+            child_passed.append(res.passed)
+            breakdown.append({"name": label, "value": res.value, "weight": weight, "passed": res.passed})
+        value = weighted_sum / total_weight  # total_weight > 0 guaranteed in __init__
+        if self.pass_threshold is not None:
+            passed: bool | None = value >= self.pass_threshold
+        else:
+            # No explicit threshold: composite passes only if every child that
+            # reported a pass/fail verdict passed (None verdicts are ignored).
+            verdicts = [p for p in child_passed if p is not None]
+            passed = all(verdicts) if verdicts else None
+        return ScoreResult(
+            self.name,
+            value=value,
+            passed=passed,
+            metadata={"strategy": self.strategy, "components": breakdown},
         )
 
 

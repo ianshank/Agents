@@ -101,6 +101,13 @@ class EvalEngine:
                 if component is not None and hasattr(component, "attach_client"):
                     component.attach_client(langfuse_client)
 
+        # Wrap the judge with a cost cap when enabled (F-022). Imported lazily so
+        # the offline path never pulls in agent_core unless budgeting is on.
+        if judge is not None and config.judge_budget is not None and config.judge_budget.enabled:
+            from .agent_core_adapter import build_budgeted_judge
+
+            judge = build_budgeted_judge(judge, config.judge_budget)
+
         engine = cls(
             config,
             dataset=dataset,

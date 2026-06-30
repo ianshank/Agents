@@ -97,6 +97,7 @@ class RunResult:
                             "value": s.value,
                             "passed": s.passed,
                             "comment": s.comment,
+                            "metadata": s.metadata,
                         }
                         for s in ir.scores
                     ],

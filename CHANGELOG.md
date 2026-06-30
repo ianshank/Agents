@@ -4,6 +4,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0-dev] — Unreleased
+
+### Hardening
+- **Enforced ≥85% coverage on all new tooling:** `scripts/skill_marketplace.py` and the
+  `scripts/validations/F_020..F_023.py` validators are now coverage-gated in the quality-gates
+  tooling step (previously run but unmeasured, since the library coverage omits `scripts/`). Added
+  `tests/test_validation_scripts.py` to exercise each validator's `main()` and the shared helper.
+- **De-duplicated `_as_text`** into `eval_harness.core._serialize.as_text`, reused by both the
+  scorers and the HTML sink instead of two copies.
+- **Single-sourced validator boilerplate** into `scripts/validations/_common.py`
+  (`configure_logging` reuse, `check`, `report`), removing the per-script `logging.basicConfig`
+  and `_check`/summary duplication.
+- **Configurable budget sentinel:** `BudgetedJudge`'s budget-exhausted score is now
+  `JudgeBudgetConfig.skip_score` (default 0.0, backwards-compatible) instead of a hardcoded
+  literal; the HTML sink palette is hoisted to named class constants.
+
+### Added
+- **Skill marketplace (F-023):** new centralized, schema-validated skill registry
+  (`skills/marketplace.yaml` + `skills/marketplace.schema.json`) and a
+  `scripts/skill_marketplace.py` CLI (`validate`/`verify`/`list`). The CLI reuses
+  `scripts/validate_skill.py` **read-only** (`parse_frontmatter`, `check_structural`) and adds
+  marketplace rules on top: a semver `version` in each `SKILL.md` frontmatter that matches the
+  registry entry, matching and unique names, and a real skill directory. Existing skills gain an
+  additive `version:` frontmatter key. `validate_skill.py` is not modified, so the skill-script
+  drift guard is unaffected.
+- **Judge budget cap (F-022):** new `BudgetedJudge` + `build_budgeted_judge` in
+  `agent_core_adapter` wrap a `Judge` with a cumulative per-run cost cap enforced via the
+  existing `agent_core.BudgetLedger` (no reimplementation). Each `evaluate` **reserves**
+  `cost_per_call` before delegating, under a lock, so the cap holds under parallel execution and
+  no admitted call is retroactively rejected. On exhaustion it raises `BudgetExceededError` or
+  returns a sentinel verdict, per `on_exceeded`. Configured via the optional, default-off
+  `JudgeBudgetConfig` and wired in `EvalEngine.from_config`; agent_core is imported lazily so the
+  offline path stays dependency-free. This is a cumulative budget cap, not time-windowed rate
+  limiting (deferred); since no live token signal exists at the judge call site, `cost_per_call`
+  is a configured per-call estimate. `SCHEMA_VERSION` unchanged.
+- **Weighted / ensemble scoring (F-020):** new `CompositeScorer` (registered as `weighted`,
+  aliases `composite`/`ensemble`) owns child scorers built once from the registry and combines
+  their values as a weight-normalised mean (`Σ wᵢ·vᵢ / Σ wᵢ`) into one `ScoreResult`, recording
+  the per-child breakdown in `ScoreResult.metadata['components']`. An `llm_judge` child still
+  receives `ctx.judge`. `pass_threshold` drives the composite pass flag; without it the composite
+  aggregates child verdicts. Configured via `ComponentSpec` params — no config-schema change,
+  `SCHEMA_VERSION` unchanged.
+- **Score metadata now serialised:** `RunResult.to_dict()` gains an additive per-score
+  `metadata` key so the composite breakdown (and any scorer metadata) reaches the JSON/HTML
+  sinks. Backwards-compatible — existing keys are unchanged.
+- **HTML dashboard export sink (F-021):** new `HtmlFileSink` (registered as `html_file`,
+  alias `html`) renders a `RunResult` into a single self-contained HTML report — inline CSS
+  and inline-SVG metric bars, no external assets or CDN links. Output is a pure function of the
+  `RunResult` (byte-identical for a fixed run); user output is HTML-escaped; `pass_rate=None`
+  renders `n/a`. Configured via existing `ComponentSpec` params (`path`/`title`/`embed_items`/
+  `bar_width_px`) — no config-schema change, `SCHEMA_VERSION` unchanged. Reuses the
+  dependency-free string-built rendering approach from `behavioral_regression.report.to_html`.
+
 ## [1.2.0-dev] — Unreleased
 
 ### Tech-debt cleanup

@@ -2,6 +2,7 @@
 name: architecture-drift-guard
 description: Detect and block architecture drift in CI by comparing a codebase's actual Python import graph against a declared C4 component model. Use this whenever the user wants to enforce architecture in CI/CD, fail builds on undocumented dependencies, keep C4/Mermaid diagrams in sync with code, set up architecture tests or fitness functions, prevent layering violations, or guard/lint/gate their architecture — even if they don't name C4 or Mermaid explicitly. Also use it to bootstrap an architecture manifest from an existing repo or to remediate a failing drift check.
 compatibility: python>=3.10, grimp, pyyaml
+version: 1.0.0
 ---
 
 # Architecture Drift Guard — E2E Action Skill

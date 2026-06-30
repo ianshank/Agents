@@ -72,6 +72,22 @@ class TestConfigWithoutBudget:
         assert "quality" in run.aggregate
 
 
+class TestConfigWithoutJudgeBudget:
+    """Config YAML without the F-022 judge_budget field parses with default None."""
+
+    def test_judge_budget_defaults_to_none(self):
+        config = load_config_dict(dict(_LEGACY_CONFIG))
+        assert config.judge_budget is None
+
+    def test_engine_judge_unwrapped_without_budget(self):
+        cfg = dict(_LEGACY_CONFIG)
+        cfg["judge"] = {"type": "mock", "params": {}}
+        config = load_config_dict(cfg)
+        engine = EvalEngine.from_config(config, langfuse_client=NullLangfuseClient())
+        # No agent_core import path taken; judge is the bare mock judge.
+        assert type(engine.judge).__name__ == "MockJudge"
+
+
 class TestLegacyConfigMigration:
     """Configs at older schema versions still migrate and parse."""
 

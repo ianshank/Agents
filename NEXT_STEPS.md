@@ -52,12 +52,16 @@
 
 ## Medium Term (v1.3.0)
 
-- [ ] **Skill Marketplace** — Centralized registry for community-contributed
-  skills with versioned SKILL.md validation.
-- [ ] **Weighted/Ensemble Scoring** — Support composite scores from multiple
-  scorers with configurable weights.
-- [ ] **Dashboard Export** — Rich HTML report generation from `RunResult`.
-- [ ] **Rate Limit Budget** — Configurable token/request budgets for judge calls.
+- [x] **Skill Marketplace** — Centralized registry for community-contributed
+  skills with versioned SKILL.md validation (F-023: `skills/marketplace.yaml` +
+  schema + `scripts/skill_marketplace.py`, reusing `validate_skill.py` read-only).
+- [x] **Weighted/Ensemble Scoring** — Support composite scores from multiple
+  scorers with configurable weights (F-020: `weighted` CompositeScorer).
+- [x] **Dashboard Export** — Rich HTML report generation from `RunResult`
+  (F-021: self-contained `html_file` sink, inline SVG, deterministic).
+- [x] **Rate Limit Budget** — Configurable token/request budgets for judge calls
+  (F-022: `JudgeBudgetConfig` + `BudgetedJudge`, cumulative cap via agent_core
+  `BudgetLedger`; time-windowed throttling deferred).
 
 ## Long Term
 
