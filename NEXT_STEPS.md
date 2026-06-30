@@ -76,8 +76,11 @@
   reusing `EvalEngine` per model, the shared `compare_metric` primitive, a
   self-contained HTML/JSON report, and an `eval-harness compare` CLI; ADR 0011).
   Note: a real model-backed target (beyond echo/callable) is a follow-up.
-- [ ] **A/B Eval Campaigns** — Persistent eval campaigns with statistical
-  significance testing.
+- [x] **A/B Eval Campaigns** — Persistent eval campaigns with statistical
+  significance testing (F-025: `ABCampaignConfig` + `CampaignStore` accumulating
+  per-arm counts across runs, `analyze` deciding via `agent_core.wilson_interval`
+  with an explicit can't-tell-below-power bucket, and an `eval-harness campaign`
+  CLI; ADR 0012).
 - [x] **Langfuse Prompt Management** — Pull judge prompts from the Langfuse prompt
   registry instead of config YAML (F-026: `PromptSourceConfig` + `resolve_prompt`
   + `LangfuseClient.get_prompt`, additive `EvalConfig.judge_prompt`, YAML fallback;

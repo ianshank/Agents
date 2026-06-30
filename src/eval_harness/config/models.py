@@ -182,6 +182,30 @@ class ComparisonConfig(BaseModel):
         return self
 
 
+class ABCampaignConfig(BaseModel):
+    """Persistent A/B eval campaign with statistical-significance testing (F-025).
+
+    Two named arms (reusing ``ModelSpec``) are run over the same dataset/scorers;
+    per-arm pass/total counts for ``score`` accumulate across runs in a store, and
+    significance is decided from agent_core Wilson intervals — never claimed below
+    the ``min_sample`` power floor. Additive/optional, so ``SCHEMA_VERSION`` is
+    unchanged.
+    """
+
+    campaign_id: str
+    arm_a: ModelSpec
+    arm_b: ModelSpec
+    score: str
+    wilson_z: float = Field(default=1.96, gt=0)
+    min_sample: int = Field(default=30, ge=1)
+
+    @model_validator(mode="after")
+    def _distinct_arms(self) -> ABCampaignConfig:
+        if self.arm_a.name == self.arm_b.name:
+            raise ValueError("ab_campaign arm_a and arm_b must have distinct names")
+        return self
+
+
 class EvalConfig(BaseModel):
     schema_version: str
     run: RunSettings = Field(default_factory=RunSettings)
@@ -194,6 +218,7 @@ class EvalConfig(BaseModel):
     sinks: list[ComponentSpec] = Field(default_factory=list)
     gate: GateConfig | None = None
     comparison: ComparisonConfig | None = None
+    ab_campaign: ABCampaignConfig | None = None
 
     @field_validator("schema_version")
     @classmethod

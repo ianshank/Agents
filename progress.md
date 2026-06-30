@@ -1,6 +1,34 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 010 — 2026-06-30
+
+### Features
+- F-025 (A/B eval campaigns): persistent campaigns with statistical-significance
+  testing; status todo → done
+
+### Changes
+- eval_harness: new `campaign.py` — `ABCampaignConfig` (two ModelSpec arms, score,
+  wilson_z, min_sample), append-only `CampaignStore` (OutcomeStore JSONL pattern),
+  `record_run` (runs both arms via EvalEngine, appends per-arm counts), `analyze`
+  (accumulates counts, decides via `agent_core.calibration.wilson_interval`:
+  cant_tell below power, a/b_better only when powered + disjoint CIs, else
+  no_difference), `CampaignResult.to_dict/to_html`
+- eval_harness config: additive `ABCampaignConfig` + optional `EvalConfig.ab_campaign`
+  (SCHEMA_VERSION unchanged)
+- eval_harness CLI: `eval-harness campaign --mode record|analyze`
+- ADR 0012; F_025 validator (offline); tests/test_campaign.py
+
+### Validation evidence
+- `python scripts/validations/F_025.py` exits 0 (offline)
+- eval_harness: `pytest --cov=eval_harness --cov-fail-under=96` → 96.8%
+  (campaign.py 99%); ruff + format clean; mypy clean on new module; drift_check
+  still matches the manifest (reuses agent_core via the permitted edge, no
+  flow_corpus import — airgap preserved)
+
+### Next
+- Track 5 step 3 (optional): a marketplace skill wrapping F-024/F-025
+
 ## Session 009 — 2026-06-30
 
 ### Features

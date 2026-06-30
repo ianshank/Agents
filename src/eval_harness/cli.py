@@ -54,6 +54,15 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--html", dest="html_out", help="write the comparison report here (HTML)")
     compare.add_argument("--json", dest="json_out", help="write the comparison result here (JSON)")
 
+    campaign = sub.add_parser("campaign", help="run or analyze an A/B eval campaign (config 'ab_campaign' block)")
+    campaign.add_argument("--config", required=True, help="path to the eval config YAML")
+    campaign.add_argument("--store", required=True, help="append-only JSONL campaign store")
+    campaign.add_argument("--mode", choices=["record", "analyze"], default="record")
+    campaign.add_argument("--set", dest="overrides", action="append", default=[], metavar="KEY.PATH=VALUE")
+    campaign.add_argument("--offline", action="store_true", help="use an in-memory Langfuse client")
+    campaign.add_argument("--html", dest="html_out", help="write the analysis report here (HTML)")
+    campaign.add_argument("--json", dest="json_out", help="write the analysis result here (JSON)")
+
     sub.add_parser("list-plugins", help="list all registered components")
     return parser
 
@@ -112,6 +121,39 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_campaign(args: argparse.Namespace) -> int:
+    import json as _json
+
+    from .campaign import CampaignStore, analyze, record_run
+
+    config = load_config(args.config, overrides=args.overrides)
+    if config.ab_campaign is None:
+        print("ERROR: config has no 'ab_campaign' block; nothing to run", file=sys.stderr)
+        return 2
+    store = CampaignStore(args.store)
+
+    if args.mode == "record":
+        client: LangfuseClient = NullLangfuseClient()
+        if not args.offline:
+            from .langfuse_client import SDKLangfuseClient
+
+            client = SDKLangfuseClient()
+        recs = record_run(store, config, langfuse_client=client)
+        for r in recs:
+            print(f"recorded {r.arm}: {r.successes}/{r.n} on {r.score}")
+        return 0
+
+    result = analyze(store, config.ab_campaign)
+    if args.html_out:
+        with open(args.html_out, "w", encoding="utf-8") as fh:
+            fh.write(result.to_html())
+    if args.json_out:
+        with open(args.json_out, "w", encoding="utf-8") as fh:
+            _json.dump(result.to_dict(), fh, indent=2, sort_keys=True)
+    print(f"decision: {result.decision.value} (delta={result.delta})")
+    return 0
+
+
 def _cmd_list(_: argparse.Namespace) -> int:
     from .plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS
 
@@ -127,6 +169,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_run(args)
     if args.command == "compare":
         return _cmd_compare(args)
+    if args.command == "campaign":
+        return _cmd_campaign(args)
     if args.command == "list-plugins":
         return _cmd_list(args)
     return 2  # pragma: no cover - argparse enforces a command
