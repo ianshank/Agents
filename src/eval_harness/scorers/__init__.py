@@ -6,13 +6,10 @@ import json
 import re
 from typing import Any
 
+from ..core._serialize import as_text as _as_text
 from ..core.interfaces import Scorer
 from ..core.types import EvalItem, RunContext, ScoreResult, TargetOutput
 from ..plugins import SCORERS
-
-
-def _as_text(value: Any) -> str:
-    return value if isinstance(value, str) else json.dumps(value, sort_keys=True, default=str)
 
 
 @SCORERS.register("exact_match", aliases=("exact",))

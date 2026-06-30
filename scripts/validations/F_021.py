@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validation script for F-021 — HTML dashboard export sink.
+"""Validation script for F-021 - HTML dashboard export sink.
 
 Checks:
     1. ``HtmlFileSink`` is registered as ``"html_file"`` with alias ``"html"``.
@@ -9,34 +9,29 @@ Checks:
     5. Existing sinks (console, json_file, langfuse) are still registered.
 
 Exit codes:
-    0 – all checks passed
-    1 – one or more checks failed
+    0 - all checks passed
+    1 - one or more checks failed
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import re
 import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import check as _check
+from _common import configure_logging, report
 
 logger = logging.getLogger(__name__)
 
-# Markers for *external* resource references — the SVG xmlns namespace URI
+# Markers for *external* resource references - the SVG xmlns namespace URI
 # (http://www.w3.org/2000/svg) is NOT an external fetch, so it is excluded.
 _EXTERNAL_RESOURCE = re.compile(r"""(<script[^>]*\ssrc=|<link[^>]*\shref=|@import|url\(\s*['"]?https?:)""", re.I)
-
-
-def _check(condition: bool, msg: str, errors: List[str]) -> bool:
-    if not condition:
-        errors.append(msg)
-        logger.error("FAIL: %s", msg)
-        return False
-    logger.info("OK: %s", msg)
-    return True
 
 
 def _sample_run():
@@ -66,8 +61,8 @@ def _sample_run():
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(name)s: %(message)s")
-    errors: List[str] = []
+    configure_logging()
+    errors: list[str] = []
 
     try:
         from eval_harness.plugins import SINKS, bootstrap
@@ -105,20 +100,14 @@ def main() -> int:
             second = sink.render(run)
             _check(second == text, "same RunResult renders byte-identically", errors)
     except Exception as exc:
-        errors.append("HtmlFileSink emit/render failed: %s" % exc)
+        errors.append(f"HtmlFileSink emit/render failed: {exc}")
         logger.error("HtmlFileSink emit/render failed: %s", exc)
 
     # 5. existing sinks intact
     for name in ("console", "json_file", "langfuse"):
-        _check(name in SINKS, "existing sink '%s' still registered" % name, errors)
+        _check(name in SINKS, f"existing sink '{name}' still registered", errors)
 
-    if errors:
-        logger.error("F-021 FAILED with %d error(s):", len(errors))
-        for err in errors:
-            logger.error("  • %s", err)
-        return 1
-    logger.info("F-021 passed ✓")
-    return 0
+    return report(logger, "F-021", errors)
 
 
 if __name__ == "__main__":

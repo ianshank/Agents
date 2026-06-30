@@ -72,6 +72,12 @@ class JudgeBudgetConfig(BaseModel):
         ),
     )
     on_exceeded: str = "raise"  # "raise" | "skip"
+    skip_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Sentinel verdict score returned when the budget is exhausted and on_exceeded='skip'.",
+    )
 
     @field_validator("on_exceeded")
     @classmethod

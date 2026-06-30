@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validation script for F-020 — Weighted / ensemble scoring.
+"""Validation script for F-020 - Weighted / ensemble scoring.
 
 Checks:
     1. ``CompositeScorer`` is registered as ``"weighted"`` with aliases
@@ -10,32 +10,27 @@ Checks:
     5. Existing scorers remain registered.
 
 Exit codes:
-    0 – all checks passed
-    1 – one or more checks failed
+    0 - all checks passed
+    1 - one or more checks failed
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from datetime import datetime, timezone
-from typing import List
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import check as _check
+from _common import configure_logging, report
 
 logger = logging.getLogger(__name__)
 
 
-def _check(condition: bool, msg: str, errors: List[str]) -> bool:
-    if not condition:
-        errors.append(msg)
-        logger.error("FAIL: %s", msg)
-        return False
-    logger.info("OK: %s", msg)
-    return True
-
-
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(name)s: %(message)s")
-    errors: List[str] = []
+    configure_logging()
+    errors: list[str] = []
 
     from eval_harness.core.types import (
         EvalItem,
@@ -99,20 +94,14 @@ def main() -> int:
             errors,
         )
     except Exception as exc:
-        errors.append("CompositeScorer scoring failed: %s" % exc)
+        errors.append(f"CompositeScorer scoring failed: {exc}")
         logger.error("CompositeScorer scoring failed: %s", exc)
 
     # 5. existing scorers intact
     for name in ("exact_match", "regex_match", "contains", "json_keys", "llm_judge"):
-        _check(name in SCORERS, "existing scorer '%s' still registered" % name, errors)
+        _check(name in SCORERS, f"existing scorer '{name}' still registered", errors)
 
-    if errors:
-        logger.error("F-020 FAILED with %d error(s):", len(errors))
-        for err in errors:
-            logger.error("  • %s", err)
-        return 1
-    logger.info("F-020 passed ✓")
-    return 0
+    return report(logger, "F-020", errors)
 
 
 if __name__ == "__main__":

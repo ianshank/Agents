@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validation script for F-023 — Skill Marketplace.
+"""Validation script for F-023 - Skill Marketplace.
 
 Checks:
     1. ``skills/marketplace.yaml`` parses and validates against the schema.
@@ -10,8 +10,8 @@ Checks:
        versionless skill (the marketplace enforces ``version``, not validate_skill).
 
 Exit codes:
-    0 – all checks passed
-    1 – one or more checks failed
+    0 - all checks passed
+    1 - one or more checks failed
 """
 
 from __future__ import annotations
@@ -20,30 +20,23 @@ import logging
 import os
 import sys
 import tempfile
-from typing import List
 
-# Ensure scripts/ is importable when run directly.
+# Ensure scripts/ and this directory are importable when run directly.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _SCRIPTS = os.path.dirname(_HERE)
-for _p in (_SCRIPTS,):
+for _p in (_HERE, _SCRIPTS):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+from _common import check as _check  # noqa: E402
+from _common import configure_logging, report  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 
-def _check(condition: bool, msg: str, errors: List[str]) -> bool:
-    if not condition:
-        errors.append(msg)
-        logger.error("FAIL: %s", msg)
-        return False
-    logger.info("OK: %s", msg)
-    return True
-
-
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(name)s: %(message)s")
-    errors: List[str] = []
+    configure_logging()
+    errors: list[str] = []
 
     import skill_marketplace as mkt
     import validate_skill
@@ -76,13 +69,7 @@ def main() -> int:
         version_required = any("version" in e.lower() for e in struct_errs)
         _check(not version_required, "validate_skill does not require 'version' (default mode unchanged)", errors)
 
-    if errors:
-        logger.error("F-023 FAILED with %d error(s):", len(errors))
-        for err in errors:
-            logger.error("  • %s", err)
-        return 1
-    logger.info("F-023 passed ✓")
-    return 0
+    return report(logger, "F-023", errors)
 
 
 if __name__ == "__main__":

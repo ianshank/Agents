@@ -225,17 +225,13 @@ class BudgetedJudge(Judge):
     is hard-coded.
     """
 
-    #: Score returned by the sentinel verdict when the budget is exhausted and
-    #: ``on_exceeded='skip'``. A 0.0 verdict is the same fail-safe value the
-    #: OpenAI/Anthropic judges use for an unparseable response.
-    _SKIP_SCORE = 0.0
-
     def __init__(
         self,
         inner: Judge,
         ledger: BudgetLedger,
         cost_per_call: float,
         on_exceeded: str = "raise",
+        skip_score: float = 0.0,
     ) -> None:
         if on_exceeded not in ("raise", "skip"):
             raise ValueError("on_exceeded must be 'raise' or 'skip'")
@@ -243,6 +239,10 @@ class BudgetedJudge(Judge):
         self._ledger = ledger
         self._cost_per_call = float(cost_per_call)
         self._on_exceeded = on_exceeded
+        # Sentinel verdict score when the budget is exhausted and on_exceeded='skip'.
+        # Defaults to the same 0.0 fail-safe the OpenAI/Anthropic judges use for an
+        # unparseable response; overridable via JudgeBudgetConfig.skip_score.
+        self._skip_score = float(skip_score)
         self._lock = threading.Lock()
 
     def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict:
@@ -253,7 +253,7 @@ class BudgetedJudge(Judge):
                 self._ledger.record(self._cost_per_call)
             except BudgetExceededError:
                 if self._on_exceeded == "skip":
-                    return JudgeVerdict(score=self._SKIP_SCORE, reasoning="judge budget exhausted (skipped)")
+                    return JudgeVerdict(score=self._skip_score, reasoning="judge budget exhausted (skipped)")
                 raise
         # Budget reserved; call outside the lock so judge calls still parallelise.
         return self._inner.evaluate(prompt, context)
@@ -284,4 +284,5 @@ def build_budgeted_judge(inner: Judge, budget: JudgeBudgetConfig) -> Judge:
         ledger,
         cost_per_call=budget.cost_per_call,
         on_exceeded=budget.on_exceeded,
+        skip_score=budget.skip_score,
     )

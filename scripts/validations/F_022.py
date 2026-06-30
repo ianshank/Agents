@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validation script for F-022 — Judge Budget Cap.
+"""Validation script for F-022 - Judge Budget Cap.
 
 Checks (skipped gracefully if agent_core is not installed):
     1. A BudgetedJudge admits calls under the cap and raises once it is exhausted.
@@ -8,36 +8,31 @@ Checks (skipped gracefully if agent_core is not installed):
     4. EvalEngine.from_config leaves the judge unwrapped when budgeting is disabled.
 
 Exit codes:
-    0 – all checks passed (or skipped because agent_core is unavailable)
-    1 – one or more checks failed
+    0 - all checks passed (or skipped because agent_core is unavailable)
+    1 - one or more checks failed
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import sys
-from typing import List
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import check as _check
+from _common import configure_logging, report
 
 logger = logging.getLogger(__name__)
 
 
-def _check(condition: bool, msg: str, errors: List[str]) -> bool:
-    if not condition:
-        errors.append(msg)
-        logger.error("FAIL: %s", msg)
-        return False
-    logger.info("OK: %s", msg)
-    return True
-
-
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(name)s: %(message)s")
-    errors: List[str] = []
+    configure_logging()
+    errors: list[str] = []
 
     try:
         import agent_core  # noqa: F401
     except ImportError:
-        logger.warning("agent_core not installed — F-022 validation skipped (lazy-import contract).")
+        logger.warning("agent_core not installed - F-022 validation skipped (lazy-import contract).")
         return 0
 
     from agent_core import BudgetExceededError
@@ -64,7 +59,7 @@ def main() -> int:
             raised = True
         _check(raised, "third call raises BudgetExceededError (cap exhausted)", errors)
     except Exception as exc:
-        errors.append("budgeted judge admission failed: %s" % exc)
+        errors.append(f"budgeted judge admission failed: {exc}")
         logger.error("budgeted judge admission failed: %s", exc)
 
     # 2. reserve_fraction=0 -> usable budget == cap (a cap of 3 admits exactly 3)
@@ -104,13 +99,7 @@ def main() -> int:
     engine_on = EvalEngine.from_config(cfg_on)
     _check(isinstance(engine_on.judge, BudgetedJudge), "judge wrapped when budgeting enabled", errors)
 
-    if errors:
-        logger.error("F-022 FAILED with %d error(s):", len(errors))
-        for err in errors:
-            logger.error("  • %s", err)
-        return 1
-    logger.info("F-022 passed ✓")
-    return 0
+    return report(logger, "F-022", errors)
 
 
 if __name__ == "__main__":

@@ -6,15 +6,11 @@ import html as _html
 import json
 from pathlib import Path
 
+from ..core._serialize import as_text as _as_text
 from ..core.interfaces import ResultSink
 from ..core.types import RunResult
 from ..langfuse_client import LangfuseClient
 from ..plugins import SINKS
-
-
-def _as_text(value: object) -> str:
-    """Render any output value as stable text for display (dicts sorted)."""
-    return value if isinstance(value, str) else json.dumps(value, sort_keys=True, default=str)
 
 
 @SINKS.register("console")
@@ -59,6 +55,14 @@ class HtmlFileSink(ResultSink):
     _DEFAULT_BAR_WIDTH_PX = 280
     _BAR_HEIGHT_PX = 14
 
+    #: Palette — presentation constants (GitHub-light-friendly), single-sourced
+    #: here rather than scattered as inline literals across the CSS/SVG builders.
+    _COLOR_TEXT = "#1b1b1b"
+    _COLOR_BORDER = "#d0d7de"
+    _COLOR_HEADER_BG = "#f6f8fa"
+    _COLOR_BAR_BG = "#eaeef2"
+    _COLOR_BAR_FILL = "#2da44e"
+
     def __init__(
         self,
         path: str,
@@ -95,10 +99,10 @@ class HtmlFileSink(ResultSink):
             '<html lang="en"><head><meta charset="utf-8">'
             f"<title>{esc}</title>"
             "<style>"
-            "body{font-family:system-ui,sans-serif;margin:2rem;color:#1b1b1b}"
+            f"body{{font-family:system-ui,sans-serif;margin:2rem;color:{self._COLOR_TEXT}}}"
             "h1{font-size:1.4rem}table{border-collapse:collapse;margin:1rem 0}"
-            "th,td{border:1px solid #d0d7de;padding:4px 10px;text-align:left;font-size:0.9rem}"
-            "th{background:#f6f8fa}.metric-bar{vertical-align:middle}"
+            f"th,td{{border:1px solid {self._COLOR_BORDER};padding:4px 10px;text-align:left;font-size:0.9rem}}"
+            f"th{{background:{self._COLOR_HEADER_BG}}}.metric-bar{{vertical-align:middle}}"
             "caption{caption-side:top;text-align:left;font-weight:600;margin-bottom:4px}"
             "</style></head><body>"
             f"<h1>{esc}</h1>"
@@ -123,8 +127,8 @@ class HtmlFileSink(ResultSink):
             f'<svg class="metric-bar" width="{self.bar_width_px}" height="{self._BAR_HEIGHT_PX}" '
             f'viewBox="0 0 {self.bar_width_px} {self._BAR_HEIGHT_PX}" '
             'xmlns="http://www.w3.org/2000/svg" role="img">'
-            f'<rect width="{self.bar_width_px}" height="{self._BAR_HEIGHT_PX}" fill="#eaeef2"/>'
-            f'<rect width="{fill:.2f}" height="{self._BAR_HEIGHT_PX}" fill="#2da44e"/></svg>'
+            f'<rect width="{self.bar_width_px}" height="{self._BAR_HEIGHT_PX}" fill="{self._COLOR_BAR_BG}"/>'
+            f'<rect width="{fill:.2f}" height="{self._BAR_HEIGHT_PX}" fill="{self._COLOR_BAR_FILL}"/></svg>'
         )
 
     def _aggregate_table(self, run: RunResult) -> str:

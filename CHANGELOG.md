@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Hardening
+- **Enforced ≥85% coverage on all new tooling:** `scripts/skill_marketplace.py` and the
+  `scripts/validations/F_020..F_023.py` validators are now coverage-gated in the quality-gates
+  tooling step (previously run but unmeasured, since the library coverage omits `scripts/`). Added
+  `tests/test_validation_scripts.py` to exercise each validator's `main()` and the shared helper.
+- **De-duplicated `_as_text`** into `eval_harness.core._serialize.as_text`, reused by both the
+  scorers and the HTML sink instead of two copies.
+- **Single-sourced validator boilerplate** into `scripts/validations/_common.py`
+  (`configure_logging` reuse, `check`, `report`), removing the per-script `logging.basicConfig`
+  and `_check`/summary duplication.
+- **Configurable budget sentinel:** `BudgetedJudge`'s budget-exhausted score is now
+  `JudgeBudgetConfig.skip_score` (default 0.0, backwards-compatible) instead of a hardcoded
+  literal; the HTML sink palette is hoisted to named class constants.
+
 ### Added
 - **Skill marketplace (F-023):** new centralized, schema-validated skill registry
   (`skills/marketplace.yaml` + `skills/marketplace.schema.json`) and a

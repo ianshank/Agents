@@ -63,6 +63,18 @@ def test_on_exceeded_skip_returns_sentinel():
     assert "budget" in sentinel.reasoning
 
 
+def test_skip_score_is_configurable():
+    j = build_budgeted_judge(MockJudge(default_score=0.9), _budget(cap=1.0, on_exceeded="skip", skip_score=0.5))
+    j.evaluate("p")  # consumes the only unit
+    sentinel = j.evaluate("p")
+    assert sentinel.score == 0.5
+
+
+def test_skip_score_out_of_range_rejected_at_config():
+    with pytest.raises(ValueError):
+        JudgeBudgetConfig(enabled=True, cap=1.0, skip_score=1.5)
+
+
 def test_parallel_safety_never_exceeds_cap():
     # C2 regression guard: under concurrency the cap must hold and no call that
     # was admitted should be retroactively rejected.
