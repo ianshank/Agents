@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Weighted / ensemble scoring (F-020):** new `CompositeScorer` (registered as `weighted`,
+  aliases `composite`/`ensemble`) owns child scorers built once from the registry and combines
+  their values as a weight-normalised mean (`Σ wᵢ·vᵢ / Σ wᵢ`) into one `ScoreResult`, recording
+  the per-child breakdown in `ScoreResult.metadata['components']`. An `llm_judge` child still
+  receives `ctx.judge`. `pass_threshold` drives the composite pass flag; without it the composite
+  aggregates child verdicts. Configured via `ComponentSpec` params — no config-schema change,
+  `SCHEMA_VERSION` unchanged.
+- **Score metadata now serialised:** `RunResult.to_dict()` gains an additive per-score
+  `metadata` key so the composite breakdown (and any scorer metadata) reaches the JSON/HTML
+  sinks. Backwards-compatible — existing keys are unchanged.
 - **HTML dashboard export sink (F-021):** new `HtmlFileSink` (registered as `html_file`,
   alias `html`) renders a `RunResult` into a single self-contained HTML report — inline CSS
   and inline-SVG metric bars, no external assets or CDN links. Output is a pure function of the

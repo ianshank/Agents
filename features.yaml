@@ -333,6 +333,25 @@ features:
     depends_on: ["F-001"]
     notes: "pyarrow is an optional dependency — ParquetDataset raises a descriptive ImportError if missing."
 
+  - id: "F-020"
+    epic: "Scoring"
+    name: "Weighted / ensemble scoring"
+    description: "Adds CompositeScorer (registered as 'weighted' with aliases 'composite'/'ensemble') that owns child scorers built from the registry and combines their values as a weight-normalised mean into one ScoreResult, recording the per-child breakdown in ScoreResult.metadata. RunResult.to_dict now serialises score metadata so the breakdown reaches the JSON/HTML sinks."
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "weighted scorer registered with aliases composite/ensemble"
+      - "weighted mean of child values computed from configured weights (default 1.0)"
+      - "per-child breakdown stored in ScoreResult.metadata['components']"
+      - "pass_threshold drives the composite passed flag; absent threshold aggregates child verdicts"
+      - "composite breakdown survives RunResult.to_dict() round-trip; existing scorers unchanged"
+    validation_command: "python scripts/validations/F_020.py"
+    implemented_in: null
+    depends_on: ["F-001"]
+    notes: "Children built once at construction via SCORERS.create; an llm_judge child still receives ctx.judge. Configured via ComponentSpec params; no config-schema change, SCHEMA_VERSION unchanged. to_dict gains an additive 'metadata' key per score (backwards-compatible)."
+
   - id: "F-021"
     epic: "Reporting"
     name: "HTML dashboard export sink"
