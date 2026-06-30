@@ -161,14 +161,16 @@ features:
     description: "agent_core merge-gate subsystem: deterministic decide() (mechanical ground truth -> protected-path escalate -> risk-derived tau + calibrator health + Wilson floor), an append-only OutcomeStore with per-domain models built from HUMAN_AUDIT records only, a passive outcome labeller, an unbiased audit sampler, and a CI entrypoint with a stable exit-code contract. Wired via an opt-in, default-off workflow."
     category: "infrastructure"
     priority: "medium"
-    status: "in_progress"
+    status: "done"
     tier: "fast"
     verification:
       - "decide() REJECTs on mechanical failure and ESCALATEs protected paths regardless of confidence"
       - "tau is risk-derived on a held-out fold; only HUMAN_AUDIT labels feed tau/health; cold start escalates"
       - "merge_gate_ci exit codes 0/10/20 map to auto-merge/escalate/reject; decisions are audit-logged"
       - "auto-merge is gated behind ENABLE_CALIBRATED_AUTOMERGE (default off); ADR 0005 documents the enable-checklist"
+      - "merge-time seeding (merge_seed.py) writes the initial pending OutcomeRecord (idempotent, default-off in merge_gate_ci) so the labeller/audit sampler can resolve it; closes the ADR 0005 seam"
     validation_command: "python scripts/validations/F_010.py"
+    implemented_in: "22c3b6e0718ddbc233b8db73e0923e31b1f8cc02"
     depends_on: ["F-007"]
     notes: "DESIGN + opt-in CI, default-off. Pure subsystem under agent_core with strict mypy + 95% coverage; the merge workflow auto-merges nothing until a human enables it and audit data accumulates."
 
