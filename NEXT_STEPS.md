@@ -20,12 +20,14 @@
 - [ ] **Make gates required** — add `quality-gates` jobs to branch-protection required
   checks once they have soaked.
 - [ ] **Enable auto-fix loop** — only after the ADR 0004 human checklist is complete.
-- [ ] **Seed merge-gate records (F-010 seam)** — write the initial pending `OutcomeRecord`
-  (`change_id` / `domain` / `raw_confidence` / `merged_at`) at merge time so the labeller and
-  audit sampler have data to resolve (the only seam left open by ADR 0005; detection is wired).
+- [x] **Seed merge-gate records (F-010 seam)** — `agent_core/merge_seed.py` writes the initial
+  pending `OutcomeRecord` (`change_id` / `domain` / `raw_confidence` / `merged_at`) at merge
+  time (idempotent, default-off integration in `merge_gate_ci`); closes the only seam ADR 0005
+  left open. Detection was already wired.
 - [ ] **Accumulate audit labels** — run `audit_sampler` to build per-domain HUMAN_AUDIT
   history before any domain can leave cold-start ESCALATE, then enable per the ADR 0005 checklist.
-- [ ] **Audit label accumulation strategy** — define cadence, domain scope, and reviewer assignment for building HUMAN_AUDIT history (prerequisite for F-010 activation per ADR 0005).
+- [x] **Audit label accumulation strategy** — cadence, domain scope, and reviewer assignment
+  defined in ADR 0005 ("Audit-label accumulation strategy" section).
 
 ## Immediate (Pre-v1.2.0)
 
@@ -43,11 +45,15 @@
 
 - [x] **CI/CD Pipeline** — GitHub Actions workflows for test, lint, type-check,
   feature validation, regression + eval-integrity gates, and Snyk scan on every PR.
-- [ ] **Dynamic Version** — Use `setuptools.dynamic.version` to derive version
-  from `version.py` and eliminate duplication in `pyproject.toml`.
-- [ ] **Parallel Execution** — Add `asyncio`/`concurrent.futures` option to
-  `EvalEngine` for large datasets.
-- [ ] **CSV/Parquet Dataset Source** — Extend dataset support beyond JSONL/inline.
+- [x] **Dynamic Version** — Derive `__version__` dynamically via
+  `importlib.metadata`, with a `0.0.0-dev` fallback for editable/source installs;
+  `SCHEMA_VERSION` decoupled from the package version (F-017).
+- [x] **Parallel Execution** — `ThreadPoolExecutor`-based parallel item execution
+  with configurable `max_workers`; `max_workers=1` preserves byte-identical
+  sequential behaviour (F-018, ADR 0008).
+- [x] **CSV/Parquet Dataset Source** — `CsvDataset` (`csv`/`csv_file`) and
+  `ParquetDataset` (`parquet`/`parquet_file`) with column mappings and `DATA_ROOT`
+  path confinement (F-019).
 - [x] **`py.typed` Marker** — Ship PEP 561 marker for downstream type checkers.
 
 ## Medium Term (v1.3.0)
@@ -65,9 +71,17 @@
 
 ## Long Term
 
-- [ ] **Multi-model Comparison** — Run the same dataset against multiple models
-  and produce comparative reports.
-- [ ] **A/B Eval Campaigns** — Persistent eval campaigns with statistical
-  significance testing.
-- [ ] **Langfuse Prompt Management** — Pull judge prompts from Langfuse prompt
-  registry instead of config YAML.
+- [x] **Multi-model Comparison** — Run the same dataset against multiple targets
+  and produce a comparative report (F-024: `ComparisonConfig` + `run_comparison`
+  reusing `EvalEngine` per model, the shared `compare_metric` primitive, a
+  self-contained HTML/JSON report, and an `eval-harness compare` CLI; ADR 0011).
+  Note: a real model-backed target (beyond echo/callable) is a follow-up.
+- [x] **A/B Eval Campaigns** — Persistent eval campaigns with statistical
+  significance testing (F-025: `ABCampaignConfig` + `CampaignStore` accumulating
+  per-arm counts across runs, `analyze` deciding via `agent_core.wilson_interval`
+  with an explicit can't-tell-below-power bucket, and an `eval-harness campaign`
+  CLI; ADR 0012).
+- [x] **Langfuse Prompt Management** — Pull judge prompts from the Langfuse prompt
+  registry instead of config YAML (F-026: `PromptSourceConfig` + `resolve_prompt`
+  + `LangfuseClient.get_prompt`, additive `EvalConfig.judge_prompt`, YAML fallback;
+  ADR 0010).

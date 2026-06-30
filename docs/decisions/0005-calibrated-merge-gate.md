@@ -5,7 +5,7 @@
 - Date: 2026-06-19
 - Related: ADR 0004 (auto-fix loop), `scripts/eval_protected_paths.py`,
   `scripts/check_protected_changes.py`, `scripts/regression_gate.py`,
-  `agent_core/calibration.py`.
+  `agent_core/calibration.py`, `agent_core/merge_seed.py` (record seeding, Session 006).
 
 ## Context
 
@@ -48,15 +48,49 @@ hundred audited changes in the operating band before it can auto-merge at all. T
 intentional conservatism: the default is to escalate, and the data requirement is the price
 of the risk guarantee. Tuning `min_calibration_n` / `risk_target` is a human decision.
 
-## Seam (must be wired by the enabling change)
+## Seam — CLOSED (2026-06-30, Session 006)
 
 The passive **detectors are wired** (`agent_core/detectors.py`): reverts come from `git log`
 (the `This reverts commit <sha>` footer) and CI failures from a commit's GitHub Actions
 check-runs (`gh api`), both timeout-bounded and failing *safe* (missing binary / timeout / no
-repo → no signal). What remains open is **record seeding**: nothing here writes the *initial*
-pending `OutcomeRecord` at merge time. The enabling workflow must seed
-`change_id / domain / raw_confidence / merged_at` so the labeller and audit sampler have
-records to resolve.
+repo → no signal).
+
+**Record seeding is now implemented** in `agent_core/merge_seed.py`
+(`seed_pending` + a `python -m agent_core.merge_seed` CLI). It writes the *initial* pending
+`OutcomeRecord` (`change_id / domain / raw_confidence / merged_at`, `label=None`) at merge
+time so the labeller and audit sampler have records to resolve — without it, every domain
+stayed in cold-start `ESCALATE` forever because `record_verdict` raises `KeyError` for an
+unknown `change_id` and `build_domain_models` never saw any HUMAN_AUDIT rows. Properties that
+keep it safe:
+
+- **Inert.** A pending record changes no gate decision (the gate reads HUMAN_AUDIT rows only),
+  so seeding cannot move `tau` or health.
+- **Idempotent.** A `change_id` already in the store is never re-seeded (workflow retries are
+  no-ops).
+- **Default-off integration.** `merge_gate_ci.py` seeds only when `--seed-store` *and*
+  `--change-id` are passed *and* the decision is `AUTO_MERGE`; absent those flags its behaviour
+  is byte-identical. The standalone CLI can also seed human-merged changes.
+
+## Audit-label accumulation strategy
+
+`audit_sampler.py` already selects an **unbiased** sample (Bernoulli `base_rate`, default 5%,
+with a per-domain floor, default 30) and records HUMAN_AUDIT verdicts; all of these live on
+`AuditConfig` / `GatePolicyConfig` (no hard-coded values). The operating policy to leave cold
+start, per domain:
+
+- **Cadence.** Run `python -m agent_core.outcome_labeller` and `audit_sampler select` on a
+  fixed schedule (e.g. weekly) over the seeded store; the maturity window
+  (`LabellerConfig.maturity_days`, default 7) gates passive labels.
+- **Domain scope.** Sample is **stratified by domain** so low-volume domains still reach the
+  `per_domain_floor`; a domain leaves cold start only once its held-out audited count clears
+  the risk-derived sample-size note above (~several hundred in the operating band at
+  `risk_target = 0.02`).
+- **Reviewer assignment.** HUMAN_AUDIT verdicts are authoritative and must come from a human
+  (CODEOWNERS for the domain), recorded via `audit_sampler record --change-id … --correct/…`.
+  Agents must not record audit verdicts.
+- **Exit criterion.** Activation stays gated on the checklist below; seeding + cadence are
+  necessary but not sufficient — health floors (`min_calibration_n`, `max_ece`, `min_auroc`,
+  `max_bin_ci_width`) must also pass on the held-out fold before any domain earns a `tau`.
 
 ## Consequences
 
@@ -75,6 +109,7 @@ records to resolve.
 - [ ] Independent review of the decision layers and the protected-path classification feed.
 - [ ] Confirm the regression gate and protected-path guard are *required* branch-protection
       checks (mechanical ground truth must hold before the gate is consulted).
-- [ ] Implement the merge-time record seeding and the audit-sampling cadence.
+- [x] Implement the merge-time record seeding (`agent_core/merge_seed.py`, Session 006) and
+      define the audit-sampling cadence (see "Audit-label accumulation strategy" above).
 - [ ] Accumulate enough HUMAN_AUDIT labels per domain to leave cold start.
 - [ ] Set `ENABLE_CALIBRATED_AUTOMERGE=true` in a dedicated, human-authored change.

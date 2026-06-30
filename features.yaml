@@ -143,7 +143,7 @@ features:
     description: "Self-contained skills/architecture-drift-guard (grimp + pyyaml only) that diffs a codebase's actual import graph against a declared C4 component manifest and renders a Mermaid C4 diagram. Dogfooded on this repo via architecture.yaml/architecture.mmd and a deterministic drift+freshness CI gate over eval_harness and agent_core."
     category: "infrastructure"
     priority: "high"
-    status: "in_progress"
+    status: "done"
     tier: "fast"
     verification:
       - "validate_skill.py passes structural+behavioral for skills/architecture-drift-guard"
@@ -151,6 +151,7 @@ features:
       - "mermaid_gen.py --check exits 1 when architecture.mmd is stale, 0 when fresh"
       - "drift gate is deterministic code with no model in the decision path; grimp isolated in adguard/extractor.py"
     validation_command: "python scripts/validations/F_009.py"
+    implemented_in: "6e00625f875f11bf4e11b657631b92ed6225814c"
     depends_on: ["F-003", "F-004"]
     notes: "Self-contained: the skill never imports the code it polices. The dogfood manifest's dependencies were seeded from --emit-actual and reviewed (core depends on nothing; deps flow inward)."
 
@@ -160,14 +161,16 @@ features:
     description: "agent_core merge-gate subsystem: deterministic decide() (mechanical ground truth -> protected-path escalate -> risk-derived tau + calibrator health + Wilson floor), an append-only OutcomeStore with per-domain models built from HUMAN_AUDIT records only, a passive outcome labeller, an unbiased audit sampler, and a CI entrypoint with a stable exit-code contract. Wired via an opt-in, default-off workflow."
     category: "infrastructure"
     priority: "medium"
-    status: "in_progress"
+    status: "done"
     tier: "fast"
     verification:
       - "decide() REJECTs on mechanical failure and ESCALATEs protected paths regardless of confidence"
       - "tau is risk-derived on a held-out fold; only HUMAN_AUDIT labels feed tau/health; cold start escalates"
       - "merge_gate_ci exit codes 0/10/20 map to auto-merge/escalate/reject; decisions are audit-logged"
       - "auto-merge is gated behind ENABLE_CALIBRATED_AUTOMERGE (default off); ADR 0005 documents the enable-checklist"
+      - "merge-time seeding (merge_seed.py) writes the initial pending OutcomeRecord (idempotent, default-off in merge_gate_ci) so the labeller/audit sampler can resolve it; closes the ADR 0005 seam"
     validation_command: "python scripts/validations/F_010.py"
+    implemented_in: "22c3b6e0718ddbc233b8db73e0923e31b1f8cc02"
     depends_on: ["F-007"]
     notes: "DESIGN + opt-in CI, default-off. Pure subsystem under agent_core with strict mypy + 95% coverage; the merge workflow auto-merges nothing until a human enables it and audit data accumulates."
 
@@ -291,7 +294,7 @@ features:
       - "Offline pytest"
       - "Identical sequential/parallel aggregates"
     validation_command: "python scripts/validations/F_018.py"
-    implemented_in: null
+    implemented_in: "e9f2ad8d8a41a228945b6c31cca7ed0c8322ee38"
     depends_on: ["F-001"]
     notes: "See ADR 0008. Langfuse per-item trace linking unavailable in parallel mode (graceful degradation). Scorers must be stateless or thread-safe."
 
@@ -310,7 +313,7 @@ features:
       - "_DIST_NAME matches the distribution name in pyproject.toml"
       - "Fallback to '0.0.0-dev' when package is not pip-installed"
     validation_command: "python scripts/validations/F_017.py"
-    implemented_in: null
+    implemented_in: "e9f2ad8d8a41a228945b6c31cca7ed0c8322ee38"
     depends_on: ["F-001"]
     notes: "Backwards compatible — all existing imports of __version__ and SCHEMA_VERSION continue to work."
 
@@ -329,7 +332,7 @@ features:
       - "Both sources registered with primary name and alias"
       - "Existing InlineDataset, JsonlDataset, LangfuseDataset unchanged"
     validation_command: "python scripts/validations/F_019.py"
-    implemented_in: null
+    implemented_in: "e9f2ad8d8a41a228945b6c31cca7ed0c8322ee38"
     depends_on: ["F-001"]
     notes: "pyarrow is an optional dependency — ParquetDataset raises a descriptive ImportError if missing."
 
@@ -348,7 +351,7 @@ features:
       - "duplicate names, name/version mismatches, and missing paths are reported"
       - "validate_skill default mode is unchanged (no 'version' requirement); the drift guard stays green"
     validation_command: "python scripts/validations/F_023.py"
-    implemented_in: null
+    implemented_in: "e1d6e48fa0a5a4b0152f15feb6b880868b2fc262"
     depends_on: ["F-003"]
     notes: "validate_skill.py is reused read-only (not edited), so the skill-script drift guard is unaffected. Semver enforcement lives in skill_marketplace.py. Tooling under scripts/ (93% branch coverage, above the 85% tooling floor)."
 
@@ -367,7 +370,7 @@ features:
       - "parallel execution never exceeds the cap and never retroactively rejects an admitted call"
       - "judge is wrapped only when JudgeBudgetConfig.enabled; absent/disabled leaves the judge and offline deps unchanged"
     validation_command: "python scripts/validations/F_022.py"
-    implemented_in: null
+    implemented_in: "82a60b4bb87407456cefd6fd39c698cb79ab6dda"
     depends_on: ["F-002"]
     notes: "Reuses agent_core.BudgetLedger (no reimplementation). Cumulative budget cap, not time-windowed rate limiting (deferred). No live token signal exists at the judge call site, so cost_per_call is a configured per-call estimate. agent_core imported lazily; the offline path stays dependency-free. SCHEMA_VERSION unchanged (judge_budget is optional)."
 
@@ -386,7 +389,7 @@ features:
       - "pass_threshold drives the composite passed flag; absent threshold aggregates child verdicts"
       - "composite breakdown survives RunResult.to_dict() round-trip; existing scorers unchanged"
     validation_command: "python scripts/validations/F_020.py"
-    implemented_in: null
+    implemented_in: "7e4f515ff1046f3951fe21d3b1378a7f20a6428a"
     depends_on: ["F-001"]
     notes: "Children built once at construction via SCORERS.create; an llm_judge child still receives ctx.judge. Configured via ComponentSpec params; no config-schema change, SCHEMA_VERSION unchanged. to_dict gains an additive 'metadata' key per score (backwards-compatible)."
 
@@ -405,6 +408,63 @@ features:
       - "rendering the same RunResult twice is byte-identical (determinism)"
       - "pass_rate=None renders 'n/a'; user output is HTML-escaped; existing sinks unchanged"
     validation_command: "python scripts/validations/F_021.py"
-    implemented_in: null
+    implemented_in: "b38424e1f659edb37c13ad333084191041eac0a3"
     depends_on: ["F-001"]
     notes: "Pure ResultSink plugin configured via ComponentSpec params (path/title/embed_items/bar_width_px); no config-schema change, SCHEMA_VERSION unchanged. Soft data-dependency on F-020 for composite breakdown rows."
+
+  - id: "F-026"
+    epic: "Tracing"
+    name: "Langfuse judge-prompt management"
+    description: "Adds an optional prompt-source seam so a judge's system prompt can be pulled from the Langfuse prompt registry instead of inline config YAML. PromptSourceConfig (source yaml|langfuse, name/version/label, fallback text) drives resolve_prompt(); LangfuseClient.get_prompt is a non-abstract, fail-safe method (SDK impl returns None on any error); EvalConfig.judge_prompt is additive and resolved into the judge's system param in engine.from_config before construction. Config-driven fallback to YAML keeps offline runs working."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "PromptSourceConfig validates: yaml requires text, langfuse requires name, source must be yaml|langfuse"
+      - "resolve_prompt returns inline text for yaml; returns registry text for langfuse when available"
+      - "langfuse source falls back to inline text when the prompt is unavailable or no client is wired"
+      - "SDKLangfuseClient.get_prompt fails safe to None on SDK/network error; NullLangfuseClient.get_prompt defaults to None"
+      - "engine.from_config injects the resolved prompt as the judge system param; absent judge_prompt leaves params untouched; SCHEMA_VERSION unchanged"
+    validation_command: "python scripts/validations/F_026.py"
+    implemented_in: "dd1dcf938be460568f35cd3222248ee3273276e4"
+    depends_on: ["F-005"]
+    notes: "Gated behind the optional [langfuse] extra; the offline path is unchanged. judge_prompt applies to judges accepting a 'system' param (openai/bedrock/anthropic). LangfuseClient.get_prompt is non-abstract so third-party subclasses keep working. See ADR 0010."
+
+  - id: "F-024"
+    epic: "Reporting"
+    name: "Multi-model comparison"
+    description: "Runs the same dataset/scorers/judge against several targets and produces a comparative result: per-metric values, deltas vs a baseline, and a ranking. ComparisonConfig (>=2 named ModelSpecs, optional baseline/rank_by, rank_metric mean|pass_rate) drives run_comparison, which reuses EvalEngine per model (identical scoring/aggregation to a single run). The shared compare_metric primitive (values + deltas + ranking, None ranked last) is reused by F-025. ComparisonResult.to_dict/to_html emit a self-contained deterministic report (reusing the F-021 html approach); an 'eval-harness compare' CLI subcommand writes HTML/JSON."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "ComparisonConfig requires >=2 models with unique names; baseline must be a model; rank_metric is mean|pass_rate"
+      - "run_comparison reuses EvalEngine per model (target swapped only) and ranks models by the chosen score/metric"
+      - "compare_metric returns per-model values, baseline deltas, and a ranking with None values ranked last"
+      - "ComparisonResult.to_dict is JSON-serialisable; to_html is deterministic and self-contained (no external assets)"
+      - "EvalConfig.comparison is additive and optional; SCHEMA_VERSION unchanged; single-run path untouched"
+    validation_command: "python scripts/validations/F_024.py"
+    implemented_in: "a0d12957264f1c348343930013df3833ddc54463"
+    depends_on: ["F-018", "F-021"]
+    notes: "Additive/opt-in; no model-backed target exists yet (only echo/callable) so F-024 is the comparison orchestration + report, with a real model target as a separate follow-up. compare_metric is the shared primitive for F-025. See ADR 0011."
+
+  - id: "F-025"
+    epic: "Scoring"
+    name: "A/B eval campaigns with statistical significance"
+    description: "Persistent A/B campaigns: ABCampaignConfig (two ModelSpec arms, score, wilson_z, min_sample power floor) drives record_run (runs both arms via EvalEngine with target swapped, like F-024) which appends per-arm pass/total counts to an append-only JSONL CampaignStore. analyze accumulates counts across runs and decides via agent_core Wilson intervals: below power -> cant_tell (no claim), powered + disjoint CIs -> a/b_better, overlapping -> no_difference. CampaignResult.to_dict/to_html emit a self-contained deterministic report; an 'eval-harness campaign' CLI records and analyzes."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "ABCampaignConfig requires distinct arm names; additive EvalConfig.ab_campaign; SCHEMA_VERSION unchanged"
+      - "record_run appends one per-arm CampaignRecord; CampaignStore.totals accumulates counts across runs per campaign/arm"
+      - "analyze reuses agent_core.wilson_interval; returns cant_tell below min_sample and a/b_better only when powered and the Wilson intervals are disjoint"
+      - "counts accumulate across runs so a campaign reaches power over time; no significance is claimed below power"
+      - "CampaignResult.to_dict is JSON-serialisable; to_html is deterministic and self-contained (no external assets)"
+    validation_command: "python scripts/validations/F_025.py"
+    implemented_in: "5fb0e91c928571ac26857b7363d44ed3e8b9878c"
+    depends_on: ["F-024"]
+    notes: "Reuses agent_core wilson_interval via the permitted eval_harness->agent_core edge (no flow_corpus import -> airgap preserved); campaign store follows the OutcomeStore JSONL pattern (agent_core.persistence is shape-specific). Additive/opt-in. See ADR 0012."

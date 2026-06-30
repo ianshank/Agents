@@ -128,3 +128,72 @@ def test_main_missing_store_is_usage_error(tmp_path):
 
 def test_exit_table_covers_all_decisions():
     assert set(merge_gate_ci.EXIT) == set(GateDecision)
+
+
+def test_seed_store_seeds_pending_on_auto_merge(tmp_path):
+    store_path = str(_healthy_store(tmp_path / "s.jsonl").path)
+    seed_path = tmp_path / "seed.jsonl"
+    rc = main(
+        [
+            "--store",
+            store_path,
+            "--mech-pass",
+            "--raw-confidence",
+            "0.96",
+            "--domain",
+            "core",
+            "--seed-store",
+            str(seed_path),
+            "--change-id",
+            "pr-42",
+            "--merged-at",
+            "2026-06-30T00:00:00+00:00",
+        ]
+    )
+    assert rc == 0
+    seeded = OutcomeStore(seed_path).all()
+    assert len(seeded) == 1
+    assert seeded[0].change_id == "pr-42"
+    assert seeded[0].label is None  # pending
+
+
+def test_seed_store_no_seed_on_escalate(tmp_path):
+    store_path = str(_healthy_store(tmp_path / "s.jsonl").path)
+    seed_path = tmp_path / "seed.jsonl"
+    # unknown domain -> cold-start ESCALATE -> nothing seeded
+    rc = main(
+        [
+            "--store",
+            store_path,
+            "--mech-pass",
+            "--domain",
+            "unknown",
+            "--seed-store",
+            str(seed_path),
+            "--change-id",
+            "pr-99",
+        ]
+    )
+    assert rc == 10
+    assert not seed_path.exists()
+
+
+def test_seed_store_ignored_without_change_id(tmp_path):
+    store_path = str(_healthy_store(tmp_path / "s.jsonl").path)
+    seed_path = tmp_path / "seed.jsonl"
+    # --seed-store but no --change-id -> seam not triggered, decision unaffected
+    rc = main(
+        [
+            "--store",
+            store_path,
+            "--mech-pass",
+            "--raw-confidence",
+            "0.96",
+            "--domain",
+            "core",
+            "--seed-store",
+            str(seed_path),
+        ]
+    )
+    assert rc == 0
+    assert not seed_path.exists()

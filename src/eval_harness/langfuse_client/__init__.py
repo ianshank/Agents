@@ -39,6 +39,15 @@ class LangfuseClient(ABC):
     @abstractmethod
     def flush(self) -> None: ...
 
+    def get_prompt(self, name: str, version: int | None = None, label: str | None = None) -> str | None:
+        """Fetch a managed prompt's text from the Langfuse prompt registry (F-026).
+
+        Non-abstract with a ``None`` default so existing subclasses keep working
+        and the offline path needs no Langfuse. Returns ``None`` when the prompt
+        is unavailable; callers fall back to the config-supplied text.
+        """
+        return None
+
 
 class NullLangfuseClient(LangfuseClient):
     """In-memory no-op client. Useful for offline runs and as a test double."""
@@ -148,6 +157,27 @@ class SDKLangfuseClient(LangfuseClient):
 
     def flush(self) -> None:
         self._lf.flush()
+
+    def get_prompt(self, name: str, version: int | None = None, label: str | None = None) -> str | None:
+        """Fetch a managed prompt's text from Langfuse (F-026).
+
+        Fails safe: any SDK/network error returns ``None`` so the caller falls
+        back to the config-supplied text (mirrors the no-op tracing fallback).
+        """
+        try:
+            kwargs: dict[str, Any] = {}
+            if version is not None:
+                kwargs["version"] = version
+            if label is not None:
+                kwargs["label"] = label
+            prompt = self._lf.get_prompt(name, **kwargs)
+            text = getattr(prompt, "prompt", None)
+            return text if isinstance(text, str) else None
+        except Exception as exc:
+            import logging
+
+            logging.getLogger(__name__).warning("Langfuse get_prompt(%r) failed: %s", name, exc)
+            return None
 
 
 def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
