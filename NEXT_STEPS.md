@@ -61,6 +61,10 @@
 - [x] **Skill Marketplace** — Centralized registry for community-contributed
   skills with versioned SKILL.md validation (F-023: `skills/marketplace.yaml` +
   schema + `scripts/skill_marketplace.py`, reusing `validate_skill.py` read-only).
+- [x] **Skills brought up to date** — `openai-judge` (the last old-convention
+  skill) modernized to the v2.0 standard: `tests/` with a ≥95% coverage gate,
+  `ruff.toml`, `validator_version: '2.0'` frontmatter, and a dedicated
+  `skills-ci.yml` job (F-028, ADR 0014). All three skills now share one bar.
 - [x] **Weighted/Ensemble Scoring** — Support composite scores from multiple
   scorers with configurable weights (F-020: `weighted` CompositeScorer).
 - [x] **Dashboard Export** — Rich HTML report generation from `RunResult`

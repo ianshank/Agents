@@ -1,8 +1,9 @@
 ---
 name: openai-judge
 description: LLM-as-a-judge evaluations over OpenAI-compatible APIs (including NVIDIA Nemotron & LM Studio). Use whenever evaluating output quality, correctness, or scoring responses using standard rubrics.
+validator_version: '2.0'
 compatibility: python>=3.10
-version: 1.0.0
+version: 1.1.0
 ---
 
 # openai-judge — E2E Action Skill

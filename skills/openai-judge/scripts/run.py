@@ -4,12 +4,14 @@
 Acts as a standalone CLI wrapping OpenAIJudge, supporting both mock mode
 (for local validation/testing) and live API mode.
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import sys
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run OpenAI-compatible LLM judge.")
@@ -24,9 +26,9 @@ def main() -> int:
 
     # Read inputs
     try:
-        with open(args.prompt, "r", encoding="utf-8") as f:
+        with open(args.prompt, encoding="utf-8") as f:
             prompt_content = f.read()
-        with open(args.rubric, "r", encoding="utf-8") as f:
+        with open(args.rubric, encoding="utf-8") as f:
             rubric_content = f.read()
     except Exception as e:
         print(f"Error reading input files: {e}", file=sys.stderr)
@@ -38,11 +40,7 @@ def main() -> int:
 
     if args.mock:
         # Mock mode: deterministic output for offline validation
-        verdict = {
-            "status": "ok",
-            "score": 1.0,
-            "reasoning": "Mock judgment passed for offline evaluation."
-        }
+        verdict = {"status": "ok", "score": 1.0, "reasoning": "Mock judgment passed for offline evaluation."}
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(verdict, f, indent=2)
         print("OK: Mock run succeeded.")
@@ -64,12 +62,7 @@ def main() -> int:
             api_key=args.api_key or os.environ.get("NVIDIA_API_KEY"),
         )
         res = judge.evaluate(full_prompt)
-        verdict = {
-            "status": "ok",
-            "score": res.score,
-            "reasoning": res.reasoning,
-            "raw": res.raw
-        }
+        verdict = {"status": "ok", "score": res.score, "reasoning": res.reasoning, "raw": res.raw}
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(verdict, f, indent=2)
         print("OK: Live run succeeded.")
@@ -77,6 +70,7 @@ def main() -> int:
     except Exception as e:
         print(f"Error during LLM evaluation: {e}", file=sys.stderr)
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

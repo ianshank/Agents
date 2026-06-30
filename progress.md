@@ -6,6 +6,18 @@
 ### Features
 - F-027 (real model-backed target): `ModelTarget` calls a live LLM and returns its
   completion to be scored, unblocking F-024/F-025 against real models; status todo → done
+- F-028 (openai-judge skill modernization): brought the last old-convention skill up to
+  the v2.0 standard (tests/, ruff.toml, validator_version, CI job); status todo → done
+
+### Changes (F-028)
+- skills/openai-judge: added `tests/` (`conftest.py` + `test_run.py`) covering `run.py`
+  `--mock`, file-error, and live paths (live path via a fake `eval_harness.judges`
+  injected into `sys.modules` — no network); `ruff.toml` (extends repo config, excludes
+  the vendored validate_skill.py); `validator_version:'2.0'` frontmatter; version bump
+  1.0.0 → 1.1.0 matched in `skills/marketplace.yaml`; `.gitignore`
+- .github/workflows/skills-ci.yml: new isolated `openai-judge` job (lint + coverage-gated
+  tests + structural/behavioral self-check) and path triggers
+- ADR 0014; F_028 validator (reuses validate_skill.py read-only)
 
 ### Changes
 - eval_harness: new `targets/model.py` — `ModelTarget` registered as `model` (alias

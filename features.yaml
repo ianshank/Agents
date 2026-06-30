@@ -487,3 +487,22 @@ features:
     implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
     depends_on: ["F-002", "F-018"]
     notes: "Additive/opt-in; existing echo/callable targets untouched. Provider-client lines are deliberately self-contained (not imported from judges) to preserve targets->[core,plugins] and avoid editing the protected judges path - same intentional-duplication rationale as the vendored skill scripts (ADR 0009). Drops straight into F-024 ModelSpec.target and F-025 arms. See ADR 0013."
+
+  - id: "F-028"
+    epic: "Skills"
+    name: "openai-judge skill modernization"
+    description: "Brings the openai-judge skill (the last on the original convention) up to the newer v2.0 skill standard: a tests/ directory with a coverage-gated unit suite over scripts/run.py (--mock, file-error, and live paths via an injected fake eval_harness.judges - no network), a ruff.toml inheriting the repo config, a validator_version:'2.0' frontmatter key with a version bump kept in lock-step with the marketplace entry, a .gitignore, and a dedicated openai-judge job in skills-ci.yml. The canonical scripts/validate_skill.py is reused read-only (drift guard unaffected); the skill's runtime behaviour is unchanged."
+    category: "infrastructure"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "SKILL.md frontmatter carries validator_version:'2.0'; version bumped and matched in marketplace.yaml (semver match enforced by skill_marketplace.py)"
+      - "skills/openai-judge/tests/ and ruff.toml exist; the runner is covered >=95% offline (mock + injected-fake live path)"
+      - "skill still passes validate_skill.py structural,behavioral (all evals use --mock); skill_marketplace.py validate passes"
+      - "an openai-judge job is added to skills-ci.yml mirroring the other skills (isolated install, lint, coverage-gated tests, structural+behavioral self-check)"
+      - "validate_skill.py is reused read-only and unchanged (skill-script drift guard unaffected)"
+    validation_command: "python scripts/validations/F_028.py"
+    implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
+    depends_on: ["F-003", "F-023"]
+    notes: "No behaviour change to run.py beyond import-order/open()-mode lint fixes. Live-mode tests inject a fake eval_harness.judges into sys.modules so the job stays isolated (no repo packages). See ADR 0014."

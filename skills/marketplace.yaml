@@ -7,7 +7,7 @@
 registry_version: 1.0.0
 skills:
   - name: openai-judge
-    version: 1.0.0
+    version: 1.1.0
     path: skills/openai-judge
     description: LLM-as-a-judge evaluations over OpenAI-compatible APIs.
     compatibility: python>=3.10

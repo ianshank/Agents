@@ -6,11 +6,13 @@ on:
     paths:
       - "skills/eval-corpus-forge/**"
       - "skills/architecture-drift-guard/**"
+      - "skills/openai-judge/**"
       - ".github/workflows/skills-ci.yml"
   pull_request:
     paths:
       - "skills/eval-corpus-forge/**"
       - "skills/architecture-drift-guard/**"
+      - "skills/openai-judge/**"
       - ".github/workflows/skills-ci.yml"
   workflow_dispatch:
 
@@ -79,5 +81,36 @@ jobs:
       - run: ruff check scripts/adguard scripts/drift_check.py scripts/mermaid_gen.py tests
       # Unit + e2e tests with coverage gate on the adguard library.
       - run: python -m pytest tests --cov=adguard --cov-branch --cov-report=term-missing --cov-fail-under=95
+      # The skill's own end-to-end self-check (structural + behavioral evals).
+      - run: python scripts/validate_skill.py --skill . --tier structural,behavioral
+
+  openai-judge:
+    name: openai-judge py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: skills/openai-judge
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      # Isolated: the runner's --mock path and the unit tests (which inject a fake
+      # eval_harness.judges) need no repo packages. Live mode is a thin, env-gated
+      # wrapper validated by injection, not by a real SDK in CI.
+      - run: pip install pytest pytest-cov "pyyaml>=6" ruff
+      # Lint the runner and tests (the vendored validate_skill.py mirrors the repo
+      # root copy and is excluded via the skill ruff.toml).
+      - run: ruff check scripts/run.py tests
+      # Unit tests with coverage gate on the runner.
+      - run: python -m pytest tests --cov=run --cov-branch --cov-report=term-missing --cov-fail-under=95
       # The skill's own end-to-end self-check (structural + behavioral evals).
       - run: python scripts/validate_skill.py --skill . --tier structural,behavioral
