@@ -484,7 +484,7 @@ features:
       - "prompt_template formats from item.inputs; invalid provider rejected at construction"
       - "no new component edge (drift_check still matches the manifest); EvalConfig accepts target.type='model'; SCHEMA_VERSION unchanged; no new dependency (reuses existing openai/bedrock/anthropic extras)"
     validation_command: "python scripts/validations/F_027.py"
-    implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
+    implemented_in: "1ff363a956b57eeb9bc995ace63eae51fc76c029"
     depends_on: ["F-002", "F-018"]
     notes: "Additive/opt-in; existing echo/callable targets untouched. Provider-client lines are deliberately self-contained (not imported from judges) to preserve targets->[core,plugins] and avoid editing the protected judges path - same intentional-duplication rationale as the vendored skill scripts (ADR 0009). Drops straight into F-024 ModelSpec.target and F-025 arms. See ADR 0013."
 
@@ -503,7 +503,7 @@ features:
       - "an openai-judge job is added to skills-ci.yml mirroring the other skills (isolated install, lint, coverage-gated tests, structural+behavioral self-check)"
       - "validate_skill.py is reused read-only and unchanged (skill-script drift guard unaffected)"
     validation_command: "python scripts/validations/F_028.py"
-    implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
+    implemented_in: "cb0479c2dd5952d0a0ed02b44aba68cd1edb6daf"
     depends_on: ["F-003", "F-023"]
     notes: "No behaviour change to run.py beyond import-order/open()-mode lint fixes. Live-mode tests inject a fake eval_harness.judges into sys.modules so the job stays isolated (no repo packages). See ADR 0014."
 
@@ -522,7 +522,7 @@ features:
       - "the rate limit and the cumulative cap trip independently; agent_core.BudgetLedger remains the cap owner (no reimplementation)"
       - "absent window fields -> no limiter attached and behaviour is byte-identical; engine.from_config wires the limiter from config"
     validation_command: "python scripts/validations/F_030.py"
-    implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
+    implemented_in: "6dd53d886a743c1cb68a5106a48e59bf1e7297fd"
     depends_on: ["F-022"]
     notes: "agent_core imported lazily (offline path unchanged). clock/sleeper injected (default time.monotonic/time.sleep) so tests use no real time. In block mode the wait holds the wrapper lock, throttling the run globally (intended for a shared endpoint limit). 100% branch coverage on the adapter. See ADR 0016."
 
@@ -541,6 +541,6 @@ features:
       - "registered in marketplace.yaml with a version matching SKILL.md (semver match enforced by skill_marketplace.py); vendored validate_skill.py matches the canonical copy (drift guard)"
       - "no harness/config-schema change; reuses run_comparison/record_run/analyze and agent_core wilson_interval via the existing edges"
     validation_command: "python scripts/validations/F_029.py"
-    implemented_in: "7948fc000dd9d61a98eaef01b1ffd611e31eece6"
+    implemented_in: "7987ae8eb7533883235825370d2546c18809436c"
     depends_on: ["F-024", "F-025", "F-027"]
     notes: "Thin wrapper - the runner adds packaging/docs/fixtures, not orchestration. Its CI job is not import-isolated like the other skills because wrapping the harness is the point. 100% coverage on the runner. See ADR 0015."
