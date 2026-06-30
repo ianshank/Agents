@@ -75,5 +75,7 @@
   and produce comparative reports.
 - [ ] **A/B Eval Campaigns** — Persistent eval campaigns with statistical
   significance testing.
-- [ ] **Langfuse Prompt Management** — Pull judge prompts from Langfuse prompt
-  registry instead of config YAML.
+- [x] **Langfuse Prompt Management** — Pull judge prompts from the Langfuse prompt
+  registry instead of config YAML (F-026: `PromptSourceConfig` + `resolve_prompt`
+  + `LangfuseClient.get_prompt`, additive `EvalConfig.judge_prompt`, YAML fallback;
+  ADR 0010).

@@ -1,6 +1,32 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 008 — 2026-06-30
+
+### Features
+- F-026 (Langfuse judge-prompt management): pull a judge's system prompt from the
+  Langfuse prompt registry instead of inline config YAML; status todo → done
+
+### Changes
+- eval_harness: new `prompts.py` (`resolve_prompt`) + `PromptSourceConfig` in
+  `config/models.py` + additive optional `EvalConfig.judge_prompt`
+  (SCHEMA_VERSION unchanged)
+- eval_harness: `LangfuseClient.get_prompt` added as a non-abstract, fail-safe
+  method (default None; SDK impl returns None on any SDK/network error) so
+  third-party subclasses and the offline path keep working
+- eval_harness: `engine.from_config` resolves `judge_prompt` into the judge's
+  `system` param before construction; absent judge_prompt → byte-identical
+- ADR 0010 (prompt-source seam); F_026 validator; tests/test_langfuse_prompts.py
+
+### Validation evidence
+- `python scripts/validations/F_026.py` exits 0 (offline; no Langfuse install)
+- eval_harness: `pytest --cov=eval_harness --cov-fail-under=96` → 97% (prompts.py
+  100%); ruff + ruff format clean on changed src/tests; mypy clean on changed
+  files (pre-existing config/__init__.py yaml-stub note unrelated)
+
+### Next
+- Tracks 2/3: F-024 multi-model comparison, F-025 A/B campaigns; Track 5 skills
+
 ## Session 007 — 2026-06-30
 
 ### Features

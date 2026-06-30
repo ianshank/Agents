@@ -94,6 +94,38 @@ class JudgeBudgetConfig(BaseModel):
         return self
 
 
+class PromptSourceConfig(BaseModel):
+    """Where a judge's system prompt comes from (F-026).
+
+    ``source='yaml'`` (default) uses the inline ``text`` — the pre-F-026 behaviour.
+    ``source='langfuse'`` pulls the named prompt from the Langfuse prompt registry,
+    with a config-driven fallback to ``text`` when Langfuse is unavailable or the
+    prompt is missing (mirrors the no-op tracing fallback). Fully optional and
+    additive, so ``SCHEMA_VERSION`` is unchanged.
+    """
+
+    source: str = "yaml"
+    text: str | None = None  # inline prompt / fallback text
+    name: str | None = None  # Langfuse prompt name (required when source='langfuse')
+    version: int | None = None  # specific Langfuse prompt version
+    label: str | None = None  # Langfuse prompt label (e.g. 'production')
+
+    @field_validator("source")
+    @classmethod
+    def _check_source(cls, v: str) -> str:
+        if v not in ("yaml", "langfuse"):
+            raise ValueError("prompt source must be 'yaml' or 'langfuse'")
+        return v
+
+    @model_validator(mode="after")
+    def _require_name_for_langfuse(self) -> PromptSourceConfig:
+        if self.source == "langfuse" and not self.name:
+            raise ValueError("judge_prompt.name is required when source='langfuse'")
+        if self.source == "yaml" and self.text is None:
+            raise ValueError("judge_prompt.text is required when source='yaml'")
+        return self
+
+
 class GateRule(BaseModel):
     score: str
     metric: str = "mean"  # "mean" | "pass_rate"
@@ -120,6 +152,7 @@ class EvalConfig(BaseModel):
     scorers: list[ComponentSpec] = Field(default_factory=list)
     judge: ComponentSpec | None = None
     judge_budget: JudgeBudgetConfig | None = None
+    judge_prompt: PromptSourceConfig | None = None
     sinks: list[ComponentSpec] = Field(default_factory=list)
     gate: GateConfig | None = None
 

@@ -92,7 +92,19 @@ class EvalEngine:
         dataset = DATASETS.create(config.dataset.type, config.dataset.params)
         target = TARGETS.create(config.target.type, config.target.params)
         scorers = [SCORERS.create(s.type, s.params) for s in config.scorers]
-        judge = JUDGES.create(config.judge.type, config.judge.params) if config.judge else None
+        judge = None
+        if config.judge is not None:
+            judge_params = config.judge.params
+            # F-026: resolve the judge system prompt from Langfuse (or YAML fallback)
+            # and inject it as the judge's `system` param. Additive — absent
+            # judge_prompt leaves params untouched.
+            if config.judge_prompt is not None:
+                from .prompts import resolve_prompt
+
+                resolved = resolve_prompt(config.judge_prompt, langfuse_client)
+                if resolved is not None:
+                    judge_params = {**judge_params, "system": resolved}
+            judge = JUDGES.create(config.judge.type, judge_params)
         sinks = [SINKS.create(s.type, s.params) for s in config.sinks]
 
         # Inject the Langfuse client into any client-aware component.
