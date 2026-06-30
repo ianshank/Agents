@@ -449,3 +449,22 @@ features:
     implemented_in: "a0d12957264f1c348343930013df3833ddc54463"
     depends_on: ["F-018", "F-021"]
     notes: "Additive/opt-in; no model-backed target exists yet (only echo/callable) so F-024 is the comparison orchestration + report, with a real model target as a separate follow-up. compare_metric is the shared primitive for F-025. See ADR 0011."
+
+  - id: "F-025"
+    epic: "Scoring"
+    name: "A/B eval campaigns with statistical significance"
+    description: "Persistent A/B campaigns: ABCampaignConfig (two ModelSpec arms, score, wilson_z, min_sample power floor) drives record_run (runs both arms via EvalEngine with target swapped, like F-024) which appends per-arm pass/total counts to an append-only JSONL CampaignStore. analyze accumulates counts across runs and decides via agent_core Wilson intervals: below power -> cant_tell (no claim), powered + disjoint CIs -> a/b_better, overlapping -> no_difference. CampaignResult.to_dict/to_html emit a self-contained deterministic report; an 'eval-harness campaign' CLI records and analyzes."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "ABCampaignConfig requires distinct arm names; additive EvalConfig.ab_campaign; SCHEMA_VERSION unchanged"
+      - "record_run appends one per-arm CampaignRecord; CampaignStore.totals accumulates counts across runs per campaign/arm"
+      - "analyze reuses agent_core.wilson_interval; returns cant_tell below min_sample and a/b_better only when powered and the Wilson intervals are disjoint"
+      - "counts accumulate across runs so a campaign reaches power over time; no significance is claimed below power"
+      - "CampaignResult.to_dict is JSON-serialisable; to_html is deterministic and self-contained (no external assets)"
+    validation_command: "python scripts/validations/F_025.py"
+    implemented_in: "5fb0e91c928571ac26857b7363d44ed3e8b9878c"
+    depends_on: ["F-024"]
+    notes: "Reuses agent_core wilson_interval via the permitted eval_harness->agent_core edge (no flow_corpus import -> airgap preserved); campaign store follows the OutcomeStore JSONL pattern (agent_core.persistence is shape-specific). Additive/opt-in. See ADR 0012."
