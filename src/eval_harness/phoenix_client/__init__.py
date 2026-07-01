@@ -205,7 +205,7 @@ def build_score_client(*, enabled: bool) -> PhoenixScoreClient:
     tracer = _otel_tracer()
     if tracer is None:
         logger.warning(
-            "Phoenix score export requested but arize-phoenix-otel is not installed; " "using no-op. %s", INSTALL_HINT
+            "Phoenix score export requested but arize-phoenix-otel is not installed; using no-op. %s", INSTALL_HINT
         )
         return NullPhoenixScoreClient()
     return SDKPhoenixScoreClient(tracer)
