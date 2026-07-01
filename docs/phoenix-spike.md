@@ -66,13 +66,24 @@ Because Langfuse already covers tracing + evals here, ROI is **non-redundant mar
 | Dimension | Status in this spike | Marginal ROI vs existing Langfuse |
 |-----------|----------------------|-----------------------------------|
 | **1. Trace debugging / visibility** (OpenInference) | **Demonstrated in code** (`configure_tracing`, auto-instrument, span export) | **Highest** — OTel-native, vendor-neutral, runs *alongside* Langfuse for a true A/B. |
-| **2. Eval quality** (`arize-phoenix-evals`) | **Documented** (`phoenix-evals` extra; validate live) | High — pre-built hallucination/QA/toxicity judges; complements `judges/`. |
+| **2. Eval quality** (`arize-phoenix-evals`) | **Implemented, offline-tested** — `@JUDGES.register("phoenix_evals") PhoenixEvalJudge` (verdict-mapping + fail-safe covered via injection; the 0.29 SDK call is validated live) | High — pre-built classification judges; complements `judges/`. |
 | **3. Experiments & datasets** (`run_experiment`) | **Documented** (not exercised) | Medium — overlaps existing `behavioral-regression` / `flow-corpus`. |
 | **4. OTel standardization** across services | **Foundation laid** (OTLP export) | Medium (long-term) — achieved incrementally via #1. |
 
 **Recommendation:** adopt **#1 (self-hosted OpenInference tracing)** as the entry point — highest ROI, lowest
 risk, and because it's OTLP it coexists with Langfuse so the spike doubles as the comparison. Expand to #2
 (`arize-phoenix-evals`) only after the live dependency resolution below is confirmed.
+
+Selecting the Phoenix-evals judge (needs `pip install '.[phoenix-evals]'`):
+
+```yaml
+judge:
+  type: phoenix_evals
+  params:
+    model: gpt-4o-mini          # provider creds via the SDK's own env vars — nothing hardcoded
+    provider: openai
+    choices: { pass: 1.0, fail: 0.0 }
+```
 
 ## Before expanding to evals (networked, one-time)
 
