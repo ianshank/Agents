@@ -106,6 +106,23 @@ pytest tests/test_phoenix_config.py tests/test_phoenix_tracing.py \
        tests/test_phoenix_sink.py tests/test_phoenix_cli.py -q
 ```
 
+## Live validation (networked runner)
+
+The pieces that can't run in the air-gapped suite are covered by opt-in artifacts:
+
+- **`tests/test_phoenix_live.py`** — `@pytest.mark.integration` tests that self-skip unless the
+  `[phoenix]` / `[phoenix-evals]` extras are installed **and** `PHOENIX_COLLECTOR_ENDPOINT` /
+  `OPENAI_API_KEY` are set. They run for real against a live Phoenix + model.
+- **`.github/workflows/phoenix-live.yml`** — `workflow_dispatch` (manual). Job `dep-resolve` runs the
+  dependency dry-run (Item 2); job `live` starts a self-hosted Phoenix via `phoenix serve` and runs the
+  live tracing + evals tests (Items 1 & 3). Add an `OPENAI_API_KEY` repo secret, then run it from the
+  Actions tab.
+
+**Item 4 — full e2e suite (PR #21).** The e2e/integration tests live on the open `feat/e2e-tests` branch,
+which is behind `main` and conflicts with it (in `scripts/`, unrelated to Phoenix). Rebase that PR onto
+`main` first, then run its suite with real `NVIDIA_API_KEY` / `LANGFUSE_*` secrets; the Phoenix spike is
+conflict-free with it. The `phoenix-live` workflow above covers the Phoenix-specific e2e angle in the meantime.
+
 ## Rollback
 
 Fully reversible with no data migration and no change to existing Langfuse users: delete
