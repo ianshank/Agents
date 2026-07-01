@@ -10,6 +10,7 @@ from ..core._serialize import as_text as _as_text
 from ..core.interfaces import ResultSink
 from ..core.types import RunResult
 from ..langfuse_client import LangfuseClient
+from ..phoenix_client import PhoenixScoreClient, build_score_client
 from ..plugins import SINKS
 
 
@@ -169,6 +170,35 @@ class LangfuseSink(ResultSink):
     def emit(self, run: RunResult) -> None:
         if self._client is None:
             raise RuntimeError("LangfuseSink has no client attached")
+        for ir in run.items:
+            for s in ir.scores:
+                if self.min_value_to_log is not None and s.value < self.min_value_to_log:
+                    continue
+                self._client.log_score(
+                    run_id=run.run_id,
+                    item_id=ir.item.id,
+                    name=s.name,
+                    value=s.value,
+                    comment=s.comment,
+                )
+        self._client.flush()
+
+
+@SINKS.register("phoenix")
+class PhoenixSink(ResultSink):
+    """Exports per-item eval scores to a self-hosted Phoenix as OpenTelemetry spans.
+
+    Additive and reversible: it self-constructs its own narrow score client (a no-op
+    unless ``enabled`` *and* the Phoenix SDK is installed), so — unlike ``LangfuseSink``
+    — it needs no engine injection and cannot be cross-wired with the Langfuse client by
+    the engine's generic ``attach_client`` loop. The score loop mirrors ``LangfuseSink``.
+    """
+
+    def __init__(self, enabled: bool = False, min_value_to_log: float | None = None):
+        self.min_value_to_log = min_value_to_log
+        self._client: PhoenixScoreClient = build_score_client(enabled=enabled)
+
+    def emit(self, run: RunResult) -> None:
         for ir in run.items:
             for s in ir.scores:
                 if self.min_value_to_log is not None and s.value < self.min_value_to_log:
