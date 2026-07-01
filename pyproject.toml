@@ -22,6 +22,21 @@ anthropic = ["anthropic>=0.40"]
 # reproducible across runs.
 archguard = ["grimp==3.14"]
 parquet = ["pyarrow>=14,<20"]
+# Arize Phoenix tracing spike (optional, self-hosted, air-gap-isolated). Kept OUT of
+# `dev` so the offline test job never needs these — the seam degrades to a no-op when
+# absent. `auto_instrument=True` only emits spans for providers whose per-provider
+# OpenInference instrumentor is installed, so the harness's OpenAI/Anthropic/Bedrock
+# targets each get one. Version floors are the current majors (verified 2026-06-30).
+phoenix = [
+    "arize-phoenix-otel>=0.16",
+    "openinference-instrumentation-openai>=0.1",
+    "openinference-instrumentation-anthropic>=1",
+    "openinference-instrumentation-bedrock>=0.1.43",
+]
+# Eval-quality / experiments path (documented, validated live — not exercised by the
+# offline spike). Split out because arize-phoenix-evals pulls pandas/numpy and its API
+# differs from older releases; resolve against `parquet`'s pyarrow pin on a networked env.
+phoenix-evals = ["arize-phoenix-evals>=0.29", "arize-phoenix-client>=2.11"]
 dev = ["pytest>=8", "pytest-cov>=5", "mypy>=1.10", "ruff>=0.5", "jsonschema>=4.0", "anthropic>=0.40", "pyarrow>=14,<20"]
 
 [project.scripts]

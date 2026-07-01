@@ -233,6 +233,35 @@ class ABCampaignConfig(BaseModel):
         return self
 
 
+class PhoenixConfig(BaseModel):
+    """Arize Phoenix observability — tracing spike (reversible, additive).
+
+    Controls the *tracing* seam only (OpenTelemetry/OpenInference auto-instrumentation
+    emitted to a self-hosted Phoenix collector). It is hidden behind a narrow,
+    SDK-optional client: when ``enabled=False`` (the default) nothing is imported and
+    no spans are emitted, so existing runs and the offline suite are unaffected. The
+    collector endpoint and API key are read from the environment in the client
+    (``PHOENIX_COLLECTOR_ENDPOINT`` / ``PHOENIX_API_KEY``) — never hardcoded here, and
+    overridable — mirroring ``SDKLangfuseClient``. Score export is a separate concern
+    (the ``phoenix`` result sink), so this block does not configure it. Fully optional
+    and additive, so ``SCHEMA_VERSION`` is unchanged.
+    """
+
+    enabled: bool = False
+    project_name: str = Field(
+        default="eval-harness",
+        description="Phoenix project the spans are grouped under. Overridable; the OTLP "
+        "endpoint/key come from the environment, not from config.",
+    )
+    tracing: bool = True
+    auto_instrument: bool = Field(
+        default=True,
+        description="Pass through to phoenix.otel.register(auto_instrument=...). Requires the "
+        "matching openinference-instrumentation-<provider> extras to be installed to emit spans.",
+    )
+    batch: bool = True
+
+
 class EvalConfig(BaseModel):
     schema_version: str
     run: RunSettings = Field(default_factory=RunSettings)
@@ -246,6 +275,7 @@ class EvalConfig(BaseModel):
     gate: GateConfig | None = None
     comparison: ComparisonConfig | None = None
     ab_campaign: ABCampaignConfig | None = None
+    phoenix: PhoenixConfig | None = None
 
     @field_validator("schema_version")
     @classmethod

@@ -15,6 +15,7 @@ from .config import load_config
 from .engine import EvalEngine
 from .gating import evaluate_gate
 from .langfuse_client import LangfuseClient, NullLangfuseClient
+from .phoenix_client import configure_tracing
 from .plugins import bootstrap
 from .version import __version__
 
@@ -69,6 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     config = load_config(args.config, overrides=args.overrides)
+    # Opt-in Phoenix tracing: gated inside configure_tracing (no-op when config.phoenix
+    # is absent/disabled or the SDK is missing), so this is safe and additive.
+    configure_tracing(config.phoenix)
     client: LangfuseClient
     if args.offline:
         client = NullLangfuseClient()
