@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
+from ._formatting import _fmt
 from .config.models import ABCampaignConfig, EvalConfig, ModelSpec
 from .core.types import RunResult
 from .langfuse_client import LangfuseClient
@@ -222,10 +223,6 @@ def analyze(
         decision=decision,
         min_sample=ab.min_sample,
     )
-
-
-def _fmt(value: float | None) -> str:
-    return "n/a" if value is None else f"{value:.3f}"
 
 
 def _render_html(result: CampaignResult, title: str) -> str:

@@ -18,6 +18,7 @@ from __future__ import annotations
 import html as _html
 from dataclasses import dataclass
 
+from ._formatting import _fmt
 from .config.models import ComparisonConfig, EvalConfig
 from .core.types import RunResult
 from .langfuse_client import LangfuseClient
@@ -150,15 +151,11 @@ def run_comparison(
     )
 
 
-def _fmt(value: float | None) -> str:
-    return "n/a" if value is None else f"{value:.3f}"
-
-
 def _fmt_delta(value: float | None) -> str:
     if value is None:
         return "n/a"
     sign = "+" if value >= 0 else ""
-    return f"{sign}{value:.3f}"
+    return f"{sign}{_fmt(value)}"
 
 
 def _render_html(result: ComparisonResult, title: str) -> str:
