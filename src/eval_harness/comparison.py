@@ -155,7 +155,7 @@ def _fmt_delta(value: float | None) -> str:
     if value is None:
         return "n/a"
     sign = "+" if value >= 0 else ""
-    return f"{sign}{value:.3f}"
+    return f"{sign}{_fmt(value)}"
 
 
 def _render_html(result: ComparisonResult, title: str) -> str:
