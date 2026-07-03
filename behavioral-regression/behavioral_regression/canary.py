@@ -12,10 +12,14 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, replace
 
+from agent_core.logging_util import get_logger
+
 from .config import BRConfig
 from .detector import RegressionDetector
 from .generator import PairedResponseGenerator, sycophancy_indicators
 from .judge import SyntheticJudge
+
+_log = get_logger("behavioral_regression.canary")
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,9 @@ def _arm_p_regression(cfg: BRConfig, seed: int, v2_shift: float) -> float:
     estimate = RegressionDetector(cfg).detect(
         v1_ind, v2_ind, verdicts, human_labels=None, seed=seed + 2
     )
+    _log.debug(
+        "canary arm v2_shift=%.4f seed=%d p_regression=%.4f", v2_shift, seed, estimate.p_regression
+    )
     return estimate.p_regression
 
 
@@ -56,9 +63,28 @@ def run_canary(cfg: BRConfig, seed: int) -> CanaryReport:
     regressed_p = _arm_p_regression(base, seed, v2_shift=base.injected_shift)
     null_p = _arm_p_regression(base, seed + 1000, v2_shift=0.0)
     margin = regressed_p - null_p
+    separated = margin >= cfg.min_canary_margin
+    if separated:
+        _log.info(
+            "canary separated: margin=%.4f >= min_canary_margin=%.4f "
+            "(regressed_p=%.4f null_p=%.4f)",
+            margin,
+            cfg.min_canary_margin,
+            regressed_p,
+            null_p,
+        )
+    else:
+        _log.warning(
+            "canary NOT separated: margin=%.4f < min_canary_margin=%.4f "
+            "(regressed_p=%.4f null_p=%.4f); detector cannot be trusted",
+            margin,
+            cfg.min_canary_margin,
+            regressed_p,
+            null_p,
+        )
     return CanaryReport(
         regressed_p=regressed_p,
         null_p=null_p,
         margin=margin,
-        separated=margin >= cfg.min_canary_margin,
+        separated=separated,
     )

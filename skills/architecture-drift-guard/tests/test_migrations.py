@@ -1,4 +1,5 @@
 """Tests for the manifest migration chain (backward compatibility)."""
+
 from __future__ import annotations
 
 import pytest

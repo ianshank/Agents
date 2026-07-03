@@ -43,7 +43,7 @@ Edge = tuple[str, str]
 
 
 def _interpolate_str(value: str, env: Mapping[str, str]) -> str:
-    def repl(match: re.Match) -> str:
+    def repl(match: re.Match[str]) -> str:
         var, default = match.group(1), match.group(2)
         if var in env:
             return env[var]
@@ -102,7 +102,7 @@ class Manifest:
     schema_version: str
     root_packages: list[str]
     components: dict[str, list[str]]  # component name -> package prefixes
-    dependencies: set[Edge]           # declared DIRECT component edges (from, to)
+    dependencies: set[Edge]  # declared DIRECT component edges (from, to)
     sys_path: list[str] = field(default_factory=list)
     output: dict[str, Any] = field(default_factory=dict)
 
@@ -170,9 +170,7 @@ def _build_manifest(raw: dict[str, Any]) -> Manifest:
 def validate(manifest: Manifest) -> None:
     """Raise :class:`ManifestError` if the manifest is internally inconsistent."""
     if manifest.schema_version != SCHEMA_VERSION:
-        raise ManifestError(
-            f"schema_version {manifest.schema_version!r} != current {SCHEMA_VERSION!r}"
-        )
+        raise ManifestError(f"schema_version {manifest.schema_version!r} != current {SCHEMA_VERSION!r}")
     if not manifest.root_packages:
         raise ManifestError("'root_packages' must list at least one importable package")
     if any(not p for p in manifest.root_packages):

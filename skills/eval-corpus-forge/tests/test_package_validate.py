@@ -1,4 +1,5 @@
 """Unit tests for forge.package_validate: every major §7 check must actually fire."""
+
 from __future__ import annotations
 
 import json
@@ -15,11 +16,20 @@ def _build_good_package(out_dir, raw):
     canonicals = [normalize.to_canonical(("evals/fixtures/full-dataset/records.jsonl", "1", raw))]
     gt = ground_truth.build_all(canonicals)
     view_data = views.build_views(canonicals)
-    write_package(out_dir, canonicals=canonicals, ground_truth=gt, views=view_data,
-                  provenance=[c["provenance"] for c in canonicals])
+    write_package(
+        out_dir,
+        canonicals=canonicals,
+        ground_truth=gt,
+        views=view_data,
+        provenance=[c["provenance"] for c in canonicals],
+    )
     m = manifest_mod.build_manifest(
-        dataset_name="d", source_input="s", mode="full_dataset",
-        canonical_count=len(canonicals), ground_truth_count=len(gt), views=view_data,
+        dataset_name="d",
+        source_input="s",
+        mode="full_dataset",
+        canonical_count=len(canonicals),
+        ground_truth_count=len(gt),
+        views=view_data,
         validation_status="pending",
     )
     with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
@@ -28,7 +38,9 @@ def _build_good_package(out_dir, raw):
 
 
 FULL_RAW = {
-    "prompt": "do it", "expected_outcome": {"ok": True}, "expected_output_fields": {"ok": True},
+    "prompt": "do it",
+    "expected_outcome": {"ok": True},
+    "expected_output_fields": {"ok": True},
     "response": "done",
     "trace": {"tool_names": ["a", "b"], "tool_invocation_order": ["a", "b"], "retrieved_ids": ["d1"]},
     "completion_status": "success",

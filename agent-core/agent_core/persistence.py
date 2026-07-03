@@ -26,9 +26,12 @@ from typing import Any
 
 from .calibration import Calibrator, IsotonicCalibrator
 from .config import RecalibrationConfig
+from .logging_util import get_logger
 from .loop import RunResult
 from .protocols import CycleState, StopReason
 from .recalibration import TemperatureScaler
+
+logger = get_logger(__name__)
 
 RUN_STATE_SCHEMA_VERSION = "1.0.0"
 
@@ -249,9 +252,11 @@ def save_run(result: RunResult, path: str) -> None:
             f.write(serialized)
         os.replace(tmp, path)
     except Exception:
+        logger.warning("atomic write to %s failed; removing temp file", path)
         with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp)
         raise
+    logger.debug("run result saved to %s", path)
 
 
 def load_run(path: str) -> RunResult:

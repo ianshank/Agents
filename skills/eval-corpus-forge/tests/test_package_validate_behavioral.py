@@ -1,4 +1,5 @@
 """Cover the remaining §7.2 behavioral checks and the validator CLI surface."""
+
 from __future__ import annotations
 
 import json
@@ -13,11 +14,14 @@ from forge import package_validate as pv
 from forge.atomic import write_package
 from forge.package_validate import validate_package, write_validation_artifacts
 
-PKG_VALIDATE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                            "scripts", "forge", "package_validate.py")
+PKG_VALIDATE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "forge", "package_validate.py"
+)
 
 FULL_RAW = {
-    "prompt": "do it", "expected_outcome": {"ok": True}, "expected_output_fields": {"ok": True},
+    "prompt": "do it",
+    "expected_outcome": {"ok": True},
+    "expected_output_fields": {"ok": True},
     "response": "done",
     "trace": {"tool_names": ["a", "b"], "tool_invocation_order": ["a", "b"], "retrieved_ids": ["d1"]},
     "completion_status": "success",
@@ -29,11 +33,20 @@ def _build(out_dir, raw=FULL_RAW, mode="full_dataset"):
     canonicals = [normalize.to_canonical(("evals/fixtures/full-dataset/records.jsonl", "1", raw))]
     gt = ground_truth.build_all(canonicals)
     view_data = views.build_views(canonicals)
-    write_package(out_dir, canonicals=canonicals, ground_truth=gt, views=view_data,
-                  provenance=[c["provenance"] for c in canonicals])
+    write_package(
+        out_dir,
+        canonicals=canonicals,
+        ground_truth=gt,
+        views=view_data,
+        provenance=[c["provenance"] for c in canonicals],
+    )
     m = manifest_mod.build_manifest(
-        dataset_name="d", source_input="s", mode=mode,
-        canonical_count=len(canonicals), ground_truth_count=len(gt), views=view_data,
+        dataset_name="d",
+        source_input="s",
+        mode=mode,
+        canonical_count=len(canonicals),
+        ground_truth_count=len(gt),
+        views=view_data,
         validation_status="pending",
     )
     _write_json(os.path.join(out_dir, "manifest.json"), m)
@@ -162,8 +175,10 @@ def test_tool_order_lost_detected(tmp_path):
     out = str(tmp_path / "pkg")
     canonicals, _gt, _vd = _build(out)
     sid = canonicals[0]["scenario_id"]
-    _rewrite_jsonl(os.path.join(out, "views", "tool_invocation_eval.jsonl"),
-                   [{"scenario_id": sid, "tool_names": ["a", "b"], "tool_invocation_order": ["b", "a"]}])
+    _rewrite_jsonl(
+        os.path.join(out, "views", "tool_invocation_eval.jsonl"),
+        [{"scenario_id": sid, "tool_names": ["a", "b"], "tool_invocation_order": ["b", "a"]}],
+    )
     passed, errors = validate_package(out)
     assert not passed and "behavioral.tool_order_lost" in _checks(errors)
 
@@ -194,8 +209,10 @@ def test_bootstrap_fabrication_detected(tmp_path):
     canonicals, _gt, _vd = _build(out, mode="bootstrap")
     sid = canonicals[0]["scenario_id"]
     # inject a tool record under bootstrap mode and mark applicable to isolate the fabrication check
-    _rewrite_jsonl(os.path.join(out, "views", "tool_invocation_eval.jsonl"),
-                   [{"scenario_id": sid, "tool_names": ["a"], "tool_invocation_order": ["a"]}])
+    _rewrite_jsonl(
+        os.path.join(out, "views", "tool_invocation_eval.jsonl"),
+        [{"scenario_id": sid, "tool_names": ["a"], "tool_invocation_order": ["a"]}],
+    )
     mpath = os.path.join(out, "manifest.json")
     m = _read_json(mpath)
     m["view_applicability"]["tool_invocation_eval"] = {"applicable": True, "reason": None}
@@ -228,6 +245,7 @@ def test_write_validation_artifacts(tmp_path):
 
 
 # --- CLI surface ---
+
 
 def _cli(args):
     return subprocess.run([sys.executable, PKG_VALIDATE, *args], capture_output=True, text=True)
@@ -299,8 +317,12 @@ def test_structural_evidence_checks_fire(tmp_path):
     _rewrite_jsonl(os.path.join(out, "views", "end_to_end_eval.jsonl"), [{"scenario_id": sid}])
     _, errors = validate_package(out)
     checks = _checks(errors)
-    assert {"structural.retrieval_no_data", "structural.tool_no_data",
-            "structural.response_no_target", "structural.e2e_no_target"} <= checks
+    assert {
+        "structural.retrieval_no_data",
+        "structural.tool_no_data",
+        "structural.response_no_target",
+        "structural.e2e_no_target",
+    } <= checks
 
 
 def test_write_validation_artifacts_records_errors(tmp_path):
@@ -317,8 +339,7 @@ def test_bootstrap_retrieval_fabrication_detected(tmp_path):
     out = str(tmp_path / "pkg")
     canonicals, _gt, _vd = _build(out, mode="bootstrap")
     sid = canonicals[0]["scenario_id"]
-    _rewrite_jsonl(os.path.join(out, "views", "retrieval_eval.jsonl"),
-                   [{"scenario_id": sid, "retrieved_ids": ["d1"]}])
+    _rewrite_jsonl(os.path.join(out, "views", "retrieval_eval.jsonl"), [{"scenario_id": sid, "retrieved_ids": ["d1"]}])
     mpath = os.path.join(out, "manifest.json")
     m = _read_json(mpath)
     m["view_applicability"]["retrieval_eval"] = {"applicable": True, "reason": None}

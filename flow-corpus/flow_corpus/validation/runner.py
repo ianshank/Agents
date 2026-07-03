@@ -127,6 +127,18 @@ def run_suite(
         )
 
     n_total = len(suite.instances)
+    indeterminate_rate = n_indeterminate / n_total if n_total else 0.0
+    if indeterminate_rate > cfg.max_indeterminate_rate:
+        _log.warning(
+            "indeterminate rate %.4f exceeds derived cap %.4f flow_type=%s domain=%s "
+            "n_indeterminate=%d n_total=%d (oracle abstentions exceed the audit budget)",
+            indeterminate_rate,
+            cfg.max_indeterminate_rate,
+            specimen.flow_type,
+            suite.domain,
+            n_indeterminate,
+            n_total,
+        )
     _log.info(
         "run_suite complete flow_type=%s agent_version=%s domain=%s "
         "n_total=%d n_indeterminate=%d indeterminate_rate=%.4f reliability=%s aurc=%s",
@@ -135,7 +147,7 @@ def run_suite(
         suite.domain,
         n_total,
         n_indeterminate,
-        (n_indeterminate / n_total if n_total else 0.0),
+        indeterminate_rate,
         reliability.reliability,
         aurc_value,
     )

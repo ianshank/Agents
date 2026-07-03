@@ -1,4 +1,5 @@
 """Unit tests for the drift_check runner helpers."""
+
 from __future__ import annotations
 
 import importlib

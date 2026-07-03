@@ -45,10 +45,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
-      - run: pip install pytest pytest-cov "pyyaml>=6" ruff
+      # ruff/mypy pinned to the root dev-extra versions so skills lint/type identically.
+      - run: pip install pytest pytest-cov "pyyaml>=6" "ruff==0.15.20" "mypy==2.1.0"
       # Lint the authored library, runner, and tests (the vendored validate_skill.py mirrors
       # the repo root copy and is intentionally excluded).
       - run: ruff check scripts/forge scripts/run_eval_corpus_forge.py tests
+      - run: ruff format --check scripts/forge scripts/run_eval_corpus_forge.py tests
+      # Type-check against the root mypy config (skills ship no config of their own).
+      - run: mypy --config-file ../../pyproject.toml scripts/forge scripts/run_eval_corpus_forge.py
       # Unit + e2e tests with coverage gate on the forge library.
       - run: python -m pytest tests --cov=forge --cov-branch --cov-report=term-missing --cov-fail-under=95
       # The skill's own end-to-end self-check (structural + behavioral evals).
@@ -76,11 +80,14 @@ jobs:
       # Isolated: only grimp + pyyaml + tooling — never the repo packages. The
       # skill must not import the code it polices. grimp is pinned for a
       # reproducible graph (an unpinned bump could shift edges and the gate).
-      - run: pip install pytest pytest-cov "pyyaml>=6" ruff "grimp==3.14"
+      - run: pip install pytest pytest-cov "pyyaml>=6" "ruff==0.15.20" "mypy==2.1.0" "grimp==3.14"
       # Lint the authored library, runners, and tests (vendored validate_skill.py
       # mirrors the repo root copy and is intentionally excluded; fixtures carry
       # deliberate "unused" imports and are excluded via the skill ruff.toml).
       - run: ruff check scripts/adguard scripts/drift_check.py scripts/mermaid_gen.py tests
+      - run: ruff format --check scripts/adguard scripts/drift_check.py scripts/mermaid_gen.py tests
+      # Type-check against the root mypy config (skills ship no config of their own).
+      - run: mypy --config-file ../../pyproject.toml scripts/adguard scripts/drift_check.py scripts/mermaid_gen.py
       # Unit + e2e tests with coverage gate on the adguard library.
       - run: python -m pytest tests --cov=adguard --cov-branch --cov-report=term-missing --cov-fail-under=95
       # The skill's own end-to-end self-check (structural + behavioral evals).
@@ -108,10 +115,13 @@ jobs:
       # Isolated: the runner's --mock path and the unit tests (which inject a fake
       # eval_harness.judges) need no repo packages. Live mode is a thin, env-gated
       # wrapper validated by injection, not by a real SDK in CI.
-      - run: pip install pytest pytest-cov "pyyaml>=6" ruff
+      - run: pip install pytest pytest-cov "pyyaml>=6" "ruff==0.15.20" "mypy==2.1.0"
       # Lint the runner and tests (the vendored validate_skill.py mirrors the repo
       # root copy and is excluded via the skill ruff.toml).
       - run: ruff check scripts/run.py tests
+      - run: ruff format --check scripts/run.py tests
+      # Type-check against the root mypy config (skills ship no config of their own).
+      - run: mypy --config-file ../../pyproject.toml scripts/run.py
       # Unit tests with coverage gate on the runner.
       - run: python -m pytest tests --cov=run --cov-branch --cov-report=term-missing --cov-fail-under=95
       # The skill's own end-to-end self-check (structural + behavioral evals).
@@ -139,9 +149,12 @@ jobs:
       # Unlike the other skills, model-bench wraps the harness, so it installs the
       # repo packages (the eval engine + agent_core for the campaign's Wilson stats).
       # The fixtures use echo targets, so no provider extras / credentials are needed.
-      - run: pip install pytest pytest-cov ruff -e ../.. -e ../../agent-core
+      - run: pip install pytest pytest-cov "ruff==0.15.20" "mypy==2.1.0" -e ../.. -e ../../agent-core
       # Lint the runner and tests (vendored validate_skill.py excluded via ruff.toml).
       - run: ruff check scripts/run.py tests
+      - run: ruff format --check scripts/run.py tests
+      # Type-check against the root mypy config (skills ship no config of their own).
+      - run: mypy --config-file ../../pyproject.toml scripts/run.py
       # Unit tests with coverage gate on the runner.
       - run: python -m pytest tests --cov=run --cov-branch --cov-report=term-missing --cov-fail-under=95
       # The skill's own end-to-end self-check (structural + behavioral evals).

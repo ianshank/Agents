@@ -4,6 +4,7 @@ A scenario contributes a record to a view ONLY if it carries that view's require
 View records reference scenario_id and a thin projection — never the full canonical record.
 If zero records qualify, the view file is empty and the manifest records the reason.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable

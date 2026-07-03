@@ -3,6 +3,7 @@
 package_validate re-counts from disk and compares, so a mismatch surfaces a dropped or
 truncated write (revision 3 — the check is meaningful, not tautological).
 """
+
 from __future__ import annotations
 
 import datetime
@@ -30,8 +31,7 @@ def build_manifest(
         "end_to_end_eval_records": len(views["end_to_end_eval"]["records"]),
     }
     view_applicability = {
-        name: {"applicable": views[name]["applicable"], "reason": views[name]["reason"]}
-        for name in views
+        name: {"applicable": views[name]["applicable"], "reason": views[name]["reason"]} for name in views
     }
     return {
         "dataset_name": dataset_name,

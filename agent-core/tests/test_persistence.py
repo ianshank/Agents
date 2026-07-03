@@ -325,6 +325,15 @@ def test_save_run_cleans_up_tmp_on_failure() -> None:
         assert not os.path.exists(path + ".tmp")
 
 
+def test_save_run_failure_logs_warning(caplog) -> None:
+    """The atomic-write failure path is observable, not silent, before re-raising."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "missing_subdir", "run.json")
+        with caplog.at_level("WARNING", logger="agent_core.persistence"), pytest.raises(OSError):
+            save_run(_make_run_result(), path)
+    assert any("atomic write" in r.message for r in caplog.records)
+
+
 def test_save_is_compact_no_whitespace() -> None:
     """The saved JSON uses compact separators (no spaces after : or ,)."""
     result = _make_run_result()

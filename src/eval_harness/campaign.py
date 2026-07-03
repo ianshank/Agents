@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import html as _html
 import json
+import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -33,6 +34,8 @@ from ._formatting import _fmt
 from .config.models import ABCampaignConfig, EvalConfig, ModelSpec
 from .core.types import RunResult
 from .langfuse_client import LangfuseClient
+
+logger = logging.getLogger(__name__)
 
 
 class Decision(str, Enum):
@@ -68,6 +71,13 @@ class CampaignStore:
     def append(self, rec: CampaignRecord) -> None:
         with self.path.open("a", encoding="utf-8") as fh:
             fh.write(rec.to_json() + "\n")
+        logger.debug(
+            "recorded campaign run: campaign=%s arm=%s %d/%d",
+            rec.campaign_id,
+            rec.arm,
+            rec.successes,
+            rec.n,
+        )
 
     def all(self) -> list[CampaignRecord]:
         if not self.path.exists():
@@ -214,6 +224,16 @@ def analyze(
     else:
         decision = Decision.NO_DIFFERENCE
 
+    logger.info(
+        "campaign %s decided %s (a: %d/%d, b: %d/%d, min_sample=%d)",
+        ab.campaign_id,
+        decision.value,
+        a.successes,
+        a.n,
+        b.successes,
+        b.n,
+        ab.min_sample,
+    )
     return CampaignResult(
         campaign_id=ab.campaign_id,
         score=ab.score,

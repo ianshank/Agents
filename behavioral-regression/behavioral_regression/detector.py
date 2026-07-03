@@ -16,11 +16,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from agent_core.calibration import brier_decomposition, brier_score, wilson_interval
+from agent_core.logging_util import get_logger
 from flow_corpus.validation.power import is_directional_only
 from flow_corpus.validation.resampling import BootstrapCI, bootstrap_delta_ci
 
 from .config import BRConfig
 from .judge import JVerdict
+
+_log = get_logger("behavioral_regression.detector")
 
 
 def _mean(scores: Sequence[float], _outcomes: Sequence[int]) -> float:
@@ -100,6 +103,8 @@ class RegressionDetector:
         # Regression proportion from the judge's determinate verdicts + Wilson CI.
         determinate = [v for v in verdicts if v.label is not None]
         n_det = len(determinate)
+        if n_det == 0:
+            _log.warning("no determinate verdicts out of %d pairs; p_regression degrades to 0.0", n)
         k = sum(1 for v in determinate if v.label)
         p_regression = k / n_det if n_det > 0 else 0.0
         wilson_low, wilson_high = wilson_interval(k, n_det, cfg.wilson_z)
@@ -117,6 +122,23 @@ class RegressionDetector:
 
         directional = is_directional_only(n_det, cfg.power_min_sample)
         cant_tell = (not delta_ci.excludes_zero) or directional
+        _log.debug(
+            "delta_ci point=%.4f low=%.4f high=%.4f excludes_zero=%s directional_only=%s",
+            delta_ci.point,
+            delta_ci.low,
+            delta_ci.high,
+            delta_ci.excludes_zero,
+            directional,
+        )
+        _log.info(
+            "detect: p_regression=%.4f wilson=[%.4f, %.4f] n_determinate=%d/%d cant_tell=%s",
+            p_regression,
+            wilson_low,
+            wilson_high,
+            n_det,
+            n,
+            cant_tell,
+        )
         return RegressionEstimate(
             p_regression=p_regression,
             wilson_low=wilson_low,

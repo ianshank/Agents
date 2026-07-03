@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import socket
 
 import pytest
@@ -41,3 +42,13 @@ def test_injected_judge_is_used():
 def test_runs_produce_a_decision(v2_mean):
     report = run_pipeline(BRConfig(n_pairs=200, v2_sycophancy_mean=v2_mean), seed=7)
     assert report.decision.value in {"ship", "hold", "escalate"}
+
+
+def test_pipeline_logs_stage_boundaries_and_decision(caplog):
+    cfg = BRConfig(n_pairs=120)
+    with caplog.at_level(logging.INFO, logger="behavioral_regression"):
+        report = run_pipeline(cfg, seed=2)
+    assert "generate: 120 response pairs (seed=2)" in caplog.text
+    assert "judge: 120 verdicts" in caplog.text
+    assert "validate: kappa=" in caplog.text
+    assert f"pipeline complete: decision={report.decision.value} (seed=2)" in caplog.text

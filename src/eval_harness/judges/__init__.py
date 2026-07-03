@@ -11,6 +11,10 @@ from ..core.interfaces import Judge
 from ..core.types import JudgeVerdict
 from ..plugins import JUDGES
 
+# Constructor default for the Anthropic judge, named once so code and docs cannot
+# drift apart; always overridable via config — never hard-coded at a call site.
+DEFAULT_ANTHROPIC_JUDGE_MODEL = "claude-opus-4-8"
+
 logger = logging.getLogger(__name__)
 
 
@@ -224,7 +228,7 @@ class AnthropicJudge(Judge):  # pragma: no cover - requires anthropic SDK + netw
     """LLM-as-judge over the Anthropic Messages API. Model id comes from config.
 
     The optional live path for the behavioral-regression demo's "wire a real model"
-    toggle. Default model is the latest Claude (``claude-opus-4-8``), overridable via
+    toggle. Default model is :data:`DEFAULT_ANTHROPIC_JUDGE_MODEL`, overridable via
     config — never hard-coded at a call site.
 
     Note: ``temperature`` is omitted by default. Sampling parameters are rejected
@@ -235,7 +239,7 @@ class AnthropicJudge(Judge):  # pragma: no cover - requires anthropic SDK + netw
 
     def __init__(
         self,
-        model: str = "claude-opus-4-8",
+        model: str = DEFAULT_ANTHROPIC_JUDGE_MODEL,
         api_key: str | None = None,
         max_tokens: int = 1024,
         temperature: float | None = None,

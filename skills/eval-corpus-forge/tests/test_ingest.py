@@ -1,4 +1,5 @@
 """Unit tests for forge.ingest: discovery, format handling, mode detection, preconditions."""
+
 from __future__ import annotations
 
 import json
@@ -86,11 +87,11 @@ def test_has_prompt(obj, expected):
         ({"retrieved_ids": ["d1"]}, True),
         ({"response": "hello"}, True),
         ({"completion_status": "success"}, True),
-        ({"completion_status": False}, True),   # present scalar counts as evidence
+        ({"completion_status": False}, True),  # present scalar counts as evidence
         ({"prompt": "x"}, False),
         ({"trace": {}}, False),
         ({"trace": {"tool_names": []}}, False),  # dict with only empty content is not evidence
-        ({"response": "   "}, False),            # whitespace-only string is not evidence
+        ({"response": "   "}, False),  # whitespace-only string is not evidence
     ],
 )
 def test_has_execution_artifact(obj, expected):
@@ -109,3 +110,12 @@ def test_require_prompts_message():
         ingest.require_prompts([("f", "1", {"metadata": {"x": 1}})])
     # does not raise when a prompt exists
     ingest.require_prompts([("f", "1", {"prompt": "hi"})])
+
+
+def test_non_object_records_are_logged_not_silent(tmp_path, caplog):
+    p = tmp_path / "mixed.jsonl"
+    p.write_text('{"prompt": "keep me"}\n"just a string"\n42\n', encoding="utf-8")
+    with caplog.at_level("WARNING", logger="forge.ingest"):
+        records = ingest.load_records(str(p))
+    assert len(records) == 1
+    assert any("skipped 2 non-object record(s)" in r.message for r in caplog.records)

@@ -1,4 +1,5 @@
 """Tests for manifest loading, interpolation, overrides, and validation."""
+
 from __future__ import annotations
 
 import textwrap
@@ -61,7 +62,7 @@ def test_interpolate_missing_without_default_raises():
 
 def test_sys_path_interpolation_in_manifest(tmp_path, monkeypatch):
     monkeypatch.setenv("REPO_ROOT", "/repo")
-    body = VALID + "    sys_path: [\"${REPO_ROOT}/src\"]\n"
+    body = VALID + '    sys_path: ["${REPO_ROOT}/src"]\n'
     m = load_manifest(_write(tmp_path, body))
     assert m.sys_path == ["/repo/src"]
 

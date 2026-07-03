@@ -77,12 +77,19 @@ def confidence_cross_check(
         by_type.setdefault(r.flow_type, []).append(r.outcome)
     base_rate = {t: sum(v) / len(v) for t, v in by_type.items()}
 
+    _log.debug(
+        "cross-check split n_fit=%d n_measured=%d n_fit_flow_types=%d",
+        len(fit),
+        len(measure),
+        len(base_rate),
+    )
     directional = is_directional_only(len(measure), cfg.power_min_sample)
     outcomes = [r.outcome for r in measure]
     if len(measure) == 0 or len(set(outcomes)) < 2:
         # AUROC undefined without both classes present in the held-out slice.
-        _log.info(
-            "confidence cross-check directional-only (degenerate measure partition) n_measured=%d",
+        _log.warning(
+            "confidence cross-check degenerate measure partition (AUROC undefined); "
+            "returning directional-only n_measured=%d",
             len(measure),
         )
         return CrossCheckReport(None, None, None, False, len(measure), directional_only=True)

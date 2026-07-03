@@ -15,9 +15,9 @@ merge-gate soak operations → redundancy/gap pass.
 | Standard | Rule | Source of truth |
 |---|---|---|
 | Logging | Stdlib `logging`, plain-text format — scripts via `scripts/_cli.py::configure_logging`; agent-core via `agent_core/logging_util.py` (`get_logger`, `debug_span`). No structlog/JSON in this repo. | `scripts/_cli.py`, `agent-core/agent_core/logging_util.py` |
-| Coverage floors | root/`eval_harness` 96; agent-core 95; flow-corpus/flow-protocol/behavioral-regression 95; skills 95 (ADR 0009). `scripts/` 85 (F-031). claude-foundation enforced gate 85 (94 is measured, not the gate). New code states the floor of where it lands: F-039 → agent-core (95); validation scripts → scripts (85). | ADR 0009, `scripts/.coveragerc`, `claude-foundation/pyproject.toml:54` |
-| Config-driven | No hardcoded tunables in new code. No CI grep-guard for this exists — enforcement is code review plus, post-extraction, `foundation_tools.scan`; gitleaks (F-037) covers secrets only. A generic hardcoded-value guard is out of scope. | — |
-| Feature pattern | `features.yaml` entry + `scripts/validations/F_0XX.py` + ADR when architectural. Next IDs: F-037, F-038, F-039. Next ADRs: **0019, 0020** (0018 = outcome-store persistence, taken). | `features.yaml`, `docs/decisions/` |
+| Coverage floors | root/`eval_harness` 96; agent-core 95; flow-corpus/flow-protocol/behavioral-regression 95; skills 95 (ADR 0009). `scripts/` 85 (F-031). claude-foundation enforced gate 85 (94 is measured, not the gate). New code states the floor of where it lands: F-040 → agent-core (95); validation scripts → scripts (85). | ADR 0009, `scripts/.coveragerc`, `claude-foundation/pyproject.toml:54` |
+| Config-driven | No hardcoded tunables in new code. No CI grep-guard for this exists — enforcement is code review plus, post-extraction, `foundation_tools.scan`; gitleaks (F-038) covers secrets only. A generic hardcoded-value guard is out of scope. | — |
+| Feature pattern | `features.yaml` entry + `scripts/validations/F_0XX.py` + ADR when architectural. Next IDs: F-038, F-039, F-040 (F-037 was consumed by the 2026-07-03 quality-floor sweep, PR #34). Next ADRs: **0019, 0020** (0018 = outcome-store persistence, taken). | `features.yaml`, `docs/decisions/` |
 | Label model | `LabelSource` = `REVERT`, `CI_FAILURE`, `TIMEOUT_CLEAN` (passive), `HUMAN_AUDIT` (authoritative). There is no `e2e_acceptance`. HUMAN_AUDIT always wins; tau/calibrator health computed from HUMAN_AUDIT only. | `agent-core/agent_core/outcome_store.py:28-32` |
 | Branch protection | None exists today (`main` is unprotected). Nothing may claim exclusions as existing. Protection on `main` is a soak-endgame step; when rules are added they must exclude `merge-gate-data` or `store_sync push` breaks. | GitHub API (verified 2026-07-03) |
 | Redundancy hygiene | Every phase ends with a delete list; nothing lands without removing what it replaces. | — |
@@ -29,7 +29,7 @@ this plan; `foundation:test-first` for Phase 1 & 3 code items; `architecture-dri
 
 ---
 
-## Phase 0 — Credential scrub + secret scanning (F-037, ADR 0019; P0, ~half day)
+## Phase 0 — Credential scrub + secret scanning (F-038, ADR 0019; P0, ~half day)
 
 Literal Langfuse key pair in three tracked files, while `NEXT_STEPS.md:77` marks rotation `[x]` done.
 
@@ -43,23 +43,23 @@ Literal Langfuse key pair in three tracked files, while `NEXT_STEPS.md:77` marks
    history, so a rewrite removes nothing an attacker could not have taken; rotation is the real
    mitigation; a rewrite would invalidate every clone, the open-PR bases (#16/#21/#30), pinned
    SHAs, and the `merge-gate-data` branch's commit lineage.
-4. **F-037 secret-scan gate:** gitleaks step in `.github/workflows/quality-gates.yml`,
+4. **F-038 secret-scan gate:** gitleaks step in `.github/workflows/quality-gates.yml`,
    config-driven via new `.gitleaks.toml` (rules + allowlist for redaction placeholders and test
    fixtures). Fail-closed on the working tree; history scan report-only (findings are
    known/rotated per ADR 0019).
-5. `scripts/validations/F_037.py` (existing `F_0XX.py` pattern): asserts `.gitleaks.toml`
+5. `scripts/validations/F_038.py` (existing `F_0XX.py` pattern): asserts `.gitleaks.toml`
    exists, the workflow wires it fail-closed, and no `sk-lf-`/`pk-lf-` literal survives in
-   tracked files. `features.yaml` F-037 entry. Fix the NEXT_STEPS rotation wording.
+   tracked files. `features.yaml` F-038 entry. Fix the NEXT_STEPS rotation wording.
 
 **Exit gate:** rotation confirmed in writing; gitleaks green on main; three files clean.
 **Files:** `HARNESS_SPEC.md`, `docs/decisions/0003-langfuse-integration.md`, `progress.md`,
 `NEXT_STEPS.md`, `.gitleaks.toml` (new), `.github/workflows/quality-gates.yml`,
-`docs/decisions/0019-no-history-rewrite.md` (new), `scripts/validations/F_037.py` (new),
+`docs/decisions/0019-no-history-rewrite.md` (new), `scripts/validations/F_038.py` (new),
 `features.yaml`.
 
 ---
 
-## Phase 1 — Extract claude-foundation + M7 dogfood (F-038, ADR 0020)
+## Phase 1 — Extract claude-foundation + M7 dogfood (F-039, ADR 0020)
 
 Per ADR 0017 and the staging PLAN.md (M0–M6 done). This is extraction + activation, not rewriting.
 
@@ -82,14 +82,14 @@ Per ADR 0017 and the staging PLAN.md (M0–M6 done). This is extraction + activa
    `scripts/check_skill_script_drift.py` pins vendored `validate_skill.py` copies only and is
    untouched by the delete. Grep docs (NEXT_STEPS, `docs/plans/claude-foundation/`, CLAUDE.md,
    README) for staging-dir links and update them.
-6. **F-038 extraction smoke:** `scripts/validations/F_038.py` — staging dir absent, pinned
+6. **F-039 extraction smoke:** `scripts/validations/F_039.py` — staging dir absent, pinned
    plugin config present, 4 domain skills still tracked, no generic-skill duplication.
-   `features.yaml` F-038 entry.
+   `features.yaml` F-039 entry.
 7. Second consumer candidate: `Strategos-MCTS` — gated on its own M5 benchmark; recorded as
    follow-up only, no work here. This deletion PR satisfies the portfolio forced-migration
    criterion (first consumer removed vendored duplicates).
 
-**Exit gate:** foundation CI green at v1.0.0; F_038 green; agents CI green with plugin installed
+**Exit gate:** foundation CI green at v1.0.0; F_039 green; agents CI green with plugin installed
 and staging deleted; deletion PR cleanly revertible.
 
 ---
@@ -117,7 +117,7 @@ active work + `main` + `merge-gate-data`; soak counter incremented only by genui
 
 ---
 
-## Phase 3 — Soak operations (human checklist + F-039)
+## Phase 3 — Soak operations (human checklist + F-040)
 
 Verified state: exactly **1** record in `merge_outcomes.jsonl` on `merge-gate-data`
 (`label: null`, seeded by PR #33's merge); target **N≥20** per #33's checklist.
@@ -136,7 +136,7 @@ Verified state: exactly **1** record in `merge_outcomes.jsonl` on `merge-gate-da
    required checks — the repo's first-ever protection — with `merge-gate-data` excluded from any
    rule pattern.
 
-**F-039 — soak-stats extension (not a new CLI).** `agent_core.store_sync` already has
+**F-040 — soak-stats extension (not a new CLI).** `agent_core.store_sync` already has
 `pull`/`push`/`stats`; `stats` emits per-domain / per-label-source JSON via `store_stats()`.
 Extend minimally:
 - `agent-core/agent_core/store_sync.py`: pure function `soak_progress(records, target) -> dict`
@@ -147,10 +147,10 @@ Extend minimally:
 - CLI: optional `--soak-target N` on the existing `stats` subparser; when passed, the JSON
   output gains a top-level `"soak"` key. Default behavior unchanged.
 - Tests in `agent-core/tests/test_store_sync.py` (95 floor), offline fixture stores including
-  malformed lines; `scripts/validations/F_039.py`; `features.yaml` entry. Property: the report
+  malformed lines; `scripts/validations/F_040.py`; `features.yaml` entry. Property: the report
   never mutates the store.
 
-**Exit gate:** F_039 green; `python -m agent_core.store_sync stats --soak-target 20` reports the
+**Exit gate:** F_040 green; `python -m agent_core.store_sync stats --soak-target 20` reports the
 live soak; checklist items 1–4 human-confirmed. Gate enablement remains time-gated, not
 effort-gated.
 
@@ -182,7 +182,7 @@ open work; delete list executed.
 ```
 Phase 0 ──► Phase 1 ──► Phase 2 ──► Phase 3 endgame (clock-gated) ──► "gates required"
                 └────────────► Phase 4 (anytime after 1)
-Phase 3 checklist items 1–4: start immediately (item 1 today); F-039 anytime after Phase 0.
+Phase 3 checklist items 1–4: start immediately (item 1 today); F-040 anytime after Phase 0.
 ```
 
 ## Risk register
@@ -191,18 +191,18 @@ Phase 3 checklist items 1–4: start immediately (item 1 today); F-039 anytime a
 |---|---|
 | Rotation never happened despite `[x]` in NEXT_STEPS | Phase 0 hard-stop: written human confirmation before the scrub merges; rotate if unconfirmed |
 | History-rewrite temptation | ADR 0019 — rotation is the mitigation; a rewrite breaks clones, open-PR bases, and `merge-gate-data` lineage |
-| Extraction breaks agents CI | Fresh import + v1.0.0 pin; staging delete in one revertible PR; F-038 smoke |
+| Extraction breaks agents CI | Fresh import + v1.0.0 pin; staging delete in one revertible PR; F-039 smoke |
 | PR triage inflates soak with junk merges | Regression gate + `foundation:code-review` on every triage merge; closures don't count |
-| Soak stalls (low merge velocity, 1 record today) | F-039 velocity/days-to-target surfaces it weekly; fallback: stay in shadow mode, adjust per-domain expectations only via a new ADR — never lower N silently |
+| Soak stalls (low merge velocity, 1 record today) | F-040 velocity/days-to-target surfaces it weekly; fallback: stay in shadow mode, adjust per-domain expectations only via a new ADR — never lower N silently |
 | Adding branch protection breaks store-sync | Endgame rule explicitly excludes `merge-gate-data` |
 | Gold-plating | Each phase's code budget is fixed; anything beyond requires a new feature entry with justification |
 
 ## Acceptance summary
 
-- F-037 gitleaks gate green; rotation confirmed; zero key strings in the working tree
+- F-038 gitleaks gate green; rotation confirmed; zero key strings in the working tree
 - claude-foundation v1.0.0 tagged; agents consuming via pinned install; staging deleted
   (forced-migration criterion met)
 - #16/#21 closed with salvage notes; #30 merged; 13 stale branches pruned
-- Soak observable via `store_sync stats --soak-target` (F-039); human checklist items 1–4 done;
+- Soak observable via `store_sync stats --soak-target` (F-040); human checklist items 1–4 done;
   first human verdict recorded
 - ADRs 0019/0020 accepted; F-008 decided; gap docs cross-referenced; NEXT_STEPS ≤1 screen

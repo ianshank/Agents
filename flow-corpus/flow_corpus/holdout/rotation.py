@@ -76,6 +76,12 @@ class RotationManager:
                 rel = report.instance_holdout.reliability
                 if rel is None:
                     # No measurable instances this fold — treat as a degenerate fold.
+                    _log.warning(
+                        "fold=%d produced no measurable instance-holdout reliability; "
+                        "skipping fold held_out_type=%s",
+                        fold,
+                        held_out_type,
+                    )
                     directional += 1
                     continue
                 if report.instance_holdout.directional_only:
@@ -84,6 +90,12 @@ class RotationManager:
                 _log.debug("fold=%d reliability=%.6f", fold, rel)
 
         if not reliabilities:
+            _log.error(
+                "no fold produced a measurable instance-holdout reliability "
+                "held_out_type=%s k_folds=%d",
+                held_out_type,
+                k_folds,
+            )
             raise ValueError("no fold produced a measurable instance-holdout reliability")
 
         spread, stable = _spread_and_stable(reliabilities, self.cfg.rotation_stability_threshold)

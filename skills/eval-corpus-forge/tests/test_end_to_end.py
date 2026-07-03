@@ -1,4 +1,5 @@
 """End-to-end tests: drive the runner CLI over the bundled fixtures."""
+
 from __future__ import annotations
 
 import json
@@ -23,7 +24,9 @@ def _read_text(path):
 def _run(args):
     return subprocess.run(
         [sys.executable, RUNNER, *args],
-        cwd=SKILL, capture_output=True, text=True,
+        cwd=SKILL,
+        capture_output=True,
+        text=True,
     )
 
 
@@ -36,8 +39,12 @@ def test_full_dataset_end_to_end(tmp_path):
     assert m["validation"]["status"] == "passed"
     assert m["counts"]["canonical_scenarios"] == 2
     # all four views populated for this fixture
-    for key in ("retrieval_eval_records", "tool_invocation_eval_records",
-                "response_eval_records", "end_to_end_eval_records"):
+    for key in (
+        "retrieval_eval_records",
+        "tool_invocation_eval_records",
+        "response_eval_records",
+        "end_to_end_eval_records",
+    ):
         assert m["counts"][key] >= 1
 
 

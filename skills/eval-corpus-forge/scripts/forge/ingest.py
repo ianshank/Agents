@@ -4,12 +4,16 @@ Supported inputs: JSON, JSONL/NDJSON, CSV, conversation transcripts (a JSON/JSON
 carrying a ``messages``/``turns`` array), and folders mixing any of these. Trace-export
 formats beyond the transcript shape remain out of scope.
 """
+
 from __future__ import annotations
 
 import csv
 import json
+import logging
 import os
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Record = (source_file, locator, raw_obj). Locator is a stable within-file position
 # (line number for JSONL, array index for a JSON list, "0" for a single object, "<row>" for
@@ -106,7 +110,8 @@ def _tool_names_from_assistant(msg: dict[str, Any]) -> list[str]:
     if isinstance(calls, list):
         for c in calls:
             if isinstance(c, dict):
-                fn = c.get("function") if isinstance(c.get("function"), dict) else c
+                function = c.get("function")
+                fn: dict[str, Any] = function if isinstance(function, dict) else c
                 name = fn.get("name")
                 if isinstance(name, str):
                     names.append(name)
@@ -142,6 +147,7 @@ def _load_file(path: str) -> list[Record]:
     if ext == ".csv":
         return _load_csv(path)
     records: list[Record] = []
+    skipped = 0
     try:
         with open(path, encoding="utf-8") as f:
             if ext == ".json":
@@ -150,6 +156,8 @@ def _load_file(path: str) -> list[Record]:
                     for idx, obj in enumerate(data):
                         if isinstance(obj, dict):
                             records.extend(_records_from_object(path, str(idx), obj))
+                        else:
+                            skipped += 1
                 elif isinstance(data, dict):
                     # A single object, transcript, or wrapper like {"records": [...]}.
                     inner = None
@@ -161,6 +169,8 @@ def _load_file(path: str) -> list[Record]:
                         for idx, obj in enumerate(inner):
                             if isinstance(obj, dict):
                                 records.extend(_records_from_object(path, str(idx), obj))
+                            else:
+                                skipped += 1
                     else:
                         records.extend(_records_from_object(path, "0", data))
             else:  # jsonl / ndjson
@@ -171,8 +181,13 @@ def _load_file(path: str) -> list[Record]:
                     obj = json.loads(line)
                     if isinstance(obj, dict):
                         records.extend(_records_from_object(path, str(lineno), obj))
+                    else:
+                        skipped += 1
     except json.JSONDecodeError as e:
         raise IngestError(f"malformed JSON/JSONL file {path}: {e}") from e
+    if skipped:
+        logger.warning("%s: skipped %d non-object record(s)", path, skipped)
+    logger.debug("%s: loaded %d record(s)", path, len(records))
     return records
 
 

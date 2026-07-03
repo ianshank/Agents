@@ -3,6 +3,7 @@
 Missing values are represented as null / empty list / "unclassified" — never omitted (§3).
 No fabrication: trace fields and metadata are only populated from what the source provides.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -39,9 +40,7 @@ def scenario_id(
     layout yields identical ids on Windows and Unix.
     """
     normalized_file = source_file.replace("\\", "/")
-    key = "\x1f".join(
-        [normalized_file, str(locator), session_id or "", turn_id or "", _normalize_prompt(prompt)]
-    )
+    key = "\x1f".join([normalized_file, str(locator), session_id or "", turn_id or "", _normalize_prompt(prompt)])
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
     return f"scn_{digest[:16]}"
 
@@ -50,7 +49,8 @@ def _build_trace(obj: dict[str, Any]) -> dict[str, Any] | None:
     """Build the §3.2 trace block iff the record has execution data. All fields present."""
     if not has_execution_artifact(obj):
         return None
-    src = obj.get("trace") if isinstance(obj.get("trace"), dict) else obj
+    trace = obj.get("trace")
+    src: dict[str, Any] = trace if isinstance(trace, dict) else obj
     tool_names = src.get("tool_names")
     if not isinstance(tool_names, list):
         tool_names = []
@@ -64,7 +64,9 @@ def _build_trace(obj: dict[str, Any]) -> dict[str, Any] | None:
         "tool_arguments": src.get("tool_arguments") if isinstance(src.get("tool_arguments"), list) else [],
         "tool_outputs": src.get("tool_outputs") if isinstance(src.get("tool_outputs"), list) else [],
         "retrieved_entities": src.get("retrieved_entities") if isinstance(src.get("retrieved_entities"), list) else [],
-        "retrieved_ids": [str(i) for i in src.get("retrieved_ids", [])] if isinstance(src.get("retrieved_ids"), list) else [],
+        "retrieved_ids": [str(i) for i in src.get("retrieved_ids", [])]
+        if isinstance(src.get("retrieved_ids"), list)
+        else [],
         "model_name": src.get("model_name") if isinstance(src.get("model_name"), str) else None,
         "token_usage": src.get("token_usage") if isinstance(src.get("token_usage"), dict) else None,
         "latency_ms": src.get("latency_ms") if isinstance(src.get("latency_ms"), (int, float)) else None,

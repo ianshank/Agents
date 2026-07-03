@@ -11,11 +11,14 @@ from __future__ import annotations
 
 from enum import Enum
 
+from agent_core.logging_util import get_logger
 from flow_corpus.oracles.kappa_gate import KappaReport
 
 from .canary import CanaryReport
 from .config import BRConfig
 from .detector import RegressionEstimate
+
+_log = get_logger("behavioral_regression.gate")
 
 
 class ShipDecision(str, Enum):
@@ -40,12 +43,39 @@ def decide_ship(
       5. otherwise             → SHIP
     """
     if not canary.separated:
+        _log.info(
+            "verdict=ESCALATE reason=canary_not_separated margin=%.4f min_canary_margin=%.4f",
+            canary.margin,
+            cfg.min_canary_margin,
+        )
         return ShipDecision.ESCALATE
     if not kappa.may_gate:
+        _log.info(
+            "verdict=ESCALATE reason=judge_not_validated kappa=%s n_codeterminate=%d",
+            kappa.kappa,
+            kappa.n_codeterminate,
+        )
         return ShipDecision.ESCALATE
     if estimate.cant_tell:
+        _log.info(
+            "verdict=ESCALATE reason=cant_tell n_determinate=%d excludes_zero=%s",
+            estimate.n_determinate,
+            estimate.excludes_zero,
+        )
         return ShipDecision.ESCALATE
     regression_real = estimate.delta_ci.point > 0.0 and estimate.excludes_zero
     if regression_real and estimate.p_regression > cfg.ship_risk_target:
+        _log.info(
+            "verdict=HOLD p_regression=%.4f ship_risk_target=%.4f delta_point=%.4f",
+            estimate.p_regression,
+            cfg.ship_risk_target,
+            estimate.delta_ci.point,
+        )
         return ShipDecision.HOLD
+    _log.info(
+        "verdict=SHIP p_regression=%.4f ship_risk_target=%.4f regression_real=%s",
+        estimate.p_regression,
+        cfg.ship_risk_target,
+        regression_real,
+    )
     return ShipDecision.SHIP

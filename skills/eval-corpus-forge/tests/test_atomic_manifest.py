@@ -1,4 +1,5 @@
 """Unit tests for forge.atomic and forge.manifest: writing, swapping, backup restore, counts."""
+
 from __future__ import annotations
 
 import os
@@ -9,8 +10,13 @@ from forge import manifest as manifest_mod
 
 
 def _pkg_inputs():
-    raw = {"prompt": "x", "expected_outcome": {"a": 1}, "response": "r", "expected_output_fields": {"a": 1},
-           "trace": {"tool_names": ["t"], "retrieved_ids": ["d"]}}
+    raw = {
+        "prompt": "x",
+        "expected_outcome": {"a": 1},
+        "response": "r",
+        "expected_output_fields": {"a": 1},
+        "trace": {"tool_names": ["t"], "retrieved_ids": ["d"]},
+    }
     canonicals = [normalize.to_canonical(("f", "1", raw))]
     view_data = views.build_views(canonicals)
     return canonicals, view_data
@@ -20,8 +26,9 @@ def test_write_package_strips_internal_and_writes_all(tmp_path):
     canonicals, view_data = _pkg_inputs()
     out = str(tmp_path / "pkg")
     os.makedirs(out)
-    atomic.write_package(out, canonicals=canonicals, ground_truth=[], views=view_data,
-                         provenance=[c["provenance"] for c in canonicals])
+    atomic.write_package(
+        out, canonicals=canonicals, ground_truth=[], views=view_data, provenance=[c["provenance"] for c in canonicals]
+    )
     scen = (tmp_path / "pkg" / "canonical" / "scenarios.jsonl").read_text(encoding="utf-8")
     assert "_raw" not in scen  # internal field stripped
     for name in views.VIEW_NAMES:
@@ -73,11 +80,43 @@ def test_commit_restores_original_when_replace_fails(tmp_path, monkeypatch):
     assert os.path.exists(os.path.join(out, "important"))
 
 
+def test_commit_restore_path_logs_warning(tmp_path, monkeypatch, caplog):
+    out = str(tmp_path / "final")
+    os.makedirs(out)
+    tmp = atomic.make_temp_dir(out)
+
+    def boom(*_a, **_k):
+        raise OSError("simulated swap failure")
+
+    monkeypatch.setattr(atomic.os, "replace", boom)
+    with caplog.at_level("WARNING", logger="forge.atomic"), pytest.raises(OSError):
+        atomic.commit(tmp, out)
+    assert any("restoring previous output" in r.message for r in caplog.records)
+
+
+def test_make_temp_dir_exhaustion_logs_and_raises(tmp_path, monkeypatch, caplog):
+    out = str(tmp_path / "final")
+
+    def always_exists(path, *_a, **_k):
+        if ".tmp." in path:
+            raise FileExistsError
+        # parent-directory creation proceeds as a no-op
+
+    monkeypatch.setattr(atomic.os, "makedirs", always_exists)
+    with caplog.at_level("WARNING", logger="forge.atomic"), pytest.raises(OSError, match="unique temp dir"):
+        atomic.make_temp_dir(out)
+    assert any("exhausted" in r.message for r in caplog.records)
+
+
 def test_manifest_counts_and_applicability():
     canonicals, view_data = _pkg_inputs()
     m = manifest_mod.build_manifest(
-        dataset_name="d", source_input="s", mode="full_dataset",
-        canonical_count=len(canonicals), ground_truth_count=1, views=view_data,
+        dataset_name="d",
+        source_input="s",
+        mode="full_dataset",
+        canonical_count=len(canonicals),
+        ground_truth_count=1,
+        views=view_data,
         validation_status="passed",
     )
     assert m["schema_version"] == manifest_mod.SCHEMA_VERSION
