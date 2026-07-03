@@ -544,3 +544,22 @@ features:
     implemented_in: "7987ae8eb7533883235825370d2546c18809436c"
     depends_on: ["F-024", "F-025", "F-027"]
     notes: "Thin wrapper - the runner adds packaging/docs/fixtures, not orchestration. Its CI job is not import-isolated like the other skills because wrapping the harness is the point. 100% coverage on the runner. See ADR 0015."
+
+  - id: "F-031"
+    epic: "Quality Gate"
+    name: "Operational-scripts quality gates (lint/type/coverage enforcement)"
+    description: "Closes the 2026-07 gap analysis (docs/gap-analysis-2026-07.md): scripts/ (44 files) was un-linted, un-typed, and coverage-unmeasured by CI. All 169 ruff findings and 19 mypy errors fixed; per-file-ignores scoped only to deliberate patterns (sys.path bootstrap E402, feature-ID module names N999, docstring typography RUF00x); vendored validate_skill.py resynced (drift guard green). 46 new unit tests bring validate.py 16%->97%, select_next.py 0%->100%, init.py 0%->100%; a dedicated coverage gate (scripts/.coveragerc, fail_under=85, branch=true) excludes validations/F_* which are themselves one-shot CI gates. eval-harness-ci now runs ruff check/format + mypy over scripts/ and the new coverage gate. Also fixes agent_core.detectors.resolve_repo to read the declared remote via 'git config --get remote.origin.url' instead of 'git remote get-url', which applies url.insteadOf rewrites and silently broke owner/repo detection on machines with rewrite rules."
+    category: "non-functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "eval-harness-ci lints/format-checks/type-checks scripts/ and runs the operational-scripts coverage gate (--cov=scripts --cov-config=scripts/.coveragerc)"
+      - "scripts/.coveragerc gates at fail_under>=85 with branch measurement and excludes validations/ (self-executing gates); measured 93.21% at introduction"
+      - "tests/test_validate_script.py, tests/test_select_next_script.py, tests/test_init_script.py exist and pass (46 tests)"
+      - "ruff per-file-ignores stay scoped to the three deliberate patterns; mypy_path resolves the validation gates' bootstrap imports (no silent Any regression)"
+      - "resolve_repo parses the declared remote URL, immune to url.insteadOf rewrites (agent-core test_detectors passes under rewrite-configured git)"
+    validation_command: "python scripts/validations/F_031.py"
+    implemented_in: "2dedd887fb8a5e7c34235513e49627df9f09f356"
+    depends_on: []
+    notes: "Gate is deterministic and offline - reads config/workflow files only. The F_* validation scripts stay outside the unit-coverage gate by design; quality-gates.yml already measures the phase-2 ones (F_020-F_023) directly. See docs/gap-analysis-2026-07.md for the measured baseline."

@@ -106,3 +106,6 @@ humans: invoke via `python -m ruff` / `python -m mypy`.
 - [x] G3: `resolve_repo` reads raw remote URL; env-sensitive test now passes everywhere
 - [x] G4: canonical `validate_skill.py` style fixes resynced to all vendored copies
 - [x] Full verification: ruff + format + mypy + all test suites green with gates enforced
+- [x] Ledgered as **F-031** in `features.yaml`; `scripts/validations/F_031.py` asserts the
+  enforcement (CI steps, coverage-gate config, test files, scoped ignores) cannot silently
+  regress — it runs with every `validate.py --tier fast` pass in quality-gates CI

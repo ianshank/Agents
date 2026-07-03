@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Hardening
+- **Operational-scripts quality gates (F-031):** `scripts/` (44 files) was un-linted,
+  un-typed, and coverage-unmeasured by CI (see `docs/gap-analysis-2026-07.md` for the measured
+  baseline). Fixed all 169 ruff findings and 19 mypy errors; per-file-ignores scoped only to
+  the deliberate patterns (sys.path bootstrap E402, feature-ID module names N999, docstring
+  typography RUF00x); vendored `validate_skill.py` copies resynced (drift guard green). Added
+  46 unit tests for the previously-untested operational scripts (`validate.py` 16%→97%,
+  `select_next.py` 0%→100%, `init.py` 0%→100%) and a dedicated coverage gate
+  (`scripts/.coveragerc`, `fail_under = 85`, branch measurement, 93.21% at introduction) that
+  excludes `validations/F_*` — those are themselves one-shot CI gates. `eval-harness-ci` now
+  runs `ruff check`/`ruff format --check`/`mypy` over `scripts/` plus the new coverage gate,
+  enforced by `scripts/validations/F_031.py`.
 - **Enforced ≥85% coverage on all new tooling:** `scripts/skill_marketplace.py` and the
   `scripts/validations/F_020..F_023.py` validators are now coverage-gated in the quality-gates
   tooling step (previously run but unmeasured, since the library coverage omits `scripts/`). Added
@@ -56,6 +67,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renders `n/a`. Configured via existing `ComponentSpec` params (`path`/`title`/`embed_items`/
   `bar_width_px`) — no config-schema change, `SCHEMA_VERSION` unchanged. Reuses the
   dependency-free string-built rendering approach from `behavioral_regression.report.to_html`.
+
+### Fixed
+- **`agent_core.detectors.resolve_repo` under git URL rewrites:** now reads the declared
+  remote via `git config --get remote.origin.url` instead of `git remote get-url origin`,
+  which applies `url.<base>.insteadOf` rewrites and silently broke `owner/repo` detection
+  (returned `None`) on machines with SSH/proxy rewrite rules. Same signature and contract.
+
+### Docs
+- **Gap analysis 2026-07** (`docs/gap-analysis-2026-07.md`): measured lint/type/coverage
+  baseline across all packages, skills, and scripts; findings and remediation checklist.
+- **`claude-foundation` plugin plan** (`docs/plans/claude-foundation/`): peer review
+  (REVIEW.md), corrected execution-ready plan (PLAN.md), and pinned doc sources for the
+  planned reusable Claude Code plugin repository. Planning artifacts only — nothing in this
+  repo depends on them yet.
 
 ## [1.2.0-dev] — Unreleased
 
