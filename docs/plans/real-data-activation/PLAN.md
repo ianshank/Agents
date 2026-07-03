@@ -120,10 +120,11 @@ persistence backend:
   local-first posture.
 
 Recommendation: **(a)**, implemented as a small `agent_core.store_sync` module
-(pull → merge-append → push; append-only union keyed by
-`(change_id, label_source, labeled_at)`; conflict semantics defer to the
-existing `HUMAN_AUDIT`-wins resolution in `outcome_store.resolved()` — sync
-never drops a `HUMAN_AUDIT` line). Because `resolved()`'s passive-label
+(pull → merge-append → push; append-only union deduped by the **full canonical
+record JSON** — only byte-identical lines collapse, so nothing semantic is ever
+merged away; conflict semantics defer to the existing `HUMAN_AUDIT`-wins
+resolution in `outcome_store.resolved()` — sync never drops a `HUMAN_AUDIT`
+line). Because `resolved()`'s passive-label
 resolution is **file-order dependent** ("latest labeled wins" by position,
 `outcome_store.py:85-86`), the merged store must be written in a canonical
 deterministic order — a stable sort keyed by
@@ -217,10 +218,12 @@ exist.
 **Work:** scheduled workflow (weekly, per ADR 0005's cadence section) that:
 1. Syncs store, runs `python -m agent_core.audit_sampler --store <path> select`.
 2. Opens/updates one GitHub issue per sampled `change_id`, labeled
-   `merge-gate-audit`, body containing the record context and the exact
-   verdict commands:
-   `python -m agent_core.audit_sampler --store <path> record --change-id <id> --correct`
-   (or `--incorrect`).
+   `merge-gate-audit`, body containing the record context and exactly two
+   verdict paths — the Actions-UI dispatch and
+   `gh workflow run merge-gate-verdict.yml -f change_id=<id> -f verdict=…` —
+   both of which sync the store and attribute the actor. (The raw
+   `audit_sampler record` CLI is deliberately not offered: it writes a local
+   store that never reaches the data branch — a silently-lost verdict.)
 3. A companion `workflow_dispatch` job (`inputs: change_id, verdict`) executes
    that command with store sync, so the human never touches JSONL by hand.
    The dispatch path is the **only** automated writer of `HUMAN_AUDIT`, and it
@@ -292,7 +295,12 @@ conventions.
   properties asserted by `F_035.py` (workflow-lint style, like `F_031.py`).
 - AC-2: The step-summary decision includes domain, decision, reason string
   (`p/tau/health/n/ece/auroc/bin` as emitted by `merge_gate_ci`), and store
-  record counts per label source (observability for the soak).
+  record counts per label source (observability for the soak). Note: agent
+  domains stay in cold-start ESCALATE until an agent-confidence artifact
+  exists (ADR 0018 §5 — the soak is plumbing-only for them), so the rich
+  reason string is delivered by a second, log-only decision computed against
+  `human/<mapped-domain>`, the namespace where audited records actually
+  accumulate. Both decisions appear in the summary.
 - AC-3: Seed-on-merge writes exactly one pending record per merged PR keyed by
   merge-commit SHA (idempotency already in `merge_seed`; test the workflow
   wiring against a temp bare remote).

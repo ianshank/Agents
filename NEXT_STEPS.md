@@ -2,6 +2,22 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Real-data activation (F-032…F-035, ADR 0018)** — the calibrated merge gate now
+  runs on real data: the outcome store persists on the `merge-gate-data` branch
+  (`agent_core.store_sync`, F-032), a daily labeller resolves matured records with
+  passive labels behind an anti-optimism precondition guard (F-033), a shadow gate
+  logs a decision on every PR plus a `human/<domain>` observability decision and
+  seed-on-merge writes one pending record per push to main (F-035), and a weekly
+  audit queue + human-triggered verdict dispatch is the only writer of HUMAN_AUDIT
+  labels (F-034). F-036 (real-transcript corpus bridge) recorded as deferred.
+  Human checklist before the soak counts: add the `eval-change-approved` label to
+  the activation PR (protected paths); exclude `merge-gate-data` from branch
+  protection; enable required reviewers on the `merge-gate-verdict` environment;
+  record the first verdict via the dispatch UI.
+- [ ] **Merge-gate soak** — accumulate N≥20 shadow decisions and weekly audits before
+  revisiting the ADR 0005 enablement checklist; agent domains stay cold-start until
+  an agent-confidence artifact exists (`merge_gate_context.py --confidence` is the
+  seam; F-036 territory).
 - [x] **Operational-scripts quality gates (F-031)** — closed the 2026-07 gap analysis
   (`docs/gap-analysis-2026-07.md`): `scripts/` is now lint/type-enforced in `eval-harness-ci`
   with its own ≥85% coverage gate (`scripts/.coveragerc`); 46 new tests for `validate.py` /

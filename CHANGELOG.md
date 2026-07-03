@@ -32,6 +32,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   literal; the HTML sink palette is hoisted to named class constants.
 
 ### Added
+- **Real-data activation (F-032…F-035, ADR 0018):** the calibrated merge gate's
+  first real data path. `agent_core.store_sync` persists the outcome store on the
+  `merge-gate-data` branch (canonical deterministic merge because
+  `OutcomeStore.resolved()` is file-order dependent; plumbing commits; bounded
+  retry-with-backoff for concurrent writers; CLI `pull/push/stats`, exit codes
+  0/4/5). New workflows: `outcome-labeller.yml` (daily passive labels behind a
+  `checks: read` + full-history precondition guard, so detector fallback cannot
+  mint optimistic `timeout_clean` labels), a `shadow` job in
+  `calibrated-merge-gate.yml` (log-only decision on every PR — decisions never
+  fail the job — plus a `human/<domain>` observability decision and per-domain
+  store stats in the step summary), `merge-gate-seed.yml` (one pending record per
+  push to main, seeded under the reserved `human/<domain>` namespace at
+  confidence 0.0 per ADR 0018 §5), `merge-gate-audit.yml` (weekly unbiased
+  selection surfaced as deduped GitHub issues; sampling knobs via repo
+  variables), and `merge-gate-verdict.yml` (dispatch-only writer of HUMAN_AUDIT
+  with environment + allowlist authorization and env-indirected inputs). New
+  operational scripts `merge_gate_context.py` (strict path→domain mapping from
+  `config/merge-gate-domains.yaml`, protected-path detection, ChangeContext
+  JSON), `record_audit_verdict.py` (idempotent, SHA-validated verdict wrapper),
+  `audit_issue_sync.py` (pure issue dedupe/render); validations
+  `F_032`–`F_035`; F-036 recorded as deferred.
+
+### Added
 - **Skill marketplace (F-023):** new centralized, schema-validated skill registry
   (`skills/marketplace.yaml` + `skills/marketplace.schema.json`) and a
   `scripts/skill_marketplace.py` CLI (`validate`/`verify`/`list`). The CLI reuses
