@@ -56,6 +56,13 @@ regression_report.json
 *.html
 !README.html
 
-# Calibrated merge gate (F-010) runtime artifacts
+# Calibrated merge gate runtime artifacts (F-010, F-032…F-035 / ADR 0018).
+# The authoritative store lives on the merge-gate-data branch; these are
+# per-run working copies (store_sync pull/push, merge_gate_ci --audit-log,
+# shadow-job context/decision files) that must never land on code branches.
 merge_outcomes.jsonl
 merge_decisions.jsonl
+context.json
+context_human.json
+seed_context.json
+changed_files.z

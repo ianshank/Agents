@@ -97,13 +97,22 @@ C4Component
     Rel(from_config, config_model, "validated input")
 ```
 
-## Level 3 — Component: Calibrated Merge Gate (F-010, agent_core, default-off)
+## Level 3 — Component: Calibrated Merge Gate (F-010 + F-032…F-035, agent_core, default-off)
 
 A pure, deterministic merge-decision subsystem under `agent_core` (ADR 0005), wired by
 `.github/workflows/calibrated-merge-gate.yml`. It **auto-merges nothing** unless
 `ENABLE_CALIBRATED_AUTOMERGE` is set and a populated, human-audited outcome store has earned it.
 Outcomes are labelled by **real** detectors (git history + GitHub Actions check-runs), all
 timeout-bounded and failing safe.
+
+Real data flows through the subsystem via the F-032…F-035 activation (ADR 0018): the store
+persists on the dedicated `merge-gate-data` branch (`store_sync` — canonical deterministic
+merge because `resolved()` is file-order dependent; plumbing commits; retry-with-backoff for
+concurrent writers; unparseable lines preserved verbatim), seeded on every push to `main`
+under the reserved `human/<domain>` namespace (confidence 0.0 — human outcomes never enter
+agent-domain calibration), passively labelled daily, audited weekly through GitHub issues,
+and observed by an always-on **shadow** job that logs a decision on every PR without ever
+blocking one.
 
 ```mermaid
 C4Component
@@ -113,6 +122,7 @@ C4Component
         Component(ci, "merge_gate_ci", "CLI entrypoint", "exit 0/10/20 (+1 internal, +2 usage); --audit-log JSONL")
         Component(decide, "merge_gate.decide()", "pure function", "REJECT mech-fail -> ESCALATE protected -> calibrated trust + Wilson bin floor -> AUTO_MERGE")
         Component(store, "outcome_store", "append-only JSONL", "OutcomeStore, BinningCalibrator, build_domain_models (held-out fold)")
+        Component(sync, "store_sync", "module + CLI (F-032)", "pull/push/stats vs merge-gate-data branch; canonical merge, opaque-line preservation, retry-backoff; exit 0/4/5")
         Component(labeller, "outcome_labeller", "module", "passive revert / CI-failure / timeout-clean labels (alerting only)")
         Component(sampler, "audit_sampler", "module", "unbiased stratified sampling + HUMAN_AUDIT verdicts")
         Component(detectors, "detectors", "module", "GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo; DetectorConfig timeouts, fail-safe")
@@ -121,17 +131,30 @@ C4Component
 
     System_Ext(git, "git", "Local history — revert footer detection")
     System_Ext(gha, "GitHub Actions", "Commit check-runs via gh api")
+    System_Ext(branch, "merge-gate-data branch", "Persistent outcome store (ADR 0018); orphan-bootstrapped, [skip ci] commits, actor trailers")
 
     Rel(ci, decide, "decide(ctx, calibrator, health, tau, bin)")
     Rel(ci, store, "build_domain_models()")
     Rel(decide, calib, "wilson_interval()")
     Rel(store, calib, "auroc / ECE / wilson")
+    Rel(sync, branch, "fetch-gated pull / plumbing-commit push")
+    Rel(sync, store, "canonical merged JSONL")
     Rel(labeller, detectors, "was_reverted() / caused_failure()")
     Rel(labeller, store, "append passive labels")
     Rel(sampler, store, "select + record HUMAN_AUDIT")
     Rel(detectors, git, "git log (-z, revert footer)")
     Rel(detectors, gha, "gh api check-runs")
 ```
+
+The CI surfaces around the subsystem (scripts layer + workflows): `merge_gate_context.py`
+composes the ChangeContext (path→domain from `config/merge-gate-domains.yaml`,
+`touches_protected` from `eval_protected_paths`, mech_pass from the regression gate);
+`record_audit_verdict.py` is the idempotent, SHA-validated verdict wrapper (the only
+HUMAN_AUDIT writer, dispatch-triggered); `audit_issue_sync.py` plans deduped audit issues.
+Workflows: `merge-gate-seed.yml` (push:main), `outcome-labeller.yml` (daily, checks:read
+precondition guard), `merge-gate-audit.yml` (weekly reader), `merge-gate-verdict.yml`
+(workflow_dispatch only, environment-gated), and the always-on `shadow` job in
+`calibrated-merge-gate.yml`.
 
 ## Level 3 — Component: Flow Calibration Corpus (F-011…F-015, airgap seam)
 
@@ -198,7 +221,8 @@ flowchart TB
     PR --> REG[regression_gate.py]
     PR --> GUARD[check_protected_changes.py]
     PR --> DRIFT[check_skill_script_drift.py<br/>vendored skill copies == canonical]
-    PR --> MG[calibrated-merge-gate.yml<br/>F-010 — default-off]
+    PR --> MG[calibrated-merge-gate.yml<br/>F-010 acting job — default-off]
+    PR --> SHADOW[shadow job F-035<br/>log-only, never blocks]
 
     subgraph Regression Gate F-006
         REG --> WT[git worktree<br/>isolated HEAD baseline]
@@ -223,6 +247,20 @@ flowchart TB
         RC -->|0 AUTO_MERGE| MERGE[enable auto-merge]
         RC -->|10 ESCALATE| HUMAN[needs-human-review]
         RC -->|20 REJECT / 1,2 error| FAIL3[exit 1]
+    end
+
+    subgraph Real-Data Activation F-032…F-035 — ADR 0018
+        SHADOW -->|store_sync pull, read-only| DATA[(merge-gate-data branch<br/>merge_outcomes.jsonl)]
+        SHADOW --> SUMMARY[step summary:<br/>agent + human/ decisions, store stats]
+        MAIN[push: main] --> SEED[merge-gate-seed.yml<br/>human/domain @ 0.0]
+        SEED -->|store_sync push| DATA
+        CRON1[daily cron] --> LAB[outcome-labeller.yml<br/>checks:read guard]
+        LAB -->|passive labels, push| DATA
+        CRON2[weekly cron] --> AUD[merge-gate-audit.yml<br/>reader: deduped issues]
+        AUD -->|store_sync pull| DATA
+        AUD --> ISSUES[merge-gate-audit issues]
+        ISSUES --> DISPATCH[merge-gate-verdict.yml<br/>workflow_dispatch, env-gated]
+        DISPATCH -->|HUMAN_AUDIT verdict, push| DATA
     end
 
     FIX[fix_loop.py<br/>DESIGN-ONLY / DISABLED] -.->|ScopeGuard blocks protected writes| MATCH

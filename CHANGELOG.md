@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Hardening
+- **Real-data activation gap-analysis round (F-032…F-035):** post-implementation
+  adversarial review + CI-parity battery fixed three defects before merge: reader
+  jobs (shadow, audit-select) no longer strip checkout credentials (on a private
+  repo an unauthenticated data-branch fetch reads as failure — the weekly audit
+  would hard-fail forever and the shadow would always cold-start empty);
+  `store_sync` preserves malformed/forward-incompatible store lines verbatim
+  through merges instead of crashing every sync — or worse, deleting them on the
+  next push (`_unparsed` stats key, round-trip tested); the `MERGE_GATE_STORE`
+  repo variable is honored by every store-touching job, not just the acting gate
+  (a set variable would have silently split readers from writers). Plus: shared
+  real-git test helpers (`agent-core/tests/gitrepo.py`), semver-major-compatible
+  domain-mapping schema, empty-tree diff fallback for a parentless first push,
+  named exit-code constants, richer sync failure logs; `store_sync` at 100%
+  branch coverage.
 - **Operational-scripts quality gates (F-031):** `scripts/` (44 files) was un-linted,
   un-typed, and coverage-unmeasured by CI (see `docs/gap-analysis-2026-07.md` for the measured
   baseline). Fixed all 169 ruff findings and 19 mypy errors; per-file-ignores scoped only to
