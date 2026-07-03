@@ -1,0 +1,11 @@
+{
+  "name": "foundation",
+  "version": "1.0.0",
+  "description": "Reusable Claude Code foundation: planning/review/test-first/C4-docs skills, least-privilege explorer and test-runner subagents, and deterministic lifecycle guards (env-configured, no hardcoded values).",
+  "author": {
+    "name": "Ian Shank"
+  },
+  "homepage": "https://github.com/ianshank/claude-foundation",
+  "license": "MIT",
+  "keywords": ["workflow", "planning", "code-review", "test-first", "hooks", "guards"]
+}

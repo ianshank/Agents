@@ -87,6 +87,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Records the routing rule (generic → foundation, domain → here) and the rejected
   alternatives (migrate, dual-publish, in-repo subdirectory plugin).
 
+### Added
+- **`claude-foundation/` staging directory** — the full foundation plugin (PLAN.md M0–M6)
+  implemented and staged for extraction to its own repository: `.claude-plugin` manifests
+  (plugin name `foundation`, official validator green), skills `plan` / `code-review` /
+  `test-first` / `c4-docs` each with ≥3 eval cases, subagents `explorer` / `test-runner`
+  (least-privilege tools, alias-only models), hooks `pre-tool-guard` (fail-closed) /
+  `post-edit-verify` / `session-logger` (fail-open, JSONL via `CLAUDE_FOUNDATION_LOG_DIR`),
+  and the `foundation_tools` package (doc-derived schema validator, no-hardcode scanner,
+  skill-creator eval gate) at 94% branch coverage with mypy strict. CI workflow ships inert
+  (activates on extraction); staging adds no jobs to this repo's CI. See ADR 0017 for why
+  the final home is a separate repository.
+
 ## [1.2.0-dev] — Unreleased
 
 ### Tech-debt cleanup

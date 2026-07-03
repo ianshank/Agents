@@ -1,0 +1,48 @@
+{
+  "skill": "c4-docs",
+  "version": 1,
+  "cases": [
+    {
+      "id": "c4-generate-from-scratch",
+      "prompt": "Our repo has no architecture docs. Generate C4 diagrams for the system - it's a web API, a worker service, a Postgres database, and a Redis queue.",
+      "expected_behavior": "The assistant invokes the c4-docs skill, performs a read-only inventory of entry points and modules, then creates docs/architecture/ containing a Level 1 system context diagram and a Level 2 container diagram written in Mermaid C4 syntax (C4Context/C4Container) inside fenced mermaid code blocks. Every container in the Level 2 diagram corresponds to something findable in the repo. No Level 3 component diagrams are produced since no specific subsystem is being changed. The summary lists files created.",
+      "assertions": [
+        "Files are created under docs/architecture/ containing fenced ```mermaid blocks using C4Context and C4Container syntax.",
+        "The inventory phase uses only read-only operations on source code (no source files are modified).",
+        "Each container in the Level 2 diagram maps to a real module, service directory, or manifest named in the summary or diagram.",
+        "No C4Component (Level 3) diagram is produced."
+      ]
+    },
+    {
+      "id": "c4-update-existing-no-duplicate",
+      "prompt": "We just split the notifications logic out of the API into its own service. Update our architecture diagrams - they live in docs/architecture/.",
+      "expected_behavior": "The assistant invokes the c4-docs skill, finds the existing diagrams in docs/architecture/, and edits the existing Level 2 container diagram in place to add the new notifications service and its relationships. It does not create a duplicate or versioned copy (e.g., containers-v2.md) alongside the old diagram. Because a specific subsystem changed, it may add a scoped Level 3 component diagram for the notifications service only. The summary states which diagrams were updated versus added.",
+      "assertions": [
+        "The existing container diagram file is modified in place; no new file duplicating the same level and scope (such as a -v2 or copy variant) is created.",
+        "The updated Mermaid diagram includes the new notifications service and at least one Rel line connecting it to another container.",
+        "If a Level 3 diagram is added, it covers only the notifications subsystem and uses C4Component syntax.",
+        "The final summary distinguishes diagrams updated from diagrams added."
+      ]
+    },
+    {
+      "id": "c4-flags-drift",
+      "prompt": "Refresh our C4 docs. Heads up: the container diagram still shows a MongoDB, but I think we migrated to Postgres a while ago.",
+      "expected_behavior": "The assistant invokes the c4-docs skill, inventories the code, confirms which datastore the code actually uses, and updates the diagram to match the code. Critically, it explicitly flags the discrepancy in its summary (diagram said MongoDB, code at specific files shows Postgres) rather than silently rewriting the diagram, so reviewers can verify the code side is correct. Diagrams remain in GitHub-renderable Mermaid C4 syntax.",
+      "assertions": [
+        "The summary explicitly lists the MongoDB-vs-Postgres discrepancy as drift, citing at least one code file as evidence.",
+        "The updated diagram reflects the datastore found in the code, inside a fenced ```mermaid block with C4 syntax.",
+        "The old diagram is edited in place rather than left stale next to a new copy."
+      ]
+    },
+    {
+      "id": "c4-negative-api-reference",
+      "prompt": "Write API reference docs for the endpoints in routes/users.py - parameters, response codes, and example payloads.",
+      "expected_behavior": "The assistant does not invoke the c4-docs skill, because the request is for endpoint-level API reference documentation, not architecture diagrams. It produces the API reference content directly without creating C4 or Mermaid diagrams or touching docs/architecture/.",
+      "assertions": [
+        "The c4-docs skill is not invoked in the transcript.",
+        "No Mermaid C4 diagrams (C4Context, C4Container, or C4Component) are created or modified.",
+        "The response documents the endpoints' parameters, response codes, and example payloads."
+      ]
+    }
+  ]
+}
