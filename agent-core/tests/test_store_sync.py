@@ -394,16 +394,17 @@ def test_cli_pull_push_stats_and_exit_codes(tmp_path, capsys):
     _, clone = _make_remote_and_clone(tmp_path)
     store = clone / "merge_outcomes.jsonl"
     write_store(store, [_rec()])
+    # Options come AFTER the subcommand — the invocation order the workflows use.
     base = ["--store", str(store), "--repo-dir", str(clone), "--backoff", "0"]
-    assert main([*base, "push", "--actor", "ci"]) == EXIT_OK
-    assert main([*base, "pull"]) == EXIT_OK
-    assert main([*base, "stats"]) == EXIT_OK
+    assert main(["push", *base, "--actor", "ci"]) == EXIT_OK
+    assert main(["pull", *base]) == EXIT_OK
+    assert main(["stats", *base]) == EXIT_OK
     out = capsys.readouterr().out
     assert "STORE_SYNC=ok" in out
     assert json.loads(out.strip().splitlines()[-1]) == {"human/agent-core": {"pending": 1}}
     _git(clone, "remote", "set-url", "origin", str(tmp_path / "gone"))
-    assert main([*base, "pull"]) == EXIT_FETCH_FAILED
-    assert main([*base, "push"]) == EXIT_FETCH_FAILED
+    assert main(["pull", *base]) == EXIT_FETCH_FAILED
+    assert main(["push", *base]) == EXIT_FETCH_FAILED
 
 
 def test_cli_retries_exhausted_exit_code(tmp_path, monkeypatch):
@@ -437,7 +438,7 @@ def test_cli_retries_exhausted_exit_code(tmp_path, monkeypatch):
         "--backoff",
         "0",
     ]
-    assert main([*base, "push"]) == EXIT_RETRIES_EXHAUSTED
+    assert main(["push", *base]) == EXIT_RETRIES_EXHAUSTED
 
 
 def test_cli_internal_error_and_usage(tmp_path, capsys, monkeypatch):
@@ -451,9 +452,12 @@ def test_cli_internal_error_and_usage(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr("agent_core.store_sync._run", broken)
     store = clone / "merge_outcomes.jsonl"
     write_store(store, [_rec()])
-    rc = main(["--store", str(store), "--repo-dir", str(clone), "push"])
+    rc = main(["push", "--store", str(store), "--repo-dir", str(clone)])
     assert rc == EXIT_INTERNAL
     assert "internal error" in capsys.readouterr().err
     with pytest.raises(SystemExit) as exc:
-        main(["--store", "s.jsonl"])  # missing subcommand
+        main(["push"])  # missing required --store
+    assert exc.value.code == 2
+    with pytest.raises(SystemExit) as exc:
+        main([])  # missing subcommand
     assert exc.value.code == 2

@@ -410,19 +410,27 @@ def _config_from_args(args: argparse.Namespace) -> StoreSyncConfig:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Common options live on the SUBCOMMANDS (via a parent parser) so the
+    # natural invocation order `store_sync push --store …` works — with
+    # top-level-only options, everything after the subcommand is rejected.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--store", required=True, help="local outcome-store JSONL path")
+    common.add_argument("--repo-dir", default=".", help="git repository directory")
+    common.add_argument("--remote", default=_DEFAULT_REMOTE)
+    common.add_argument("--branch", default=_DEFAULT_BRANCH)
+    common.add_argument("--timeout", type=float, default=_DEFAULT_GIT_TIMEOUT_S)
+    common.add_argument("--max-retries", type=int, default=_DEFAULT_MAX_PUSH_RETRIES)
+    common.add_argument("--backoff", type=float, default=_DEFAULT_BACKOFF_BASE_S)
     ap = argparse.ArgumentParser(description="Outcome-store data-branch sync (ADR 0018).")
-    ap.add_argument("--store", required=True, help="local outcome-store JSONL path")
-    ap.add_argument("--repo-dir", default=".", help="git repository directory")
-    ap.add_argument("--remote", default=_DEFAULT_REMOTE)
-    ap.add_argument("--branch", default=_DEFAULT_BRANCH)
-    ap.add_argument("--timeout", type=float, default=_DEFAULT_GIT_TIMEOUT_S)
-    ap.add_argument("--max-retries", type=int, default=_DEFAULT_MAX_PUSH_RETRIES)
-    ap.add_argument("--backoff", type=float, default=_DEFAULT_BACKOFF_BASE_S)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("pull", help="merge the remote store into the local store")
-    p_push = sub.add_parser("push", help="publish merged records to the data branch")
+    sub.add_parser("pull", parents=[common], help="merge the remote store into the local store")
+    p_push = sub.add_parser(
+        "push", parents=[common], help="publish merged records to the data branch"
+    )
     p_push.add_argument("--actor", help="attribution trailer for the data-branch commit")
-    sub.add_parser("stats", help="per-domain / per-label-source record counts (JSON)")
+    sub.add_parser(
+        "stats", parents=[common], help="per-domain / per-label-source record counts (JSON)"
+    )
     args = ap.parse_args(argv)
 
     configure_logging(level="INFO")
