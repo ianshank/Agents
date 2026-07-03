@@ -8,13 +8,14 @@ Exit codes:
     0 – all tests passed
     non-zero – pytest failure or error
 """
+
 from __future__ import annotations
 
 import logging
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ TEST_MODULE: str = "tests/test_openai_judge.py"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _project_root() -> Path:
     """Resolve the project root (two levels up from this script)."""
     return Path(__file__).resolve().parent.parent.parent
@@ -38,7 +40,8 @@ def _project_root() -> Path:
 # Main
 # ---------------------------------------------------------------------------
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+
+def main(argv: Sequence[str] | None = None) -> int:
     """Run pytest for the OpenAI judge tests and return the exit code."""
     logging.basicConfig(
         level=logging.INFO,

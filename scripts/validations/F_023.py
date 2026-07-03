@@ -28,8 +28,8 @@ for _p in (_HERE, _SCRIPTS):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from _common import check as _check  # noqa: E402
-from _common import configure_logging, report  # noqa: E402
+from _common import check as _check
+from _common import configure_logging, report
 
 logger = logging.getLogger(__name__)
 

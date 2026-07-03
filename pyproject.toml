@@ -69,8 +69,20 @@ src = ["src", "tests"]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
 ignore = ["E501"]  # line length handled by formatter
 
+[tool.ruff.lint.per-file-ignores]
+# Standalone validation gates bootstrap sys.path before imports (E402) and are
+# deliberately named after the feature IDs they gate, e.g. F_013.py (N999).
+"scripts/validations/*.py" = ["E402", "N999"]
+# Typographic characters (em-dashes, multiplication signs) in script docstring
+# prose; not identifiers, no correctness impact.
+"scripts/**" = ["RUF001", "RUF002", "RUF003"]
+
 [tool.mypy]
 python_version = "3.10"
+# Lets `mypy scripts` resolve the validation gates' runtime `from _common import ...`
+# bootstrap imports; explicit_package_bases keeps module naming stable for it.
+mypy_path = "scripts/validations"
+explicit_package_bases = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false

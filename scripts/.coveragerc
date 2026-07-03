@@ -1,0 +1,20 @@
+# Coverage gate for the operational scripts (validate, select_next, init,
+# regression_gate, skill_marketplace, drift/protected-path checks, ...).
+# scripts/validations/F_* are themselves one-shot CI gates executed via
+# features.yaml validation commands — they are checks, not unit-test targets —
+# so they are excluded here (quality-gates.yml measures the phase-2 ones directly).
+[run]
+branch = True
+omit =
+    */scripts/validations/*
+
+[report]
+fail_under = 85
+show_missing = True
+exclude_lines =
+    pragma: no cover
+    if __name__ ==
+    if TYPE_CHECKING:
+    raise NotImplementedError
+    @(abc\.)?abstractmethod
+    ^\s*\.\.\.$

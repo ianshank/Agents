@@ -10,6 +10,7 @@ Deterministic and offline. Asserts the Phase-2 exit gates:
   4. The confidence cross-check returns a signed, significance-tested result
      (ablation vs a flow-type indicator, bootstrap CI on the AUROC delta).
 """
+
 import os
 import random
 import sys
@@ -18,14 +19,14 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 for rel in ("flow-protocol", "flow-corpus", "agent-core"):
     sys.path.insert(0, os.path.join(PROJECT_ROOT, rel))
 
-from flow_corpus.config import CorpusConfig  # noqa: E402
-from flow_corpus.crosscheck import CrossCheckRow, confidence_cross_check  # noqa: E402
-from flow_corpus.holdout import HoldoutManager, Sample, samples_from_run  # noqa: E402
-from flow_corpus.oracles import PropertyOracle  # noqa: E402
-from flow_corpus.policy import MockPolicy  # noqa: E402
-from flow_corpus.specimens import BaselineSpecimen, MCTSSpecimen, ReActSpecimen  # noqa: E402
-from flow_corpus.suites.sdlc import build_sdlc_suite  # noqa: E402
-from flow_corpus.validation import brier_reliability, run_suite  # noqa: E402
+from flow_corpus.config import CorpusConfig
+from flow_corpus.crosscheck import CrossCheckRow, confidence_cross_check
+from flow_corpus.holdout import HoldoutManager, Sample, samples_from_run
+from flow_corpus.oracles import PropertyOracle
+from flow_corpus.policy import MockPolicy
+from flow_corpus.specimens import BaselineSpecimen, MCTSSpecimen, ReActSpecimen
+from flow_corpus.suites.sdlc import build_sdlc_suite
+from flow_corpus.validation import brier_reliability, run_suite
 
 
 def validate_f014() -> bool:
@@ -34,7 +35,7 @@ def validate_f014() -> bool:
     oracle = PropertyOracle()
 
     def samples(spec) -> list[Sample]:
-        return samples_from_run(run_suite(spec, suite, oracle, cfg, seed=4))
+        return list(samples_from_run(run_suite(spec, suite, oracle, cfg, seed=4)))
 
     by_type = {
         "baseline": samples(BaselineSpecimen(MockPolicy(0.7, 1.0))),
@@ -56,9 +57,7 @@ def validate_f014() -> bool:
 
     # Sub-power slice -> directional only (cannot gate).
     tiny = brier_reliability([0.5, 0.6, 0.4], [1, 0, 1], cfg)
-    checks["sub-power slice is directional-only (cannot gate)"] = (
-        tiny.directional_only and not tiny.passes
-    )
+    checks["sub-power slice is directional-only (cannot gate)"] = tiny.directional_only and not tiny.passes
 
     # Confidence cross-check: informative confidence beats the flow-type indicator.
     rng = random.Random(0)

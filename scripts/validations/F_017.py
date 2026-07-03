@@ -12,13 +12,13 @@ Exit codes:
     0 – all checks passed
     1 – one or more checks failed
 """
+
 from __future__ import annotations
 
 import logging
 import re
 import sys
 from pathlib import Path
-from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +27,13 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _project_root() -> Path:
     """Resolve the project root (two levels up from this script)."""
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _check(condition: bool, msg: str, errors: List[str]) -> bool:
+def _check(condition: bool, msg: str, errors: list[str]) -> bool:
     """Log and track a check result."""
     if not condition:
         errors.append(msg)
@@ -46,6 +47,7 @@ def _check(condition: bool, msg: str, errors: List[str]) -> bool:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     """Run all F-017 validation checks."""
     logging.basicConfig(
@@ -54,7 +56,7 @@ def main() -> int:
     )
 
     root = _project_root()
-    errors: List[str] = []
+    errors: list[str] = []
 
     # 1. version.py uses importlib.metadata, not a hardcoded string
     version_path = root / "src" / "eval_harness" / "version.py"
@@ -80,54 +82,59 @@ def main() -> int:
     # 2. __version__ is importable and non-empty
     try:
         from eval_harness.version import __version__
+
         _check(
             isinstance(__version__, str) and len(__version__) > 0,
-            "__version__ is a non-empty string: %s" % __version__,
+            f"__version__ is a non-empty string: {__version__}",
             errors,
         )
     except ImportError as exc:
-        errors.append("Cannot import __version__: %s" % exc)
+        errors.append(f"Cannot import __version__: {exc}")
         logger.error("Cannot import __version__: %s", exc)
 
     # 3. SCHEMA_VERSION equals "1.0"
     try:
         from eval_harness.version import SCHEMA_VERSION
+
         _check(
             SCHEMA_VERSION == "1.0",
             "SCHEMA_VERSION == '1.0'",
             errors,
         )
     except ImportError as exc:
-        errors.append("Cannot import SCHEMA_VERSION: %s" % exc)
+        errors.append(f"Cannot import SCHEMA_VERSION: {exc}")
         logger.error("Cannot import SCHEMA_VERSION: %s", exc)
 
     # 4. _DIST_NAME matches pyproject.toml
     try:
         from eval_harness.version import _DIST_NAME
+
         _check(
             _DIST_NAME == "langfuse-eval-harness",
             "_DIST_NAME == 'langfuse-eval-harness'",
             errors,
         )
     except ImportError as exc:
-        errors.append("Cannot import _DIST_NAME: %s" % exc)
+        errors.append(f"Cannot import _DIST_NAME: {exc}")
         logger.error("Cannot import _DIST_NAME: %s", exc)
 
     # 5. __init__.py re-exports both symbols
     try:
-        from eval_harness import __version__ as pkg_v, SCHEMA_VERSION as pkg_sv
+        from eval_harness import SCHEMA_VERSION as PKG_SCHEMA_VERSION
+        from eval_harness import __version__ as pkg_v
+
         _check(
             pkg_v == __version__,
             "eval_harness.__version__ matches version.__version__",
             errors,
         )
         _check(
-            pkg_sv == SCHEMA_VERSION,
+            PKG_SCHEMA_VERSION == SCHEMA_VERSION,
             "eval_harness.SCHEMA_VERSION matches version.SCHEMA_VERSION",
             errors,
         )
     except ImportError as exc:
-        errors.append("Cannot import from eval_harness: %s" % exc)
+        errors.append(f"Cannot import from eval_harness: {exc}")
         logger.error("Cannot import from eval_harness: %s", exc)
 
     # Summary

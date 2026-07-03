@@ -71,9 +71,7 @@ def validate_f024() -> int:
         errors,
     )
     _check(
-        _raises(
-            models=[{"name": "a", "target": echo}, {"name": "b", "target": echo}], baseline="zzz"
-        ),
+        _raises(models=[{"name": "a", "target": echo}, {"name": "b", "target": echo}], baseline="zzz"),
         "baseline must be a model name",
         errors,
     )

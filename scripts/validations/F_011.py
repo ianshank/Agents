@@ -8,6 +8,7 @@ Checks, all deterministic:
      eval_harness makes drift_check.py exit 1. A static "manifest has no edge" check
      would be insufficient — we prove the guard actually trips, then remove the fixture.
 """
+
 import os
 import shutil
 import subprocess
@@ -31,7 +32,10 @@ def _drift_exit() -> int:
     shutil.rmtree(GRIMP_CACHE, ignore_errors=True)
     res = subprocess.run(
         [sys.executable, DRIFT_CHECK, "--manifest", MANIFEST],
-        cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=180,
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=180,
     )
     return res.returncode
 
