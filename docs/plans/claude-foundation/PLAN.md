@@ -34,7 +34,8 @@ MERGE-BLOCKING — this succeeds when:
 - [ ] Every hook script passes unit tests + shellcheck/ruff with zero findings
 - [ ] Zero hardcoded values, per the allowlist policy in §2.1: full model IDs banned
       everywhere; model aliases permitted only in frontmatter `model:` fields; paths
-      only via ${CLAUDE_PLUGIN_ROOT}/${CLAUDE_PROJECT_DIR}; no literal secrets/endpoints
+      only via ${CLAUDE_PLUGIN_ROOT}/${CLAUDE_PLUGIN_DATA}/${CLAUDE_PROJECT_DIR}; no
+      literal secrets/endpoints
 - [ ] Structured JSONL logs are emitted by every hook when CLAUDE_FOUNDATION_LOG_DIR is set
 
 RELEASE-BLOCKING — a version tag may be cut only when, additionally:
@@ -79,7 +80,7 @@ evals not updated). Invariants:
 (1) every released component validates against schema; (2) public component names
 are append-only within a major version — renames/removals require a major bump;
 (3) hooks fail open for advisory checks and fail closed only for security checks
-    (fail-closed = exit 2 + stderr, or JSON permissionDecision: "deny");
+    (fail-closed = exit 2 + stderr, or JSON hookSpecificOutput.permissionDecision: "deny");
 (4) no component contains environment-specific literals.
 ```
 
@@ -92,6 +93,9 @@ are append-only within a major version — renames/removals require a major bump
 ```
 - Runtime: Claude Code CLI (current stable); hook/tooling scripts in Python 3.11+ and/or Bash
   (note: Agents consumer CI matrix is 3.10–3.12 — relevant only if tooling is ever vendored)
+- Plugin identity: plugin.json `name` = "foundation". The plugin name — not the repository
+  name "claude-foundation" — sets the component namespace (foundation:*) and the install
+  reference (`claude plugin install foundation@<marketplace>`)
 - Structure: valid Claude Code plugin layout —
     .claude-plugin/plugin.json          (manifest; .claude-plugin/ holds ONLY the manifest
     .claude-plugin/marketplace.json      and, for this marketplace repo, marketplace.json)
@@ -109,7 +113,7 @@ are append-only within a major version — renames/removals require a major bump
 - No hardcoded values — explicit scanner policy:
     * full model IDs (e.g. claude-*-<version> patterns): banned everywhere
     * model aliases (haiku/sonnet/opus/inherit): permitted ONLY in frontmatter `model:` fields
-    * paths: only via ${CLAUDE_PLUGIN_ROOT} / ${CLAUDE_PROJECT_DIR}
+    * paths: only via ${CLAUDE_PLUGIN_ROOT} / ${CLAUDE_PLUGIN_DATA} / ${CLAUDE_PROJECT_DIR}
     * secrets/endpoints: env vars only
 - Security: hooks never read .env files; no secrets in repo; shellcheck clean; input validation
   on every hook script argument
@@ -156,7 +160,7 @@ You ARE permitted to:
 | Skill | `foundation:c4-docs` | Generates/updates C4 Mermaid diagrams for the host repo |
 | Subagent | `explorer` | Read-only codebase scanner, cheap model alias, Read/Grep only |
 | Subagent | `test-runner` | Runs verification loop in isolation, returns summary |
-| Hook | `pre-tool-guard` | PreToolUse: blocks .env reads, out-of-scope writes — fail closed via exit 2 + stderr or JSON `permissionDecision: "deny"` |
+| Hook | `pre-tool-guard` | PreToolUse: blocks .env reads, out-of-scope writes — fail closed via exit 2 + stderr or JSON `hookSpecificOutput.permissionDecision: "deny"` |
 | Hook | `post-edit-verify` | PostToolUse: lint/typecheck touched files (fail open: exit 0, findings as `additionalContext`; logs) |
 | Hook | `session-logger` | Structured JSONL audit log of tool calls when enabled |
 | MCP | (template only) | .mcp.json.example with env-var placeholders, no live servers |
