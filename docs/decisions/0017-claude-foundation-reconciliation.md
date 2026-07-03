@@ -17,8 +17,10 @@ as its first consumer.
 
 This repo, however, already has a mature, CI-enforced **custom** skill system that predates
 the plugin: four domain skills (`openai-judge`, `architecture-drift-guard`,
-`eval-corpus-forge`, `model-bench`) in the v2.0 frontmatter convention
-(`validator_version`, `compatibility`, semver `version`), a schema-validated registry
+`eval-corpus-forge`, `model-bench`) in the custom frontmatter convention
+(`compatibility` and semver `version` on all four; three also declare
+`validator_version: '2.0'` — `architecture-drift-guard` predates that field, an existing
+inconsistency this ADR records rather than fixes), a schema-validated registry
 (`skills/marketplace.yaml` + `scripts/skill_marketplace.py`, F-023), per-skill CI with ≥95%
 branch-coverage gates (`skills-ci.yml`), and the vendored `validate_skill.py` drift guard
 (ADR 0009). The plugin's `.claude-plugin/marketplace.json` format and Anthropic's SKILL.md
@@ -53,7 +55,7 @@ dual-publish them) each break something that currently works.
 ### Alternatives rejected
 
 - **Migrate the four skills into the plugin format:** loses the ≥95% coverage gates,
-  per-skill CI isolation, and registry semver contract for zero behavioural gain; the
+  per-skill CI isolation, and registry semver contract for zero behavioral gain; the
   plugin convention has no equivalent of the v2.0 validator tiers.
 - **Dual-publish (shim the custom skills into the plugin marketplace too):** reintroduces
   copy-drift between two sources of truth — the exact problem the plugin was proposed to
