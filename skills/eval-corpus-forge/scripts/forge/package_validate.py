@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Hashable
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,6 +53,16 @@ def _read_json(path: str) -> dict[str, Any] | None:
         data = json.load(f)
     # A non-object top level (list/scalar) is as unusable as a missing file here.
     return data if isinstance(data, dict) else None
+
+
+def _key(value: object) -> object:
+    """Dict/set-safe stand-in for an untrusted scenario_id.
+
+    Malformed packages can carry list/dict ids; those must surface as validation
+    errors, never crash a membership test. repr() is only the container key — the
+    error messages still show the raw value.
+    """
+    return value if isinstance(value, Hashable) else repr(value)
 
 
 def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
@@ -130,7 +141,7 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
         if not isinstance(gt, dict):
             fail("structural.invalid_ground_truth_row", f"ground-truth row is not a JSON object: {gt!r}")
             continue
-        if gt.get("scenario_id") not in scenario_ids:
+        if _key(gt.get("scenario_id")) not in scenario_ids:
             fail(
                 "structural.gt_dangling",
                 f"ground-truth references unknown scenario {gt.get('scenario_id')!r}",
@@ -144,7 +155,7 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
                 fail("structural.invalid_view_row", f"{name} row is not a JSON object: {row!r}")
                 continue
             sid = row.get("scenario_id")
-            if sid not in scenario_ids:
+            if _key(sid) not in scenario_ids:
                 fail("structural.view_dangling", f"{name} references unknown scenario {sid!r}", sid)
             if name == "retrieval_eval" and not (row.get("retrieved_ids") or row.get("retrieved_entities")):
                 fail("structural.retrieval_no_data", "retrieval view record without retrieval data", sid)
@@ -166,7 +177,7 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
     # --- §7.2 behavioral ---
     # Non-dict rows were already reported structurally; skip them here so the checks below can
     # safely assume dict access without crashing on malformed packages.
-    by_id = {sc.get("scenario_id"): sc for sc in canonical if isinstance(sc, dict)}
+    by_id = {_key(sc.get("scenario_id")): sc for sc in canonical if isinstance(sc, dict)}
     for sc in canonical:
         if not isinstance(sc, dict):
             continue
@@ -198,9 +209,9 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
             if not isinstance(row, dict):
                 continue  # already reported structurally
             sid = row.get("scenario_id")
-            if sid in seen:
+            if _key(sid) in seen:
                 fail("behavioral.view_not_unique", f"{name} has duplicate record for {sid}", sid)
-            seen.add(sid)
+            seen.add(_key(sid))
             # a view row must be a thin projection, not the full canonical record
             if set(row.keys()) >= set(REQUIRED_SCENARIO_FIELDS):
                 fail("behavioral.view_duplicates_canonical", f"{name} row duplicates canonical for {sid}", sid)

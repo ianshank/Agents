@@ -130,3 +130,19 @@ def test_applicability_contradiction_detected(tmp_path):
 def test_self_test_broken_returns_zero(tmp_path):
     # the negative self-test must report the validator correctly rejected a corrupt package
     assert _self_test_broken(str(tmp_path / "broken")) == 0
+
+
+def test_unhashable_scenario_ids_reported_not_crashed(tmp_path):
+    """List/dict ids from malformed JSON must become validation errors, not TypeErrors."""
+    out = str(tmp_path / "pkg")
+    _build_good_package(out, FULL_RAW)
+    # Corrupt the package: a canonical row with a list id, a view row with a dict id.
+    with open(os.path.join(out, "canonical", "scenarios.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps({"scenario_id": ["not", "a", "string"], "raw_prompt": "x"}) + "\n")
+    with open(os.path.join(out, "views", "response_eval.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps({"scenario_id": {"bad": 1}, "response": "r", "comparison_target": "t"}) + "\n")
+    ok, errors = validate_package(out)  # must not raise
+    assert ok is False
+    checks = _checks(errors)
+    assert "structural.invalid_scenario_id" in checks
+    assert "structural.view_dangling" in checks
