@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from flow_corpus.config import CorpusConfig
@@ -36,6 +38,6 @@ def test_derived_rate_is_not_stored_literal() -> None:
         {"bootstrap_alpha": 1.0},
     ],
 )
-def test_invalid_config_rejected(kwargs: dict) -> None:
+def test_invalid_config_rejected(kwargs: dict[str, Any]) -> None:
     with pytest.raises(ValueError):
         CorpusConfig(**kwargs)

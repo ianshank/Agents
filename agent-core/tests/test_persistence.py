@@ -251,7 +251,7 @@ def test_unsupported_calibrator_type_raises() -> None:
     """A Protocol-compliant but unknown calibrator class raises TypeError."""
 
     class Dummy:
-        def fit(self, probs, outcomes):  # type: ignore[no-untyped-def]
+        def fit(self, probs, outcomes):
             return self
 
         def predict(self, prob: float) -> float:
@@ -259,7 +259,7 @@ def test_unsupported_calibrator_type_raises() -> None:
 
     dummy = Dummy()
     with pytest.raises(TypeError, match="unsupported calibrator type"):
-        calibrator_to_dict(dummy)  # type: ignore[arg-type]
+        calibrator_to_dict(dummy)
 
 
 # ---- Hypothesis round-trip --------------------------------------------------

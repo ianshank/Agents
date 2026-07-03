@@ -125,7 +125,7 @@ def test_factory_passes_config_to_temperature() -> None:
     cfg = RecalibrationConfig(clamp_eps=1e-4)
     cal = make_calibrator("temperature", cfg)
     assert isinstance(cal, TemperatureScaler)
-    assert cal._config.clamp_eps == 1e-4  # type: ignore[attr-defined]
+    assert cal._config.clamp_eps == 1e-4
 
 
 def test_factory_isotonic_ignores_config() -> None:

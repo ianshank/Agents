@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
@@ -32,8 +33,10 @@ def _healthy_store(path) -> OutcomeStore:
     return store
 
 
-def _ctx(**kw) -> ChangeContext:
-    base = dict(mech_pass=True, touches_protected=False, raw_confidence=0.96, domain="core")
+def _ctx(**kw: object) -> ChangeContext:
+    base: dict[str, Any] = dict(
+        mech_pass=True, touches_protected=False, raw_confidence=0.96, domain="core"
+    )
     base.update(kw)
     return ChangeContext(**base)
 

@@ -664,6 +664,7 @@ features:
       - "Degrade paths log: agent_core/detectors.py, agent_core/jsonl.py, agent_core/persistence.py, src/eval_harness/campaign.py, behavioral_regression/gate.py, flow_corpus/holdout/manager.py each carry a module logger; caplog tests assert the WARNING paths"
       - "agent_core.jsonl.read_jsonl exists with strict semantics (malformed line raises) and OutcomeStore.all() delegates to it; behavior round-trips (test_jsonl.py)"
       - "All suite gates unchanged or stronger: root 96 / agent-core 95 / flow-* 95 / behavioral-regression 95 / skills 95 / scripts 85 / claude-foundation 85 — nothing lowered"
+      - "tests/ are type-checked in every suite's CI (round 2): the tests.* mypy overrides were dead config because test dirs ship no __init__.py so modules resolved as top-level names; explicit_package_bases makes them resolve as tests.* so the relaxations apply, the ~460 spurious errors collapse to 28 real ones (all fixed: None-guards, typed kwargs helpers, stale ignores, TYPE_CHECKING import for the importorskip alias), and mypy <pkg> tests is wired into eval-harness/agent-core/flow-corpus/behavioral-regression/foundation CI"
     validation_command: "python scripts/validations/F_037.py"
     implemented_in: "54986893ed95530e6fe942462826b385a9fe0ceb"
     depends_on: ["F-031"]

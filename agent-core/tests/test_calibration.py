@@ -146,5 +146,6 @@ def test_ship_gate_rejects_calibrated_but_undiscriminating_model():
         probs, outcomes, n_bins=10, ece_target=0.05, mce_target=0.12, auroc_target=0.80
     )
     assert report.ece < 1e-9
+    assert report.auroc is not None
     assert math.isclose(report.auroc, 0.5, abs_tol=1e-9)
     assert report.passes is False  # the vanity-metric guard in action

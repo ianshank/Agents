@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from agent_core.merge_gate import (
     CalibratorHealth,
     ChangeContext,
@@ -76,8 +78,10 @@ def test_threshold_none_when_risk_unachievable():
 
 
 # --- decide ------------------------------------------------------------------
-def _ctx(**kw) -> ChangeContext:
-    base = dict(mech_pass=True, touches_protected=False, raw_confidence=0.99, domain="core")
+def _ctx(**kw: object) -> ChangeContext:
+    base: dict[str, Any] = dict(
+        mech_pass=True, touches_protected=False, raw_confidence=0.99, domain="core"
+    )
     base.update(kw)
     return ChangeContext(**base)
 

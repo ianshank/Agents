@@ -104,7 +104,33 @@ def main() -> int:
     for rel_path, needle in _INSTRUMENTED.items():
         _check(needle in _read(rel_path), f"{rel_path} keeps its module logger", errors)
 
-    # 4. The shared strict JSONL reader stays OutcomeStore's read path.
+    # 4. tests/ stay type-checked in every suite's CI, and the package configs keep
+    # explicit_package_bases (without it the tests.* overrides silently never match).
+    for wf, needle in (
+        (os.path.join(".github", "workflows", "eval-harness-ci.yml"), "mypy tests"),
+        (os.path.join(".github", "workflows", "agent-core-ci.yml"), "mypy agent_core tests"),
+        (os.path.join(".github", "workflows", "flow-corpus-ci.yml"), "mypy flow_protocol tests"),
+        (os.path.join(".github", "workflows", "flow-corpus-ci.yml"), "mypy flow_corpus tests"),
+        (
+            os.path.join(".github", "workflows", "behavioral-regression-ci.yml"),
+            "mypy behavioral_regression tests",
+        ),
+    ):
+        _check(needle in _read(wf), f"{wf} type-checks tests ({needle})", errors)
+    if workflow_exists:
+        _check(
+            "mypy tests" in _read(_FOUNDATION_WORKFLOW),
+            "claude-foundation staging CI type-checks tests",
+            errors,
+        )
+    for pkg in ("agent-core", "flow-protocol", "flow-corpus", "behavioral-regression"):
+        _check(
+            "explicit_package_bases = true" in _read(os.path.join(pkg, "pyproject.toml")),
+            f"{pkg} pyproject keeps explicit_package_bases (tests.* override stays live)",
+            errors,
+        )
+
+    # 5. The shared strict JSONL reader stays OutcomeStore's read path.
     _check(
         "def read_jsonl(" in _read(os.path.join("agent-core", "agent_core", "jsonl.py")),
         "agent_core.jsonl.read_jsonl exists",

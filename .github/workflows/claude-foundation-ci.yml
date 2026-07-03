@@ -50,6 +50,7 @@ jobs:
       - run: ruff format --check tools tests hooks
       - run: mypy tools
       - run: mypy hooks
+      - run: mypy tests
       - run: python -m foundation_tools.validate --root .
       - run: python -m foundation_tools.scan --root .
       - run: python -m pytest --cov --cov-report=term-missing

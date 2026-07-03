@@ -68,6 +68,11 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
 [tool.mypy]
 python_version = "3.10"
 strict = true
+# tests/ ships no __init__.py, so without explicit bases mypy names its files as
+# top-level modules (test_*, conftest) and the tests.* override below silently
+# never matches. Explicit package bases make them resolve as tests.*.
+explicit_package_bases = true
+mypy_path = "."
 ignore_missing_imports = true
 warn_unused_ignores = true
 
