@@ -36,6 +36,9 @@ jobs:
   verdict:
     name: record human audit verdict
     runs-on: ubuntu-latest
+    env:
+      # Same repo-variable seam the acting gate job honors (I-4).
+      STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
     timeout-minutes: 10
     environment: merge-gate-verdict
     steps:
@@ -58,7 +61,7 @@ jobs:
       - run: python -m pip install --upgrade pip "setuptools>=68"
       - run: pip install -e "./agent-core"
       - name: Sync store (pull — any failure aborts before recording)
-        run: python -m agent_core.store_sync pull --store merge_outcomes.jsonl --repo-dir .
+        run: python -m agent_core.store_sync pull --store "$STORE" --repo-dir .
       - name: Record verdict (idempotent wrapper; unknown change_id fails loudly)
         env:
           CHANGE_ID: ${{ inputs.change_id }}
@@ -67,13 +70,13 @@ jobs:
         run: |
           FLAG=--incorrect
           [ "$VERDICT" = "correct" ] && FLAG=--correct
-          python scripts/record_audit_verdict.py --store merge_outcomes.jsonl \
+          python scripts/record_audit_verdict.py --store "$STORE" \
             --change-id "$CHANGE_ID" "$FLAG" --actor "$ACTOR"
       - name: Sync store (push — the verdict reaches the data branch, attributed)
         env:
           ACTOR: ${{ github.actor }}
         run: |
-          python -m agent_core.store_sync push --store merge_outcomes.jsonl \
+          python -m agent_core.store_sync push --store "$STORE" \
             --repo-dir . --actor "$ACTOR"
       - name: Close the audit issue (zero matches is fine)
         env:

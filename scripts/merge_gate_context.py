@@ -43,8 +43,13 @@ from eval_protected_paths import _glob_to_regex, matched_protected
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAPPING_PATH = os.path.join("config", "merge-gate-domains.yaml")
-SUPPORTED_SCHEMA_VERSION = "1.0.0"
+# Semver-style compatibility: any 1.x.y mapping loads (additive evolution stays
+# backwards-compatible); a major bump is a deliberate breaking cutover.
+SUPPORTED_SCHEMA_MAJOR = "1"
 _HUMAN_CONFIDENCE = 0.0  # ADR 0018 §5: human-authored changes carry no agent confidence
+
+EXIT_OK = 0
+EXIT_CONFIG = 2
 
 
 @dataclass(frozen=True)
@@ -74,10 +79,10 @@ class DomainMapping:
         expected = {"schema_version", "default_domain", "human_namespace", "rules"}
         if set(doc) != expected:
             raise ConfigError(f"domain mapping keys must be exactly {sorted(expected)}; got {sorted(doc)}")
-        if str(doc["schema_version"]) != SUPPORTED_SCHEMA_VERSION:
+        version = str(doc["schema_version"])
+        if version.split(".", 1)[0] != SUPPORTED_SCHEMA_MAJOR:
             raise ConfigError(
-                f"unsupported domain-mapping schema_version {doc['schema_version']!r} "
-                f"(supported: {SUPPORTED_SCHEMA_VERSION})"
+                f"unsupported domain-mapping schema_version {version!r} (supported major: {SUPPORTED_SCHEMA_MAJOR}.x)"
             )
         namespace = str(doc["human_namespace"])
         if not namespace.endswith("/"):
@@ -190,7 +195,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except ConfigError as exc:
         logger.error("merge-gate-context: %s", exc)
-        return 2
+        return EXIT_CONFIG
     payload = json.dumps(context, sort_keys=True)
     if args.output:
         with open(args.output, "w", encoding="utf-8") as fh:
@@ -204,7 +209,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         context["mech_pass"],
         len(files),
     )
-    return 0
+    return EXIT_OK
 
 
 if __name__ == "__main__":

@@ -11,6 +11,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
+# Real-git helpers shared with test_detectors (tests/gitrepo.py).
+from gitrepo import git as _git
+from gitrepo import make_remote_and_clone as _make_remote_and_clone
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -21,6 +25,7 @@ from agent_core.store_sync import (
     EXIT_INTERNAL,
     EXIT_OK,
     EXIT_RETRIES_EXHAUSTED,
+    UNPARSED_STATS_KEY,
     StoreSyncConfig,
     SyncStatus,
     _run,
@@ -30,40 +35,11 @@ from agent_core.store_sync import (
     pull,
     push,
     read_store,
+    read_store_lines,
     serialize_store,
     store_stats,
     write_store,
 )
-
-
-# --- real git helpers ---------------------------------------------------------
-def _git(cwd: Path, *args: str) -> str:
-    proc = subprocess.run(
-        ["git", "-c", "user.email=t@e", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-    )
-    assert proc.returncode == 0, proc.stderr
-    return proc.stdout.strip()
-
-
-def _make_remote_and_clone(tmp_path: Path, name: str = "work") -> tuple[Path, Path]:
-    """A bare remote with a born `main` plus a clone of it."""
-    remote = tmp_path / "remote.git"
-    remote.mkdir()
-    _git(remote, "init", "-q", "--bare", "-b", "main")
-    seedwork = tmp_path / "_seedwork"
-    seedwork.mkdir()
-    _git(seedwork, "init", "-q", "-b", "main")
-    (seedwork / "README").write_text("x", encoding="utf-8")
-    _git(seedwork, "add", "README")
-    _git(seedwork, "commit", "-q", "-m", "init")
-    _git(seedwork, "remote", "add", "origin", str(remote))
-    _git(seedwork, "push", "-q", "origin", "main")
-    clone = tmp_path / name
-    _git(tmp_path, "clone", "-q", str(remote), str(clone))
-    return remote, clone
 
 
 def _rec(
@@ -166,10 +142,50 @@ def test_stats_counts_per_domain_per_source_including_pending(tmp_path):
             _rec(change_id="c2", domain="human/docs"),
         ],
     )
-    assert store_stats(OutcomeStore(path)) == {
+    assert store_stats(read_store(path)) == {
         "human/agent-core": {"pending": 1, "revert": 1},
         "human/docs": {"pending": 1},
     }
+
+
+def test_opaque_lines_preserved_through_push_not_dropped(tmp_path):
+    """A malformed line and a forward-incompatible line (unknown field from an
+    upgraded writer) must neither crash the sync nor be deleted from the
+    branch by a reader that cannot parse them."""
+    remote, clone = _make_remote_and_clone(tmp_path)
+    store = clone / "merge_outcomes.jsonl"
+    corrupt = "{not json at all"
+    future = json.dumps(
+        {**json.loads(_rec(change_id="cf").to_json()), "novel_field": 1}, sort_keys=True
+    )
+    store.write_text(_rec().to_json() + "\n" + corrupt + "\n" + future + "\n", encoding="utf-8")
+
+    records, opaque = read_store_lines(store)
+    assert records == [_rec()]
+    assert sorted(opaque) == sorted([corrupt, future])
+
+    assert push(_cfg(clone), store).status is SyncStatus.OK
+    branch_content = _git(clone, "show", "origin/merge-gate-data:merge_outcomes.jsonl")
+    assert corrupt in branch_content and future in branch_content  # preserved verbatim
+
+    clone2 = tmp_path / "work2"
+    _git(tmp_path, "clone", "-q", str(remote), str(clone2))
+    store2 = clone2 / "merge_outcomes.jsonl"
+    assert pull(_cfg(clone2), store2).status is SyncStatus.OK
+    records2, opaque2 = read_store_lines(store2)
+    assert records2 == [_rec()]
+    assert sorted(opaque2) == sorted([corrupt, future])
+    # second push is a byte-level no-op (opaque lines participate in the merge)
+    assert push(_cfg(clone2), store2).status is SyncStatus.NOOP
+
+
+def test_stats_reports_unparsed_lines(tmp_path):
+    store = tmp_path / "s.jsonl"
+    store.write_text(_rec().to_json() + "\n\n" + "{broken\n", encoding="utf-8")
+    records, opaque = read_store_lines(store)
+    stats = store_stats(records, opaque)
+    assert stats[UNPARSED_STATS_KEY] == {"lines": 1}
+    assert stats["human/agent-core"] == {"pending": 1}
 
 
 # --- hypothesis: merge properties ------------------------------------------------
@@ -339,17 +355,19 @@ def test_fetch_failure_leaves_local_untouched(tmp_path):
     assert result.attempts == 1
 
 
-def test_plumbing_failure_raises_internal_error(tmp_path):
+@pytest.mark.parametrize("broken_cmd", ["hash-object", "mktree", "commit-tree"])
+def test_plumbing_failure_raises_internal_error(tmp_path, broken_cmd):
     _, clone = _make_remote_and_clone(tmp_path)
     store = clone / "merge_outcomes.jsonl"
     write_store(store, [_rec()])
 
     def broken_plumbing(args, timeout, input_text=None):
-        if args[3] in {"hash-object", "mktree", "commit-tree"}:
-            return subprocess.CompletedProcess(list(args), 1, "", f"boom {args[3]}")
+        # commit-tree is preceded by "-c user.name=…" flags, so match anywhere.
+        if broken_cmd in args:
+            return subprocess.CompletedProcess(list(args), 1, "", f"boom {broken_cmd}")
         return _run(args, timeout, input_text)
 
-    with pytest.raises(Exception, match="hash-object failed"):
+    with pytest.raises(Exception, match=f"{broken_cmd} failed"):
         push(_cfg(clone), store, runner=broken_plumbing)
 
 

@@ -8,10 +8,8 @@ which cannot be exercised deterministically offline without a mock.
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
 from agent_core.detectors import (
     DetectorConfig,
@@ -28,38 +26,10 @@ from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 SINCE = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
 
-# --- real git helpers --------------------------------------------------------
-def _git(cwd: Path, *args: str) -> str:
-    proc = subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.email=t@e",
-            "-c",
-            "user.name=t",
-            "-c",
-            "commit.gpgsign=false",
-            *args,
-        ],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-    )
-    assert proc.returncode == 0, proc.stderr
-    return proc.stdout.strip()
-
-
-def _init_repo(path: Path) -> Path:
-    path.mkdir(parents=True, exist_ok=True)
-    _git(path, "init", "-q", "-b", "main")
-    return path
-
-
-def _commit(path: Path, name: str, content: str, message: str) -> str:
-    (path / name).write_text(content, encoding="utf-8")
-    _git(path, "add", name)
-    _git(path, "commit", "-q", "-m", message)
-    return _git(path, "rev-parse", "HEAD")
+# Real-git helpers shared with test_store_sync (tests/gitrepo.py).
+from gitrepo import commit as _commit  # noqa: E402
+from gitrepo import git as _git  # noqa: E402
+from gitrepo import init_repo as _init_repo  # noqa: E402
 
 
 # --- GitRevertDetector (real git) -------------------------------------------

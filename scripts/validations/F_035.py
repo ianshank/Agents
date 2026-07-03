@@ -5,7 +5,8 @@ Deterministic and offline: reads workflow/config files only, runs nothing.
 
     1. The shadow job runs on every PR (no ENABLE_CALIBRATED_AUTOMERGE guard),
        cannot block (all three decision exit codes succeed), cannot write
-       (contents: read, persist-credentials: false, pull-only store sync), and
+       (contents: read makes the persisted token write-proof; store sync is
+       pull-only), and
        surfaces BOTH decisions (agent domain + human/ observability) plus
        store stats in the step summary.
     2. The acting ``gate`` job stays gated and keeps its stricter exit map.
@@ -71,7 +72,9 @@ def _validate_shadow(errors: list[str]) -> None:
         errors,
     )
     shadow_text = text[text.index("\n  shadow:") :]
-    _check("persist-credentials: false" in shadow_text, "shadow checkout has no creds", errors)
+    # Credentials deliberately persist (a private repo needs auth even to FETCH
+    # the data branch); contents: read is what makes the job write-proof, and
+    # that permission is asserted above.
     _check("0 | 10 | 20) exit 0" in shadow_text, "all three decisions succeed in shadow", errors)
     _check("0 | 10) exit 0" in text, "acting gate keeps its stricter exit map", errors)
     _check("store_sync pull" in shadow_text, "shadow pulls the store", errors)

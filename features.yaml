@@ -629,7 +629,7 @@ features:
     status: "done"
     tier: "fast"
     verification:
-      - "Shadow job cannot merge, approve, or block: permissions exactly contents: read, persist-credentials false, decisions 0/10/20 all succeed (F_035.py asserts all three; only internal/usage errors fail)"
+      - "Shadow job cannot merge, approve, or block: permissions exactly contents: read (the persisted token can fetch the data branch on a private repo but never push), decisions 0/10/20 all succeed (F_035.py; only internal/usage errors fail)"
       - "Step summary carries both decisions (agent domain + human/ observability) and store record counts per label source (F_035.py)"
       - "Seed-on-merge writes exactly one pending record per merged change (merge_seed idempotency by change_id; push:main trigger — fork-safe and F-032 AC-4 verbatim)"
       - "With an empty store the shadow decision is ESCALATE and the job succeeds (cold start is not an error; store pull tolerates sync failure with a warning)"

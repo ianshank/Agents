@@ -59,6 +59,12 @@ def test_load_rejects_invalid_mapping(tmp_path, mutate):
         mgc.DomainMapping.load(_write_mapping(tmp_path, doc))
 
 
+def test_load_accepts_minor_schema_bumps(tmp_path):
+    doc = dict(_VALID, schema_version="1.2.0")
+    mapping = mgc.DomainMapping.load(_write_mapping(tmp_path, doc))
+    assert mapping.schema_version == "1.2.0"  # additive evolution loads fine
+
+
 def test_load_rejects_unreadable_and_non_mapping(tmp_path):
     with pytest.raises(ConfigError):
         mgc.DomainMapping.load(str(tmp_path / "missing.yaml"))
@@ -68,7 +74,7 @@ def test_load_rejects_unreadable_and_non_mapping(tmp_path):
 
 def test_committed_mapping_loads_and_never_emits_human(tmp_path):
     mapping = mgc.DomainMapping.load(mgc.DEFAULT_MAPPING_PATH)
-    assert mapping.schema_version == mgc.SUPPORTED_SCHEMA_VERSION
+    assert mapping.schema_version.split(".", 1)[0] == mgc.SUPPORTED_SCHEMA_MAJOR
     assert not mapping.default_domain.startswith(mapping.human_namespace)
     assert all(not r.domain.startswith(mapping.human_namespace) for r in mapping.rules)
 
@@ -117,6 +123,18 @@ def test_resolve_files_from_nul_delimited_file(tmp_path):
     listing.write_text("a.py\0dir/b.md\0\0", encoding="utf-8")
     args = mgc.build_parser().parse_args(["--files-from", str(listing)])
     assert mgc.resolve_files(args) == ["a.py", "dir/b.md"]
+
+
+def test_main_empty_files_from_defaults_domain(tmp_path, capsys):
+    """The seed's real cold case: an empty merge diff still composes a context."""
+    mapping_path = _write_mapping(tmp_path, _VALID)
+    empty = tmp_path / "empty.z"
+    empty.write_text("", encoding="utf-8")
+    rc = mgc.main(["--mapping", mapping_path, "--files-from", str(empty), "--human"])
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["domain"] == "human/repo-misc"  # default domain, namespaced
+    assert payload["touches_protected"] is False
 
 
 def test_resolve_files_missing_files_from_raises(tmp_path):

@@ -30,6 +30,9 @@ jobs:
   label:
     name: label matured outcome records
     runs-on: ubuntu-latest
+    env:
+      # Same repo-variable seam the acting gate job honors (I-4).
+      STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
     timeout-minutes: 15
     steps:
       # Credentials persisted deliberately: this job pushes the data branch.
@@ -55,16 +58,16 @@ jobs:
           gh api "repos/${{ github.repository }}/commits/$(git rev-parse HEAD)/check-runs" \
             --jq .total_count > /dev/null
       - name: Sync store (pull — any failure aborts before labelling)
-        run: python -m agent_core.store_sync pull --store merge_outcomes.jsonl --repo-dir .
+        run: python -m agent_core.store_sync pull --store "$STORE" --repo-dir .
       - name: Label matured records (passive sources only)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python -m agent_core.outcome_labeller --store merge_outcomes.jsonl \
+          python -m agent_core.outcome_labeller --store "$STORE" \
             --repo-dir . --repo "${{ github.repository }}"
       # Push is the LAST step: any earlier failure leaves the remote store
       # untouched (fail toward no-op, never toward partial state).
       - name: Sync store (push)
         run: |
-          python -m agent_core.store_sync push --store merge_outcomes.jsonl \
+          python -m agent_core.store_sync push --store "$STORE" \
             --repo-dir . --actor "${{ github.actor }}"

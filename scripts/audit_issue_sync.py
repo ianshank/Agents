@@ -34,6 +34,8 @@ from agent_core.outcome_store import OutcomeRecord, OutcomeStore
 logger = logging.getLogger(__name__)
 
 ISSUE_TITLE_PREFIX = "merge-gate audit: "
+EXIT_OK = 0
+EXIT_CONFIG = 2
 VERDICT_WORKFLOW = "merge-gate-verdict.yml"
 
 
@@ -158,11 +160,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except InputError as exc:
         logger.error("audit-issue-sync: %s", exc)
-        return 2
+        return EXIT_CONFIG
     with open(args.output, "w", encoding="utf-8") as fh:
         json.dump(plan, fh, sort_keys=True)
         fh.write("\n")
-    return 0
+    return EXIT_OK
 
 
 if __name__ == "__main__":

@@ -48,7 +48,7 @@ from typing import Protocol, runtime_checkable
 
 from .config import ConfigError
 from .logging_util import configure_logging, debug_span, get_logger
-from .outcome_store import OutcomeRecord, OutcomeStore
+from .outcome_store import OutcomeRecord
 
 logger = get_logger(__name__)
 
@@ -190,21 +190,74 @@ def merge_records(*sets: Iterable[OutcomeRecord]) -> list[OutcomeRecord]:
     return sorted(unique.values(), key=canonical_key)
 
 
-def serialize_store(records: Sequence[OutcomeRecord]) -> str:
-    return "".join(rec.to_json() + "\n" for rec in records)
+def _parse_line(line: str) -> OutcomeRecord | None:
+    """Strictly parse one store line; None means opaque (see merge_opaque).
+
+    A malformed line or one carrying fields this reader doesn't know (an
+    upgraded writer during a rolling upgrade) must NOT crash the pipeline —
+    and must NOT be silently dropped either, or a subsequent push would
+    delete it from the data branch. Opaque lines are preserved verbatim.
+    """
+    try:
+        return OutcomeRecord(**json.loads(line))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        logger.warning("store-sync preserving unparseable line (%s): %.120s", exc, line)
+        return None
+
+
+def _split_lines(text: str) -> tuple[list[OutcomeRecord], list[str]]:
+    records: list[OutcomeRecord] = []
+    opaque: list[str] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        rec = _parse_line(line)
+        if rec is None:
+            opaque.append(line)
+        else:
+            records.append(rec)
+    return records, opaque
+
+
+def merge_opaque(*sets: Iterable[str]) -> list[str]:
+    """Union of opaque (unparseable-here) lines, deduped exactly, sorted.
+
+    They serialize AFTER the parsed records: their canonical position cannot
+    be computed without parsing, and the next upgraded writer re-canonicalizes
+    the whole store anyway.
+    """
+    unique: set[str] = set()
+    for lines in sets:
+        unique.update(lines)
+    return sorted(unique)
+
+
+def serialize_store(records: Sequence[OutcomeRecord], opaque: Sequence[str] = ()) -> str:
+    body = "".join(rec.to_json() + "\n" for rec in records)
+    return body + "".join(line + "\n" for line in opaque)
+
+
+def read_store_lines(path: str | Path) -> tuple[list[OutcomeRecord], list[str]]:
+    """(records, opaque lines) of the local store; absent file is empty."""
+    target = Path(path)
+    if not target.exists():
+        return [], []
+    return _split_lines(target.read_text(encoding="utf-8"))
 
 
 def read_store(path: str | Path) -> list[OutcomeRecord]:
-    """All records in the local store; an absent file is an empty store."""
-    return OutcomeStore(path).all()
+    """Parsed records in the local store; an absent file is an empty store."""
+    return read_store_lines(path)[0]
 
 
-def write_store(path: str | Path, records: Sequence[OutcomeRecord]) -> None:
+def write_store(
+    path: str | Path, records: Sequence[OutcomeRecord], opaque: Sequence[str] = ()
+) -> None:
     """Atomically replace the local store with the canonical serialization."""
     target = Path(path)
     tmp = target.with_name(target.name + ".tmp")
     try:
-        tmp.write_text(serialize_store(records), encoding="utf-8")
+        tmp.write_text(serialize_store(records, opaque), encoding="utf-8")
         os.replace(tmp, target)
     except Exception:
         with contextlib.suppress(FileNotFoundError):
@@ -212,14 +265,23 @@ def write_store(path: str | Path, records: Sequence[OutcomeRecord]) -> None:
         raise
 
 
-def store_stats(store: OutcomeStore) -> dict[str, dict[str, int]]:
+# Reserved stats key for lines this reader could not parse (observability —
+# real domains come from config/merge-gate-domains.yaml and never start with _).
+UNPARSED_STATS_KEY = "_unparsed"
+
+
+def store_stats(
+    records: Sequence[OutcomeRecord], opaque: Sequence[str] = ()
+) -> dict[str, dict[str, int]]:
     """Per-domain counts by label source over RAW lines (accumulation view):
-    ``{domain: {"pending" | <label_source>: count}}``."""
+    ``{domain: {"pending" | <label_source>: count}}`` plus ``_unparsed`` lines."""
     stats: dict[str, dict[str, int]] = {}
-    for rec in store.all():
+    for rec in records:
         source = rec.label_source if rec.label_source is not None else "pending"
         domain = stats.setdefault(rec.domain, {})
         domain[source] = domain.get(source, 0) + 1
+    if opaque:
+        stats[UNPARSED_STATS_KEY] = {"lines": len(opaque)}
     return stats
 
 
@@ -262,13 +324,24 @@ def _fetch_tip(cfg: StoreSyncConfig, runner: GitRunner) -> tuple[SyncStatus, str
     return SyncStatus.OK, tip.stdout.strip()
 
 
-def _read_records_at(cfg: StoreSyncConfig, tip: str, runner: GitRunner) -> list[OutcomeRecord]:
-    """Records of the store file at *tip*. The fetch already succeeded, so a
-    ``git show`` failure here means the file is absent in that commit -> []."""
+def _read_remote_lines(
+    cfg: StoreSyncConfig, tip: str, runner: GitRunner
+) -> tuple[list[OutcomeRecord], list[str]]:
+    """(records, opaque lines) of the store file at *tip*. The fetch already
+    succeeded, so a ``git show`` failure here means the file is absent -> empty."""
     proc = _git(cfg, ["show", f"{tip}:{cfg.store_filename}"], runner)
     if proc.returncode != 0:
-        return []
-    return [OutcomeRecord.from_json(line) for line in proc.stdout.splitlines() if line.strip()]
+        # Diagnosable absent-vs-error: the fetch already succeeded, so this is
+        # almost always "file not in that commit", but keep the evidence.
+        logger.debug(
+            "store-sync show %s:%s rc=%s stderr=%s -> empty store",
+            tip,
+            cfg.store_filename,
+            proc.returncode,
+            proc.stderr.strip(),
+        )
+        return [], []
+    return _split_lines(proc.stdout)
 
 
 def _commit_store(
@@ -320,12 +393,19 @@ def pull(cfg: StoreSyncConfig, store_path: str | Path, runner: GitRunner = _run)
     """
     with debug_span(logger, "store_sync.pull", branch=cfg.branch):
         status, tip = _fetch_tip(cfg, runner)
-        local = read_store(store_path)
+        local, local_opaque = read_store_lines(store_path)
         if status is not SyncStatus.OK or tip is None:
             return SyncResult(status=status, records=len(local))
-        merged = merge_records(_read_records_at(cfg, tip, runner), local)
-        write_store(store_path, merged)
-        logger.info("store-sync pull merged %d records from %s", len(merged), cfg.branch)
+        remote, remote_opaque = _read_remote_lines(cfg, tip, runner)
+        merged = merge_records(remote, local)
+        opaque = merge_opaque(remote_opaque, local_opaque)
+        write_store(store_path, merged, opaque)
+        logger.info(
+            "store-sync pull merged %d records (+%d opaque lines) from %s",
+            len(merged),
+            len(opaque),
+            cfg.branch,
+        )
         return SyncResult(status=SyncStatus.OK, records=len(merged))
 
 
@@ -352,13 +432,18 @@ def push(
                 return SyncResult(
                     status=status, records=len(read_store(store_path)), attempts=attempts
                 )
-            remote = _read_records_at(cfg, tip, runner) if tip is not None else []
-            merged = merge_records(remote, read_store(store_path))
-            content = serialize_store(merged)
-            if content == serialize_store(remote):
+            if tip is not None:
+                remote, remote_opaque = _read_remote_lines(cfg, tip, runner)
+            else:
+                remote, remote_opaque = [], []
+            local, local_opaque = read_store_lines(store_path)
+            merged = merge_records(remote, local)
+            opaque = merge_opaque(remote_opaque, local_opaque)
+            content = serialize_store(merged, opaque)
+            if content == serialize_store(remote, remote_opaque):
                 logger.info("store-sync push no-op: remote already has all %d records", len(merged))
                 return SyncResult(status=SyncStatus.NOOP, records=len(merged), attempts=attempts)
-            write_store(store_path, merged)  # keep the local store canonical too
+            write_store(store_path, merged, opaque)  # keep the local store canonical too
             commit = _commit_store(cfg, tip, content, actor, runner)
             pushed = _git(cfg, ["push", cfg.remote, f"{commit}:refs/heads/{cfg.branch}"], runner)
             if pushed.returncode == 0:
@@ -373,7 +458,10 @@ def push(
                     status=SyncStatus.OK, records=len(merged), attempts=attempts, commit_sha=commit
                 )
             logger.warning(
-                "store-sync push rejected (attempt %d/%d): %s",
+                "store-sync push rejected remote=%s branch=%s commit=%s (attempt %d/%d): %s",
+                cfg.remote,
+                cfg.branch,
+                commit,
                 attempts,
                 cfg.max_push_retries,
                 pushed.stderr.strip(),
@@ -436,7 +524,8 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging(level="INFO")
     try:
         if args.cmd == "stats":
-            print(json.dumps(store_stats(OutcomeStore(args.store)), sort_keys=True))
+            records, opaque = read_store_lines(args.store)
+            print(json.dumps(store_stats(records, opaque), sort_keys=True))
             return EXIT_OK
         cfg = _config_from_args(args)
         # Resolve the runner at call time (module attribute) so the seam stays

@@ -107,6 +107,19 @@ return code **before** reading `FETCH_HEAD` — `actions/checkout` leaves a stal
 remote branch ("couldn't find remote ref") is cold start, not an error; any other fetch
 failure aborts the sync with the store untouched.
 
+Two further obligations (post-implementation review round):
+
+- **Reader jobs keep the checkout token.** On a private repository an unauthenticated
+  fetch of the data branch reads as a hard failure, not cold start — so the read-only
+  jobs (shadow, audit selection) must NOT strip credentials; their
+  `permissions: contents: read` is what makes the persisted token write-proof.
+- **Unparseable lines are preserved, never dropped.** A malformed line — or a line
+  carrying fields from an upgraded writer during a rolling upgrade — must neither crash
+  the pipeline nor be deleted by a reader that cannot parse it: `store_sync` carries such
+  lines verbatim as opaque content (serialized after the parsed records; the next
+  upgraded writer re-canonicalizes), logs them, and reports them under the reserved
+  `_unparsed` stats key.
+
 ## Consequences
 
 - Records survive between CI runs; labels can accumulate; the F-033 labeller and F-034

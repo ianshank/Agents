@@ -33,6 +33,9 @@ jobs:
   seed:
     name: seed pending outcome record
     runs-on: ubuntu-latest
+    env:
+      # Same repo-variable seam the acting gate job honors (I-4).
+      STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
     timeout-minutes: 10
     steps:
       # Credentials persisted deliberately: this job pushes the data branch.
@@ -45,15 +48,19 @@ jobs:
       - run: python -m pip install --upgrade pip "setuptools>=68"
       - run: pip install -e "./agent-core" pyyaml
       - name: Sync store (pull — any failure aborts before seeding)
-        run: python -m agent_core.store_sync pull --store merge_outcomes.jsonl --repo-dir .
+        run: python -m agent_core.store_sync pull --store "$STORE" --repo-dir .
       - name: Compose seed context (human/<domain>, confidence 0.0)
         env:
           BEFORE: ${{ github.event.before }}
         run: |
           # github.event.before is all-zeros on force-push/branch-create; fall
-          # back to the first parent so the diff always resolves.
+          # back to the first parent, and for a parentless first commit diff
+          # against the empty tree so even that push seeds.
           if ! git cat-file -e "$BEFORE" 2>/dev/null; then
             BEFORE="$GITHUB_SHA^1"
+          fi
+          if ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            BEFORE="$(git hash-object -t tree /dev/null)"
           fi
           git diff --name-only -z "$BEFORE" "$GITHUB_SHA" > changed_files.z
           python scripts/merge_gate_context.py --files-from changed_files.z \
@@ -61,12 +68,12 @@ jobs:
           cat seed_context.json
       - name: Seed pending record (idempotent by change_id)
         run: |
-          python -m agent_core.merge_seed --store merge_outcomes.jsonl \
+          python -m agent_core.merge_seed --store "$STORE" \
             --change-id "$GITHUB_SHA" \
             --domain "$(jq -r .domain seed_context.json)" \
             --raw-confidence "$(jq -r .raw_confidence seed_context.json)" \
             --merged-at "$(git show -s --format=%cI "$GITHUB_SHA")"
       - name: Sync store (push — final step; earlier failure leaves remote untouched)
         run: |
-          python -m agent_core.store_sync push --store merge_outcomes.jsonl \
+          python -m agent_core.store_sync push --store "$STORE" \
             --repo-dir . --actor "${{ github.actor }}"
