@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Hardening
+- **Real-data activation gap-analysis round (F-032…F-035):** post-implementation
+  adversarial review + CI-parity battery fixed three defects before merge: reader
+  jobs (shadow, audit-select) no longer strip checkout credentials (on a private
+  repo an unauthenticated data-branch fetch reads as failure — the weekly audit
+  would hard-fail forever and the shadow would always cold-start empty);
+  `store_sync` preserves malformed/forward-incompatible store lines verbatim
+  through merges instead of crashing every sync — or worse, deleting them on the
+  next push (`_unparsed` stats key, round-trip tested); the `MERGE_GATE_STORE`
+  repo variable is honored by every store-touching job, not just the acting gate
+  (a set variable would have silently split readers from writers). Plus: shared
+  real-git test helpers (`agent-core/tests/gitrepo.py`), semver-major-compatible
+  domain-mapping schema, empty-tree diff fallback for a parentless first push,
+  named exit-code constants, richer sync failure logs; `store_sync` at 100%
+  branch coverage.
 - **Operational-scripts quality gates (F-031):** `scripts/` (44 files) was un-linted,
   un-typed, and coverage-unmeasured by CI (see `docs/gap-analysis-2026-07.md` for the measured
   baseline). Fixed all 169 ruff findings and 19 mypy errors; per-file-ignores scoped only to
@@ -30,6 +44,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configurable budget sentinel:** `BudgetedJudge`'s budget-exhausted score is now
   `JudgeBudgetConfig.skip_score` (default 0.0, backwards-compatible) instead of a hardcoded
   literal; the HTML sink palette is hoisted to named class constants.
+
+### Added
+- **Real-data activation (F-032…F-035, ADR 0018):** the calibrated merge gate's
+  first real data path. `agent_core.store_sync` persists the outcome store on the
+  `merge-gate-data` branch (canonical deterministic merge because
+  `OutcomeStore.resolved()` is file-order dependent; plumbing commits; bounded
+  retry-with-backoff for concurrent writers; CLI `pull/push/stats`, exit codes
+  0/4/5). New workflows: `outcome-labeller.yml` (daily passive labels behind a
+  `checks: read` + full-history precondition guard, so detector fallback cannot
+  mint optimistic `timeout_clean` labels), a `shadow` job in
+  `calibrated-merge-gate.yml` (log-only decision on every PR — decisions never
+  fail the job — plus a `human/<domain>` observability decision and per-domain
+  store stats in the step summary), `merge-gate-seed.yml` (one pending record per
+  push to main, seeded under the reserved `human/<domain>` namespace at
+  confidence 0.0 per ADR 0018 §5), `merge-gate-audit.yml` (weekly unbiased
+  selection surfaced as deduped GitHub issues; sampling knobs via repo
+  variables), and `merge-gate-verdict.yml` (dispatch-only writer of HUMAN_AUDIT
+  with environment + allowlist authorization and env-indirected inputs). New
+  operational scripts `merge_gate_context.py` (strict path→domain mapping from
+  `config/merge-gate-domains.yaml`, protected-path detection, ChangeContext
+  JSON), `record_audit_verdict.py` (idempotent, SHA-validated verdict wrapper),
+  `audit_issue_sync.py` (pure issue dedupe/render); validations
+  `F_032`–`F_035`; F-036 recorded as deferred.
 
 ### Added
 - **Skill marketplace (F-023):** new centralized, schema-validated skill registry

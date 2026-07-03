@@ -1,0 +1,80 @@
+name: merge-gate audit queue
+
+# F-034 (ADR 0005 cadence): weekly unbiased audit selection surfaced as GitHub
+# issues. This workflow is a READER — it never writes the store (selection does
+# not mutate; verdicts land via the human-triggered merge-gate-verdict
+# dispatch, the only automated writer of the authoritative label).
+#
+# Sampling knobs are repo variables, not hardcoded (I-4): the library default
+# per-domain floor (30) would select nearly every record per domain in the
+# early low-volume regime and flood the tracker weekly. human/* domains stay
+# auditable on purpose — the first verdicts must come from somewhere, and
+# per-domain isolation keeps them out of agent-domain calibration.
+
+on:
+  schedule:
+    - cron: "23 6 * * 1"  # weekly (Monday)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: merge-gate-audit
+  cancel-in-progress: false
+
+jobs:
+  audit-select:
+    name: select records and open audit issues
+    runs-on: ubuntu-latest
+    env:
+      # Same repo-variable seam the acting gate job honors (I-4).
+      STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
+    timeout-minutes: 15
+    steps:
+      # Credentials persist so store_sync can FETCH the data branch on a
+      # private repo (an unauthenticated fetch reads as FETCH_FAILED, which
+      # would hard-fail this job forever). The job's permissions are
+      # contents: read, so the persisted token still cannot push.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip "setuptools>=68"
+      - run: pip install -e "./agent-core"
+      - name: Sync store (pull — selecting from a stale store wastes the week)
+        run: python -m agent_core.store_sync pull --store "$STORE" --repo-dir .
+      - name: Select records for audit (unbiased sample; knobs via repo vars)
+        run: |
+          python -m agent_core.audit_sampler --store "$STORE" select \
+            --base-rate "${{ vars.MERGE_GATE_AUDIT_RATE || '0.05' }}" \
+            --per-domain-floor "${{ vars.MERGE_GATE_AUDIT_FLOOR || '3' }}" \
+            > selected.txt
+          cat selected.txt
+      - name: List existing audit issues (all states — closed means handled)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create merge-gate-audit --force \
+            --description "merge-gate human audit queue" || true
+          gh issue list --label merge-gate-audit --state all \
+            --json title,state --limit 1000 > issues.json
+      - name: Plan new issues (dedupe + render; pure logic, unit-tested)
+        run: |
+          python scripts/audit_issue_sync.py --store "$STORE" \
+            --selected selected.txt --existing-issues issues.json \
+            --repo "${{ github.repository }}" --output new_issues.json
+      - name: Create issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(jq length new_issues.json)
+          echo "creating $count audit issue(s)"
+          for i in $(seq 0 $((count - 1))); do
+            jq -r ".[$i].body" new_issues.json > body.md
+            gh issue create \
+              --title "$(jq -r ".[$i].title" new_issues.json)" \
+              --body-file body.md \
+              --label merge-gate-audit
+          done

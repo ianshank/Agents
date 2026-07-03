@@ -1,0 +1,95 @@
+name: merge-gate verdict
+
+# F-034 (ADR 0005): the ONLY automated writer of the authoritative human-audit
+# label, and it is human-triggered by construction — workflow_dispatch is the
+# sole trigger (F_034.py guards this structurally).
+#
+# Authorization (attribution alone is not authorization): the job declares the
+# `merge-gate-verdict` environment so a human can require reviewers on it with
+# zero code change, and if the repo variable MERGE_GATE_AUDITORS is set (comma
+# list of logins) the job fails closed unless the actor is listed. With the
+# variable unset, write access is the floor (single-owner repo today) and every
+# verdict is attributed via the data-branch commit trailer.
+#
+# Inputs reach shell steps ONLY via env: indirection — never inline ${{ }}
+# inside run: bodies (script-injection hygiene); record_audit_verdict.py also
+# rejects any change_id that is not a commit SHA.
+
+on:
+  workflow_dispatch:
+    inputs:
+      change_id:
+        description: "merge-commit SHA of the audited change"
+        required: true
+        type: string
+      verdict:
+        description: "human verdict for the change"
+        required: true
+        type: choice
+        options: [correct, incorrect]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  verdict:
+    name: record human audit verdict
+    runs-on: ubuntu-latest
+    env:
+      # Same repo-variable seam the acting gate job honors (I-4).
+      STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
+    timeout-minutes: 10
+    environment: merge-gate-verdict
+    steps:
+      - name: Authorization guard (fail closed when an allowlist is configured)
+        env:
+          ACTOR: ${{ github.actor }}
+          AUDITORS: ${{ vars.MERGE_GATE_AUDITORS }}
+        run: |
+          if [ -n "$AUDITORS" ]; then
+            case ",$AUDITORS," in
+              *",$ACTOR,"*) echo "actor $ACTOR authorized" ;;
+              *) echo "::error::actor $ACTOR is not in MERGE_GATE_AUDITORS"; exit 1 ;;
+            esac
+          fi
+      # Credentials persisted deliberately: this job pushes the data branch.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip "setuptools>=68"
+      - run: pip install -e "./agent-core"
+      - name: Sync store (pull — any failure aborts before recording)
+        run: python -m agent_core.store_sync pull --store "$STORE" --repo-dir .
+      - name: Record verdict (idempotent wrapper; unknown change_id fails loudly)
+        env:
+          CHANGE_ID: ${{ inputs.change_id }}
+          VERDICT: ${{ inputs.verdict }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          FLAG=--incorrect
+          [ "$VERDICT" = "correct" ] && FLAG=--correct
+          python scripts/record_audit_verdict.py --store "$STORE" \
+            --change-id "$CHANGE_ID" "$FLAG" --actor "$ACTOR"
+      - name: Sync store (push — the verdict reaches the data branch, attributed)
+        env:
+          ACTOR: ${{ github.actor }}
+        run: |
+          python -m agent_core.store_sync push --store "$STORE" \
+            --repo-dir . --actor "$ACTOR"
+      - name: Close the audit issue (zero matches is fine)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANGE_ID: ${{ inputs.change_id }}
+          VERDICT: ${{ inputs.verdict }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          num=$(gh issue list --label merge-gate-audit --state open \
+            --search "$CHANGE_ID in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh issue close "$num" \
+              --comment "Verdict \`$VERDICT\` recorded by @$ACTOR via merge-gate-verdict."
+          else
+            echo "no open audit issue for $CHANGE_ID (verdict recorded anyway)"
+          fi

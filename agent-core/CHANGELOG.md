@@ -5,6 +5,23 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 
 ## [Unreleased]
 
+### Added (F-032 — outcome-store persistence sync)
+- `store_sync` module (ADR 0018): syncs the merge-gate outcome store with a dedicated
+  git data branch (default `merge-gate-data`). `StoreSyncConfig` (all tunables; no
+  literal in sync logic), injectable `GitRunner`/`Sleeper` seams, canonical
+  deterministic merge (`merge_records` — full-record-JSON dedupe, total-order sort so
+  `OutcomeStore.resolved()` is byte-reproducible from any interleaving), fetch-gated
+  `FETCH_HEAD` reads (stale-checkout hazard), plumbing commits
+  (`hash-object`/`mktree`/`commit-tree` with explicit ident — the worktree is never
+  touched), bootstrap of an absent branch via a parentless root commit, and a
+  bounded retry-with-backoff push loop for concurrent writers. CLI
+  `python -m agent_core.store_sync {pull,push,stats}`; exit codes 0 (ok/no-op/cold
+  start), 4 (fetch failed, store untouched), 5 (retries exhausted), 2 usage,
+  1 internal. Unparseable / forward-incompatible store lines are preserved
+  verbatim through merges (opaque lines, `_unparsed` stats key) instead of
+  crashing the pipeline or being silently deleted by an older reader.
+  Real-git test suite incl. Hypothesis merge properties.
+
 ### Added (F-010 — calibrated auto-merge gate, opt-in / default-off)
 - `merge_gate` module: `GatePolicyConfig` (all tunables; no literal in decision logic),
   `CalibratorHealth`, `ChangeContext`, `threshold_for_risk` (risk-derived `tau` via a Wilson

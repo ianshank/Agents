@@ -1,0 +1,73 @@
+name: outcome labeller
+
+# F-033 (ADR 0005 cadence, ADR 0018 persistence): resolve pending merge-gate
+# outcome records with PASSIVE labels (revert / ci_failure / timeout_clean).
+# Passive labels drive alerting only — they never feed the auto-merge tau
+# (only human-audit verdicts do, via the merge-gate-verdict dispatch). This
+# workflow structurally cannot reach the authoritative label path.
+#
+# Schedule activates once this file reaches the default branch.
+
+on:
+  schedule:
+    - cron: "17 5 * * *"  # daily; maturity_days (default 7) still gates timeout_clean
+  workflow_dispatch:
+
+# checks: read is LOAD-BEARING, not optional: the CI-failure attributor reads
+# the Checks API (repos/<r>/commits/<sha>/check-runs). An explicit permissions
+# block zeroes unlisted scopes; without checks: read every lookup 403s, the
+# detector fails safe to "no signal", and matured records silently become
+# optimistic timeout_clean=correct — the exact hazard this job must not widen.
+permissions:
+  contents: write
+  checks: read
+
+concurrency:
+  group: outcome-labeller
+  cancel-in-progress: false
+
+jobs:
+  label:
+    name: label matured outcome records
+    runs-on: ubuntu-latest
+    env:
+      # Same repo-variable seam the acting gate job honors (I-4).
+      STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
+    timeout-minutes: 15
+    steps:
+      # Credentials persisted deliberately: this job pushes the data branch.
+      # fetch-depth: 0 is load-bearing too — revert detection reads full history.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip "setuptools>=68"
+      - run: pip install -e "./agent-core"
+      # Detector substrate must provably work BEFORE any store write-back:
+      # the detectors degrade to "no signal" on failure, and "no signal +
+      # matured" becomes an optimistic timeout_clean label. A shallow clone
+      # (revert footers invisible) or an unauthorized Checks API (failures
+      # invisible) must abort the run, not poison the label stream.
+      - name: Precondition guard (full history + live check-runs access)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git rev-parse --is-shallow-repository)" = "false"
+          gh api "repos/${{ github.repository }}/commits/$(git rev-parse HEAD)/check-runs" \
+            --jq .total_count > /dev/null
+      - name: Sync store (pull — any failure aborts before labelling)
+        run: python -m agent_core.store_sync pull --store "$STORE" --repo-dir .
+      - name: Label matured records (passive sources only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m agent_core.outcome_labeller --store "$STORE" \
+            --repo-dir . --repo "${{ github.repository }}"
+      # Push is the LAST step: any earlier failure leaves the remote store
+      # untouched (fail toward no-op, never toward partial state).
+      - name: Sync store (push)
+        run: |
+          python -m agent_core.store_sync push --store "$STORE" \
+            --repo-dir . --actor "${{ github.actor }}"
