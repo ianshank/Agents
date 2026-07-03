@@ -8,6 +8,7 @@ Deterministic and offline. Asserts the Phase-4 exit gates:
   3. Holdout rotation produces >= k folds and a primary-metric (Brier reliability)
      stability spread, gated by the configured rotation-stability threshold.
 """
+
 import os
 import random
 import sys
@@ -16,14 +17,14 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 for rel in ("flow-protocol", "flow-corpus", "agent-core"):
     sys.path.insert(0, os.path.join(PROJECT_ROOT, rel))
 
-from flow_corpus.config import CorpusConfig  # noqa: E402
-from flow_corpus.holdout import RotationManager, Sample, samples_from_run  # noqa: E402
-from flow_corpus.mutation import MutationEngine  # noqa: E402
-from flow_corpus.oracles import PropertyOracle  # noqa: E402
-from flow_corpus.policy import MockPolicy  # noqa: E402
-from flow_corpus.specimens import BaselineSpecimen, MCTSSpecimen, ReActSpecimen  # noqa: E402
-from flow_corpus.suites.sdlc import build_sdlc_suite  # noqa: E402
-from flow_corpus.validation import run_suite  # noqa: E402
+from flow_corpus.config import CorpusConfig
+from flow_corpus.holdout import RotationManager, Sample, samples_from_run
+from flow_corpus.mutation import MutationEngine
+from flow_corpus.oracles import PropertyOracle
+from flow_corpus.policy import MockPolicy
+from flow_corpus.specimens import BaselineSpecimen, MCTSSpecimen, ReActSpecimen
+from flow_corpus.suites.sdlc import build_sdlc_suite
+from flow_corpus.validation import run_suite
 
 
 def validate_f015() -> bool:
@@ -43,9 +44,7 @@ def validate_f015() -> bool:
         # Assert the expected variant count first, so the all(...) below can't pass vacuously
         # on an empty list if the suffixing scheme ever changes.
         and len(variants) == 3
-        and all(
-            v.solution_space == base.solution_space and v.correct == base.correct for v in variants
-        )
+        and all(v.solution_space == base.solution_space and v.correct == base.correct for v in variants)
     )
 
     # 2. Re-key semantics: task perturbation does NOT re-key; config change DOES.
@@ -61,7 +60,7 @@ def validate_f015() -> bool:
     mutated = eng.mutate_suite(suite, n_variants=3, seed=9)
 
     def samples(spec_) -> list[Sample]:
-        return samples_from_run(run_suite(spec_, mutated, oracle, cfg, seed=4))
+        return list(samples_from_run(run_suite(spec_, mutated, oracle, cfg, seed=4)))
 
     by_type = {
         "baseline": samples(BaselineSpecimen(MockPolicy(0.7, 1.0))),

@@ -52,9 +52,7 @@ def validate_f027() -> int:
     _check("model" in TARGETS.names(), "model target registered", errors)
     _check("llm" in TARGETS, "llm alias resolves", errors)
 
-    target = TARGETS.create(
-        "model", {"provider": "openai", "model": "m", "client": _openai_stub("hi there")}
-    )
+    target = TARGETS.create("model", {"provider": "openai", "model": "m", "client": _openai_stub("hi there")})
     _check(isinstance(target, ModelTarget), "registry builds a ModelTarget", errors)
 
     out = target.run(EvalItem(id="1", inputs={"prompt": "hello"}))
@@ -62,18 +60,14 @@ def validate_f027() -> int:
     _check(out.error is None and out.latency_ms is not None, "records latency, no error", errors)
     _check(out.metadata == {"provider": "openai", "model": "m"}, "carries provider/model metadata", errors)
 
-    templated = ModelTarget(
-        provider="openai", model="m", prompt_template="Q: {q}", client=_openai_stub("ok")
-    )
+    templated = ModelTarget(provider="openai", model="m", prompt_template="Q: {q}", client=_openai_stub("ok"))
     templated.run(EvalItem(id="2", inputs={"q": "why"}))
     sent = templated.client.chat.completions.create.call_args.kwargs["messages"][-1]["content"]
     _check(sent == "Q: why", "prompt_template formats from item.inputs", errors)
 
     raising = MagicMock()
     raising.chat.completions.create.side_effect = RuntimeError("boom")
-    err_out = ModelTarget(provider="openai", model="m", client=raising).run(
-        EvalItem(id="3", inputs={"prompt": "x"})
-    )
+    err_out = ModelTarget(provider="openai", model="m", client=raising).run(EvalItem(id="3", inputs={"prompt": "x"}))
     _check(err_out.output is None and err_out.error == "boom", "model failure surfaced as error", errors)
 
     try:

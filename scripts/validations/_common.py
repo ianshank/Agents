@@ -18,7 +18,7 @@ _SCRIPTS = os.path.dirname(_HERE)
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-from _cli import configure_logging  # noqa: E402  re-exported for the validators
+from _cli import configure_logging
 
 __all__ = ["check", "configure_logging", "report"]
 

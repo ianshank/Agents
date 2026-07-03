@@ -2,6 +2,21 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Operational-scripts quality gates (F-031)** — closed the 2026-07 gap analysis
+  (`docs/gap-analysis-2026-07.md`): `scripts/` is now lint/type-enforced in `eval-harness-ci`
+  with its own ≥85% coverage gate (`scripts/.coveragerc`); 46 new tests for `validate.py` /
+  `select_next.py` / `init.py`; `resolve_repo` fixed to be immune to git `url.insteadOf`
+  rewrites; `scripts/validations/F_031.py` guards the enforcement itself.
+- [x] **`claude-foundation` plugin plan** — peer-reviewed, corrected execution plan for the
+  reusable Claude Code plugin repository (`docs/plans/claude-foundation/`). Planning only;
+  see follow-ups below.
+- [ ] **Execute `claude-foundation` M0–M6** — scaffold the plugin repo per
+  `docs/plans/claude-foundation/PLAN.md` (walking skeleton → tooling → hooks → subagents →
+  skills → release v1.0.0). Separate repository; blocked on creating it.
+- [ ] **`claude-foundation` M7 reconciliation ADR** — before dogfooding the plugin into this
+  repo, record the decision on how it coexists with the existing custom skill marketplace
+  (recommended: this repo keeps its 4 domain skills; foundation supplies only the generic
+  layer). See PLAN.md §6.2 M7.
 - [x] **Skill-script drift guard** — CI guard that pins vendored skill copies of
   `validate_skill.py` to the canonical repo-root copy (`scripts/check_skill_script_drift.py`);
   uniform 95% coverage floor across all packages and skills; shared `scripts/_cli.py` logging

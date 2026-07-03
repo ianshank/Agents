@@ -105,8 +105,13 @@ class GitRevertDetector:
 def resolve_repo(
     repo_dir: str | Path = ".", *, timeout: float = _DEFAULT_GIT_TIMEOUT_S
 ) -> str | None:
-    """Return ``owner/repo`` from the origin remote, or None if unavailable."""
-    proc = _run(["git", "-C", str(repo_dir), "remote", "get-url", "origin"], timeout)
+    """Return ``owner/repo`` from the origin remote, or None if unavailable.
+
+    Reads the declared URL (``git config``) rather than ``git remote get-url``,
+    which applies ``url.<base>.insteadOf`` rewrites and would misreport the
+    origin on machines with SSH/proxy rewrite rules.
+    """
+    proc = _run(["git", "-C", str(repo_dir), "config", "--get", "remote.origin.url"], timeout)
     if proc.returncode != 0:
         return None
     m = _REMOTE_RE.search(proc.stdout.strip())

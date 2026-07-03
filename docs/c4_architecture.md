@@ -185,7 +185,8 @@ they can never be mistaken for the harness's unbiased human-audit sample.
 
 ## Quality & Eval-Integrity Gates
 
-These gates run in CI (`.github/workflows/quality-gates.yml`) and guard the harness
+These gates run in CI (`.github/workflows/quality-gates.yml`; the operational-scripts
+lint/type/coverage gate, F-031, runs in `eval-harness-ci.yml`) and guard the harness
 against the Goodhart failure mode where the cheapest path to "green" is weakening the
 evaluation itself rather than fixing the code.
 
@@ -193,6 +194,7 @@ evaluation itself rather than fixing the code.
 flowchart TB
     PR[Pull Request] --> VAL[validate.py<br/>features.yaml schema + DAG + provenance]
     PR --> COV[Tooling coverage gate<br/>>=85% on gate modules]
+    PR --> SCOV[Operational-scripts gate F-031<br/>ruff + mypy + >=85% coverage on scripts/]
     PR --> REG[regression_gate.py]
     PR --> GUARD[check_protected_changes.py]
     PR --> DRIFT[check_skill_script_drift.py<br/>vendored skill copies == canonical]

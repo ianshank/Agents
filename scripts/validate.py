@@ -10,6 +10,7 @@ Exit codes:
     1 – one or more checks failed
     2 – configuration / usage error
 """
+
 from __future__ import annotations
 
 import argparse
@@ -46,8 +47,10 @@ logger = logging.getLogger(__name__)
 # DFS colouring for cycle detection
 # ---------------------------------------------------------------------------
 
+
 class _Colour(Enum):
     """DFS node colours for Tarjan-style cycle detection."""
+
     WHITE = auto()
     GREY = auto()
     BLACK = auto()
@@ -94,6 +97,7 @@ def _detect_cycles(
 # ---------------------------------------------------------------------------
 # Validation helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_features(path: Path) -> dict[str, Any]:
     """Load and return the features YAML document."""
@@ -257,6 +261,7 @@ def _run_validation_commands(
 # Main entry-point
 # ---------------------------------------------------------------------------
 
+
 def build_parser() -> argparse.ArgumentParser:
     """Build and return the CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -289,7 +294,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Validate a single feature by ID",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable DEBUG logging",
     )

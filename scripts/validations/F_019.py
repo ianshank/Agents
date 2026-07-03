@@ -12,6 +12,7 @@ Exit codes:
     0 – all checks passed
     1 – one or more checks failed
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,6 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +28,13 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _project_root() -> Path:
     """Resolve the project root (two levels up from this script)."""
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _check(condition: bool, msg: str, errors: List[str]) -> bool:
+def _check(condition: bool, msg: str, errors: list[str]) -> bool:
     """Log and track a check result."""
     if not condition:
         errors.append(msg)
@@ -47,6 +48,7 @@ def _check(condition: bool, msg: str, errors: List[str]) -> bool:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     """Run all F-019 validation checks."""
     logging.basicConfig(
@@ -54,7 +56,7 @@ def main() -> int:
         format="%(levelname)-8s %(name)s: %(message)s",
     )
 
-    errors: List[str] = []
+    errors: list[str] = []
 
     # 1. CsvDataset class exists and is registered
     try:
@@ -77,13 +79,18 @@ def main() -> int:
             errors,
         )
     except ImportError as exc:
-        errors.append("Cannot import CsvDataset: %s" % exc)
+        errors.append(f"Cannot import CsvDataset: {exc}")
         logger.error("Cannot import CsvDataset: %s", exc)
 
     # 2. ParquetDataset class exists and is registered
     try:
         from eval_harness.datasets import ParquetDataset
 
+        _check(
+            isinstance(ParquetDataset, type),
+            "ParquetDataset is an importable class",
+            errors,
+        )
         _check(
             "parquet" in DATASETS,
             "ParquetDataset registered as 'parquet'",
@@ -100,7 +107,7 @@ def main() -> int:
             errors,
         )
     except ImportError as exc:
-        errors.append("Cannot import ParquetDataset: %s" % exc)
+        errors.append(f"Cannot import ParquetDataset: {exc}")
         logger.error("Cannot import ParquetDataset: %s", exc)
 
     # 3. _validate_dataset_path rejects traversal
@@ -124,7 +131,7 @@ def main() -> int:
             if old_data_root is not None:
                 os.environ["DATA_ROOT"] = old_data_root
     except ImportError as exc:
-        errors.append("Cannot import _validate_dataset_path: %s" % exc)
+        errors.append(f"Cannot import _validate_dataset_path: {exc}")
         logger.error("Cannot import _validate_dataset_path: %s", exc)
 
     # 4. CsvDataset loads a trivial CSV
@@ -166,7 +173,7 @@ def main() -> int:
                     errors,
                 )
     except Exception as exc:
-        errors.append("CsvDataset load failed: %s" % exc)
+        errors.append(f"CsvDataset load failed: {exc}")
         logger.error("CsvDataset load failed: %s", exc)
 
     # 5. Existing datasets still registered
@@ -176,11 +183,11 @@ def main() -> int:
         for name in ("inline", "jsonl", "langfuse"):
             _check(
                 name in DATASETS,
-                "Existing dataset '%s' still registered" % name,
+                f"Existing dataset '{name}' still registered",
                 errors,
             )
     except Exception as exc:
-        errors.append("Registry check failed: %s" % exc)
+        errors.append(f"Registry check failed: {exc}")
         logger.error("Registry check failed: %s", exc)
 
     # Summary

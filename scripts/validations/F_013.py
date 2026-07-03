@@ -12,6 +12,7 @@ Deterministic and offline. Asserts the Phase-1 exit gates:
   7. The oracle kappa-gate blocks a disagreeing oracle and passes an agreeing one
      (co-determinate pairs only, power-aware).
 """
+
 import os
 import random
 import sys
@@ -20,14 +21,14 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 for rel in ("flow-protocol", "flow-corpus", "agent-core"):
     sys.path.insert(0, os.path.join(PROJECT_ROOT, rel))
 
-from flow_corpus.canary import GoldSpecimen, NoOpSpecimen, canary_separation  # noqa: E402
-from flow_corpus.config import CorpusConfig  # noqa: E402
-from flow_corpus.keying import version_key  # noqa: E402
-from flow_corpus.oracles import PropertyOracle, validate_oracle  # noqa: E402
-from flow_corpus.policy import MockPolicy  # noqa: E402
-from flow_corpus.specimens import SPECIMENS, BaselineSpecimen, MCTSSpecimen  # noqa: E402
-from flow_corpus.suites.sdlc import build_sdlc_suite, load_suite  # noqa: E402
-from flow_corpus.validation import run_suite  # noqa: E402
+from flow_corpus.canary import GoldSpecimen, NoOpSpecimen, canary_separation
+from flow_corpus.config import CorpusConfig
+from flow_corpus.keying import version_key
+from flow_corpus.oracles import PropertyOracle, validate_oracle
+from flow_corpus.policy import MockPolicy
+from flow_corpus.specimens import SPECIMENS, BaselineSpecimen, MCTSSpecimen
+from flow_corpus.suites.sdlc import build_sdlc_suite, load_suite
+from flow_corpus.validation import run_suite
 
 
 def _outcomes(spec, suite, oracle) -> list[int]:
@@ -49,8 +50,7 @@ def validate_f013() -> bool:
 
     # 2. Mandatory baseline control registered, with MCTS.
     checks["baseline control + mcts registered"] = (
-        SPECIMENS.get("baseline") is BaselineSpecimen
-        and SPECIMENS.get("mcts") is MCTSSpecimen
+        SPECIMENS.get("baseline") is BaselineSpecimen and SPECIMENS.get("mcts") is MCTSSpecimen
     )
 
     # 3. Version keyer: task excluded, config included.
@@ -60,9 +60,7 @@ def validate_f013() -> bool:
     mcts = MCTSSpecimen(MockPolicy(skill=0.8), n_rollouts=5)
     r_a = mcts.run(suite.instances[0], random.Random(1))
     r_b = mcts.run(suite.instances[50], random.Random(1))
-    checks["version key: order-independent + config-sensitive"] = (
-        k1 == k1_reordered and k1 != k_diff_cfg
-    )
+    checks["version key: order-independent + config-sensitive"] = k1 == k1_reordered and k1 != k_diff_cfg
     checks["version key: task does NOT re-key"] = r_a.agent_version == r_b.agent_version
 
     # 4 + 5. Run a well-calibrated baseline -> reliability via brier_decomposition, cap check.
@@ -71,10 +69,10 @@ def validate_f013() -> bool:
     checks["Brier reliability computed (primary metric, gating-eligible)"] = (
         run.reliability.reliability is not None and not run.reliability.directional_only
     )
-    checks["outcomes keyed by (agent_version, domain)"] = all(
-        rec.agent_version == run.agent_version and rec.domain == "sdlc"
-        for rec in run.outcome_records
-    ) and len(run.outcome_records) > 0
+    checks["outcomes keyed by (agent_version, domain)"] = (
+        all(rec.agent_version == run.agent_version and rec.domain == "sdlc" for rec in run.outcome_records)
+        and len(run.outcome_records) > 0
+    )
 
     # 6. Canary separation: gold vs no-op.
     sep = canary_separation(

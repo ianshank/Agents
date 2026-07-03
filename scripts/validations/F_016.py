@@ -20,13 +20,12 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 for rel in ("flow-protocol", "flow-corpus", "agent-core", "behavioral-regression"):
     sys.path.insert(0, os.path.join(PROJECT_ROOT, rel))
 
-from flow_corpus.oracles.kappa_gate import KappaReport  # noqa: E402
-from flow_corpus.validation.resampling import BootstrapCI  # noqa: E402
-
-from behavioral_regression import BRConfig, run_pipeline  # noqa: E402
-from behavioral_regression.canary import CanaryReport, run_canary  # noqa: E402
-from behavioral_regression.detector import RegressionEstimate  # noqa: E402
-from behavioral_regression.gate import ShipDecision, decide_ship  # noqa: E402
+from behavioral_regression import BRConfig, run_pipeline
+from behavioral_regression.canary import CanaryReport, run_canary
+from behavioral_regression.detector import RegressionEstimate
+from behavioral_regression.gate import ShipDecision, decide_ship
+from flow_corpus.oracles.kappa_gate import KappaReport
+from flow_corpus.validation.resampling import BootstrapCI
 
 
 def _estimate(*, point, low, high, p_regression, cant_tell):
@@ -64,11 +63,12 @@ def validate_f016() -> bool:
     # 1. Determinism (byte-identical) + offline (block sockets and still run).
     a = json.dumps(run_pipeline(cfg, seed=7).to_dict(), sort_keys=True)
     real_socket = socket.socket
-    socket.socket = lambda *a, **k: (_ for _ in ()).throw(AssertionError("network used"))
+    # Deliberate module-level monkeypatch: any socket construction must fail loudly.
+    socket.socket = lambda *a, **k: (_ for _ in ()).throw(AssertionError("network used"))  # type: ignore[misc, assignment]
     try:
         b = json.dumps(run_pipeline(cfg, seed=7).to_dict(), sort_keys=True)
     finally:
-        socket.socket = real_socket
+        socket.socket = real_socket  # type: ignore[misc]
     checks["deterministic + offline run"] = a == b
 
     # 2. Unvalidated judge cannot gate.
@@ -80,18 +80,14 @@ def validate_f016() -> bool:
     # 3. Canary separation + can't-tell on the null run.
     can = run_canary(cfg, seed=7)
     null_run = run_pipeline(BRConfig(n_pairs=400), seed=7)  # v1 == v2 => null
-    checks["canary separates known regression from null"] = (
-        can.regressed_p > can.null_p and can.separated
-    )
+    checks["canary separates known regression from null"] = can.regressed_p > can.null_p and can.separated
     checks["null run reports can't-tell"] = null_run.estimate.cant_tell
 
     # 4. Gate truth table: fail-safe, HOLD, SHIP.
     checks["canary not separated => ESCALATE"] = (
         decide_ship(ok_est, _kappa(True), _canary(False), cfg) is ShipDecision.ESCALATE
     )
-    checks["real regression => HOLD"] = (
-        decide_ship(ok_est, _kappa(True), _canary(True), cfg) is ShipDecision.HOLD
-    )
+    checks["real regression => HOLD"] = decide_ship(ok_est, _kappa(True), _canary(True), cfg) is ShipDecision.HOLD
     safe_est = _estimate(point=-0.2, low=-0.4, high=-0.05, p_regression=0.2, cant_tell=False)
     checks["validated, separable, below-risk => SHIP"] = (
         decide_ship(safe_est, _kappa(True), _canary(True), cfg) is ShipDecision.SHIP

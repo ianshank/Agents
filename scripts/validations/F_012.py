@@ -8,6 +8,7 @@ it was built against. This validator asserts:
   3. A forced harness mismatch raises PinMismatchError.
 The negative cases are the point: if a wrong pin passed, the skew tripwire would be dead.
 """
+
 import os
 import sys
 
@@ -15,8 +16,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 for rel in ("flow-protocol", "flow-corpus", "agent-core"):
     sys.path.insert(0, os.path.join(PROJECT_ROOT, rel))
 
-import flow_corpus.pinning as pinning  # noqa: E402
-from flow_corpus.pinning import PinMismatchError, verify_pins  # noqa: E402
+import flow_corpus.pinning as pinning
+from flow_corpus.pinning import PinMismatchError, verify_pins
 
 
 def _raises_mismatch(setup) -> bool:

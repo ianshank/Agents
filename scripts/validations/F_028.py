@@ -26,11 +26,9 @@ _ROOT = os.path.dirname(_SCRIPTS)
 for _p in (_HERE, _SCRIPTS):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+import yaml
 from _common import check as _check
 from _common import configure_logging, report
-
-import yaml
-
 from validate_skill import check_structural, parse_frontmatter  # canonical validator, read-only
 
 _SKILL = os.path.join(_ROOT, "skills", "openai-judge")

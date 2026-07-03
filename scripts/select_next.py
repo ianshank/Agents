@@ -13,6 +13,7 @@ Exit codes:
     0 – a feature was selected
     2 – all remaining features are blocked or none remain
 """
+
 from __future__ import annotations
 
 import argparse
@@ -44,13 +45,17 @@ logger = logging.getLogger(__name__)
 # Core logic
 # ---------------------------------------------------------------------------
 
+
 def _load_features(path: Path) -> list[dict[str, Any]]:
     """Load features list from a YAML file."""
     with path.open("r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
     if not isinstance(data, dict) or "features" not in data:
         raise ValueError(f"{path} must contain a top-level 'features' key")
-    return data["features"]
+    features = data["features"]
+    if not isinstance(features, list):
+        raise ValueError(f"{path} 'features' must be a list")
+    return features
 
 
 def _priority_key(feature: dict[str, Any]) -> int:
@@ -66,9 +71,7 @@ def select_next(features: list[dict[str, Any]]) -> dict[str, Any] | None:
     dict or None
         The selected feature, or *None* if all are blocked / complete.
     """
-    done_ids: set[str] = {
-        f["id"] for f in features if f.get("status") == "done"
-    }
+    done_ids: set[str] = {f["id"] for f in features if f.get("status") == "done"}
 
     # 1. Resume any in_progress feature (highest priority first)
     in_progress = sorted(
@@ -107,7 +110,8 @@ def select_next(features: list[dict[str, Any]]) -> dict[str, Any] | None:
     if not ready:
         if blocked:
             logger.error(
-                "All %d remaining feature(s) are blocked.", len(blocked),
+                "All %d remaining feature(s) are blocked.",
+                len(blocked),
             )
         else:
             logger.info("No features remaining – everything is done or deferred.")
@@ -129,6 +133,7 @@ def select_next(features: list[dict[str, Any]]) -> dict[str, Any] | None:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def build_parser() -> argparse.ArgumentParser:
     """Build and return the CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -140,7 +145,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Path to features YAML (default: {DEFAULT_FEATURES_PATH})",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable DEBUG logging",
     )

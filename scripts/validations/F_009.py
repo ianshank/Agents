@@ -6,6 +6,7 @@ Checks three things, all deterministic:
   2. The dogfood drift gate passes against the repo manifest (exit 0).
   3. The dogfood freshness gate passes (committed architecture.mmd is current).
 """
+
 import os
 import subprocess
 import sys
@@ -22,8 +23,13 @@ def _run(cmd: list[str], *, cwd: str) -> bool:
     print(f"Running: {' '.join(cmd)} (cwd={cwd})")
     try:
         res = subprocess.run(
-            cmd, cwd=cwd, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=180,
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
         )
     except Exception as exc:  # pragma: no cover - defensive
         print(f"FAIL: command crashed: {exc}")

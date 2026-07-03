@@ -11,10 +11,10 @@ Exit codes:
     0 – all checks passed
     1 – one or more checks failed
 """
+
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -72,12 +72,7 @@ def main() -> int:
         "run": {"name": "f018", "run_id": "f018-val", "seed": 99},
         "dataset": {
             "type": "inline",
-            "params": {
-                "items": [
-                    {"id": str(i), "inputs": {"q": f"q{i}"}, "expected": f"q{i}"}
-                    for i in range(8)
-                ]
-            },
+            "params": {"items": [{"id": str(i), "inputs": {"q": f"q{i}"}, "expected": f"q{i}"} for i in range(8)]},
         },
         "target": {"type": "echo", "params": {"output_key": "q"}},
         "scorers": [{"type": "exact_match", "params": {"name": "acc"}}],

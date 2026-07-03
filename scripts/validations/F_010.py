@@ -7,26 +7,27 @@ the safety invariants hold — mechanical failure REJECTs, protected paths
 ESCALATE, the happy path AUTO_MERGEs, the exit-code contract is complete, and
 protected auto-merge is off by default.
 """
+
 import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "agent-core"))
 
-import tempfile  # noqa: E402
-from pathlib import Path  # noqa: E402
+import tempfile
+from pathlib import Path
 
-from agent_core.audit_sampler import record_verdict  # noqa: E402
-from agent_core.merge_gate import (  # noqa: E402
+from agent_core.audit_sampler import record_verdict
+from agent_core.merge_gate import (
     CalibratorHealth,
     ChangeContext,
     GateDecision,
     GatePolicyConfig,
     decide,
 )
-from agent_core.merge_gate_ci import EXIT  # noqa: E402
-from agent_core.merge_seed import seed_pending  # noqa: E402
-from agent_core.outcome_store import LabelSource, OutcomeStore  # noqa: E402
+from agent_core.merge_gate_ci import EXIT
+from agent_core.merge_seed import seed_pending
+from agent_core.outcome_store import LabelSource, OutcomeStore
 
 
 class _Const:
@@ -55,10 +56,7 @@ def _seam_closes_audit_data_gap() -> bool:
             return False  # second seed must be a no-op
         # after seeding: a human audit verdict resolves authoritatively
         audit = record_verdict(store, "c1", correct=True)
-        return (
-            audit.label is True
-            and store.resolved()["c1"].label_source == LabelSource.HUMAN_AUDIT.value
-        )
+        return audit.label is True and store.resolved()["c1"].label_source == LabelSource.HUMAN_AUDIT.value
 
 
 def validate_f010() -> bool:
@@ -68,16 +66,13 @@ def validate_f010() -> bool:
 
     checks = {
         "mechanical failure REJECTs": (
-            decide(ChangeContext(False, False, 0.99, "core"), cal, healthy, 0.5, 100, 100, cfg)
-            == GateDecision.REJECT
+            decide(ChangeContext(False, False, 0.99, "core"), cal, healthy, 0.5, 100, 100, cfg) == GateDecision.REJECT
         ),
         "protected paths ESCALATE": (
-            decide(ChangeContext(True, True, 0.99, "core"), cal, healthy, 0.5, 100, 100, cfg)
-            == GateDecision.ESCALATE
+            decide(ChangeContext(True, True, 0.99, "core"), cal, healthy, 0.5, 100, 100, cfg) == GateDecision.ESCALATE
         ),
         "cold start ESCALATEs": (
-            decide(ChangeContext(True, False, 0.99, "core"), None, None, None, 0, 0, cfg)
-            == GateDecision.ESCALATE
+            decide(ChangeContext(True, False, 0.99, "core"), None, None, None, 0, 0, cfg) == GateDecision.ESCALATE
         ),
         "happy path AUTO_MERGEs": (
             decide(ChangeContext(True, False, 0.99, "core"), cal, healthy, 0.5, 1000, 1000, cfg)

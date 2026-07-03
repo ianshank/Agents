@@ -12,13 +12,13 @@ Exit codes:
     0 – all checks passed
     1 – one or more checks failed
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import sys
 from pathlib import Path
-from typing import List
 
 import yaml
 
@@ -29,12 +29,13 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _project_root() -> Path:
     """Resolve the project root (two levels up from this script)."""
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _check_file_exists(root: Path, rel_path: str, errors: List[str]) -> bool:
+def _check_file_exists(root: Path, rel_path: str, errors: list[str]) -> bool:
     """Assert that *rel_path* exists under *root*. Append to *errors* on failure."""
     full = root / rel_path
     if not full.exists():
@@ -50,6 +51,7 @@ def _check_file_exists(root: Path, rel_path: str, errors: List[str]) -> bool:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     """Run all F-001 validation checks."""
     logging.basicConfig(
@@ -58,7 +60,7 @@ def main() -> int:
     )
 
     root = _project_root()
-    errors: List[str] = []
+    errors: list[str] = []
 
     # 1. HARNESS_SPEC.md
     _check_file_exists(root, "HARNESS_SPEC.md", errors)

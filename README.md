@@ -82,17 +82,26 @@ Reference it from config: `{type: length_ok, params: {max_chars: 140}}`.
 # Full suite with coverage
 pytest --cov=eval_harness --cov-report=term-missing
 
-# Lint and type checks
-ruff check src/ tests/
+# Operational-scripts coverage gate (F-031)
+pytest tests --cov=scripts --cov-config=scripts/.coveragerc --cov-report=term-missing
+
+# Lint and type checks (scripts/ is enforced too)
+ruff check src/ tests/ scripts/
+ruff format --check src/ tests/ scripts/
 mypy src/eval_harness/
+mypy scripts/
 ```
 
 Every package and skill enforces a **≥95% branch-coverage floor** (the root harness gate is
 96%; the quality-gate tooling stays at 85% — its `git worktree`/subprocess paths are
 impractical to cover further, see
-[ADR 0009](docs/decisions/0009-tech-debt-audit-and-compat-surface.md)). Coverage is measured
-with `branch = true` across the board. Each sub-package runs its own `ruff` + `mypy` +
-`pytest --cov` in CI across Python 3.10–3.12.
+[ADR 0009](docs/decisions/0009-tech-debt-audit-and-compat-surface.md)). Operational scripts
+under `scripts/` carry their own **≥85% gate** (`scripts/.coveragerc`, F-031); the
+`validations/F_*` gate scripts are excluded — they are one-shot CI checks executed via
+`features.yaml`, not unit-test targets. Coverage is measured with `branch = true` across the
+board. Each sub-package runs its own `ruff` + `mypy` + `pytest --cov` in CI across
+Python 3.10–3.12. The measured 2026-07 baseline behind these numbers is recorded in
+[docs/gap-analysis-2026-07.md](docs/gap-analysis-2026-07.md).
 
 ## Quality Gates
 
@@ -123,6 +132,11 @@ python scripts/check_protected_changes.py --base-ref origin/main
   skill stays self-contained). Run `python scripts/check_skill_script_drift.py`. The
   rationale for the kept compatibility shims and the uniform 95% coverage floor is recorded
   in [`docs/decisions/0009-tech-debt-audit-and-compat-surface.md`](docs/decisions/0009-tech-debt-audit-and-compat-surface.md).
+- **Operational-scripts quality gates** (`F-031`) keep `scripts/` lint-clean (`ruff check` +
+  `ruff format --check`), type-clean (`mypy scripts`), and coverage-gated at ≥85%
+  (`scripts/.coveragerc`) in `eval-harness-ci.yml`; `scripts/validations/F_031.py` asserts the
+  enforcement itself cannot silently regress. Baseline and rationale:
+  [docs/gap-analysis-2026-07.md](docs/gap-analysis-2026-07.md).
 
 The regression gate and protected-path guard run in
 `.github/workflows/quality-gates.yml`. The auto-fix loop (`F-008`) is disabled and is
@@ -155,10 +169,13 @@ src/eval_harness/
   cli.py           entry point
 
 scripts/
+  .coveragerc             operational-scripts coverage gate (>=85%, F-031)
   _cli.py                 shared CLI helpers (configure_logging)
+  init.py                 cross-platform project init (venv + editable install)
   validate.py             spec-driven project validation
   validate_skill.py       skill structural + behavioral validation (canonical copy)
   select_next.py          feature priority selector
+  skill_marketplace.py    skill registry CLI (validate/verify/list)
   regression_gate.py      net-new lint/test diff vs an isolated HEAD baseline
   eval_protected_paths.py single source of truth for protected eval-defining paths
   check_protected_changes.py   CI guard: flags protected changes lacking approval
@@ -172,6 +189,8 @@ skills/
 docs/
   c4_architecture.md  C4 context/container/component diagrams
   decisions/          Architecture Decision Records (ADRs)
+  gap-analysis-2026-07.md  measured lint/type/coverage baseline + remediation record
+  plans/              cross-repo planning docs (claude-foundation plugin plan + review)
   SKILL_TEMPLATE.md   template for new skills
 ```
 
