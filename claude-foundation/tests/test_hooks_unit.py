@@ -69,7 +69,7 @@ def test_log_event_swallows_fs_errors(tmp_path: Path, monkeypatch: pytest.Monkey
 
 
 def test_check_ignores_unknown_tools_and_empty_paths() -> None:
-    assert pre_tool_guard.check(_event("Glob", pattern="**/*.py")) is None
+    assert pre_tool_guard.check(_event("WebFetch", url="https://x")) is None
     assert pre_tool_guard.check(_event("Read")) is None
     assert pre_tool_guard.check({"tool_name": "Read"}) is None
 
@@ -79,14 +79,61 @@ def test_check_notebook_path_and_windows_separators() -> None:
     assert reason is not None and ".env" in reason
 
 
-def test_check_relative_write_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(pre_tool_guard.PROJECT_DIR_ENV, "/some/project")
+def test_grep_and_glob_paths_are_guarded() -> None:
+    assert pre_tool_guard.check(_event("Grep", path="/repo/.env")) is not None
+    assert pre_tool_guard.check(_event("Glob", path="/repo/secrets/id_ed25519")) is not None
+    assert pre_tool_guard.check(_event("Grep", path="/repo/src/main.py")) is None
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["prod.env", "production.env", "local.env", "id_ed25519", "id_ecdsa", "credentials", "app.pem"],
+)
+def test_extended_secret_names_are_blocked(name: str) -> None:
+    assert pre_tool_guard.check(_event("Read", file_path=f"/repo/{name}")) is not None
+
+
+def test_check_relative_write_inside_project_is_allowed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv(pre_tool_guard.PROJECT_DIR_ENV, str(tmp_path))
     assert pre_tool_guard.check(_event("Write", file_path="src/ok.py")) is None
 
 
-def test_check_outside_write_without_project_dir(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_relative_traversal_write_is_blocked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv(pre_tool_guard.PROJECT_DIR_ENV, str(project))
+    monkeypatch.setenv(pre_tool_guard.SCRATCH_DIRS_ENV, str(tmp_path / "none"))
+    # B1 regression: a relative "../" escape must be resolved and denied.
+    assert pre_tool_guard.check(_event("Write", file_path="../escape.txt")) is not None
+    assert pre_tool_guard.check(_event("Write", file_path="src/ok.py")) is None
+
+
+def test_symlink_alias_read_is_blocked(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".env").write_text("SECRET=1\n", encoding="utf-8")
+    link = project / "notes.txt"
+    link.symlink_to(project / ".env")
+    monkeypatch.setenv(pre_tool_guard.PROJECT_DIR_ENV, str(project))
+    assert pre_tool_guard.check(_event("Read", file_path=str(link))) is not None
+
+
+def test_non_string_path_fails_closed() -> None:
+    with pytest.raises(ValueError, match="non-string"):
+        pre_tool_guard.check(_event("Read", file_path=["/repo/.env"]))
+
+
+def test_project_dir_falls_back_to_cwd(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv(pre_tool_guard.PROJECT_DIR_ENV, raising=False)
-    assert pre_tool_guard.check(_event("Write", file_path="/anywhere/x.txt")) is None
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(pre_tool_guard.SCRATCH_DIRS_ENV, str(tmp_path / "none"))
+    # m2 fix: with no CLAUDE_PROJECT_DIR, containment is enforced against cwd.
+    assert pre_tool_guard.check(_event("Write", file_path="/somewhere/else.txt")) is not None
+    assert pre_tool_guard.check(_event("Write", file_path=str(tmp_path / "in.txt"))) is None
 
 
 def test_scratch_dirs_parsing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

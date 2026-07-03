@@ -36,19 +36,28 @@ _SCAN_SUFFIXES = {".py", ".sh", ".json", ".md", ".yaml", ".yml", ".toml"}
 _DEFAULT_EXCLUDES = ("docs/*", "tests/*", "*.example")
 
 _RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("full-model-id", re.compile(r"claude-[a-z0-9]+-[0-9][\w.-]*")),
+    ("full-model-id", re.compile(r"claude-[a-z0-9]+-[0-9][\w.-]*", re.IGNORECASE)),
     ("aws-access-key", re.compile(r"AKIA[0-9A-Z]{16}")),
     ("api-key-literal", re.compile(r"(sk|pk)-[A-Za-z0-9_-]{20,}")),
     ("github-token", re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}")),
     (
+        # Assigned secret literals — quoted or bare — excluding env indirection
+        # (values beginning with $, <, {) which are placeholders, not secrets.
         "assigned-secret",
         re.compile(
-            r"(?i)\b(api_key|secret|token|password)\b\s*[:=]\s*[\"'][^\"'$<{][^\"']{7,}[\"']"
+            r"(?i)\b(?:api_?key|secret(?:_key)?|access_key|private_key|token|passwd|password)\b"
+            r"\s*[:=]\s*[\"']?[^\s\"'$<{][^\s\"']{5,}"
         ),
     ),
     # Absolute POSIX paths outside portable env indirection; anchored to path-like
     # roots that never belong in portable components.
-    ("absolute-path", re.compile(r"[\"' =(](/(?:home|Users|usr|opt|var|tmp|etc)/[\w./-]+)")),
+    (
+        "absolute-path",
+        re.compile(
+            r"(?:^|[\s\"'=(:,>])"
+            r"(/(?:home|Users|root|usr|opt|var|tmp|etc|mnt|srv|Applications)/[\w./-]+)"
+        ),
+    ),
 )
 
 
@@ -76,11 +85,19 @@ def iter_scan_files(root: Path, extra_excludes: Iterable[str] = ()) -> Iterable[
 
 
 def scan_file(path: Path, root: Path) -> list[str]:
-    """Return ``rel:line rule 'excerpt'`` findings for one file."""
+    """Return ``rel:line rule 'excerpt'`` findings for one file.
+
+    A ``scan:allow`` marker waives the line, but every waiver is logged (never
+    silent) so waived lines stay auditable.
+    """
     findings: list[str] = []
     rel = path.relative_to(root).as_posix()
     for lineno, line in enumerate(path.read_text("utf-8", errors="replace").splitlines(), 1):
-        if "scan:allow" in line:  # explicit, visible-in-diff waiver
+        hits = [rule for rule, pattern in _RULES if pattern.search(line)]
+        if not hits:
+            continue
+        if "scan:allow" in line:  # explicit, visible-in-diff, LOGGED waiver
+            logger.warning("waiver", extra={"location": f"{rel}:{lineno}", "rules": hits})
             continue
         for rule, pattern in _RULES:
             match = pattern.search(line)

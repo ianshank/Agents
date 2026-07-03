@@ -104,3 +104,16 @@ def test_unreadable_hooks_json(plugin_tree: Path) -> None:
     (plugin_tree / "hooks" / "hooks.json").write_text("{not json", encoding="utf-8")
     findings = fv.validate_tree(plugin_tree)
     assert any("hooks/hooks.json" in f for f in findings)
+
+
+def test_malformed_hooks_json_shapes_do_not_crash(plugin_tree: Path) -> None:
+    hooks = plugin_tree / "hooks" / "hooks.json"
+    # A JSON list (not an object) must yield a finding, not an AttributeError.
+    hooks.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+    assert any("must be a JSON object" in f for f in fv.validate_tree(plugin_tree))
+    # A non-object matcher block must yield a finding, not a crash.
+    hooks.write_text(json.dumps({"hooks": {"PreToolUse": ["not-a-dict"]}}), encoding="utf-8")
+    assert any("matcher block must be an object" in f for f in fv.validate_tree(plugin_tree))
+    # A non-list 'hooks' inside a block must yield a finding.
+    hooks.write_text(json.dumps({"hooks": {"PreToolUse": [{"hooks": {}}]}}), encoding="utf-8")
+    assert any("'hooks' must be a list" in f for f in fv.validate_tree(plugin_tree))

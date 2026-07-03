@@ -35,9 +35,27 @@ def test_skill_frontmatter_description_budget() -> None:
         )
 
 
+def test_skill_frontmatter_allows_documented_optional_fields() -> None:
+    # model/effort/hooks are documented SKILL.md fields; accept them...
+    fm = schemas.SkillFrontmatter.model_validate(
+        {"name": "s", "description": "d", "model": "haiku", "effort": "high", "hooks": {"x": []}}
+    )
+    assert fm.model == "haiku" and fm.effort == "high"
+
+
+def test_skill_frontmatter_model_is_alias_only() -> None:
+    # ...but a skill still cannot pin a full model ID (same policy as agents).
+    with pytest.raises(ValidationError, match="full model IDs are banned"):
+        schemas.SkillFrontmatter.model_validate(
+            {"name": "s", "description": "d", "model": "claude-" + "opus-4-8"}
+        )
+
+
 def test_skill_frontmatter_rejects_unknown_fields_and_bad_context() -> None:
     with pytest.raises(ValidationError):
-        schemas.SkillFrontmatter.model_validate({"name": "s", "description": "d", "model": "haiku"})
+        schemas.SkillFrontmatter.model_validate(
+            {"name": "s", "description": "d", "totally_unknown": 1}
+        )
     with pytest.raises(ValidationError, match="fork"):
         schemas.SkillFrontmatter.model_validate(
             {"name": "s", "description": "d", "context": "thread"}

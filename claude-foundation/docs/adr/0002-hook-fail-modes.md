@@ -54,3 +54,19 @@ stdout be parsed as JSON control output; other exit codes are non-blocking error
   "allow more"; the cost is occasional false blocks, surfaced via stderr reasons.
 - Advisory hook failures are invisible unless `CLAUDE_FOUNDATION_LOG_DIR` is set;
   operators who need an audit trail must set it.
+
+## Threat model & coverage limits
+
+The guard is defense-in-depth, not a sandbox. Its guarantees, strongest first:
+
+- **File tools** (`Read`/`Edit`/`Write`/`NotebookEdit`/`Grep`/`Glob`): the path is
+  matched both as given and after resolving `..` and symlinks relative to
+  `CLAUDE_PROJECT_DIR`, so relative-traversal and symlink-alias reads of secret
+  files are caught, and writes are confined to the project plus configured scratch
+  dirs. This is the real barrier.
+- **Bash**: a best-effort regex over the raw command. The shell normalizes away
+  quoting (`.e'n'v`), wildcards (`cat .*`), and encodings, so this cannot be a
+  hard guarantee — it raises the bar, nothing more. Treat Bash as untrusted and
+  rely on the file-tool checks for real protection.
+- **MCP file-reading servers** are out of scope for this hook; scope their file
+  access at the MCP layer. The `PreToolUse` matcher covers built-in tools only.

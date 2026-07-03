@@ -16,14 +16,29 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 # Combined description + when_to_use budget for a skill's listing entry.
 SKILL_DESCRIPTION_BUDGET = 1536
 
-# Model aliases permitted in agent frontmatter; full model IDs are banned
-# everywhere (scanner policy) so selection stays config-level and portable.
+# Model aliases permitted in frontmatter; full model IDs are banned everywhere
+# (scanner policy) so selection stays config-level and portable. Kept in sync
+# with docs/sources.md (sub-agents frontmatter reference).
 ALLOWED_MODEL_VALUES = frozenset({"haiku", "sonnet", "opus", "fable", "inherit"})
 
 # Plugin-shipped agents ignore these for security; shipping them is a defect.
 PLUGIN_AGENT_FORBIDDEN_FIELDS = frozenset({"hooks", "mcpServers", "permissionMode"})
 
 _NAME_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+
+
+def validate_model_alias(value: str | None) -> str | None:
+    """Reject full model IDs; permit the documented aliases and ``inherit``.
+
+    Shared by skill and agent frontmatter so the no-hardcoded-model-ID policy
+    is enforced identically wherever ``model:`` may appear.
+    """
+    if value is not None and value not in ALLOWED_MODEL_VALUES:
+        raise ValueError(
+            f"model must be one of {sorted(ALLOWED_MODEL_VALUES)}; "
+            "full model IDs are banned (portability)"
+        )
+    return value
 
 
 class _StrictModel(BaseModel):
@@ -92,7 +107,11 @@ class MarketplaceManifest(_StrictModel):
 
 
 class SkillFrontmatter(_StrictModel):
-    """``skills/<name>/SKILL.md`` frontmatter."""
+    """``skills/<name>/SKILL.md`` frontmatter (doc-derived optional fields).
+
+    All optional SKILL.md fields the docs define are accepted; ``model`` is held
+    to the same alias-only policy as agents so a skill cannot pin a model ID.
+    """
 
     name: str
     description: str
@@ -100,6 +119,9 @@ class SkillFrontmatter(_StrictModel):
     allowed_tools: str | None = Field(default=None, alias="allowed-tools")
     context: str | None = None
     agent: str | None = None
+    model: str | None = None
+    effort: str | None = None
+    hooks: dict[str, Any] | None = None
     disable_model_invocation: bool | None = Field(default=None, alias="disable-model-invocation")
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -113,6 +135,11 @@ class SkillFrontmatter(_StrictModel):
                 f"budget is {SKILL_DESCRIPTION_BUDGET}"
             )
         return self
+
+    @field_validator("model")
+    @classmethod
+    def _model_alias_only(cls, value: str | None) -> str | None:
+        return validate_model_alias(value)
 
     @field_validator("context")
     @classmethod
@@ -144,12 +171,7 @@ class AgentFrontmatter(_StrictModel):
     @field_validator("model")
     @classmethod
     def _model_alias_only(cls, value: str | None) -> str | None:
-        if value is not None and value not in ALLOWED_MODEL_VALUES:
-            raise ValueError(
-                f"model must be one of {sorted(ALLOWED_MODEL_VALUES)}; "
-                "full model IDs are banned (portability)"
-            )
-        return value
+        return validate_model_alias(value)
 
 
 class EvalCase(_StrictModel):

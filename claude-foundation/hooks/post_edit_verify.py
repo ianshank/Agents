@@ -44,6 +44,11 @@ def verify(event: dict[str, Any]) -> str | None:
     file_path = str(tool_input.get("file_path") or "")
     if not file_path or not os.path.exists(file_path):
         return None
+    # A file literally named like an option (e.g. "--config=…") would be passed
+    # as a flag to the verify command; refuse to run rather than smuggle args.
+    if os.path.basename(file_path).startswith("-"):
+        log_event(HOOK, "skipped-option-like-path", file=file_path)
+        return None
     timeout = float(os.environ.get(VERIFY_TIMEOUT_ENV, _DEFAULT_TIMEOUT_S))
     result = subprocess.run(
         build_command(template, file_path),

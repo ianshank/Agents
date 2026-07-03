@@ -36,7 +36,7 @@ Any schema or contract change must re-verify against these pages and update this
 
 ## Subagents
 
-- https://code.claude.com/docs/en/sub-agents.md — frontmatter fields (`name`, `description`, `model`, `tools`, `disallowedTools`, `effort`, `maxTurns`, `skills`, `permissionMode`, `memory`, `hooks`, `mcpServers`, `isolation`); valid `model` values: aliases (`haiku`/`sonnet`/`opus`), full IDs, `inherit`; **plugin-shipped agents ignore `hooks`, `mcpServers`, `permissionMode`** (security restriction — enforced by the validator).
+- https://code.claude.com/docs/en/sub-agents.md — frontmatter fields (`name`, `description`, `model`, `tools`, `disallowedTools`, `effort`, `maxTurns`, `skills`, `permissionMode`, `memory`, `hooks`, `mcpServers`, `isolation`); valid `model` values: aliases (`haiku`/`sonnet`/`opus`/`fable`), full IDs, `inherit`. The plugin's `ALLOWED_MODEL_VALUES` permits the four aliases + `inherit` and bans full IDs for portability (applied to both skill and agent `model:`). **Plugin-shipped agents ignore `hooks`, `mcpServers`, `permissionMode`** (security restriction — enforced by the validator).
 
 ## Hooks
 

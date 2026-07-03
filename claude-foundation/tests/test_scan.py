@@ -22,6 +22,10 @@ def test_clean_tree_passes(plugin_tree: Path, capsys) -> None:  # type: ignore[n
         ("t = 'ghp_" + "b" * 24 + "'", "github-token"),
         ('api_key = "hunter2secret"', "assigned-secret"),
         ('path = "/home/someone/project/config.yaml"', "absolute-path"),
+        ("model = 'Claude-" + "Sonnet-4-5'", "full-model-id"),  # case-insensitive
+        ("api_key = mysecretvalue123", "assigned-secret"),  # unquoted
+        ('secret_key="realvalue123"', "assigned-secret"),  # underscore keyword
+        ("x = '/root/private/thing'", "absolute-path"),  # widened root
     ],
 )
 def test_each_rule_fires(plugin_tree: Path, payload: str, rule: str) -> None:
@@ -30,11 +34,28 @@ def test_each_rule_fires(plugin_tree: Path, payload: str, rule: str) -> None:
     assert any(rule in f for f in findings), findings
 
 
-def test_scan_allow_waiver_suppresses(plugin_tree: Path) -> None:
+def test_env_placeholders_are_not_flagged(plugin_tree: Path) -> None:
+    (plugin_tree / "hooks" / "ok.py").write_text(
+        'token = "${API_TOKEN}"\nkey = "$SECRET"\n', encoding="utf-8"
+    )
+    assert fs.scan_tree(plugin_tree) == []
+
+
+def test_scan_allow_waiver_suppresses_but_logs(
+    plugin_tree: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     (plugin_tree / "hooks" / "waived.py").write_text(
         "EXAMPLE = 'claude-" + "opus-4-8'  # scan:allow — doc example\n", encoding="utf-8"
     )
-    assert fs.scan_tree(plugin_tree) == []
+    # The scan logger sets propagate=False, so attach caplog's handler directly.
+    fs.logger.addHandler(caplog.handler)
+    try:
+        assert fs.scan_tree(plugin_tree) == []
+    finally:
+        fs.logger.removeHandler(caplog.handler)
+    # M6: waivers are never silent — the waived location is logged with its rules.
+    waivers = [r for r in caplog.records if r.message == "waiver"]
+    assert waivers and getattr(waivers[0], "rules", None) == ["full-model-id"]
 
 
 def test_env_exclude_globs(plugin_tree: Path, monkeypatch: pytest.MonkeyPatch) -> None:

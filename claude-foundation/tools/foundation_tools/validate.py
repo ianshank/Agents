@@ -146,6 +146,8 @@ def check_hooks(root: Path) -> list[str]:
         config = json.loads(hooks_path.read_text("utf-8"))
     except json.JSONDecodeError as exc:
         return [f"hooks/hooks.json: {exc}"]
+    if not isinstance(config, dict):
+        return ["hooks/hooks.json: must be a JSON object"]
     hooks_map = config.get("hooks", config)
     if not isinstance(hooks_map, dict):
         return ["hooks/hooks.json: top-level 'hooks' must be a mapping of event -> matchers"]
@@ -154,8 +156,15 @@ def check_hooks(root: Path) -> list[str]:
             errors.append(f"hooks/hooks.json[{event}]: expected a list of matcher blocks")
             continue
         for block in matchers:
-            for hook in block.get("hooks", []):
-                command = hook.get("command", "")
+            if not isinstance(block, dict):
+                errors.append(f"hooks/hooks.json[{event}]: each matcher block must be an object")
+                continue
+            hooks_list = block.get("hooks", [])
+            if not isinstance(hooks_list, list):
+                errors.append(f"hooks/hooks.json[{event}]: 'hooks' must be a list")
+                continue
+            for hook in hooks_list:
+                command = hook.get("command", "") if isinstance(hook, dict) else ""
                 if "${CLAUDE_PLUGIN_ROOT}" not in command:
                     errors.append(
                         f"hooks/hooks.json[{event}]: command must reference scripts via "
