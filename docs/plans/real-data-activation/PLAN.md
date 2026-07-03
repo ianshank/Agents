@@ -126,8 +126,10 @@ existing `HUMAN_AUDIT`-wins resolution in `outcome_store.resolved()` — sync
 never drops a `HUMAN_AUDIT` line). Because `resolved()`'s passive-label
 resolution is **file-order dependent** ("latest labeled wins" by position,
 `outcome_store.py:85-86`), the merged store must be written in a canonical
-deterministic order — stable sort by `(merged_at, labeled_at` with pending
-records first`, label_source, change_id)` — so any interleaving of the same
+deterministic order — a stable sort keyed by
+`(merged_at, has_label, labeled_at, label_source, change_id)`, where the
+`has_label` component orders pending records before labeled ones — so any
+interleaving of the same
 record sets yields a byte-identical store and an identical `resolved()` view
 on every runner. ADR 0018 additionally fixes two conventions the features
 below depend on:

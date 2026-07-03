@@ -26,7 +26,7 @@ plan, because no new `LabelSource` is needed at all.
 
 | # | Draft claim | Verdict | Evidence |
 |---|---|---|---|
-| 1 | Gate machinery (`merge_gate`, `outcome_store`, `outcome_labeller`, `audit_sampler`, `detectors`, `merge_seed`, `merge_gate_ci`) exists | **TRUE** | all eight modules under `agent-core/agent_core/` |
+| 1 | Gate machinery (`merge_gate`, `outcome_store`, `outcome_labeller`, `audit_sampler`, `detectors`, `merge_seed`, `merge_gate_ci`, `calibration`) exists | **TRUE** | all eight modules under `agent-core/agent_core/` |
 | 2 | "343 passed, 2 xfailed" | **UNVERIFIED** | agent-core has 311 `def test_` functions and exactly one `xfail` marker (`agent-core/tests/test_sanitize.py:92`, `strict=False`); the number matches no directory's raw count. Not load-bearing, but a plan that opens with "verified against the codebase" must not include numbers that cannot be reproduced |
 | 3 | `calibrated-merge-gate.yml` is inert; `ENABLE_CALIBRATED_AUTOMERGE` unset | **TRUE (nuance)** | job-level `if` on the **repo variable** `vars.ENABLE_CALIBRATED_AUTOMERGE` (`.github/workflows/calibrated-merge-gate.yml:27`), not an env var |
 | 4 | Store file has **no persistence between CI runs** | **TRUE — the load-bearing finding** | `STORE: ${{ vars.MERGE_GATE_STORE \|\| 'merge_outcomes.jsonl' }}` (`calibrated-merge-gate.yml:48`) lives in the ephemeral runner workspace; no workflow commits, caches, or uploads it (only artifact anywhere is `regression_report.json`, `quality-gates.yml:83`) |
