@@ -36,7 +36,7 @@ Literal Langfuse key pair in three tracked files, while `NEXT_STEPS.md:77` marks
 1. **Hard-stop (human):** confirm the checked-off rotation actually happened — the
    `sk-lf-e220…` / `pk-lf-ad61…` pair shows revoked in the Langfuse dashboard. If unconfirmed,
    rotate immediately. No scrub PR merges before written confirmation.
-2. Scrub `HARNESS_SPEC.md:308-309`, `docs/decisions/0003-langfuse-integration.md:7-8`, and
+2. Scrub `HARNESS_SPEC.md:309-310`, `docs/decisions/0003-langfuse-integration.md:7-8`, and
    `progress.md` (Session 003 entry) → `<REDACTED — rotated, see incident record>`.
 3. **ADR 0019 — no history rewrite** (`docs/decisions/0019-no-history-rewrite.md`). Rationale
    (must not cite branch protection — none exists): the keys are already public in remote
