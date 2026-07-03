@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -92,15 +93,24 @@ def _make_valid_feature(**overrides: Any) -> dict[str, Any]:
 
 
 def _run_validate(tmp: Path, extra_args: str = "") -> subprocess.CompletedProcess[str]:
-    """Run validate.py against files in tmp."""
+    """Run validate.py against files in tmp.
+
+    Uses ``sys.executable`` (not a bare ``python`` PATH lookup) so the subprocess
+    runs in the same environment as the test session — a PATH ``python`` without
+    jsonschema silently downgrades schema validation to a warning and inverts the
+    expected exit codes.
+    """
     validate_script = Path(__file__).resolve().parent.parent / "scripts" / "validate.py"
-    cmd = (
-        f"python {validate_script} "
-        f"--features {tmp / 'features.yaml'} "
-        f"--schema {tmp / 'features.schema.json'} "
-        f"{extra_args}"
-    )
-    return subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=str(tmp))
+    cmd = [
+        sys.executable,
+        str(validate_script),
+        "--features",
+        str(tmp / "features.yaml"),
+        "--schema",
+        str(tmp / "features.schema.json"),
+        *extra_args.split(),
+    ]
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=str(tmp))
 
 
 # ---------------------------------------------------------------------------

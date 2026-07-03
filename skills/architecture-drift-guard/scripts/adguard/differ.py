@@ -19,7 +19,7 @@ class DiffResult:
     """Outcome of comparing actual vs declared component edges."""
 
     undocumented: list[Edge]  # actual - declared  => gate failure
-    unused: list[Edge]        # declared - actual  => warning only
+    unused: list[Edge]  # declared - actual  => warning only
 
     @property
     def has_drift(self) -> bool:

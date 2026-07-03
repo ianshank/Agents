@@ -8,12 +8,15 @@ can still run this file when agent-core IS installed.
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from pydantic import ValidationError
 
 agent_core = pytest.importorskip("agent_core")
+
+if TYPE_CHECKING:
+    from agent_core import CycleState
 
 from eval_harness.agent_core_adapter import (  # noqa: E402
     AdapterConfig,
@@ -154,7 +157,7 @@ class TestHarnessJudgeRunner:
         cfg = _config(resolution_threshold=threshold, tokens_per_claim=tokens, per_token_rate=rate)
         return HarnessJudgeRunner(judge, _store(), cfg)
 
-    def _state(self, *ids: str) -> agent_core.CycleState:
+    def _state(self, *ids: str) -> CycleState:
         return agent_core.CycleState(cycle_index=1, unresolved=tuple(ids))
 
     def test_resolves_all_claims_above_threshold(self) -> None:
@@ -252,7 +255,7 @@ class TestFixedCostEstimator:
     def _est(self, tokens: int = 2_000, rate: float = 1e-5) -> FixedCostEstimator:
         return FixedCostEstimator(_config(tokens_per_claim=tokens, per_token_rate=rate))
 
-    def _state(self, *ids: str) -> agent_core.CycleState:
+    def _state(self, *ids: str) -> CycleState:
         return agent_core.CycleState(unresolved=tuple(ids))
 
     def test_projects_n_unresolved_times_rate(self) -> None:

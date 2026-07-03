@@ -1,4 +1,5 @@
 """End-to-end tests driving the thin runners as subprocesses."""
+
 from __future__ import annotations
 
 import os
@@ -68,7 +69,7 @@ def test_emit_actual_prints_dependencies(tmp_path):
 
 def test_bad_manifest_exits_two(tmp_path):
     path = tmp_path / "architecture.yaml"
-    path.write_text("schema_version: \"1.0.0\"\nroot_packages: []\ncomponents: {a: [x]}\n", encoding="utf-8")
+    path.write_text('schema_version: "1.0.0"\nroot_packages: []\ncomponents: {a: [x]}\n', encoding="utf-8")
     result = _run(DRIFT_CHECK, "--manifest", str(path))
     assert result.returncode == 2
     assert "error:" in result.stderr

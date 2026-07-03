@@ -1,4 +1,5 @@
 """Make the bundled ``adguard`` package importable from tests without installation."""
+
 from __future__ import annotations
 
 import os

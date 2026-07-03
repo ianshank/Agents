@@ -251,7 +251,7 @@ def test_unsupported_calibrator_type_raises() -> None:
     """A Protocol-compliant but unknown calibrator class raises TypeError."""
 
     class Dummy:
-        def fit(self, probs, outcomes):  # type: ignore[no-untyped-def]
+        def fit(self, probs, outcomes):
             return self
 
         def predict(self, prob: float) -> float:
@@ -259,7 +259,7 @@ def test_unsupported_calibrator_type_raises() -> None:
 
     dummy = Dummy()
     with pytest.raises(TypeError, match="unsupported calibrator type"):
-        calibrator_to_dict(dummy)  # type: ignore[arg-type]
+        calibrator_to_dict(dummy)
 
 
 # ---- Hypothesis round-trip --------------------------------------------------
@@ -323,6 +323,15 @@ def test_save_run_cleans_up_tmp_on_failure() -> None:
             save_run(_make_run_result(), path)
         # The .tmp was never created, so suppressed unlink is a no-op.
         assert not os.path.exists(path + ".tmp")
+
+
+def test_save_run_failure_logs_warning(caplog) -> None:
+    """The atomic-write failure path is observable, not silent, before re-raising."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "missing_subdir", "run.json")
+        with caplog.at_level("WARNING", logger="agent_core.persistence"), pytest.raises(OSError):
+            save_run(_make_run_result(), path)
+    assert any("atomic write" in r.message for r in caplog.records)
 
 
 def test_save_is_compact_no_whitespace() -> None:

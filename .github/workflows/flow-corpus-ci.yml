@@ -45,7 +45,7 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check flow_protocol tests
       - run: ruff format --check flow_protocol tests
-      - run: mypy flow_protocol
+      - run: mypy flow_protocol tests
       - run: python -m pytest --cov --cov-report=term-missing
 
   flow-corpus:
@@ -72,7 +72,7 @@ jobs:
         working-directory: flow-corpus
       - run: ruff format --check flow_corpus tests
         working-directory: flow-corpus
-      - run: mypy flow_corpus
+      - run: mypy flow_corpus tests
         working-directory: flow-corpus
       - run: python -m pytest --cov --cov-report=term-missing
         working-directory: flow-corpus

@@ -51,7 +51,7 @@ jobs:
         working-directory: behavioral-regression
       - run: ruff format --check behavioral_regression tests
         working-directory: behavioral-regression
-      - run: mypy behavioral_regression
+      - run: mypy behavioral_regression tests
         working-directory: behavioral-regression
       - run: python -m pytest --cov --cov-report=term-missing
         working-directory: behavioral-regression

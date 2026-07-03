@@ -201,3 +201,58 @@ def test_main_labels_real_revert_incorrect(tmp_path):
     assert rc == 0
     resolved = store.resolved()[sha]
     assert resolved.label is False and resolved.label_source == LabelSource.REVERT.value
+
+
+# --- degrade paths emit WARNING logs (fail-safe is observable, never silent) --
+def test_run_missing_binary_warns(caplog):
+    with caplog.at_level("WARNING", logger="agent_core.detectors"):
+        _run(["agent-core-nonexistent-binary-xyz"], timeout=5)
+    assert any("executable not found" in r.message for r in caplog.records)
+
+
+def test_run_timeout_warns(caplog):
+    with caplog.at_level("WARNING", logger="agent_core.detectors"):
+        _run([sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.5)
+    assert any("timed out" in r.message for r in caplog.records)
+
+
+def test_parse_check_runs_invalid_json_warns(caplog):
+    with caplog.at_level("WARNING", logger="agent_core.detectors"):
+        _parse_check_runs("not json")
+    assert any("unparseable check-runs payload" in r.message for r in caplog.records)
+
+
+def test_parse_check_runs_non_list_warns(caplog):
+    with caplog.at_level("WARNING", logger="agent_core.detectors"):
+        _parse_check_runs('{"check_runs": 1}')
+    assert any("unexpected check-runs payload type" in r.message for r in caplog.records)
+
+
+def test_resolve_repo_without_remote_warns(tmp_path, caplog):
+    repo = _init_repo(tmp_path / "r")  # real repo, but no origin remote configured
+    with caplog.at_level("WARNING", logger="agent_core.detectors"):
+        assert resolve_repo(repo) is None
+    assert any("origin remote unreadable" in r.message for r in caplog.records)
+
+
+def test_resolve_repo_non_github_remote_warns(tmp_path, caplog):
+    repo = _init_repo(tmp_path / "r")
+    _git(repo, "remote", "add", "origin", "https://gitlab.example.com/o/r.git")
+    with caplog.at_level("WARNING", logger="agent_core.detectors"):
+        assert resolve_repo(repo) is None
+    assert any("not a GitHub URL" in r.message for r in caplog.records)
+
+
+def test_revert_detector_off_repo_warns(tmp_path, caplog):
+    with caplog.at_level("WARNING", logger="agent_core.detectors"):
+        assert GitRevertDetector(tmp_path / "not-a-repo").was_reverted("abc123", SINCE) is False
+    assert any("revert signal unavailable" in r.message for r in caplog.records)
+
+
+def test_revert_detected_logs_info(tmp_path, caplog):
+    repo = _init_repo(tmp_path / "r")
+    sha = _commit(repo, "a.txt", "v1", "add a")
+    _git(repo, "revert", "--no-edit", sha)
+    with caplog.at_level("INFO", logger="agent_core.detectors"):
+        assert GitRevertDetector(repo).was_reverted(sha, SINCE) is True
+    assert any("revert detected" in r.message for r in caplog.records)

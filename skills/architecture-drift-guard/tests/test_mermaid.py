@@ -1,4 +1,5 @@
 """Tests for deterministic Mermaid C4 rendering and freshness normalisation."""
+
 from __future__ import annotations
 
 from adguard.manifest import Manifest

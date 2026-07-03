@@ -1,4 +1,5 @@
 """Tests for emitting a dependencies: block from actual edges."""
+
 from __future__ import annotations
 
 import yaml

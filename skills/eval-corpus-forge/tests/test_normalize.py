@@ -1,4 +1,5 @@
 """Unit tests for forge.normalize: deterministic ids, canonical schema, trace, metadata."""
+
 from __future__ import annotations
 
 from forge import normalize
@@ -58,9 +59,16 @@ def test_trace_present_with_all_fields_when_execution_data():
     c = normalize.to_canonical(("f", "1", raw))
     trace = c["trace"]
     for field in (
-        "tool_names", "tool_invocation_order", "tool_arguments", "tool_outputs",
-        "retrieved_entities", "retrieved_ids", "model_name", "token_usage",
-        "latency_ms", "trace_ids",
+        "tool_names",
+        "tool_invocation_order",
+        "tool_arguments",
+        "tool_outputs",
+        "retrieved_entities",
+        "retrieved_ids",
+        "model_name",
+        "token_usage",
+        "latency_ms",
+        "trace_ids",
     ):
         assert field in trace
     # invocation order defaults to tool_names when not given

@@ -1,3 +1,5 @@
+from typing import Any
+
 from agent_core import (
     BudgetCondition,
     ConvergenceCondition,
@@ -13,8 +15,8 @@ from agent_core.protocols import LoopContext
 CFG = FrameworkConfig()
 
 
-def _ctx(**kw):
-    base = dict(
+def _ctx(**kw: object) -> LoopContext:
+    base: dict[str, Any] = dict(
         cycle_index=1,
         config=CFG,
         spent=0.0,
@@ -65,7 +67,8 @@ def test_no_progress_ignores_reordering() -> None:
 def test_convergence_requires_low_delta_and_no_new_evidence():
     cond = ConvergenceCondition(0.05)
     converged = CycleResult(cost=1, new_unresolved=(), max_conf_delta=0.0, new_evidence=False)
-    assert cond.evaluate(_ctx(last_result=converged)).reason is StopReason.SUCCESS
+    converged_out = cond.evaluate(_ctx(last_result=converged))
+    assert converged_out is not None and converged_out.reason is StopReason.SUCCESS
     still_moving = CycleResult(cost=1, new_unresolved=(), max_conf_delta=0.0, new_evidence=True)
     assert cond.evaluate(_ctx(last_result=still_moving)) is None
     high_delta = CycleResult(cost=1, new_unresolved=(), max_conf_delta=0.5, new_evidence=False)
@@ -75,9 +78,8 @@ def test_convergence_requires_low_delta_and_no_new_evidence():
 def test_no_progress_detects_unchanged_set():
     cond = NoProgressCondition()
     res = CycleResult(cost=1, new_unresolved=("a", "b"), max_conf_delta=0.5)
-    assert (
-        cond.evaluate(_ctx(last_result=res, prev_unresolved=("a", "b"))).reason is StopReason.STALL
-    )
+    out = cond.evaluate(_ctx(last_result=res, prev_unresolved=("a", "b")))
+    assert out is not None and out.reason is StopReason.STALL
     assert cond.evaluate(_ctx(last_result=res, prev_unresolved=("a",))) is None
 
 
@@ -108,4 +110,4 @@ def test_gate_returns_first_non_none():
     # CAP registered before BUDGET: when both fire, CAP wins
     gate = Gate([MaxCyclesCondition(3), BudgetCondition()])
     out = gate.evaluate(_ctx(cycle_index=4, spent=999, ceiling=1, projected_next_cost=999))
-    assert out.reason is StopReason.CAP
+    assert out is not None and out.reason is StopReason.CAP

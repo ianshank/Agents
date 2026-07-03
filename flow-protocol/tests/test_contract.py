@@ -69,7 +69,7 @@ def test_extra_fields_forbidden() -> None:
 
 def test_oracle_tier_constrained() -> None:
     with pytest.raises(ValidationError):
-        OracleResult(instance_id="i1", verdict=True, oracle_tier="psychic", oracle_id="o1")  # type: ignore[arg-type]
+        OracleResult(instance_id="i1", verdict=True, oracle_tier="psychic", oracle_id="o1")
 
 
 @pytest.mark.parametrize("bad_step", [-0.1, 1.5])

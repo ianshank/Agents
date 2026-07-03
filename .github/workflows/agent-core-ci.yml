@@ -39,5 +39,5 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check agent_core tests
       - run: ruff format --check agent_core tests
-      - run: mypy agent_core
+      - run: mypy agent_core tests
       - run: python -m pytest --cov --cov-report=term-missing

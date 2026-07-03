@@ -1,4 +1,5 @@
 """Tests for diffing actual vs declared component edges."""
+
 from __future__ import annotations
 
 from adguard.differ import diff_edges, format_report

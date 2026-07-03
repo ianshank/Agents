@@ -5,12 +5,14 @@ package back from disk, runs every §7 check, writes validation artifacts, and r
 status. The framework eval asserts on its results, and a negative self-test proves it
 actually rejects malformed packages (revision 2).
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import sys
+from collections.abc import Hashable
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -48,7 +50,19 @@ def _read_json(path: str) -> dict[str, Any] | None:
     if not os.path.isfile(path):
         return None
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    # A non-object top level (list/scalar) is as unusable as a missing file here.
+    return data if isinstance(data, dict) else None
+
+
+def _key(value: object) -> object:
+    """Dict/set-safe stand-in for an untrusted scenario_id.
+
+    Malformed packages can carry list/dict ids; those must surface as validation
+    errors, never crash a membership test. repr() is only the container key — the
+    error messages still show the raw value.
+    """
+    return value if isinstance(value, Hashable) else repr(value)
 
 
 def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
@@ -90,7 +104,11 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
         sid = sc.get("scenario_id")
         for field in REQUIRED_SCENARIO_FIELDS:
             if field not in sc:
-                fail("structural.missing_field", f"canonical scenario missing field {field!r}", sid if isinstance(sid, str) else None)
+                fail(
+                    "structural.missing_field",
+                    f"canonical scenario missing field {field!r}",
+                    sid if isinstance(sid, str) else None,
+                )
         # Only a non-empty string is a usable id; record invalid ones instead of poisoning the set.
         if isinstance(sid, str) and sid:
             scenario_ids.add(sid)
@@ -123,8 +141,12 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
         if not isinstance(gt, dict):
             fail("structural.invalid_ground_truth_row", f"ground-truth row is not a JSON object: {gt!r}")
             continue
-        if gt.get("scenario_id") not in scenario_ids:
-            fail("structural.gt_dangling", f"ground-truth references unknown scenario {gt.get('scenario_id')!r}", gt.get("scenario_id"))
+        if _key(gt.get("scenario_id")) not in scenario_ids:
+            fail(
+                "structural.gt_dangling",
+                f"ground-truth references unknown scenario {gt.get('scenario_id')!r}",
+                gt.get("scenario_id"),
+            )
 
     # view records reference valid scenarios and carry required evidence
     for name, rows in views.items():
@@ -133,7 +155,7 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
                 fail("structural.invalid_view_row", f"{name} row is not a JSON object: {row!r}")
                 continue
             sid = row.get("scenario_id")
-            if sid not in scenario_ids:
+            if _key(sid) not in scenario_ids:
                 fail("structural.view_dangling", f"{name} references unknown scenario {sid!r}", sid)
             if name == "retrieval_eval" and not (row.get("retrieved_ids") or row.get("retrieved_entities")):
                 fail("structural.retrieval_no_data", "retrieval view record without retrieval data", sid)
@@ -155,11 +177,12 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
     # --- §7.2 behavioral ---
     # Non-dict rows were already reported structurally; skip them here so the checks below can
     # safely assume dict access without crashing on malformed packages.
-    by_id = {sc.get("scenario_id"): sc for sc in canonical if isinstance(sc, dict)}
+    by_id = {_key(sc.get("scenario_id")): sc for sc in canonical if isinstance(sc, dict)}
     for sc in canonical:
         if not isinstance(sc, dict):
             continue
-        prov = sc.get("provenance") if isinstance(sc.get("provenance"), dict) else {}
+        provenance = sc.get("provenance")
+        prov: dict[str, Any] = provenance if isinstance(provenance, dict) else {}
         # provenance traceable to a source origin
         if not prov.get("source_file"):
             fail("behavioral.untraceable_provenance", "scenario provenance lacks source_file", sc.get("scenario_id"))
@@ -180,14 +203,15 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
 
     # each view record maps to exactly one canonical; views do not duplicate full canonical
     for name, rows in views.items():
-        seen: set[str] = set()
+        # ids come from untrusted rows, so non-str (even None) values must still dedup
+        seen: set[Any] = set()
         for row in rows:
             if not isinstance(row, dict):
                 continue  # already reported structurally
             sid = row.get("scenario_id")
-            if sid in seen:
+            if _key(sid) in seen:
                 fail("behavioral.view_not_unique", f"{name} has duplicate record for {sid}", sid)
-            seen.add(sid)
+            seen.add(_key(sid))
             # a view row must be a thin projection, not the full canonical record
             if set(row.keys()) >= set(REQUIRED_SCENARIO_FIELDS):
                 fail("behavioral.view_duplicates_canonical", f"{name} row duplicates canonical for {sid}", sid)
@@ -223,7 +247,9 @@ def write_validation_artifacts(out_dir: str, passed: bool, errors: list[dict[str
     vdir = os.path.join(out_dir, "validation")
     os.makedirs(vdir, exist_ok=True)
     with open(os.path.join(vdir, "validation_report.json"), "w", encoding="utf-8") as f:
-        json.dump({"status": "passed" if passed else "failed", "error_count": len(errors), "errors": errors}, f, indent=2)
+        json.dump(
+            {"status": "passed" if passed else "failed", "error_count": len(errors), "errors": errors}, f, indent=2
+        )
     with open(os.path.join(vdir, "schema_errors.jsonl"), "w", encoding="utf-8") as f:
         for err in errors:
             f.write(json.dumps(err, ensure_ascii=False, sort_keys=True) + "\n")
@@ -241,8 +267,16 @@ def _self_test_broken(workdir: str) -> int:
     for sub in ("canonical", "ground_truth", "views", "validation", "provenance"):
         os.makedirs(os.path.join(workdir, sub), exist_ok=True)
     # one valid canonical scenario...
-    good = {f: None for f in REQUIRED_SCENARIO_FIELDS}
-    good.update({"scenario_id": "scn_real", "raw_prompt": "hi", "provenance": {"source_file": "x", "locator": "1"}, "metadata": {}, "trace": None})
+    good: dict[str, Any] = {f: None for f in REQUIRED_SCENARIO_FIELDS}
+    good.update(
+        {
+            "scenario_id": "scn_real",
+            "raw_prompt": "hi",
+            "provenance": {"source_file": "x", "locator": "1"},
+            "metadata": {},
+            "trace": None,
+        }
+    )
     with open(os.path.join(workdir, "canonical", "scenarios.jsonl"), "w", encoding="utf-8") as f:
         f.write(json.dumps(good) + "\n")
     # ...but a retrieval view referencing a scenario that does not exist (the injected defect)

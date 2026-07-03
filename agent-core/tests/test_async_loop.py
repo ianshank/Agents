@@ -22,7 +22,7 @@ from agent_core.config import AsyncConfig
 from agent_core.protocols import AsyncCycleRunner
 
 
-def _run(coro):  # type: ignore[no-untyped-def]
+def _run(coro):
     return asyncio.run(coro)
 
 
@@ -150,7 +150,7 @@ class ACap:
         (SyncCap(), ACap(), StopReason.CAP, {"loop": {"max_cycles": 3}}),
     ],
 )
-def test_async_matches_sync_runresult(  # type: ignore[no-untyped-def]
+def test_async_matches_sync_runresult(
     sync_runner, async_runner, expected_reason, cfg_overrides
 ) -> None:
     cfg = FrameworkConfig.from_dict(cfg_overrides)

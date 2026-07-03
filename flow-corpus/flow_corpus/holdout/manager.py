@@ -21,12 +21,16 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from agent_core.logging_util import get_logger
+
 from flow_corpus.config import CorpusConfig
 from flow_corpus.partition import bucket
 from flow_corpus.validation.reliability import ReliabilityReport, brier_reliability
 
 if TYPE_CHECKING:
     from flow_corpus.validation.runner import RunResult
+
+_log = get_logger("flow_corpus.holdout.manager")
 
 
 @dataclass(frozen=True)
@@ -60,6 +64,11 @@ def samples_from_run(run: RunResult) -> list[Sample]:
                 outcome=1 if verdict else 0,
             )
         )
+    _log.debug(
+        "samples_from_run kept=%d dropped=%d (indeterminate or confidence-free)",
+        len(out),
+        len(run.flow_results) - len(out),
+    )
     return out
 
 
@@ -88,6 +97,14 @@ class HoldoutManager:
 
         # instance-holdout (primary): unseen TASKS within the SEEN flow types.
         measured = self._measured_instances(seen)
+        _log.debug(
+            "holdout split held_out_type=%s seed=%d n_seen=%d n_measured=%d n_held=%d",
+            held_out_type,
+            self.seed,
+            len(seen),
+            len(measured),
+            len(held),
+        )
         instance_report = brier_reliability(
             [s.confidence for s in measured], [s.outcome for s in measured], self.cfg
         )
@@ -107,7 +124,23 @@ class HoldoutManager:
             support = (lo, hi)
             outside = sum(1 for s in held if s.confidence < lo or s.confidence > hi)
             extrapolation = outside / len(held)
+        else:
+            _log.warning(
+                "extrapolation caveat unavailable (empty partition) held_out_type=%s "
+                "n_seen=%d n_held=%d",
+                held_out_type,
+                len(seen),
+                len(held),
+            )
 
+        _log.info(
+            "holdout evaluated held_out_type=%s instance_reliability=%s type_reliability=%s "
+            "extrapolation_fraction=%.4f",
+            held_out_type,
+            instance_report.reliability,
+            type_report.reliability,
+            extrapolation,
+        )
         return HoldoutReport(
             instance_holdout=instance_report,
             type_holdout=type_report,

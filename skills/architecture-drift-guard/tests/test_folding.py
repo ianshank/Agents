@@ -1,4 +1,5 @@
 """Tests for folding a module graph into component edges (pure logic)."""
+
 from __future__ import annotations
 
 from adguard.folding import _prefix_index, fold_to_components, module_to_component

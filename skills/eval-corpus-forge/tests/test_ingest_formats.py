@@ -1,4 +1,5 @@
 """Unit tests for CSV and transcript ingestion."""
+
 from __future__ import annotations
 
 from forge import ingest
@@ -10,11 +11,7 @@ def _write(path, text):
 
 
 def test_csv_rows_become_records_with_json_cells(tmp_path):
-    csv_text = (
-        'prompt,expected_outcome,complexity\n'
-        '"hi","{""a"": 1}",low\n'
-        '"yo","{""b"": 2}",high\n'
-    )
+    csv_text = 'prompt,expected_outcome,complexity\n"hi","{""a"": 1}",low\n"yo","{""b"": 2}",high\n'
     records = ingest.load_records(_write(tmp_path / "r.csv", csv_text))
     assert [loc for _f, loc, _o in records] == ["1", "2"]
     first = records[0][2]

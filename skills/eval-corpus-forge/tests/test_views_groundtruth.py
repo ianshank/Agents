@@ -1,4 +1,5 @@
 """Unit tests for forge.views and forge.ground_truth: gating, separation, thin projections."""
+
 from __future__ import annotations
 
 from forge import ground_truth, normalize, views

@@ -34,18 +34,14 @@ def extract_graph(root_packages: Sequence[str]) -> dict[str, set[str]]:
     try:
         import grimp
     except ImportError as exc:  # pragma: no cover - exercised via integration, not unit
-        raise ExtractionError(
-            "grimp is required for import extraction; install it (pip install grimp)"
-        ) from exc
+        raise ExtractionError("grimp is required for import extraction; install it (pip install grimp)") from exc
 
     roots = list(root_packages)
     with debug_span(logger, "grimp.build_graph", roots=",".join(roots)):
         try:
             graph = grimp.build_graph(*roots)
         except Exception as exc:
-            raise ExtractionError(
-                f"could not build import graph for {roots!r}: {exc}"
-            ) from exc
+            raise ExtractionError(f"could not build import graph for {roots!r}: {exc}") from exc
 
     result: dict[str, set[str]] = {}
     for module in graph.modules:

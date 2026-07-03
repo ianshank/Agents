@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.metadata as md
 import pathlib
+from typing import Any
 
 import pytest
 
@@ -18,9 +19,10 @@ from agent_core import version as _version
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
-def _pyproject() -> dict:
+def _pyproject() -> dict[str, Any]:
     tomllib = pytest.importorskip("tomllib")  # stdlib on 3.11+; skip on 3.10 source runs
-    return tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))
+    data: dict[str, Any] = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))
+    return data
 
 
 def test_dev_extra_declares_toolchain() -> None:

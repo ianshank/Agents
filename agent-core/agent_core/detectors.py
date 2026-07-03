@@ -31,7 +31,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from .logging_util import get_logger
 from .timeutil import parse_iso8601
+
+logger = get_logger(__name__)
 
 # git revert writes a footer line: ``This reverts commit <40-hex>.``
 _REVERT_RE = re.compile(r"This reverts commit ([0-9a-f]{7,40})")
@@ -62,8 +65,10 @@ def _run(args: Sequence[str], timeout: float) -> subprocess.CompletedProcess[str
     try:
         return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
     except FileNotFoundError:
+        logger.warning("executable not found: %s; degrading to 'no signal'", argv[0])
         return subprocess.CompletedProcess(argv, _RC_NOT_FOUND, "", "executable not found")
     except subprocess.TimeoutExpired:
+        logger.warning("%s timed out after %.1fs; degrading to 'no signal'", argv[0], timeout)
         return subprocess.CompletedProcess(argv, _RC_TIMED_OUT, "", "timed out")
 
 
@@ -88,7 +93,13 @@ class GitRevertDetector:
             self._cfg.git_timeout_s,
         )
         if proc.returncode != 0:
-            return False  # not a repo / git error / timeout -> fail safe
+            # not a repo / git error / timeout -> fail safe
+            logger.warning(
+                "git log failed (rc=%d); revert signal unavailable for %s",
+                proc.returncode,
+                change_id,
+            )
+            return False
         cutoff = since.timestamp()
         for entry in proc.stdout.split("\x00"):
             if not entry.strip():
@@ -98,7 +109,9 @@ class GitRevertDetector:
                 continue  # committed before the change merged -> not its revert
             m = _REVERT_RE.search(body)
             if m and _sha_prefix_match(m.group(1), change_id):
+                logger.info("revert detected for %s (footer sha %s)", change_id, m.group(1))
                 return True
+        logger.debug("no revert found for %s since %s", change_id, since.isoformat())
         return False
 
 
@@ -113,8 +126,11 @@ def resolve_repo(
     """
     proc = _run(["git", "-C", str(repo_dir), "config", "--get", "remote.origin.url"], timeout)
     if proc.returncode != 0:
+        logger.warning("origin remote unreadable in %s (rc=%d)", repo_dir, proc.returncode)
         return None
     m = _REMOTE_RE.search(proc.stdout.strip())
+    if m is None:
+        logger.warning("origin remote is not a GitHub URL; check-run attribution disabled")
     return m.group(1) if m else None
 
 
@@ -144,8 +160,14 @@ def _parse_check_runs(stdout: str) -> list[Mapping[str, object]]:
     try:
         loaded = json.loads(stdout or "[]")
     except json.JSONDecodeError:
+        logger.warning("unparseable check-runs payload; treating as no signal")
         return []
-    return loaded if isinstance(loaded, list) else []
+    if not isinstance(loaded, list):
+        logger.warning(
+            "unexpected check-runs payload type %s; treating as no signal", type(loaded).__name__
+        )
+        return []
+    return loaded
 
 
 class GitHubChecksFailureAttributor:
@@ -161,6 +183,7 @@ class GitHubChecksFailureAttributor:
 
     def _fetch_check_runs(self, change_id: str) -> list[Mapping[str, object]]:
         if self._repo is None:
+            logger.debug("no repo resolved; skipping check-run fetch for %s", change_id)
             return []
         return self._fetch_remote(change_id)  # pragma: no cover - delegates to live gh
 

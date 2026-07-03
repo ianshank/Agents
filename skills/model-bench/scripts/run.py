@@ -43,7 +43,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     # Forward verbatim to the harness CLI — it owns arg parsing and the work.
-    return harness_main(argv)
+    exit_code: int = harness_main(argv)
+    return exit_code
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entrypoint

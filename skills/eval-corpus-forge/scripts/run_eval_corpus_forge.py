@@ -6,6 +6,7 @@
 Pipeline (§5): ingest -> normalize -> ground-truth -> views -> manifest -> validate -> swap.
 On any precondition failure, stops and reports without fabricating data.
 """
+
 from __future__ import annotations
 
 import argparse

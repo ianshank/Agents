@@ -28,8 +28,11 @@ def dependencies_mapping(edges: set[Edge]) -> dict[str, list[str]]:
 def emit_dependencies_block(edges: set[Edge]) -> str:
     """Render a deterministic YAML ``dependencies:`` block."""
     mapping = dependencies_mapping(edges)
-    return yaml.safe_dump(
+    # Typed local so the return type holds with or without yaml stubs installed
+    # (the skill CI env is isolated and does not ship types-PyYAML).
+    rendered: str = yaml.safe_dump(
         {"dependencies": mapping},
         sort_keys=True,
         default_flow_style=False,
     )
+    return rendered

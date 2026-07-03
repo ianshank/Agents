@@ -649,3 +649,23 @@ features:
       - "Deferred: ingestion path from labeled store records into a flow_corpus suite, replacing MockPolicy for validation of the live system"
     depends_on: ["F-032", "F-033", "F-034", "F-035"]
     notes: "Blocked until F-032..F-035 have soaked and at least one domain has non-trivial audit history (docs/plans/real-data-activation/PLAN.md). Recorded so the intent is tracked without inviting premature mechanism (F-008 precedent for deferred entries)."
+
+  - id: "F-037"
+    epic: "Quality Gate"
+    name: "Monorepo quality-floor remediation (staging CI, skills typing, logging instrumentation)"
+    description: "Closes the gaps from the 2026-07-03 branch sweep: (1) the staged claude-foundation suite (83 tests, 85% coverage gate) ran in NO active CI because its workflow is inert inside the monorepo — a root claude-foundation-ci.yml now runs its ruff/format/mypy/validators/pytest gates until extraction; (2) skills were never type-checked or format-gated — skills-ci now runs ruff format --check and mypy (root config, pinned ruff/mypy) on all four skills, with the 25 shallow type errors fixed (yaml-boundary narrowing, re.Match[str], typed dict literals); (3) silent degrade paths got observable: agent_core.detectors logs every fail-safe (missing binary, timeout, unreadable remote, unparseable check-runs), outcome_store/persistence/campaign log store I/O and decisions, flow_corpus holdout/rotation/validation/crosscheck and the whole behavioral_regression package log verdicts and degrade paths, forge logs restore-after-failed-swap and skipped non-object records; (4) the strict JSONL read idiom is shared via agent_core.jsonl.read_jsonl (outcome_store delegates to it; store_sync's opaque-preserving reader and dataset loaders keep their deliberately different semantics); (5) tests/test_validate.py subprocess helper uses sys.executable so exit-code assertions cannot silently invert in venv-less environments."
+    category: "non-functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "claude-foundation-ci.yml exists at the repo root, path-filtered on claude-foundation/**, and runs ruff check + format --check + mypy tools + mypy hooks + foundation validators + pytest --cov (85% gate from claude-foundation/pyproject.toml); the workflow and the staging dir exist or vanish together (post-extraction the deletion PR removes both)"
+      - "skills-ci.yml runs ruff format --check and mypy --config-file ../../pyproject.toml for each of the four skills, with ruff/mypy pinned to the root dev-extra versions"
+      - "Degrade paths log: agent_core/detectors.py, agent_core/jsonl.py, agent_core/persistence.py, src/eval_harness/campaign.py, behavioral_regression/gate.py, flow_corpus/holdout/manager.py each carry a module logger; caplog tests assert the WARNING paths"
+      - "agent_core.jsonl.read_jsonl exists with strict semantics (malformed line raises) and OutcomeStore.all() delegates to it; behavior round-trips (test_jsonl.py)"
+      - "All suite gates unchanged or stronger: root 96 / agent-core 95 / flow-* 95 / behavioral-regression 95 / skills 95 / scripts 85 / claude-foundation 85 — nothing lowered"
+      - "tests/ are type-checked in every suite's CI (round 2): the tests.* mypy overrides were dead config because test dirs ship no __init__.py so modules resolved as top-level names; explicit_package_bases makes them resolve as tests.* so the relaxations apply, the ~460 spurious errors collapse to 28 real ones (all fixed: None-guards, typed kwargs helpers, stale ignores, TYPE_CHECKING import for the importorskip alias), and mypy <pkg> tests is wired into eval-harness/agent-core/flow-corpus/behavioral-regression/foundation CI"
+    validation_command: "python scripts/validations/F_037.py"
+    implemented_in: "54986893ed95530e6fe942462826b385a9fe0ceb"
+    depends_on: ["F-031"]
+    notes: "Sweep scope and evidence: three read-only assessment passes over the branch (static tooling, suite baselines, debt scan) — findings and dispositions recorded in the PR. numpy tooling was requested but numpy is not a dependency anywhere; docstring-convention enforcement deliberately not adopted. vulture not adopted: ruff F401/F841 already active in root+agent-core. types-PyYAML deliberately not added: mypy 2.1.0 under the root config passes without it (verified by uninstall)."

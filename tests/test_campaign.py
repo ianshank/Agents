@@ -234,3 +234,22 @@ def test_cli_campaign_without_block_errors(tmp_path):
     cfg_path.write_text(yaml.safe_dump(cfg.model_dump(mode="json")), encoding="utf-8")
     rc = cli_main(["campaign", "--config", str(cfg_path), "--store", str(tmp_path / "s.jsonl")])
     assert rc == 2
+
+
+# --- decisions and store writes are observable in logs -----------------------
+
+
+def test_analyze_logs_decision(tmp_path, caplog):
+    store = CampaignStore(tmp_path / "s.jsonl")
+    cfg = _config(30, min_sample=30, hi_is_b=True)
+    record_run(store, cfg, now=FIXED)
+    with caplog.at_level("INFO", logger="eval_harness.campaign"):
+        analyze(store, cfg.ab_campaign)
+    assert any("decided b_better" in r.message for r in caplog.records)
+
+
+def test_store_append_logs_debug(tmp_path, caplog):
+    store = CampaignStore(tmp_path / "s.jsonl")
+    with caplog.at_level("DEBUG", logger="eval_harness.campaign"):
+        store.append(CampaignRecord("c1", "hi", "exact_match", 3, 4, FIXED.isoformat()))
+    assert any("recorded campaign run" in r.message for r in caplog.records)

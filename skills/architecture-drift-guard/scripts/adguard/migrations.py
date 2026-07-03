@@ -24,7 +24,9 @@ SCHEMA_VERSION = "1.0.0"
 MIGRATIONS: dict[str, tuple[str, Callable[[dict[str, Any]], dict[str, Any]]]] = {}
 
 
-def migration(from_version: str, to_version: str) -> Callable[
+def migration(
+    from_version: str, to_version: str
+) -> Callable[
     [Callable[[dict[str, Any]], dict[str, Any]]],
     Callable[[dict[str, Any]], dict[str, Any]],
 ]:
@@ -62,9 +64,7 @@ def migrate_to_current(raw: dict[str, Any]) -> dict[str, Any]:
             raise ManifestError(f"migration cycle detected at version {current!r}")
         seen.add(current)  # type: ignore[arg-type]
         if current not in MIGRATIONS:
-            raise ManifestError(
-                f"no migration path from schema_version {current!r} to {SCHEMA_VERSION!r}"
-            )
+            raise ManifestError(f"no migration path from schema_version {current!r} to {SCHEMA_VERSION!r}")
         to_version, fn = MIGRATIONS[current]
         raw = fn(raw)
         raw["schema_version"] = to_version

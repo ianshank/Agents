@@ -22,7 +22,11 @@ from enum import Enum
 from pathlib import Path
 
 from .calibration import auroc, expected_calibration_error, wilson_interval
+from .jsonl import read_jsonl
+from .logging_util import get_logger
 from .merge_gate import CalibratorHealth, GatePolicyConfig, threshold_for_risk
+
+logger = get_logger(__name__)
 
 
 class LabelSource(str, Enum):
@@ -63,14 +67,15 @@ class OutcomeStore:
     def append(self, rec: OutcomeRecord) -> None:
         with self.path.open("a", encoding="utf-8") as fh:
             fh.write(rec.to_json() + "\n")
+        logger.debug(
+            "appended outcome for %s (domain=%s, label_source=%s)",
+            rec.change_id,
+            rec.domain,
+            rec.label_source,
+        )
 
     def all(self) -> list[OutcomeRecord]:
-        # Stream line-by-line rather than read_text(): this store is append-only
-        # and grows unbounded, so never materialise the whole file as one string.
-        if not self.path.exists():
-            return []
-        with self.path.open(encoding="utf-8") as fh:
-            return [OutcomeRecord.from_json(line) for line in fh if line.strip()]
+        return read_jsonl(self.path, OutcomeRecord.from_json)
 
     def resolved(self) -> dict[str, OutcomeRecord]:
         """One authoritative record per change_id (HUMAN_AUDIT wins, else latest labeled)."""
