@@ -1,0 +1,48 @@
+{
+  "skill": "code-review",
+  "version": 1,
+  "cases": [
+    {
+      "id": "review-diff-with-injection",
+      "prompt": "Review my staged diff before I merge. It adds a search endpoint that builds a SQL query from a request parameter with string concatenation.",
+      "expected_behavior": "The assistant invokes the code-review skill, which runs in a forked subagent restricted to Read, Grep, and Glob. It reads the changed files, identifies the SQL injection as a critical or high severity finding with a file:line reference, a one-sentence defect statement, and a concrete failure scenario (e.g., a crafted parameter value that alters the query). The report ranks findings by severity and ends with 'Verdict: blocking'. No files are edited and no fix code is proposed.",
+      "assertions": [
+        "The review output contains a finding referencing the injection with a file:line location, a severity label, and a concrete failure scenario.",
+        "The output ends with a single verdict line reading 'Verdict: blocking'.",
+        "No Edit, Write, or Bash tool calls occur during the review; only Read, Grep, and Glob are used.",
+        "The output contains no code patches or rewritten implementation snippets offered as fixes."
+      ]
+    },
+    {
+      "id": "review-clean-diff",
+      "prompt": "Please review this small diff: it renames an internal helper function and updates its three call sites, with the existing tests updated to match.",
+      "expected_behavior": "The assistant invokes the code-review skill, works through the checklist (injection, secrets, authz/authn, error handling, resource leaks, concurrency, backwards compatibility, test coverage, hardcoded values), finds no defects tied to a specific line and scenario, and reports a clean result. It does not pad the report with speculative findings, and it ends with 'Verdict: clean'.",
+      "assertions": [
+        "The output ends with a single verdict line reading 'Verdict: clean'.",
+        "No finding in the output lacks a file:line reference (i.e., there are either zero findings or every listed item has file:line).",
+        "The review uses only read-only tools (Read, Grep, Glob) and modifies no files."
+      ]
+    },
+    {
+      "id": "review-secrets-and-compat",
+      "prompt": "Can you review the changes on this branch? It adds an integration with a payments provider - I pasted an API key into the client module to get it working, and I also changed the signature of our public charge() function.",
+      "expected_behavior": "The assistant invokes the code-review skill and reports at least two findings: a hardcoded credential (secrets/credentials checklist item) and a backwards-compatibility break on the public charge() signature. Each finding has a severity, file:line, one-sentence defect statement, and concrete failure scenario. Findings are ordered highest severity first and the report ends with 'Verdict: blocking'. The reviewer does not rewrite the code or insert a fix.",
+      "assertions": [
+        "The output contains a finding for a hardcoded secret/credential with file:line and a severity label.",
+        "The output contains a finding for a backwards-incompatible change to a public function signature with file:line.",
+        "Findings are presented in descending severity order and the report ends with 'Verdict: blocking'.",
+        "No file modifications or inline fix proposals appear in the transcript."
+      ]
+    },
+    {
+      "id": "review-negative-write-feature",
+      "prompt": "Write a new pagination helper for our list endpoints and add tests for it.",
+      "expected_behavior": "The assistant does not invoke the code-review skill, because the request is to author new code, not to review existing changes. It proceeds with normal implementation work (writing the helper and tests) without producing a severity-ranked findings report or a verdict line.",
+      "assertions": [
+        "The code-review skill is not invoked in the transcript.",
+        "No severity-ranked findings report or 'Verdict:' line appears in the response.",
+        "The assistant writes or edits implementation and test files as part of fulfilling the request."
+      ]
+    }
+  ]
+}

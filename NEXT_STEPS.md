@@ -10,13 +10,25 @@
 - [x] **`claude-foundation` plugin plan** — peer-reviewed, corrected execution plan for the
   reusable Claude Code plugin repository (`docs/plans/claude-foundation/`). Planning only;
   see follow-ups below.
-- [ ] **Execute `claude-foundation` M0–M6** — scaffold the plugin repo per
-  `docs/plans/claude-foundation/PLAN.md` (walking skeleton → tooling → hooks → subagents →
-  skills → release v1.0.0). Separate repository; blocked on creating it.
-- [ ] **`claude-foundation` M7 reconciliation ADR** — before dogfooding the plugin into this
-  repo, record the decision on how it coexists with the existing custom skill marketplace
-  (recommended: this repo keeps its 4 domain skills; foundation supplies only the generic
-  layer). See PLAN.md §6.2 M7.
+- [x] **Execute `claude-foundation` M0–M6 (staged)** — full plugin implemented per
+  `docs/plans/claude-foundation/PLAN.md` in the staging directory
+  [`claude-foundation/`](claude-foundation/): manifests (official `claude plugin validate`
+  green), 4 skills with evals, 2 subagents, 3 hooks (fail-closed guard, fail-open
+  verify/logger), `foundation_tools` validation/scan/eval-gate package (94% branch
+  coverage, mypy strict), inert CI workflow, docs+ADRs. Verified end-to-end via
+  `claude --plugin-dir` headless load. Staging is CI-neutral here (per ADR 0017 the
+  plugin's final home is its own repo).
+- [ ] **Extract `claude-foundation/` to its own repository** — create
+  `ianshank/claude-foundation`, move the staging directory (history via
+  `git filter-repo` or fresh import), activate its CI, tag v1.0.0, then run the M7
+  dogfood (config-only install here per ADR 0017).
+- [x] **`claude-foundation` M7 reconciliation ADR** — decided in
+  [ADR 0017](docs/decisions/0017-claude-foundation-reconciliation.md): this repo keeps its
+  4 domain skills and custom marketplace unchanged; foundation supplies only the generic
+  layer, consumed by installing the plugin (pinned tag), never by vendoring. Routing rule:
+  generic skills → foundation, domain skills (anything importing `eval_harness`/`agent_core`
+  or gated by this repo's CI) → here. M7 dogfooding is config+docs only, unblocked once the
+  plugin tags v1.0.0.
 - [x] **Skill-script drift guard** — CI guard that pins vendored skill copies of
   `validate_skill.py` to the canonical repo-root copy (`scripts/check_skill_script_drift.py`);
   uniform 95% coverage floor across all packages and skills; shared `scripts/_cli.py` logging
