@@ -13,10 +13,13 @@
 - [ ] **Execute `claude-foundation` M0–M6** — scaffold the plugin repo per
   `docs/plans/claude-foundation/PLAN.md` (walking skeleton → tooling → hooks → subagents →
   skills → release v1.0.0). Separate repository; blocked on creating it.
-- [ ] **`claude-foundation` M7 reconciliation ADR** — before dogfooding the plugin into this
-  repo, record the decision on how it coexists with the existing custom skill marketplace
-  (recommended: this repo keeps its 4 domain skills; foundation supplies only the generic
-  layer). See PLAN.md §6.2 M7.
+- [x] **`claude-foundation` M7 reconciliation ADR** — decided in
+  [ADR 0017](docs/decisions/0017-claude-foundation-reconciliation.md): this repo keeps its
+  4 domain skills and custom marketplace unchanged; foundation supplies only the generic
+  layer, consumed by installing the plugin (pinned tag), never by vendoring. Routing rule:
+  generic skills → foundation, domain skills (anything importing `eval_harness`/`agent_core`
+  or gated by this repo's CI) → here. M7 dogfooding is config+docs only, unblocked once the
+  plugin tags v1.0.0.
 - [x] **Skill-script drift guard** — CI guard that pins vendored skill copies of
   `validate_skill.py` to the canonical repo-root copy (`scripts/check_skill_script_drift.py`);
   uniform 95% coverage floor across all packages and skills; shared `scripts/_cli.py` logging

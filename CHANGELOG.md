@@ -81,6 +81,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (REVIEW.md), corrected execution-ready plan (PLAN.md), and pinned doc sources for the
   planned reusable Claude Code plugin repository. Planning artifacts only — nothing in this
   repo depends on them yet.
+- **ADR 0017 — claude-foundation reconciliation** (PLAN.md M7 prerequisite): this repo keeps
+  its four domain skills and custom marketplace unchanged; the plugin supplies only the
+  generic `foundation:*` layer and is consumed by installing a pinned tag, never by vendoring.
+  Records the routing rule (generic → foundation, domain → here) and the rejected
+  alternatives (migrate, dual-publish, in-repo subdirectory plugin).
 
 ## [1.2.0-dev] — Unreleased
 
