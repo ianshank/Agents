@@ -123,18 +123,38 @@ Recommendation: **(a)**, implemented as a small `agent_core.store_sync` module
 (pull → merge-append → push; append-only union keyed by
 `(change_id, label_source, labeled_at)`; conflict semantics defer to the
 existing `HUMAN_AUDIT`-wins resolution in `outcome_store.resolved()` — sync
-never drops a `HUMAN_AUDIT` line). ADR 0018 additionally fixes two conventions
-the features below depend on:
+never drops a `HUMAN_AUDIT` line). Because `resolved()`'s passive-label
+resolution is **file-order dependent** ("latest labeled wins" by position,
+`outcome_store.py:85-86`), the merged store must be written in a canonical
+deterministic order — stable sort by `(merged_at, labeled_at` with pending
+records first`, label_source, change_id)` — so any interleaving of the same
+record sets yields a byte-identical store and an identical `resolved()` view
+on every runner. ADR 0018 additionally fixes two conventions the features
+below depend on:
 - **Credentials:** the default `GITHUB_TOKEN` with job-scoped
   `permissions: contents: write` (data branch stays outside branch
   protection). No fine-grained PAT, no new secret surface.
   `pull_request`-triggered jobs sync **read-only** (fetch/merge, never push).
 - **Seed-input conventions** (consumed by F-035): `change_id` = merge-commit
   SHA; `domain` = lookup in the committed path→domain mapping (default domain
-  for unmapped paths); `raw_confidence` = agent-reported value when one
-  exists, else an explicit `0.0` sentinel for human-authored changes — records
-  at 0.0 can only ever populate the bottom calibrator bin, so the sentinel can
-  never raise a domain's `tau` (fail-safe, I-3).
+  for unmapped paths); `raw_confidence` = agent-reported value for
+  agent-authored changes. **Human-authored changes carry no agent confidence
+  and must never enter an agent domain's calibration**: a naive `0.0` sentinel
+  pooled into the agent's domain would be a poisoning path, because
+  `BinningCalibrator.predict()` returns the bin's *empirical accuracy* — a
+  bottom bin filled with mostly-correct human outcomes approaches 1.0, so a
+  genuinely low-confidence agent change (e.g. 0.05) would inherit p≈1.0,
+  potentially clear `tau`, and satisfy the Wilson bin floor on the strength of
+  human outcomes (violating I-3). Convention: human-authored changes are
+  seeded with `raw_confidence=0.0` under a **reserved domain namespace**
+  (`human/<mapped-domain>`) that the path→domain mapping never emits for gate
+  lookups. Per-domain model isolation (`build_domain_models` groups by
+  `domain`) then guarantees these records — and any `HUMAN_AUDIT` verdicts on
+  them — can never feed an agent domain's calibrator, `tau`, or bin
+  statistics, with **zero TCB changes** (I-2), while still exercising
+  persistence, labeller, and audit machinery end-to-end. Agent domains leave
+  cold start only on real agent-authored records, which is the honest
+  behaviour.
 
 **Acceptance criteria:**
 - AC-1: A record appended in workflow run N is readable in run N+1 (integration
@@ -147,6 +167,12 @@ the features below depend on:
 - AC-4: `scripts/validations/F_032.py` guards that every workflow referencing
   the store also invokes `store_sync`, and that no `pull_request`-triggered
   job invokes the push path.
+- AC-5: Deterministic merge order: syncing the same record sets in any
+  interleaving yields a byte-identical store file, and
+  `OutcomeStore.resolved()` returns the same authoritative record per
+  `change_id` regardless of sync order (property test; `resolved()`'s
+  passive-label resolution is file-order dependent, so canonical ordering is
+  a correctness requirement, not cosmetics).
 
 ### F-033 — Scheduled labeller workflow
 
@@ -239,9 +265,11 @@ REJECT):*
   (`scripts/check_protected_changes.py` / `scripts/eval_protected_paths.py`,
   already named as the upstream feed in `merge_gate_ci.py`'s docstring).
 - `domain` ← committed path→domain mapping config (I-4); unmapped → default
-  domain.
-- `raw_confidence` ← agent-reported value when present, else the `0.0`
-  sentinel (ADR 0018 seed-input conventions).
+  domain. The mapping never emits `human/`-prefixed domains (those are
+  reserved for seeding human-authored changes, ADR 0018).
+- `raw_confidence` ← agent-reported value when present; human-authored
+  changes seed at `0.0` under the reserved `human/<domain>` namespace so they
+  never enter agent-domain calibration (ADR 0018 seed-input conventions).
 
 *Shadow exit-code contract:* all three decision codes (0 AUTO_MERGE /
 10 ESCALATE / 20 REJECT) map to job **success**; only 1 (internal error) and

@@ -103,12 +103,19 @@ REJECT. Two required fixes:
 (`agent-core/agent_core/merge_seed.py:87-125`). For a real, human-authored
 merged PR there is no agent-reported confidence, and the workflow's domain
 default is `'unknown'`. The draft never says what values to seed. ADR 0018
-must fix the conventions (v2 proposes: change_id = merge-commit SHA; domain
-from the same mapping as gap A; `raw_confidence` = explicit
-`0.0` sentinel for non-agent changes, with the calibration implication written
-down: HUMAN_AUDIT-labeled records at confidence 0.0 populate only the bottom
-calibrator bin and can never raise `tau` into auto-merge territory — the
-fail-safe direction).
+must fix the conventions (v2: change_id = merge-commit SHA; domain from the
+same mapping as gap A; human-authored changes seeded at `raw_confidence=0.0`
+under a **reserved `human/<domain>` namespace** that the gate's path→domain
+mapping never emits). The namespace is load-bearing, not cosmetic: a bare
+`0.0` sentinel pooled into agent domains would be a poisoning path, because
+`BinningCalibrator.predict()` returns a bin's *empirical accuracy*
+(`outcome_store.py:97-98`) — a bottom bin filled with mostly-correct human
+outcomes approaches 1.0, so a genuinely low-confidence agent change would
+inherit p≈1.0 and could clear `tau` and the Wilson bin floor on the strength
+of human outcomes, violating I-3. (An earlier revision of this review claimed
+the sentinel alone was fail-safe; that was wrong — see §6.) Per-domain model
+isolation in `build_domain_models` makes the namespace exclusion complete
+with zero TCB changes (I-2).
 
 ### C. Optimistic-label hazard in the scheduled labeller
 
@@ -162,6 +169,11 @@ mitigation — v2 makes it explicit that this loop is `store_sync`'s core
 correctness obligation (bounded retries, append-only merge keyed by
 `change_id`+`label_source`+`labeled_at`, `HUMAN_AUDIT` never dropped), tested
 against a temp bare repo with interleaved pushes (draft AC-2/AC-3 retained).
+Adjacent correctness requirement: `resolved()`'s passive-label resolution is
+**file-order dependent** ("latest labeled wins" by line position,
+`outcome_store.py:85-86`), so the merged store must be written in a canonical
+deterministic order or the authoritative record for a change could flip
+between passive labels across runners (v2 F-032 AC-5).
 
 ## 4. Endorsed without change
 
@@ -187,3 +199,23 @@ folds gaps A–F into ADR 0018's scope and the feature ACs. Do not implement
 from the draft as written — F-033's AC-1 names a label source that cannot be
 emitted, F-034's issue body prints a command that cannot run, and F-035 would
 fail every PR it was meant to observe.
+
+## 6. Addendum — second-round findings (2026-07-03, PR #33 review)
+
+Two findings from external review of this document were verified against the
+code and incorporated into both this review and PLAN.md v2:
+
+1. **The `0.0` confidence sentinel was not fail-safe as originally claimed.**
+   This review's first revision asserted that human-authored records seeded at
+   confidence 0.0 "can only populate the bottom calibrator bin and never raise
+   `tau`." That reasoning confused the raw score with the bin's *prediction*:
+   `BinningCalibrator.predict()` returns the bin's empirical accuracy, which
+   mostly-correct human outcomes drive toward 1.0 — legitimizing low-confidence
+   agent changes. Corrected in gap B: human-authored changes seed under the
+   reserved `human/<domain>` namespace, excluding them from agent-domain
+   calibration entirely with zero TCB changes.
+2. **`store_sync` must produce a canonical deterministic record order.**
+   `resolved()` picks the winning passive label by file position, so an
+   order-shuffling merge could non-deterministically flip a change between
+   e.g. `revert` and `timeout_clean` across runners. Folded into gap F and
+   PLAN.md F-032 (new AC-5).
