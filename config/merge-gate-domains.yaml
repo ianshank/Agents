@@ -1,0 +1,31 @@
+# Path -> domain mapping for the calibrated merge gate (F-035, ADR 0018).
+#
+# Consumed by scripts/merge_gate_context.py to classify a change's domain from
+# its changed-file set. Ordered: the FIRST rule whose glob matches ANY changed
+# file wins, so rule order is the priority order for multi-directory changes.
+# Glob semantics are eval_protected_paths._glob_to_regex (anchored; `*` stays
+# within one path segment; `**` crosses segments) — NOT fnmatch.
+#
+# The gate consults per-domain calibrators keyed by these names. The reserved
+# `human/` namespace (human_namespace) is applied ONLY by the seed path for
+# human-authored merges; no rule or default may emit it — human outcomes must
+# never enter an agent domain's calibration (ADR 0018 §5, REVIEW.md §6).
+schema_version: "1.0.0"
+default_domain: "repo-misc"
+human_namespace: "human/"
+rules:
+  - {pattern: "agent-core/**", domain: "agent-core"}
+  - {pattern: "src/**", domain: "eval-harness"}
+  - {pattern: "flow-protocol/**", domain: "flow"}
+  - {pattern: "flow-corpus/**", domain: "flow"}
+  - {pattern: "behavioral-regression/**", domain: "behavioral-regression"}
+  - {pattern: "skills/**", domain: "skills"}
+  - {pattern: "claude-foundation/**", domain: "foundation"}
+  - {pattern: "scripts/**", domain: "tooling"}
+  - {pattern: "tests/**", domain: "eval-harness"}
+  - {pattern: "config/**", domain: "eval-harness"}
+  - {pattern: ".github/**", domain: "ci-config"}
+  - {pattern: "docs/**", domain: "docs"}
+  # `**/*.md` (not `*.md`): _glob_to_regex anchors `*` within one segment, so a
+  # bare `*.md` would match only root-level markdown files.
+  - {pattern: "**/*.md", domain: "docs"}
