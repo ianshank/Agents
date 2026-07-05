@@ -87,9 +87,17 @@ def _is_excluded(path: Path, root: Path) -> bool:
 
 
 def iter_source_files(roots: Iterable[Path], repo_root: Path) -> list[Path]:
-    """All non-excluded ``*.py`` files under *roots*, sorted for deterministic output."""
+    """All non-excluded ``*.py`` files under *roots*, sorted for deterministic output.
+
+    A root may be a directory (walked recursively) or an individual ``*.py`` file, so the
+    gate also works when invoked on a single file (e.g. from a pre-commit hook).
+    """
     seen: set[Path] = set()
     for root in roots:
+        if root.is_file():
+            if root.suffix == ".py" and not _is_excluded(root, repo_root):
+                seen.add(root)
+            continue
         for path in root.rglob("*.py"):
             if path.is_file() and not _is_excluded(path, repo_root):
                 seen.add(path)
@@ -97,9 +105,13 @@ def iter_source_files(roots: Iterable[Path], repo_root: Path) -> list[Path]:
 
 
 def _public_method_count(node: ast.ClassDef) -> int:
-    """Number of public (non-underscore) methods directly defined on *node*."""
+    """Number of distinct public (non-underscore) method names directly on *node*.
+
+    Deduplicated by name so ``@overload`` stubs and property getter/setter/deleter trios
+    (each a separate ``FunctionDef`` with the same name) count once, not several times.
+    """
     methods = (child for child in node.body if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef))
-    return sum(1 for m in methods if not m.name.startswith("_"))
+    return len({m.name for m in methods if not m.name.startswith("_")})
 
 
 def _node_line_span(node: ast.stmt) -> int:
@@ -137,9 +149,13 @@ def scan_file(path: Path, repo_root: Path) -> list[Finding]:
 
 
 def scan(roots: Sequence[Path] | None = None, *, repo_root: Path | None = None) -> list[Finding]:
-    """Scan *roots* (default: the whole repo) and return all findings, sorted."""
-    base = repo_root if repo_root is not None else _repo_root()
-    scan_roots = list(roots) if roots else [base]
+    """Scan *roots* (default: the whole repo) and return all findings, sorted.
+
+    Roots and the repo root are resolved to absolute paths so a relative ``--root``
+    (e.g. ``agent-core``) does not break the ``relative_to`` exclusion check.
+    """
+    base = (repo_root if repo_root is not None else _repo_root()).resolve()
+    scan_roots = [r.resolve() for r in roots] if roots else [base]
     findings: list[Finding] = []
     for path in iter_source_files(scan_roots, base):
         findings.extend(scan_file(path, base))

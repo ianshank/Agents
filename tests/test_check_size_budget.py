@@ -68,6 +68,22 @@ def test_private_methods_do_not_count(tmp_path: Path) -> None:
     assert [f for f in sb.scan_file(path, tmp_path) if f.kind == "public_methods"] == []
 
 
+def test_overloaded_and_property_methods_count_once(tmp_path: Path) -> None:
+    """@overload stubs and property getter/setter/deleter share a name -> one method."""
+    src = (
+        "class C:\n"
+        "    @property\n"
+        "    def value(self): ...\n"
+        "    @value.setter\n"
+        "    def value(self, v): ...\n"
+        "    @value.deleter\n"
+        "    def value(self): ...\n"
+    )
+    path = _write(tmp_path, "prop.py", src)
+    # Three FunctionDefs named 'value' collapse to one distinct public method.
+    assert [f for f in sb.scan_file(path, tmp_path) if f.kind == "public_methods"] == []
+
+
 def test_unparseable_file_is_skipped_not_crashed(tmp_path: Path) -> None:
     path = _write(tmp_path, "broken.py", "def (:\n")  # syntax error
     # No exception; file-length still measured, symbol checks skipped.
@@ -94,6 +110,26 @@ def test_iter_source_files_is_sorted_and_deduped(tmp_path: Path) -> None:
     # Overlapping roots must not double-count a file.
     files = sb.iter_source_files([tmp_path, tmp_path], tmp_path)
     assert [p.name for p in files] == ["a.py", "b.py"]
+
+
+def test_iter_source_files_accepts_a_single_file(tmp_path: Path) -> None:
+    f = _write(tmp_path, "one.py", "x = 1\n")
+    _write(tmp_path, "two.py", "y = 2\n")
+    # A file root selects only that file, not the whole directory.
+    assert [p.name for p in sb.iter_source_files([f], tmp_path)] == ["one.py"]
+
+
+def test_iter_source_files_ignores_non_python_file_root(tmp_path: Path) -> None:
+    notpy = _write(tmp_path, "data.txt", "x\n")
+    assert sb.iter_source_files([notpy], tmp_path) == []
+
+
+def test_relative_root_does_not_crash(tmp_path: Path, monkeypatch) -> None:
+    """A relative --root must resolve, not raise ValueError in relative_to."""
+    _write(tmp_path, "pkg/mod.py", _lines(sb.MAX_FILE_LINES + 1))
+    monkeypatch.chdir(tmp_path)
+    findings = sb.scan([Path("pkg")], repo_root=Path("."))
+    assert any(f.kind == "file_lines" and f.hard for f in findings)
 
 
 # ---------------------------------------------------------------------------
