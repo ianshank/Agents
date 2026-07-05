@@ -174,6 +174,11 @@ def scan(roots: Sequence[Path] | None = None, *, repo_root: Path | None = None) 
     """
     base = (repo_root if repo_root is not None else _repo_root()).resolve()
     scan_roots = [r.resolve() for r in roots] if roots else [base]
+    # Confine scanning to the repo: an out-of-repo root is a usage error (main() maps a
+    # ValueError to exit 2), caught here early so even a root with no *.py files is reported.
+    for root in scan_roots:
+        if root != base and base not in root.parents:
+            raise ValueError(f"root {root} is outside the repository root {base}")
     findings: list[Finding] = []
     for path in iter_source_files(scan_roots, base):
         findings.extend(scan_file(path, base))

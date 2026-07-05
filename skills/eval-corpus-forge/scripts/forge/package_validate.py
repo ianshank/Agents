@@ -13,7 +13,7 @@ import json
 import os
 import sys
 from collections.abc import Hashable
-from typing import Any
+from typing import Any, Protocol
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -65,8 +65,10 @@ def _key(value: object) -> object:
     return value if isinstance(value, Hashable) else repr(value)
 
 
-# A structured-error sink: (check, detail, scenario_id) -> appended record.
-Fail = Any
+class Fail(Protocol):
+    """Structured-error sink: record a (check, detail, optional scenario_id) failure."""
+
+    def __call__(self, check: str, detail: str, scenario: str | None = None) -> None: ...
 
 
 def _check_required_artifacts(out_dir: str, fail: Fail) -> None:

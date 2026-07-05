@@ -58,6 +58,10 @@ def _read_store_sync_impl() -> str:
     pkg_dir = os.path.join(_ROOT, "agent-core", "agent_core", "store_sync")
     if os.path.isfile(pkg_dir + ".py"):  # tolerate the pre-refactor single-module layout
         return _read(os.path.join("agent-core", "agent_core", "store_sync.py"))
+    if not os.path.isdir(pkg_dir):
+        # Neither the module nor the package exists (partial checkout / future refactor):
+        # return empty so the needle checks fail cleanly via _check, not with a crash.
+        return ""
     parts = [
         _read(os.path.join("agent-core", "agent_core", "store_sync", name))
         for name in sorted(os.listdir(pkg_dir))
