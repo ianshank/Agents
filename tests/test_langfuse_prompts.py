@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -117,15 +118,21 @@ def test_sdk_get_prompt_non_string_returns_none(mock_langfuse_class):
 # --- engine.from_config injection -------------------------------------------
 
 
-def _base_config(**overrides) -> EvalConfig:
-    data = dict(
+def _base_config(**overrides: Any) -> EvalConfig:
+    data: dict[str, Any] = dict(
         schema_version=SCHEMA_VERSION,
         dataset={"type": "inline", "params": {}},
         target={"type": "echo", "params": {}},
         judge={"type": "system_recording_judge", "params": {}},
     )
     data.update(overrides)
-    return EvalConfig(**data)
+    return EvalConfig.model_validate(data)
+
+
+def _system_from(engine: EvalEngine) -> str | None:
+    judge = engine.judge
+    assert isinstance(judge, _SystemRecordingJudge)
+    return cast(str | None, cast(Any, judge).system)
 
 
 def test_from_config_injects_resolved_system_prompt():
@@ -134,21 +141,21 @@ def test_from_config_injects_resolved_system_prompt():
         judge_prompt={"source": "langfuse", "name": "rubric", "text": "FB"},
     )
     engine = EvalEngine.from_config(cfg, langfuse_client=_PromptClient())
-    assert engine.judge.system == "REGISTRY::rubric:vNone:lNone"
+    assert _system_from(engine) == "REGISTRY::rubric:vNone:lNone"
 
 
 def test_from_config_falls_back_to_yaml_text():
     bootstrap()
     cfg = _base_config(judge_prompt={"source": "yaml", "text": "INLINE"})
     engine = EvalEngine.from_config(cfg, langfuse_client=None)
-    assert engine.judge.system == "INLINE"
+    assert _system_from(engine) == "INLINE"
 
 
 def test_from_config_without_judge_prompt_leaves_params_untouched():
     bootstrap()
     cfg = _base_config(judge={"type": "system_recording_judge", "params": {"system": "RAW"}})
     engine = EvalEngine.from_config(cfg)
-    assert engine.judge.system == "RAW"
+    assert _system_from(engine) == "RAW"
 
 
 def test_from_config_resolved_none_does_not_inject():
@@ -160,4 +167,4 @@ def test_from_config_resolved_none_does_not_inject():
         judge_prompt={"source": "langfuse", "name": "rubric"},
     )
     engine = EvalEngine.from_config(cfg, langfuse_client=None)
-    assert engine.judge.system == "RAW"
+    assert _system_from(engine) == "RAW"

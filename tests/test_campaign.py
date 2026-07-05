@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from typing import Any
 
 import pytest
 
@@ -22,6 +23,10 @@ from eval_harness.version import SCHEMA_VERSION
 FIXED = datetime(2026, 6, 30, tzinfo=timezone.utc)
 
 
+def _eval_config(**data: Any) -> EvalConfig:
+    return EvalConfig.model_validate(data)
+
+
 def _items(n: int) -> list[dict]:
     # Every item: arm "hi" (echo 'good') passes; arm "lo" (echo 'bad') fails.
     return [{"id": str(i), "inputs": {"good": "x", "bad": "y"}, "expected": "x"} for i in range(n)]
@@ -31,7 +36,7 @@ def _config(n_items: int, *, min_sample: int = 30, hi_is_b: bool = True) -> Eval
     hi = {"name": "hi", "target": {"type": "echo", "params": {"output_key": "good"}}}
     lo = {"name": "lo", "target": {"type": "echo", "params": {"output_key": "bad"}}}
     arm_a, arm_b = (lo, hi) if hi_is_b else (hi, lo)
-    return EvalConfig(
+    return _eval_config(
         schema_version=SCHEMA_VERSION,
         run={"name": "camp"},
         dataset={"type": "inline", "params": {"items": _items(n_items)}},
@@ -77,7 +82,7 @@ def test_record_run_writes_per_arm_counts(tmp_path):
 
 def test_record_run_requires_config(tmp_path):
     store = CampaignStore(tmp_path / "s.jsonl")
-    cfg = EvalConfig(
+    cfg = _eval_config(
         schema_version=SCHEMA_VERSION,
         dataset={"type": "inline", "params": {"items": _items(1)}},
         target={"type": "echo", "params": {}},
@@ -150,7 +155,7 @@ def test_decision_no_difference_when_overlapping(tmp_path):
     # Both arms echo 'good' -> identical 30/30 -> overlapping CIs -> no_difference.
     store = CampaignStore(tmp_path / "s.jsonl")
     good = {"type": "echo", "params": {"output_key": "good"}}
-    cfg = EvalConfig(
+    cfg = _eval_config(
         schema_version=SCHEMA_VERSION,
         dataset={"type": "inline", "params": {"items": _items(30)}},
         target={"type": "echo", "params": {}},
@@ -225,7 +230,7 @@ def test_cli_record_then_analyze(tmp_path):
 def test_cli_campaign_without_block_errors(tmp_path):
     import yaml
 
-    cfg = EvalConfig(
+    cfg = _eval_config(
         schema_version=SCHEMA_VERSION,
         dataset={"type": "inline", "params": {"items": _items(1)}},
         target={"type": "echo", "params": {}},

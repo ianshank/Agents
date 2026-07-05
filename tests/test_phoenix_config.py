@@ -6,18 +6,21 @@ is imported here (config is pure data), so these run in the air-gapped suite.
 
 from __future__ import annotations
 
+from typing import Any
+
 from eval_harness.config.models import EvalConfig, PhoenixConfig
 from eval_harness.version import SCHEMA_VERSION
 
 
-def _minimal_eval_config(**extra: object) -> EvalConfig:
+def _minimal_eval_config(**extra: Any) -> EvalConfig:
     """A structurally-valid EvalConfig; component types need not be registered to validate."""
-    return EvalConfig(
-        schema_version=SCHEMA_VERSION,
-        dataset={"type": "inline"},
-        target={"type": "echo"},
+    data: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "dataset": {"type": "inline"},
+        "target": {"type": "echo"},
         **extra,
-    )
+    }
+    return EvalConfig.model_validate(data)
 
 
 def test_phoenix_config_defaults_are_safe_and_off() -> None:

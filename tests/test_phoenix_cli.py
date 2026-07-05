@@ -6,7 +6,9 @@ only the tracing-activation wiring, so it needs no network and no Phoenix SDK.
 
 from __future__ import annotations
 
+from argparse import Namespace
 from types import SimpleNamespace
+from typing import Any
 
 import eval_harness.cli as cli
 from eval_harness.config.models import EvalConfig, PhoenixConfig
@@ -19,6 +21,10 @@ class _FakeEngine:
         return SimpleNamespace(run=lambda: SimpleNamespace(aggregate={}))
 
 
+def _eval_config(**data: Any) -> EvalConfig:
+    return EvalConfig.model_validate(data)
+
+
 def _stub_run_pipeline(monkeypatch, cfg, captured):
     monkeypatch.setattr(cli, "load_config", lambda *a, **k: cfg)
     monkeypatch.setattr(cli, "configure_tracing", lambda pc: captured.__setitem__("pc", pc))
@@ -27,7 +33,7 @@ def _stub_run_pipeline(monkeypatch, cfg, captured):
 
 
 def test_run_activates_tracing_with_phoenix_config(monkeypatch) -> None:
-    cfg = EvalConfig(
+    cfg = _eval_config(
         schema_version=SCHEMA_VERSION,
         dataset={"type": "x"},
         target={"type": "y"},
@@ -36,7 +42,7 @@ def test_run_activates_tracing_with_phoenix_config(monkeypatch) -> None:
     captured: dict = {}
     _stub_run_pipeline(monkeypatch, cfg, captured)
 
-    rc = cli._cmd_run(SimpleNamespace(config="cfg.yaml", overrides=[], offline=True))
+    rc = cli._cmd_run(Namespace(config="cfg.yaml", overrides=[], offline=True))
 
     assert rc == 0
     assert captured["pc"] is cfg.phoenix
@@ -44,7 +50,7 @@ def test_run_activates_tracing_with_phoenix_config(monkeypatch) -> None:
 
 
 def test_run_passes_none_when_no_phoenix_block(monkeypatch) -> None:
-    cfg = EvalConfig(
+    cfg = _eval_config(
         schema_version=SCHEMA_VERSION,
         dataset={"type": "x"},
         target={"type": "y"},
@@ -52,7 +58,7 @@ def test_run_passes_none_when_no_phoenix_block(monkeypatch) -> None:
     captured: dict = {}
     _stub_run_pipeline(monkeypatch, cfg, captured)
 
-    rc = cli._cmd_run(SimpleNamespace(config="cfg.yaml", overrides=[], offline=True))
+    rc = cli._cmd_run(Namespace(config="cfg.yaml", overrides=[], offline=True))
 
     assert rc == 0
     assert captured["pc"] is None
