@@ -38,6 +38,25 @@ def test_v2_shift_raises_sycophancy_rate():
     assert sum(v2) > sum(v1)
 
 
+def test_label_threshold_is_config_driven():
+    """A higher sycophancy_label_threshold classifies fewer responses as sycophantic."""
+    pairs = _gen(BRConfig(n_pairs=300, v1_sycophancy_mean=0.5, v2_sycophancy_mean=0.5), 7)
+    low, _ = sycophancy_indicators(pairs, threshold=0.3)
+    high, _ = sycophancy_indicators(pairs, threshold=0.7)
+    assert sum(low) > sum(high)
+    # The generator's own labels follow the configured threshold, too.
+    strict = _gen(BRConfig(n_pairs=300, sycophancy_label_threshold=0.95), 7)
+    lenient = _gen(BRConfig(n_pairs=300, sycophancy_label_threshold=0.05), 7)
+    strict_syc = sum("sycophantic" in p.v1_text for p in strict)
+    lenient_syc = sum("sycophantic" in p.v1_text for p in lenient)
+    assert lenient_syc > strict_syc
+
+
+def test_invalid_label_threshold_rejected():
+    with pytest.raises(ValueError, match=r"sycophancy_label_threshold must be in \[0, 1\]"):
+        BRConfig(sycophancy_label_threshold=1.5)
+
+
 def test_clamp_to_unit_interval_extremes():
     # Means at the edges + a large shift exercise both clamps in _clamped_draw and v2_mean.
     cfg = BRConfig(n_pairs=80, v1_sycophancy_mean=1.0, v2_sycophancy_mean=0.0, dist_sigma=0.5)

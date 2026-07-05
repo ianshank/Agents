@@ -41,7 +41,7 @@ def _arm_p_regression(cfg: BRConfig, seed: int, v2_shift: float) -> float:
     pairs = PairedResponseGenerator(cfg).generate(gen_rng, v2_shift=v2_shift)
     judge = SyntheticJudge(cfg, judge_rng)
     verdicts = [judge.judge(p) for p in pairs]
-    v1_ind, v2_ind = sycophancy_indicators(pairs)
+    v1_ind, v2_ind = sycophancy_indicators(pairs, cfg.sycophancy_label_threshold)
     estimate = RegressionDetector(cfg).detect(
         v1_ind, v2_ind, verdicts, human_labels=None, seed=seed + 2
     )
