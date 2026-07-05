@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Changed
+- **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted
+  tech-debt pass on top of the size-budget work. Config-drove the one remaining hard-coded
+  threshold (`BRConfig.sycophancy_label_threshold`, additive/backwards-compatible); extracted
+  two duplicated, drifted `agent_core` idioms into reusable stdlib utilities
+  (`subprocess_util.run_failsafe`, `atomic_io.atomic_write_text`) — recovering the logging the
+  drifted copies had lost; added structured logging to the `behavioral_regression` CLI's report
+  writes and decision; and decomposed `validate_skill.check_behavioral` below the function-length
+  budget (5 vendored copies synced). Hardened the new `check_size_budget` gate and `F_032` against
+  crashes on bad input, and typed the `package_validate` error sink. All coverage floors,
+  `ruff`/`mypy --strict`, and the eval-integrity/drift guards stay green; no schema bump, no new
+  dependency. The gap-analysis doc records what was intentionally left (cohesive long functions,
+  pure-core logging) and why.
+
 ### Added
 - **Structural size-budget enforcement (ADR 0019):** two of the project's four documented
   structural limits are now enforced gates instead of prose. Cyclomatic complexity `< 15`
