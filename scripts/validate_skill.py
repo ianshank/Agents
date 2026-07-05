@@ -76,6 +76,40 @@ def first_path_token(cmd: str) -> str | None:
     return None
 
 
+def _check_name(name: str, skill_dir: str, errs: list[str], warns: list[str]) -> None:
+    """Validate the frontmatter ``name``: presence, casing, and dir agreement."""
+    if not name or "{{" in name:
+        errs.append(f"frontmatter 'name' missing or placeholder: {name!r}")
+        return
+    if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name):
+        warns.append(f"name {name!r} isn't lowercase-hyphen; some loaders require that")
+    dirbase = os.path.basename(os.path.abspath(skill_dir))
+    if dirbase != name:
+        warns.append(f"dir '{dirbase}' != skill name '{name}'")
+
+
+def _check_description(desc: str, errs: list[str], warns: list[str]) -> None:
+    """Validate the frontmatter ``description``: presence, length, trigger cue."""
+    if not desc or "{{" in desc:
+        errs.append("frontmatter 'description' missing or placeholder (it is the only trigger signal)")
+        return
+    if len(desc) < 40:
+        warns.append("description very short; triggering will be weak")
+    if not re.search(r"\b(use|when|whenever)\b", desc, re.I):
+        warns.append("description lacks a 'when to use' cue; add a trigger phrase")
+
+
+def _check_eval_file_refs(skill_dir: str, spec: dict[str, Any], warns: list[str]) -> None:
+    """Warn when an eval's ``run``/``setup`` references a script/bin file that is absent."""
+    for ev in spec.get("evals", []):
+        for key in ("run", "setup"):
+            cmd = ev.get(key)
+            if cmd:
+                tok = first_path_token(cmd)
+                if tok and tok.split("/")[0] in ("scripts", "bin") and not os.path.exists(os.path.join(skill_dir, tok)):
+                    warns.append(f"eval {ev.get('id', '?')}: {key} references missing file {tok}")
+
+
 def check_structural(skill_dir: str, evals_path: str) -> tuple[list[str], list[str]]:
     errs: list[str] = []
     warns: list[str] = []
@@ -85,38 +119,13 @@ def check_structural(skill_dir: str, evals_path: str) -> tuple[list[str], list[s
     fm, nlines = parse_frontmatter(skill_md)
     if fm is None:
         return ["SKILL.md has no YAML frontmatter (--- ... ---)"], []
-    name = fm.get("name", "")
-    desc = fm.get("description", "")
-    if not name or "{{" in name:
-        errs.append(f"frontmatter 'name' missing or placeholder: {name!r}")
-    else:
-        if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name):
-            warns.append(f"name {name!r} isn't lowercase-hyphen; some loaders require that")
-        dirbase = os.path.basename(os.path.abspath(skill_dir))
-        if dirbase != name:
-            warns.append(f"dir '{dirbase}' != skill name '{name}'")
-    if not desc or "{{" in desc:
-        errs.append("frontmatter 'description' missing or placeholder (it is the only trigger signal)")
-    else:
-        if len(desc) < 40:
-            warns.append("description very short; triggering will be weak")
-        if not re.search(r"\b(use|when|whenever)\b", desc, re.I):
-            warns.append("description lacks a 'when to use' cue; add a trigger phrase")
+    _check_name(fm.get("name", ""), skill_dir, errs, warns)
+    _check_description(fm.get("description", ""), errs, warns)
     if nlines > 500:
         warns.append(f"SKILL.md is {nlines} lines (>500); move detail into references/")
     spec = load_evals(skill_dir, evals_path, errs)  # missing evals.json is fine at this tier
     if spec:
-        for ev in spec.get("evals", []):
-            for key in ("run", "setup"):
-                cmd = ev.get(key)
-                if cmd:
-                    tok = first_path_token(cmd)
-                    if (
-                        tok
-                        and tok.split("/")[0] in ("scripts", "bin")
-                        and not os.path.exists(os.path.join(skill_dir, tok))
-                    ):
-                        warns.append(f"eval {ev.get('id', '?')}: {key} references missing file {tok}")
+        _check_eval_file_refs(skill_dir, spec, warns)
     return errs, warns
 
 
