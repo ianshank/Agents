@@ -44,7 +44,11 @@ import json
 import sys
 
 from ..logging_util import configure_logging
-from .git_sync import _run, pull, push
+
+# ``_run as _run`` marks the seam as an explicit re-export (mypy no_implicit_reexport):
+# the CLI resolves it at call time and tests monkeypatch ``agent_core.store_sync._run``.
+from .git_sync import _run as _run
+from .git_sync import pull, push
 from .models import (
     _DEFAULT_BACKOFF_BASE_S,
     _DEFAULT_BRANCH,
