@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added
+- **Live Phoenix validation (opt-in workflow_dispatch):** `.github/workflows/phoenix-live.yml`
+  runs a two-job matrix — `dep-resolve` performs a `pip install '.[phoenix,phoenix-evals,parquet]'
+  --dry-run` to surface the pandas/numpy vs `pyarrow>=14,<20` interaction without installing,
+  and `live` boots a self-hosted `arize-phoenix==17.18.0` via `phoenix serve` and exercises
+  the real OTLP tracing surface plus the Phoenix evals judge. Companion tests live in
+  `tests/test_phoenix_live.py` (marker `@pytest.mark.integration`), which skip cleanly when
+  the extras aren't installed or the endpoint/secret env vars aren't set. Project name, span
+  name, judge name, and eval model are all env-driven (`PHOENIX_LIVE_PROJECT`,
+  `PHOENIX_LIVE_SPAN_NAME`, `PHOENIX_LIVE_JUDGE_NAME`, `PHOENIX_EVAL_MODEL`) with defaults, so
+  reruns on the same collector namespace cleanly. Both jobs carry `timeout-minutes: 20` and
+  the OTLP endpoint uses the explicit `/v1/traces` path. Rollback is fully reversible — see
+  `docs/phoenix-spike.md`.
+- **`AGENTS.md`** at the repo root — orientation for coding agents (Claude Code, Codex,
+  Copilot, Gemini). Codifies the non-hardcoded-values constraint, protected-paths guard,
+  seam pattern for SDK-optional integrations, testing conventions, and the pre-PR checklist.
+  Complements `README.md` without duplicating it.
+
 ### Hardening
 - **Real-data activation gap-analysis round (F-032…F-035):** post-implementation
   adversarial review + CI-parity battery fixed three defects before merge: reader
