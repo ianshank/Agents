@@ -17,13 +17,12 @@ Real controllers always set a finite allowance before running cycles.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import math
-import os
 from collections.abc import Callable
 from typing import Any
 
+from .atomic_io import atomic_write_text
 from .calibration import Calibrator, IsotonicCalibrator
 from .config import RecalibrationConfig
 from .logging_util import get_logger
@@ -246,16 +245,7 @@ def save_run(result: RunResult, path: str) -> None:
     """
     d = run_result_to_dict(result)
     serialized = json.dumps(d, sort_keys=True, separators=(",", ":"))
-    tmp = path + ".tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(serialized)
-        os.replace(tmp, path)
-    except Exception:
-        logger.warning("atomic write to %s failed; removing temp file", path)
-        with contextlib.suppress(FileNotFoundError):
-            os.unlink(tmp)
-        raise
+    atomic_write_text(path, serialized)
     logger.debug("run result saved to %s", path)
 
 

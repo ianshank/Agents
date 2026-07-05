@@ -6,11 +6,10 @@ An absent store file is an empty store, never an error. Writes are atomic
 
 from __future__ import annotations
 
-import contextlib
-import os
 from collections.abc import Sequence
 from pathlib import Path
 
+from ..atomic_io import atomic_write_text
 from ..outcome_store import OutcomeRecord
 from .serialization import _split_lines, serialize_store
 
@@ -36,15 +35,7 @@ def write_store(
     path: str | Path, records: Sequence[OutcomeRecord], opaque: Sequence[str] = ()
 ) -> None:
     """Atomically replace the local store with the canonical serialization."""
-    target = Path(path)
-    tmp = target.with_name(target.name + ".tmp")
-    try:
-        tmp.write_text(serialize_store(records, opaque), encoding="utf-8")
-        os.replace(tmp, target)
-    except Exception:
-        with contextlib.suppress(FileNotFoundError):
-            tmp.unlink()
-        raise
+    atomic_write_text(path, serialize_store(records, opaque))
 
 
 def store_stats(

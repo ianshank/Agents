@@ -15,6 +15,7 @@ from pathlib import Path
 
 from ..logging_util import debug_span, get_logger
 from ..outcome_store import OutcomeRecord
+from ..subprocess_util import run_failsafe
 from .models import GitRunner, Sleeper, StoreSyncConfig, StoreSyncGitError, SyncResult, SyncStatus
 from .serialization import _split_lines, merge_opaque, merge_records, serialize_store
 from .store import read_store, read_store_lines, write_store
@@ -26,25 +27,11 @@ _BLOB_MODE = "100644"
 # git's message for fetching a ref that does not exist on the remote; used to
 # distinguish "branch not born yet" (cold start) from a real fetch failure.
 _ABSENT_REF_MARKER = "couldn't find remote ref"
-# Conventional shell exit codes for the fail-safe synthetic results (detectors idiom).
-_RC_TIMED_OUT = 124
-_RC_NOT_FOUND = 127
 
-
-def _run(
-    args: Sequence[str], timeout: float, input_text: str | None = None
-) -> subprocess.CompletedProcess[str]:
-    """Fail-safe runner (detectors idiom, plus stdin support for git plumbing):
-    a missing binary or a timeout becomes a non-zero result, never an exception."""
-    argv = list(args)
-    try:
-        return subprocess.run(
-            argv, capture_output=True, text=True, timeout=timeout, input=input_text
-        )
-    except FileNotFoundError:
-        return subprocess.CompletedProcess(argv, _RC_NOT_FOUND, "", "executable not found")
-    except subprocess.TimeoutExpired:
-        return subprocess.CompletedProcess(argv, _RC_TIMED_OUT, "", "timed out")
+# Shared fail-safe runner (:mod:`agent_core.subprocess_util`), bound as a module attribute so
+# the CLI + tests keep monkeypatching ``agent_core.store_sync._run``. It supports the
+# ``input_text`` stdin payload the git plumbing commits need.
+_run = run_failsafe
 
 
 def _git(
