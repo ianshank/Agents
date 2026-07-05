@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Structural size-budget enforcement (ADR 0019):** two of the project's four documented
+  structural limits are now enforced gates instead of prose. Cyclomatic complexity `< 15`
+  is enforced repo-wide via ruff `C901` + `[tool.ruff.lint.mccabe] max-complexity = 14`
+  (added to the root and every sub-package config; skills inherit it). File length `≤ 500`
+  is enforced by a new stdlib gate `scripts/check_size_budget.py`, wired into
+  `quality-gates.yml` with its own unit tests under the `scripts/` ≥85% floor. Function
+  length (`≤ 50`) and public-method count (`≤ 15`) are reported as **non-blocking warnings**
+  (41 functions exceed the line budget — argparse `main()`s and validation gates — so
+  hard-gating them would churn protected paths; the backlog is surfaced, not hidden).
+  Pre-existing complexity violations in `behavioral_regression.config`, `validate_skill`,
+  and `eval-corpus-forge` were refactored by extracting single-responsibility helpers;
+  behaviour and error messages are unchanged.
+- **Browsable HTML coverage artifact:** `eval-harness-ci.yml` now emits `--cov-report=html`
+  and uploads `htmlcov/` as the `coverage-html` artifact (one matrix leg).
+- **Per-package gap-analysis docs:** `flow-corpus/GAP_ANALYSIS.md` and
+  `behavioral-regression/GAP_ANALYSIS.md` mirror `agent-core/GAP_ANALYSIS.md`, so every
+  package now carries the same candour surface (design choices, known limitations, coverage
+  residual).
 - **Live Phoenix validation (opt-in workflow_dispatch):** `.github/workflows/phoenix-live.yml`
   runs a two-job matrix — `dep-resolve` performs a `pip install '.[phoenix,phoenix-evals,parquet]'
   --dry-run` to surface the pandas/numpy vs `pyarrow>=14,<20` interaction without installing,
