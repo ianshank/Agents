@@ -141,48 +141,68 @@ def _load_csv(path: str) -> list[Record]:
     return records
 
 
+def _append_objects(path: str, objects: list[Any], records: list[Record]) -> int:
+    """Append records parsed from indexed candidate objects; return non-object skips."""
+    skipped = 0
+    for idx, obj in enumerate(objects):
+        if isinstance(obj, dict):
+            records.extend(_records_from_object(path, str(idx), obj))
+        else:
+            skipped += 1
+    return skipped
+
+
+def _find_inner_list(data: dict[str, Any]) -> list[Any] | None:
+    """The first list-valued wrapper key (records/scenarios/data/items), if any."""
+    for key in ("records", "scenarios", "data", "items"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return value
+    return None
+
+
+def _load_json_records(path: str, f: Any) -> tuple[list[Record], int]:
+    """Parse a ``.json`` payload into (records, skipped)."""
+    records: list[Record] = []
+    data = json.load(f)
+    if isinstance(data, list):
+        return records, _append_objects(path, data, records)
+    if isinstance(data, dict):
+        # A single object, transcript, or wrapper like {"records": [...]}.
+        inner = _find_inner_list(data)
+        if inner is not None:
+            return records, _append_objects(path, inner, records)
+        records.extend(_records_from_object(path, "0", data))
+    return records, 0
+
+
+def _load_jsonl_records(path: str, f: Any) -> tuple[list[Record], int]:
+    """Parse a ``.jsonl`` / ``.ndjson`` stream into (records, skipped)."""
+    records: list[Record] = []
+    skipped = 0
+    for lineno, line in enumerate(f, start=1):
+        line = line.strip()
+        if not line:
+            continue
+        obj = json.loads(line)
+        if isinstance(obj, dict):
+            records.extend(_records_from_object(path, str(lineno), obj))
+        else:
+            skipped += 1
+    return records, skipped
+
+
 def _load_file(path: str) -> list[Record]:
     """Parse one supported file into records, preserving a stable locator."""
     ext = os.path.splitext(path)[1].lower()
     if ext == ".csv":
         return _load_csv(path)
-    records: list[Record] = []
-    skipped = 0
     try:
         with open(path, encoding="utf-8") as f:
             if ext == ".json":
-                data = json.load(f)
-                if isinstance(data, list):
-                    for idx, obj in enumerate(data):
-                        if isinstance(obj, dict):
-                            records.extend(_records_from_object(path, str(idx), obj))
-                        else:
-                            skipped += 1
-                elif isinstance(data, dict):
-                    # A single object, transcript, or wrapper like {"records": [...]}.
-                    inner = None
-                    for key in ("records", "scenarios", "data", "items"):
-                        if isinstance(data.get(key), list):
-                            inner = data[key]
-                            break
-                    if inner is not None:
-                        for idx, obj in enumerate(inner):
-                            if isinstance(obj, dict):
-                                records.extend(_records_from_object(path, str(idx), obj))
-                            else:
-                                skipped += 1
-                    else:
-                        records.extend(_records_from_object(path, "0", data))
+                records, skipped = _load_json_records(path, f)
             else:  # jsonl / ndjson
-                for lineno, line in enumerate(f, start=1):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    obj = json.loads(line)
-                    if isinstance(obj, dict):
-                        records.extend(_records_from_object(path, str(lineno), obj))
-                    else:
-                        skipped += 1
+                records, skipped = _load_jsonl_records(path, f)
     except json.JSONDecodeError as e:
         raise IngestError(f"malformed JSON/JSONL file {path}: {e}") from e
     if skipped:

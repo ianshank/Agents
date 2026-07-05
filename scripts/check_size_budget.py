@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""CI guard: enforce the project's size budgets on source files.
+
+The project documents four structural limits. Two are enforced elsewhere by ruff
+(cyclomatic complexity < 15 via ``C901``; line length via the formatter). The two
+this guard owns:
+
+  * **File length** — no source ``*.py`` file exceeds :data:`MAX_FILE_LINES` lines.
+    This is a HARD gate: exceeding it fails CI (exit 1).
+  * **Function length** (> :data:`MAX_FUNCTION_LINES` physical lines) and
+    **public methods per class** (> :data:`MAX_PUBLIC_METHODS`) are reported as
+    NON-BLOCKING warnings. The codebase carries a documented backlog of functions
+    over the line budget (many are argparse ``main()`` bodies and validation gates),
+    so these are surfaced for visibility without gating — see
+    ``docs/decisions/0019-size-budget-gate.md``. Silent truncation is avoided: every
+    over-budget item is listed.
+
+  python scripts/check_size_budget.py            # human-readable report
+  python scripts/check_size_budget.py --json     # machine-readable report
+  python scripts/check_size_budget.py --root src --root agent-core   # limit scope
+
+Exit codes:
+    0 - no file exceeds the hard file-length budget (warnings may still be printed)
+    1 - at least one file exceeds the hard file-length budget
+    2 - configuration / usage error
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import json
+import logging
+import sys
+from collections.abc import Iterable, Sequence
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+from _cli import configure_logging
+
+logger = logging.getLogger(__name__)
+
+# Structural budgets (single source of truth; no magic numbers at call sites).
+MAX_FILE_LINES = 500
+MAX_FUNCTION_LINES = 50
+MAX_PUBLIC_METHODS = 15
+
+# Directory names never scanned: test suites (legitimately long), caches, virtualenvs,
+# build output, VCS, and synthetic fixtures whose shape is deliberate.
+EXCLUDED_DIR_NAMES = frozenset(
+    {
+        "tests",
+        "__pycache__",
+        ".git",
+        ".grimp_cache",
+        "build",
+        "dist",
+        "node_modules",
+        "fixtures",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+    }
+)
+
+
+@dataclass(frozen=True)
+class Finding:
+    """One budget observation. ``hard`` findings gate CI; others are warnings."""
+
+    kind: str  # "file_lines" | "function_lines" | "public_methods"
+    path: str
+    name: str  # symbol name, or "" for a whole-file finding
+    value: int
+    limit: int
+    hard: bool
+
+
+def _repo_root() -> Path:
+    """Repo root (parent of the ``scripts/`` directory holding this file)."""
+    return Path(__file__).resolve().parent.parent
+
+
+def _is_excluded(path: Path, root: Path) -> bool:
+    """True when any path segment below *root* is an excluded directory name."""
+    return any(part in EXCLUDED_DIR_NAMES for part in path.relative_to(root).parts)
+
+
+def iter_source_files(roots: Iterable[Path], repo_root: Path) -> list[Path]:
+    """All non-excluded ``*.py`` files under *roots*, sorted for deterministic output."""
+    seen: set[Path] = set()
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if path.is_file() and not _is_excluded(path, repo_root):
+                seen.add(path)
+    return sorted(seen)
+
+
+def _public_method_count(node: ast.ClassDef) -> int:
+    """Number of public (non-underscore) methods directly defined on *node*."""
+    methods = (child for child in node.body if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef))
+    return sum(1 for m in methods if not m.name.startswith("_"))
+
+
+def _node_line_span(node: ast.stmt) -> int:
+    """Physical line count of a statement node (functions/classes carry positions)."""
+    end = node.end_lineno if node.end_lineno is not None else node.lineno
+    return end - node.lineno + 1
+
+
+def scan_file(path: Path, repo_root: Path) -> list[Finding]:
+    """Collect every budget finding for a single source file."""
+    rel = str(path.relative_to(repo_root))
+    text = path.read_text(encoding="utf-8")
+    findings: list[Finding] = []
+
+    line_count = len(text.splitlines())
+    if line_count > MAX_FILE_LINES:
+        findings.append(Finding("file_lines", rel, "", line_count, MAX_FILE_LINES, hard=True))
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        logger.warning("could not parse %s; skipping symbol-level checks", rel)
+        return findings
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            span = _node_line_span(node)
+            if span > MAX_FUNCTION_LINES:
+                findings.append(Finding("function_lines", rel, node.name, span, MAX_FUNCTION_LINES, hard=False))
+        elif isinstance(node, ast.ClassDef):
+            count = _public_method_count(node)
+            if count > MAX_PUBLIC_METHODS:
+                findings.append(Finding("public_methods", rel, node.name, count, MAX_PUBLIC_METHODS, hard=False))
+    return findings
+
+
+def scan(roots: Sequence[Path] | None = None, *, repo_root: Path | None = None) -> list[Finding]:
+    """Scan *roots* (default: the whole repo) and return all findings, sorted."""
+    base = repo_root if repo_root is not None else _repo_root()
+    scan_roots = list(roots) if roots else [base]
+    findings: list[Finding] = []
+    for path in iter_source_files(scan_roots, base):
+        findings.extend(scan_file(path, base))
+    return sorted(findings, key=lambda f: (not f.hard, f.kind, f.path, f.name))
+
+
+def _report(findings: list[Finding]) -> None:
+    """Print a human-readable summary of findings."""
+    hard = [f for f in findings if f.hard]
+    warnings = [f for f in findings if not f.hard]
+    for f in warnings:
+        print(f"[warn] {f.kind}: {f.path}::{f.name or '<file>'} = {f.value} (> {f.limit})")
+    if hard:
+        print(f"size-budget: FAIL - {len(hard)} file(s) over {MAX_FILE_LINES} lines:")
+        for f in hard:
+            print(f"  {f.path}: {f.value} lines (> {f.limit})")
+    else:
+        print(f"size-budget: OK - no file exceeds {MAX_FILE_LINES} lines ({len(warnings)} warning(s)).")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build and return the CLI argument parser."""
+    parser = argparse.ArgumentParser(description="Enforce source-file size budgets.")
+    parser.add_argument(
+        "--root",
+        action="append",
+        dest="roots",
+        default=None,
+        help="Directory to scan (repeatable); defaults to the whole repo.",
+    )
+    parser.add_argument("--json", action="store_true", help="Emit a JSON report on stdout")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable DEBUG logging")
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the size-budget check and return an exit code."""
+    args = build_parser().parse_args(argv)
+    configure_logging(args.verbose)
+
+    base = _repo_root()
+    roots = [Path(r) for r in args.roots] if args.roots else None
+    findings = scan(roots, repo_root=base)
+    hard_failures = [f for f in findings if f.hard]
+
+    if args.json:
+        print(json.dumps([asdict(f) for f in findings], indent=2, sort_keys=True))
+    else:
+        _report(findings)
+
+    return 1 if hard_failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -65,24 +65,11 @@ def _key(value: object) -> object:
     return value if isinstance(value, Hashable) else repr(value)
 
 
-def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
-    """Run all §7 checks. Returns (passed, errors) where errors are structured records."""
-    errors: list[dict[str, Any]] = []
+# A structured-error sink: (check, detail, scenario_id) -> appended record.
+Fail = Any
 
-    def fail(check: str, detail: str, scenario: str | None = None) -> None:
-        errors.append({"check": check, "detail": detail, "scenario_id": scenario})
 
-    try:
-        manifest = _read_json(os.path.join(out_dir, "manifest.json"))
-        canonical = _read_jsonl(os.path.join(out_dir, "canonical", "scenarios.jsonl"))
-        ground_truth = _read_jsonl(os.path.join(out_dir, "ground_truth", "mappings.jsonl"))
-        views = {name: _read_jsonl(os.path.join(out_dir, "views", f"{name}.jsonl")) for name in VIEW_FILES}
-    except json.JSONDecodeError as e:
-        # Record a structural error instead of crashing on a corrupt package file.
-        fail("structural.malformed_json", f"failed to parse JSON/JSONL file: {e}")
-        return False, errors
-
-    # --- §7.1 structural ---
+def _check_required_artifacts(out_dir: str, fail: Fail) -> None:
     # Required artifacts are always created (§2); a missing file is a contract violation, not
     # an empty view. _read_jsonl cannot distinguish missing from empty, so check existence here.
     required_files = [
@@ -94,6 +81,14 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
         if not os.path.isfile(os.path.join(out_dir, rel)):
             fail("structural.missing_artifact", f"required artifact {rel} is missing")
 
+
+def _check_provenance_artifact(out_dir: str, fail: Fail) -> None:
+    if not os.path.isfile(os.path.join(out_dir, "provenance", "source_index.jsonl")):
+        fail("structural.missing_provenance", "provenance/source_index.jsonl is missing")
+
+
+def _check_canonical(canonical: list[dict[str, Any]], fail: Fail) -> set[str]:
+    """Validate canonical rows; return the set of usable scenario ids."""
     if not canonical:
         fail("structural.no_canonical", "no canonical scenarios produced")
     scenario_ids: set[str] = set()
@@ -114,29 +109,35 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
             scenario_ids.add(sid)
         else:
             fail("structural.invalid_scenario_id", f"scenario_id must be a non-empty string, got {sid!r}")
+    return scenario_ids
 
+
+def _check_manifest_counts(
+    manifest: dict[str, Any] | None,
+    canonical: list[dict[str, Any]],
+    ground_truth: list[dict[str, Any]],
+    views: dict[str, list[dict[str, Any]]],
+    fail: Fail,
+) -> None:
     # manifest presence + count cross-check (independent re-count from disk, revision 3)
     if manifest is None:
         fail("structural.missing_manifest", "manifest.json is missing")
-    else:
-        counts = manifest.get("counts", {})
-        disk_counts = {
-            "canonical_scenarios": len(canonical),
-            "ground_truth_mappings": len(ground_truth),
-            "retrieval_eval_records": len(views["retrieval_eval"]),
-            "tool_invocation_eval_records": len(views["tool_invocation_eval"]),
-            "response_eval_records": len(views["response_eval"]),
-            "end_to_end_eval_records": len(views["end_to_end_eval"]),
-        }
-        for key, disk_val in disk_counts.items():
-            if counts.get(key) != disk_val:
-                fail("structural.count_mismatch", f"{key}: manifest={counts.get(key)} disk={disk_val}")
+        return
+    counts = manifest.get("counts", {})
+    disk_counts = {
+        "canonical_scenarios": len(canonical),
+        "ground_truth_mappings": len(ground_truth),
+        "retrieval_eval_records": len(views["retrieval_eval"]),
+        "tool_invocation_eval_records": len(views["tool_invocation_eval"]),
+        "response_eval_records": len(views["response_eval"]),
+        "end_to_end_eval_records": len(views["end_to_end_eval"]),
+    }
+    for key, disk_val in disk_counts.items():
+        if counts.get(key) != disk_val:
+            fail("structural.count_mismatch", f"{key}: manifest={counts.get(key)} disk={disk_val}")
 
-    # validation artifacts exist
-    if not os.path.isfile(os.path.join(out_dir, "provenance", "source_index.jsonl")):
-        fail("structural.missing_provenance", "provenance/source_index.jsonl is missing")
 
-    # ground-truth references valid scenarios
+def _check_ground_truth_refs(ground_truth: list[dict[str, Any]], scenario_ids: set[str], fail: Fail) -> None:
     for gt in ground_truth:
         if not isinstance(gt, dict):
             fail("structural.invalid_ground_truth_row", f"ground-truth row is not a JSON object: {gt!r}")
@@ -148,7 +149,8 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
                 gt.get("scenario_id"),
             )
 
-    # view records reference valid scenarios and carry required evidence
+
+def _check_view_records(views: dict[str, list[dict[str, Any]]], scenario_ids: set[str], fail: Fail) -> None:
     for name, rows in views.items():
         for row in rows:
             if not isinstance(row, dict):
@@ -166,18 +168,18 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
             if name == "end_to_end_eval" and not row.get("success_target"):
                 fail("structural.e2e_no_target", "end-to-end view record without success target", sid)
 
-    # applicability must not contradict data
-    if manifest is not None:
-        for name in VIEW_FILES:
-            applicable = manifest.get("view_applicability", {}).get(name, {}).get("applicable")
-            has_rows = len(views[name]) > 0
-            if applicable != has_rows:
-                fail("structural.applicability_contradiction", f"{name}: applicable={applicable} but rows={has_rows}")
 
-    # --- §7.2 behavioral ---
-    # Non-dict rows were already reported structurally; skip them here so the checks below can
-    # safely assume dict access without crashing on malformed packages.
-    by_id = {_key(sc.get("scenario_id")): sc for sc in canonical if isinstance(sc, dict)}
+def _check_applicability(manifest: dict[str, Any] | None, views: dict[str, list[dict[str, Any]]], fail: Fail) -> None:
+    if manifest is None:
+        return
+    for name in VIEW_FILES:
+        applicable = manifest.get("view_applicability", {}).get(name, {}).get("applicable")
+        has_rows = len(views[name]) > 0
+        if applicable != has_rows:
+            fail("structural.applicability_contradiction", f"{name}: applicable={applicable} but rows={has_rows}")
+
+
+def _check_provenance_determinism(canonical: list[dict[str, Any]], fail: Fail) -> None:
     for sc in canonical:
         if not isinstance(sc, dict):
             continue
@@ -201,6 +203,10 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
         if isinstance(sid, str) and sid.startswith("scn_") and sid != recomputed:
             fail("behavioral.nondeterministic_id", f"id {sid} != recomputed {recomputed}", sid)
 
+
+def _check_view_projection(
+    views: dict[str, list[dict[str, Any]]], by_id: dict[Any, dict[str, Any]], fail: Fail
+) -> None:
     # each view record maps to exactly one canonical; views do not duplicate full canonical
     for name, rows in views.items():
         # ids come from untrusted rows, so non-str (even None) values must still dedup
@@ -221,24 +227,62 @@ def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
                 if row.get("tool_invocation_order") != canon_trace.get("tool_invocation_order"):
                     fail("behavioral.tool_order_lost", f"tool order not preserved for {sid}", sid)
 
+
+def _check_empty_view_labels(
+    manifest: dict[str, Any] | None, views: dict[str, list[dict[str, Any]]], fail: Fail
+) -> None:
+    if manifest is None:
+        return
+    mode = manifest.get("mode")
+    for name in VIEW_FILES:
+        entry = manifest.get("view_applicability", {}).get(name, {})
+        if len(views[name]) == 0 and entry.get("applicable") is not False:
+            fail("behavioral.empty_view_mislabeled", f"{name} empty but not marked not-applicable")
+        if len(views[name]) == 0 and not entry.get("reason"):
+            fail("behavioral.empty_view_no_reason", f"{name} empty but no reason recorded")
+    if mode == "bootstrap":
+        for name in ("retrieval_eval", "tool_invocation_eval"):
+            if views[name]:
+                fail("behavioral.bootstrap_fabrication", f"bootstrap mode produced {name} records")
+
+
+def validate_package(out_dir: str) -> tuple[bool, list[dict[str, Any]]]:
+    """Run all §7 checks. Returns (passed, errors) where errors are structured records."""
+    errors: list[dict[str, Any]] = []
+
+    def fail(check: str, detail: str, scenario: str | None = None) -> None:
+        errors.append({"check": check, "detail": detail, "scenario_id": scenario})
+
+    try:
+        manifest = _read_json(os.path.join(out_dir, "manifest.json"))
+        canonical = _read_jsonl(os.path.join(out_dir, "canonical", "scenarios.jsonl"))
+        ground_truth = _read_jsonl(os.path.join(out_dir, "ground_truth", "mappings.jsonl"))
+        views = {name: _read_jsonl(os.path.join(out_dir, "views", f"{name}.jsonl")) for name in VIEW_FILES}
+    except json.JSONDecodeError as e:
+        # Record a structural error instead of crashing on a corrupt package file.
+        fail("structural.malformed_json", f"failed to parse JSON/JSONL file: {e}")
+        return False, errors
+
+    # --- §7.1 structural ---
+    _check_required_artifacts(out_dir, fail)
+    scenario_ids = _check_canonical(canonical, fail)
+    _check_manifest_counts(manifest, canonical, ground_truth, views, fail)
+    _check_provenance_artifact(out_dir, fail)
+    _check_ground_truth_refs(ground_truth, scenario_ids, fail)
+    _check_view_records(views, scenario_ids, fail)
+    _check_applicability(manifest, views, fail)
+
+    # --- §7.2 behavioral ---
+    # Non-dict rows were already reported structurally; skip them here so the checks below can
+    # safely assume dict access without crashing on malformed packages.
+    by_id = {_key(sc.get("scenario_id")): sc for sc in canonical if isinstance(sc, dict)}
+    _check_provenance_determinism(canonical, fail)
+    _check_view_projection(views, by_id, fail)
     # ground truth separate from canonical (no raw_prompt leaking into mappings)
     for gt in ground_truth:
         if isinstance(gt, dict) and "raw_prompt" in gt:
             fail("behavioral.gt_not_separate", "ground-truth mapping contains raw_prompt", gt.get("scenario_id"))
-
-    # empty views correctly labeled not-applicable; bootstrap fabrication guard
-    if manifest is not None:
-        mode = manifest.get("mode")
-        for name in VIEW_FILES:
-            entry = manifest.get("view_applicability", {}).get(name, {})
-            if len(views[name]) == 0 and entry.get("applicable") is not False:
-                fail("behavioral.empty_view_mislabeled", f"{name} empty but not marked not-applicable")
-            if len(views[name]) == 0 and not entry.get("reason"):
-                fail("behavioral.empty_view_no_reason", f"{name} empty but no reason recorded")
-        if mode == "bootstrap":
-            for name in ("retrieval_eval", "tool_invocation_eval"):
-                if views[name]:
-                    fail("behavioral.bootstrap_fabrication", f"bootstrap mode produced {name} records")
+    _check_empty_view_labels(manifest, views, fail)
 
     return (len(errors) == 0, errors)
 
