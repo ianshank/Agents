@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
 from pydantic import ValidationError
+import pytest
 
-from flow_protocol import ConfidenceChannel, FlowResult, OracleResult
-from flow_protocol.version import PROTOCOL_VERSION
+from flow_protocol import ConfidenceChannel, FlowResult, OracleResult  # type: ignore[import-not-found]
+from flow_protocol.version import PROTOCOL_VERSION  # type: ignore[import-not-found]
 
 
 def test_flow_result_roundtrips_via_json() -> None:

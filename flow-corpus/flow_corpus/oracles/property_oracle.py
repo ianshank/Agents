@@ -13,9 +13,27 @@ cannot detect non-determinism. There is no I/O, randomness, or network here.
 
 from __future__ import annotations
 
-from flow_protocol import FlowResult, OracleResult
+from dataclasses import dataclass
+from typing import Any, Protocol
 
 from flow_corpus.suites.base import TaskInstance
+
+
+class FlowResult(Protocol):
+    @property
+    def output(self) -> Any: ...
+
+
+@dataclass(frozen=True, slots=True)
+class OracleResult:
+    instance_id: str
+    verdict: bool | None
+    oracle_tier: str
+    oracle_id: str
+
+    @property
+    def is_indeterminate(self) -> bool:
+        return self.verdict is None
 
 
 class PropertyOracle:

@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import importlib
+
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from behavioral_regression.canary import CanaryReport, run_canary
-from behavioral_regression.config import BRConfig
+_canary_module = importlib.import_module("behavioral_regression.canary")
+_config_module = importlib.import_module("behavioral_regression.config")
+
+CanaryReport = _canary_module.CanaryReport
+run_canary = _canary_module.run_canary
+BRConfig = _config_module.BRConfig
 
 
 def test_canary_separates_known_regression_from_null():

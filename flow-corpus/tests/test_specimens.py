@@ -6,9 +6,14 @@ import random
 
 import pytest
 
-from flow_corpus.policy import MockPolicy
-from flow_corpus.specimens import SPECIMENS, BaselineSpecimen, MCTSSpecimen, ReActSpecimen
-from flow_corpus.suites.base import TaskInstance
+from flow_corpus.policy import MockPolicy  # type: ignore
+from flow_corpus.specimens import (  # type: ignore
+    SPECIMENS,
+    BaselineSpecimen,
+    MCTSSpecimen,
+    ReActSpecimen,
+)
+from flow_corpus.suites.base import TaskInstance  # type: ignore
 
 INSTANCE = TaskInstance(
     instance_id="t1",
@@ -75,7 +80,7 @@ class _ConfidenceFreePolicy:
     """Policy that returns no confidence, exercising the confidence-None branches."""
 
     def decide(self, instance, rng: random.Random):
-        from flow_corpus.policy.base import PolicyDecision
+        from flow_corpus.policy.base import PolicyDecision  # type: ignore
 
         return PolicyDecision(candidate=instance.solution_space[0], confidence=None)
 

@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 """ReAct-style specimen — interleaved reason/act steps with a confidence trace.
 
 Introduced as the **type-holdout** flow: the harness calibrates on baseline+MCTS,
@@ -20,7 +21,7 @@ from flow_protocol import ConfidenceChannel, FlowResult
 from flow_corpus.policy.base import Policy
 from flow_corpus.suites.base import TaskInstance
 
-from .base import SpecimenBase
+from .base import SpecimenBase, copy_flow_result
 
 
 class ReActSpecimen(SpecimenBase):
@@ -60,4 +61,4 @@ class ReActSpecimen(SpecimenBase):
             per_step.append(last.confidence if last.confidence is not None else 0.0)
         channel = ConfidenceChannel(per_step=tuple(per_step))
         result = self._result(instance, last.candidate, last.confidence, seed=None)
-        return result.model_copy(update={"confidence_channel": channel})
+        return copy_flow_result(result, {"confidence_channel": channel})

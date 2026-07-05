@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 """Specimen protocol, a shared base, and a minimal generic registry.
 
 A *specimen* is one agentic flow variant. It runs a task instance against an
@@ -9,15 +10,49 @@ injected :class:`~flow_corpus.policy.base.Policy` and emits a
 from __future__ import annotations
 
 import random
-from typing import Generic, Protocol, TypeVar, runtime_checkable
-
-from flow_protocol import FlowResult
+from contextlib import suppress
+from dataclasses import dataclass, replace
+from importlib import import_module
+from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, cast, runtime_checkable
 
 from flow_corpus.keying import version_key
 from flow_corpus.policy.base import Policy
 from flow_corpus.suites.base import TaskInstance
 
 T = TypeVar("T")
+
+
+if TYPE_CHECKING:
+    from flow_protocol import FlowResult
+else:
+
+    @dataclass(frozen=True, slots=True)
+    class FlowResult:
+        instance_id: str
+        flow_type: str
+        agent_version: str
+        domain: str
+        output: Any
+        raw_confidence: float | None
+        seed: int | None
+
+        def model_copy(self, *, update: dict[str, Any] | None = None) -> FlowResult:
+            return replace(self, **(update or {}))
+
+
+_FlowResultFactory: Any = FlowResult
+
+
+with suppress(ImportError, AttributeError):
+    _FlowResultFactory = import_module("flow_protocol").FlowResult
+
+
+def copy_flow_result(result: FlowResult, update: dict[str, Any]) -> FlowResult:
+    """Return ``result`` with ``update`` applied across protocol/fallback variants."""
+    try:
+        return result.model_copy(update=update)
+    except AttributeError:  # pragma: no cover - pydantic v1 compatibility
+        return cast(FlowResult, cast(Any, result).copy(update=update))
 
 
 class Registry(Generic[T]):
@@ -77,15 +112,19 @@ class SpecimenBase:
         confidence: float | None,
         seed: int | None,
     ) -> FlowResult:
-        return FlowResult(
-            instance_id=instance.instance_id,
-            flow_type=self.flow_type,
-            agent_version=self.agent_version,
-            domain=instance.domain,
-            output=candidate,
-            raw_confidence=confidence,
-            seed=seed,
+        return cast(
+            FlowResult,
+            _FlowResultFactory(
+                instance_id=instance.instance_id,
+                flow_type=self.flow_type,
+                agent_version=self.agent_version,
+                domain=instance.domain,
+                output=candidate,
+                raw_confidence=confidence,
+                seed=seed,
+            ),
         )
 
     def run(self, instance: TaskInstance, rng: random.Random) -> FlowResult:  # pragma: no cover
+        _ = (instance, rng)
         raise NotImplementedError

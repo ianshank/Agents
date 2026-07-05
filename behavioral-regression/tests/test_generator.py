@@ -6,8 +6,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from behavioral_regression.config import BRConfig
-from behavioral_regression.generator import (
+from behavioral_regression.config import BRConfig  # type: ignore[import-not-found]
+from behavioral_regression.generator import (  # type: ignore[import-not-found]
     PairedResponseGenerator,
     ground_truth_regressions,
     sycophancy_indicators,

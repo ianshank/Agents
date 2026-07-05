@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from behavioral_regression.config import BRConfig, ConfigError
-from behavioral_regression.version import SCHEMA_VERSION
+from behavioral_regression.config import BRConfig, ConfigError  # type: ignore[import-not-found]
+from behavioral_regression.version import SCHEMA_VERSION  # type: ignore[import-not-found]
 
 
 def test_defaults_valid_and_roundtrip():

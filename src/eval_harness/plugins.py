@@ -8,6 +8,9 @@ harness is extensible without editing this package.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
+from importlib import import_module
+from typing import Any, cast
 
 from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
 from .core.registry import Registry
@@ -27,11 +30,8 @@ _bootstrapped = False
 
 def load_builtin_plugins() -> None:
     """Import built-in component modules so their decorators run."""
-    from . import datasets as _datasets  # noqa: F401
-    from . import judges as _judges  # noqa: F401
-    from . import scorers as _scorers  # noqa: F401
-    from . import sinks as _sinks  # noqa: F401
-    from . import targets as _targets  # noqa: F401
+    for module_name in ("datasets", "judges", "scorers", "sinks", "targets"):
+        import_module(f"{__package__}.{module_name}")
 
 
 def load_entry_point_plugins() -> None:
@@ -40,9 +40,11 @@ def load_entry_point_plugins() -> None:
         from importlib.metadata import entry_points
 
         eps = entry_points()
-        selected = (
-            eps.select(group=ENTRY_POINT_GROUP) if hasattr(eps, "select") else eps.get(ENTRY_POINT_GROUP, [])  # type: ignore[arg-type]  # pragma: no cover - py<3.10 shim
-        )
+        selected: Iterable[Any]
+        if hasattr(eps, "select"):
+            selected = eps.select(group=ENTRY_POINT_GROUP)
+        else:  # pragma: no cover - py<3.10 shim
+            selected = cast("dict[str, list[Any]]", eps).get(ENTRY_POINT_GROUP, [])
         for ep in selected:
             try:
                 ep.load()

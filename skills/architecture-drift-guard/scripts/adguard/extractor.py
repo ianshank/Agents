@@ -32,7 +32,7 @@ def extract_graph(root_packages: Sequence[str]) -> dict[str, set[str]]:
     analysed.
     """
     try:
-        import grimp
+        import grimp  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover - exercised via integration, not unit
         raise ExtractionError(
             "grimp is required for import extraction; install it (pip install grimp)"

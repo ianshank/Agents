@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import importlib
+from typing import Any, cast
 
 import pytest
 
-from behavioral_regression import cli
+cli = cast(Any, importlib.import_module("behavioral_regression.cli"))
 
 
 def test_coerce_types():
@@ -27,9 +29,9 @@ def test_build_config_rejects_bad_override():
 
 
 def test_build_config_unknown_key_raises_config_error():
-    from behavioral_regression.config import ConfigError
+    config = cast(Any, importlib.import_module("behavioral_regression.config"))
 
-    with pytest.raises(ConfigError, match="unknown config keys"):
+    with pytest.raises(config.ConfigError, match="unknown config keys"):
         cli._build_config(["bogus_field=1"])
 
 

@@ -10,8 +10,8 @@ Behaviour:
     3. Report blocked features (``todo`` with unmet deps).
 
 Exit codes:
-    0 – a feature was selected
-    2 – all remaining features are blocked or none remain
+    0 - a feature was selected
+    2 - all remaining features are blocked or none remain
 """
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def select_next(features: list[dict[str, Any]]) -> dict[str, Any] | None:
     if in_progress:
         selected = in_progress[0]
         logger.info(
-            "Resuming in-progress feature: %s – %s",
+            "Resuming in-progress feature: %s - %s",
             selected["id"],
             selected["name"],
         )
@@ -95,7 +95,7 @@ def select_next(features: list[dict[str, Any]]) -> dict[str, Any] | None:
         if missing:
             blocked.append(feat)
             logger.warning(
-                "Blocked: %s – %s (waiting on %s)",
+                "Blocked: %s - %s (waiting on %s)",
                 feat["id"],
                 feat["name"],
                 ", ".join(missing),
@@ -109,14 +109,14 @@ def select_next(features: list[dict[str, Any]]) -> dict[str, Any] | None:
                 "All %d remaining feature(s) are blocked.", len(blocked),
             )
         else:
-            logger.info("No features remaining – everything is done or deferred.")
+            logger.info("No features remaining - everything is done or deferred.")
         return None
 
     # Pick highest priority among ready features
     ready.sort(key=_priority_key)
     selected = ready[0]
     logger.info(
-        "Next feature: %s – %s (priority=%s)",
+        "Next feature: %s - %s (priority=%s)",
         selected["id"],
         selected["name"],
         selected.get("priority", "unknown"),

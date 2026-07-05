@@ -16,9 +16,9 @@ live-judge / Langfuse-backed evals, which are non-deterministic and would make t
 diff chase noise.
 
 Exit codes:
-    0 – no net-new findings (or ``--mode warn``)
-    1 – net-new findings detected (``--mode block``)
-    2 – configuration / tooling error
+    0 - no net-new findings (or ``--mode warn``)
+    1 - net-new findings detected (``--mode block``)
+    2 - configuration / tooling error
 """
 
 from __future__ import annotations

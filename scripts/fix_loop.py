@@ -27,7 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from eval_protected_paths import is_protected
+from scripts.eval_protected_paths import is_protected
 
 logger = logging.getLogger(__name__)
 

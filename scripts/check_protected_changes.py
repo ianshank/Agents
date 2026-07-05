@@ -15,9 +15,9 @@ Inputs are resolved dynamically so the script works locally and in CI:
                      ``--labels`` / ``$PR_LABELS`` (comma/space/JSON list)
 
 Exit codes:
-    0 – no protected paths changed, or change is approved
-    1 – protected paths changed without approval
-    2 – configuration error (could not determine the changed file set)
+    0 - no protected paths changed, or change is approved
+    1 - protected paths changed without approval
+    2 - configuration error (could not determine the changed file set)
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 
-from eval_protected_paths import matched_protected
+from eval_protected_paths import matched_protected  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 

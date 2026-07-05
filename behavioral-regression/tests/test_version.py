@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from behavioral_regression import version as v
+from behavioral_regression import version as v  # type: ignore[import-not-found]
 
 
 def test_migrate_noop_at_current_version():

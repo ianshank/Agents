@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from flow_protocol.version import (
+from flow_protocol.version import (  # type: ignore[import-not-found]
     MIGRATIONS,
     PROTOCOL_VERSION,
     __version__,

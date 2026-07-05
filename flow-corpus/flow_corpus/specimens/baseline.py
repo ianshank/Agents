@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 """Baseline single-agent specimen — the mandatory control.
 
 One policy query, reported verbatim. The simplest flow shape; every richer flow is

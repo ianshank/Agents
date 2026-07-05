@@ -5,10 +5,10 @@ import socket
 
 import pytest
 
-from behavioral_regression.config import BRConfig
-from behavioral_regression.generator import PairedResponse
-from behavioral_regression.judge import JVerdict
-from behavioral_regression.pipeline import run_pipeline
+from behavioral_regression.config import BRConfig  # type: ignore[import-not-found]
+from behavioral_regression.generator import PairedResponse  # type: ignore[import-not-found]
+from behavioral_regression.judge import JVerdict  # type: ignore[import-not-found]
+from behavioral_regression.pipeline import run_pipeline  # type: ignore[import-not-found]
 
 
 def test_byte_identical_for_same_seed():
@@ -20,7 +20,8 @@ def test_byte_identical_for_same_seed():
 
 def test_offline_guarantee(monkeypatch):
     # If the pipeline tried to touch the network this would raise; it must not.
-    def _boom(*a, **k):
+    def _boom(*args, **kwargs):
+        del args, kwargs
         raise AssertionError("network access attempted on the offline path")
 
     monkeypatch.setattr(socket, "socket", _boom)
@@ -31,6 +32,7 @@ def test_offline_guarantee(monkeypatch):
 def test_injected_judge_is_used():
     class AlwaysRegressed:
         def judge(self, pair: PairedResponse) -> JVerdict:
+            del pair
             return JVerdict(label=True, confidence=1.0)
 
     report = run_pipeline(BRConfig(n_pairs=80, power_min_sample=5), seed=4, judge=AlwaysRegressed())

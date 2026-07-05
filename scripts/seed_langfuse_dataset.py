@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import importlib
 import logging
 import os
 import sys
@@ -49,7 +50,7 @@ _TEST_ITEMS: list[dict[str, Any]] = [
 def seed_dataset(dataset_name: str) -> None:
     """Create dataset in Langfuse and populate with test items."""
     try:
-        from langfuse import Langfuse
+        Langfuse = getattr(importlib.import_module("langfuse"), "Langfuse")
     except ImportError:
         logger.error("langfuse package not installed. Run: pip install 'langfuse-eval-harness[langfuse]'")
         sys.exit(1)

@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import math
 
-from behavioral_regression.config import BRConfig
-from behavioral_regression.pipeline import run_pipeline
-from behavioral_regression.report import _num
+from behavioral_regression.config import BRConfig  # type: ignore[import-not-found]
+from behavioral_regression.pipeline import run_pipeline  # type: ignore[import-not-found]
+from behavioral_regression.report import _num  # type: ignore[import-not-found]
 
 
 def test_num_normalises_non_finite():

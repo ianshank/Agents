@@ -47,11 +47,13 @@ def parse_frontmatter(skill_md: str) -> tuple[dict[str, str] | None, int]:
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         if not line[0].isspace() and ":" in line:
-            key, val = line.split(":", 1)
-            key = key.strip()
-            fm[key] = val.strip()
-        elif key and line[0].isspace():           # folded continuation
-            fm[key] = (fm[key] + " " + line.strip()).strip()
+            raw_key, val = line.split(":", 1)
+            current_key = raw_key.strip()
+            key = current_key
+            fm[current_key] = val.strip()
+        elif key is not None and line[0].isspace():           # folded continuation
+            current_key = key
+            fm[current_key] = (fm[current_key] + " " + line.strip()).strip()
     return fm, nlines
 
 
@@ -253,8 +255,8 @@ def main() -> int:
         warns += w
     if "behavioral" in tiers:
         errs += check_behavioral(args.skill, args.evals, args.timeout)
-    for w in warns:
-        print(f"[warn] {w}")
+    for warn in warns:
+        print(f"[warn] {warn}")
     if errs:
         print("SKILL VALIDATION FAILED:\n  - " + "\n  - ".join(errs))
         return 1

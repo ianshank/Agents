@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import random
 
-from behavioral_regression.config import BRConfig
-from behavioral_regression.generator import PairedResponse
-from behavioral_regression.judge import JudgeProtocol, SyntheticJudge
+from behavioral_regression.config import BRConfig  # type: ignore[import-not-found]
+from behavioral_regression.generator import PairedResponse  # type: ignore[import-not-found]
+from behavioral_regression.judge import JudgeProtocol, SyntheticJudge  # type: ignore[import-not-found]
 
 
 def _pair(v1, v2):

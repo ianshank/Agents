@@ -14,12 +14,10 @@ from __future__ import annotations
 
 import random
 
-from flow_protocol import FlowResult
-
 from flow_corpus.policy.base import PolicyDecision
 from flow_corpus.suites.base import TaskInstance
 
-from ..specimens.base import SpecimenBase
+from ..specimens.base import FlowResult, SpecimenBase
 
 
 class _CanaryBase(SpecimenBase):

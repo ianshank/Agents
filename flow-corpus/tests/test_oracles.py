@@ -6,11 +6,11 @@ import random
 
 import pytest
 
-from flow_corpus.config import CorpusConfig
-from flow_corpus.oracles import PropertyOracle, validate_oracle
-from flow_corpus.policy import MockPolicy
-from flow_corpus.specimens import BaselineSpecimen
-from flow_corpus.suites.base import TaskInstance
+from flow_corpus.config import CorpusConfig  # type: ignore[import-not-found]
+from flow_corpus.oracles import PropertyOracle, validate_oracle  # type: ignore[import-not-found]
+from flow_corpus.policy import MockPolicy  # type: ignore[import-not-found]
+from flow_corpus.specimens import BaselineSpecimen  # type: ignore[import-not-found]
+from flow_corpus.suites.base import TaskInstance  # type: ignore[import-not-found]
 
 INSTANCE = TaskInstance(
     instance_id="t1",

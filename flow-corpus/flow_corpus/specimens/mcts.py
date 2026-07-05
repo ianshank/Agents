@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 """MCTS-style specimen — aggregate several policy rollouts by majority vote.
 
 Uncovered failure mode (vs the baseline control): *confidence inflation under
@@ -19,7 +20,7 @@ from flow_protocol import ConfidenceChannel, FlowResult
 from flow_corpus.policy.base import Policy
 from flow_corpus.suites.base import TaskInstance
 
-from .base import SpecimenBase
+from .base import SpecimenBase, copy_flow_result
 
 
 class MCTSSpecimen(SpecimenBase):
@@ -50,4 +51,4 @@ class MCTSSpecimen(SpecimenBase):
         vote_fraction = top / self.n_rollouts  # the aggregated (inflated) confidence
         channel = ConfidenceChannel(per_step=tuple(per_step)) if per_step else None
         result = self._result(instance, candidate, vote_fraction, seed=None)
-        return result.model_copy(update={"confidence_channel": channel})
+        return copy_flow_result(result, {"confidence_channel": channel})

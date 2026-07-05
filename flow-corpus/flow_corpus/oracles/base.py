@@ -7,11 +7,12 @@ case to the audit queue rather than feeding the gate a guess).
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
-
-from flow_protocol import FlowResult, OracleResult
+from typing import Any, Protocol, runtime_checkable
 
 from flow_corpus.suites.base import TaskInstance
+
+FlowResult = Any
+OracleResult = Any
 
 
 @runtime_checkable

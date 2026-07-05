@@ -47,10 +47,10 @@ def parse_frontmatter(skill_md: str) -> tuple[dict[str, str] | None, int]:
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         if not line[0].isspace() and ":" in line:
-            key, val = line.split(":", 1)
-            key = key.strip()
+            raw_key, val = line.split(":", 1)
+            key = raw_key.strip()
             fm[key] = val.strip()
-        elif key and line[0].isspace():           # folded continuation
+        elif key is not None and line and line[0].isspace() and key in fm:   # folded continuation
             fm[key] = (fm[key] + " " + line.strip()).strip()
     return fm, nlines
 
@@ -248,9 +248,9 @@ def main() -> int:
     errs: list[str] = []
     warns: list[str] = []
     if "structural" in tiers:
-        e, w = check_structural(args.skill, args.evals)
-        errs += e
-        warns += w
+        struct_errs, struct_warns = check_structural(args.skill, args.evals)
+        errs += struct_errs
+        warns += struct_warns
     if "behavioral" in tiers:
         errs += check_behavioral(args.skill, args.evals, args.timeout)
     for w in warns:

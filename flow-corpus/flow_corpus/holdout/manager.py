@@ -29,6 +29,22 @@ if TYPE_CHECKING:
     from flow_corpus.validation.runner import RunResult
 
 
+def _result_instance_id(result: object) -> str | None:
+    """Return the task/instance identifier from runner result shapes."""
+    for name in ("instance_id", "id"):
+        value = getattr(result, name, None)
+        if isinstance(value, str):
+            return value
+
+    task = getattr(result, "task", None)
+    for name in ("id", "instance_id"):
+        value = getattr(task, name, None)
+        if isinstance(value, str):
+            return value
+
+    return None
+
+
 @dataclass(frozen=True)
 class Sample:
     instance_id: str
@@ -47,15 +63,22 @@ class HoldoutReport:
 
 def samples_from_run(run: RunResult) -> list[Sample]:
     """Extract confidence-bearing, determinate samples from a RunResult."""
-    verdict_by_id = {o.instance_id: o.verdict for o in run.oracle_results}
+    verdict_by_id = {
+        instance_id: o.verdict
+        for o in run.oracle_results
+        if (instance_id := _result_instance_id(o)) is not None
+    }
     out: list[Sample] = []
     for fr in run.flow_results:
-        verdict = verdict_by_id.get(fr.instance_id)
+        instance_id = _result_instance_id(fr)
+        if instance_id is None:
+            continue
+        verdict = verdict_by_id.get(instance_id)
         if verdict is None or fr.raw_confidence is None:
             continue
         out.append(
             Sample(
-                instance_id=fr.instance_id,
+                instance_id=instance_id,
                 confidence=fr.raw_confidence,
                 outcome=1 if verdict else 0,
             )

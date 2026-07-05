@@ -1,12 +1,28 @@
 from __future__ import annotations
 
-from flow_corpus.oracles.kappa_gate import KappaReport
-from flow_corpus.validation.resampling import BootstrapCI
+from dataclasses import dataclass
 
-from behavioral_regression.canary import CanaryReport
-from behavioral_regression.config import BRConfig
-from behavioral_regression.detector import RegressionEstimate
-from behavioral_regression.gate import ShipDecision, decide_ship
+from behavioral_regression.canary import CanaryReport  # type: ignore[import-not-found]
+from behavioral_regression.config import BRConfig  # type: ignore[import-not-found]
+from behavioral_regression.detector import RegressionEstimate  # type: ignore[import-not-found]
+from behavioral_regression.gate import ShipDecision, decide_ship  # type: ignore[import-not-found]
+
+
+@dataclass(frozen=True)
+class BootstrapCI:
+    point: float
+    low: float
+    high: float
+    n_resamples: int
+
+
+@dataclass(frozen=True)
+class KappaReport:
+    kappa: float
+    n_codeterminate: int
+    n_total: int
+    directional_only: bool
+    may_gate: bool
 
 
 def _estimate(*, point, low, high, p_regression, cant_tell):

@@ -12,12 +12,13 @@ outcomes — the gate is never fed a guess.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from copy import copy
+from dataclasses import dataclass, is_dataclass, replace
+from typing import Any, Protocol, cast
 
 from agent_core.calibration import selective_risk_coverage
 from agent_core.logging_util import debug_span, get_logger
 from agent_core.outcome_store import OutcomeRecord
-from flow_protocol import FlowResult, OracleResult
 
 from flow_corpus.config import CorpusConfig
 from flow_corpus.oracles.base import Oracle
@@ -35,6 +36,38 @@ _MERGED_AT = "1970-01-01T00:00:00+00:00"  # corpus runs are synthetic; timestamp
 # agent_core's merge-gate store, build_domain_models / resolved() correctly exclude them from
 # the authoritative auto-merge calibration.
 _ORACLE_LABEL_SOURCE = "corpus_oracle"
+
+
+class FlowResult(Protocol):
+    @property
+    def raw_confidence(self) -> float | None: ...
+
+
+class OracleResult(Protocol):
+    verdict: bool | None
+
+
+def _with_run_seed(flow_result: FlowResult, seed: int) -> FlowResult:
+    model_copy = getattr(flow_result, "model_copy", None)
+    if callable(model_copy):
+        return cast(FlowResult, model_copy(update={"seed": seed}))
+
+    copy_method = getattr(flow_result, "copy", None)
+    if callable(copy_method):
+        try:
+            return cast(FlowResult, copy_method(update={"seed": seed}))
+        except TypeError:
+            pass
+
+    if is_dataclass(flow_result) and not isinstance(flow_result, type):
+        try:
+            return cast(FlowResult, replace(cast(Any, flow_result), seed=seed))
+        except (TypeError, ValueError):
+            pass
+
+    stamped = copy(flow_result)
+    setattr(stamped, "seed", seed)
+    return cast(FlowResult, stamped)
 
 
 @dataclass(frozen=True)
@@ -92,7 +125,7 @@ def run_suite(
         seed=seed,
     ):
         for instance in suite.instances:
-            fr = specimen.run(instance, rng).model_copy(update={"seed": seed})
+            fr = _with_run_seed(specimen.run(instance, rng), seed)
             verdict = oracle.judge(instance, fr)
             flow_results.append(fr)
             oracle_results.append(verdict)

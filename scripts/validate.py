@@ -6,13 +6,14 @@ cycle/missing-edge detection via DFS coloring (WHITE→GREY→BLACK), git ref
 verification, and tier-filtered validation_command execution.
 
 Exit codes:
-    0 – all checks passed
-    1 – one or more checks failed
-    2 – configuration / usage error
+    0 - all checks passed
+    1 - one or more checks failed
+    2 - configuration / usage error
 """
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import logging
 import subprocess
@@ -68,10 +69,10 @@ def _detect_cycles(
         colour[node] = _Colour.GREY
         for neighbour in adj.get(node, []):
             if neighbour not in colour:
-                # neighbour is not a known feature – skip (caught by missing-edge check)
+                # neighbour is not a known feature - skip (caught by missing-edge check)
                 continue
             if colour[neighbour] == _Colour.GREY:
-                # Back-edge → cycle found – reconstruct
+                # Back-edge -> cycle found - reconstruct
                 cycle = [neighbour, node]
                 cur = parent[node]
                 while cur is not None and cur != neighbour:
@@ -108,16 +109,16 @@ def _validate_schema(data: dict[str, Any], schema_path: Path) -> list[str]:
     """Validate *data* against *schema_path*. Returns list of error messages."""
     errors: list[str] = []
     if not schema_path.exists():
-        logger.warning("Schema file %s not found – skipping schema validation", schema_path)
+        logger.warning("Schema file %s not found - skipping schema validation", schema_path)
         return errors
 
     with schema_path.open("r", encoding="utf-8") as fh:
         schema = json.load(fh)
 
     try:
-        import jsonschema
+        jsonschema: Any = importlib.import_module("jsonschema")
     except ImportError:
-        logger.warning("jsonschema not installed – skipping schema validation")
+        logger.warning("jsonschema not installed - skipping schema validation")
         return errors
 
     validator = jsonschema.Draft202012Validator(schema)
@@ -245,7 +246,7 @@ def _run_validation_commands(
 def build_parser() -> argparse.ArgumentParser:
     """Build and return the CLI argument parser."""
     parser = argparse.ArgumentParser(
-        description="Validate features.yaml – schema, DAG, git refs, and commands.",
+        description="Validate features.yaml - schema, DAG, git refs, and commands.",
     )
     parser.add_argument(
         "--features",

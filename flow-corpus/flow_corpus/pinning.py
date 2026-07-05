@@ -9,9 +9,9 @@ population stats against an unexpected contract.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import import_module
 
 from agent_core.logging_util import get_logger
-from flow_protocol.version import PROTOCOL_VERSION
 
 from .version import HARNESS_VERSION_PIN, PROTOCOL_VERSION_PIN
 
@@ -44,11 +44,17 @@ def _live_harness_version() -> str:
     return str(harness_version)
 
 
+def _live_protocol_version() -> str:
+    """Live flow_protocol version (imported lazily to avoid static optional-import checks)."""
+    version_module = import_module("flow_protocol.version")
+    return str(getattr(version_module, "PROTOCOL_VERSION"))
+
+
 def check_pins() -> PinReport:
     """Return a :class:`PinReport` comparing pinned vs live versions (no raising)."""
     return PinReport(
         protocol_expected=PROTOCOL_VERSION_PIN,
-        protocol_actual=PROTOCOL_VERSION,
+        protocol_actual=_live_protocol_version(),
         harness_expected=HARNESS_VERSION_PIN,
         harness_actual=_live_harness_version(),
     )

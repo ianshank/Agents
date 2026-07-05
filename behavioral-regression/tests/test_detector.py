@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from behavioral_regression.config import BRConfig
-from behavioral_regression.detector import RegressionDetector, labelled_correctness
-from behavioral_regression.judge import JVerdict
+from behavioral_regression.config import BRConfig  # type: ignore[import-not-found]
+from behavioral_regression.detector import RegressionDetector, labelled_correctness  # type: ignore[import-not-found]
+from behavioral_regression.judge import JVerdict  # type: ignore[import-not-found]
 
 
 def _verdicts(labels, conf=0.8):
