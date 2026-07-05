@@ -60,8 +60,18 @@ EXCLUDED_DIR_NAMES = frozenset(
         ".mypy_cache",
         ".ruff_cache",
         ".pytest_cache",
+        # in-tree virtualenvs / tooling envs: scanning these wastes time and can raise
+        # spurious findings against third-party code that isn't project source.
+        ".venv",
+        "venv",
+        ".tox",
+        ".nox",
+        ".eggs",
     }
 )
+
+# Exit code for a configuration / usage error (matches the module docstring contract).
+EXIT_USAGE_ERROR = 2
 
 
 @dataclass(frozen=True)
@@ -82,8 +92,16 @@ def _repo_root() -> Path:
 
 
 def _is_excluded(path: Path, root: Path) -> bool:
-    """True when any path segment below *root* is an excluded directory name."""
-    return any(part in EXCLUDED_DIR_NAMES for part in path.relative_to(root).parts)
+    """True when any path segment below *root* is an excluded directory name.
+
+    A path outside *root* has no segments below it to exclude, so it is simply not
+    excluded — this keeps a ``--root`` pointed outside the repo from raising ``ValueError``.
+    """
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return False
+    return any(part in EXCLUDED_DIR_NAMES for part in relative.parts)
 
 
 def iter_source_files(roots: Iterable[Path], repo_root: Path) -> list[Path]:
@@ -198,7 +216,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     base = _repo_root()
     roots = [Path(r) for r in args.roots] if args.roots else None
-    findings = scan(roots, repo_root=base)
+    try:
+        findings = scan(roots, repo_root=base)
+    except (ValueError, OSError) as exc:
+        # A --root outside the repo (or an unreadable path) is a usage error, not a crash:
+        # honour the documented exit-2 contract with a readable message.
+        logger.error("cannot scan requested roots: %s", exc)
+        print(f"size-budget: usage error — {exc}", file=sys.stderr)
+        return EXIT_USAGE_ERROR
     hard_failures = [f for f in findings if f.hard]
 
     if args.json:

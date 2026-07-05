@@ -104,6 +104,21 @@ def test_excluded_dirs_are_skipped(tmp_path: Path) -> None:
     assert names == {"mod.py"}
 
 
+def test_in_tree_virtualenv_is_skipped(tmp_path: Path) -> None:
+    _write(tmp_path, "mod.py", "x = 1\n")
+    _write(tmp_path, ".venv/lib/site-packages/huge.py", _lines(sb.MAX_FILE_LINES + 50))
+    _write(tmp_path, "venv/also.py", "y = 2\n")
+    _write(tmp_path, ".tox/py/junk.py", "z = 3\n")
+    files = sb.iter_source_files([tmp_path], tmp_path)
+    assert [p.name for p in files] == ["mod.py"]
+
+
+def test_path_outside_root_is_not_excluded(tmp_path: Path) -> None:
+    # _is_excluded must not raise for a path that is not under root.
+    outside = tmp_path.parent / "elsewhere" / "x.py"
+    assert sb._is_excluded(outside, tmp_path) is False
+
+
 def test_iter_source_files_is_sorted_and_deduped(tmp_path: Path) -> None:
     _write(tmp_path, "b.py", "x = 1\n")
     _write(tmp_path, "a.py", "x = 1\n")
@@ -191,6 +206,18 @@ def test_default_root_scans_whole_repo(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(sb, "_repo_root", lambda: tmp_path)
     # No --root: falls back to _repo_root() for both scan base and roots.
     assert sb.main([]) == 0
+
+
+def test_root_outside_repo_returns_usage_error(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch) -> None:
+    """A --root that resolves outside the repo root is a usage error (exit 2), not a crash."""
+    repo = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    _write(repo, "keep.py", "x = 1\n")
+    _write(outside, "big.py", _lines(sb.MAX_FILE_LINES + 5))
+    monkeypatch.setattr(sb, "_repo_root", lambda: repo)
+    rc = sb.main(["--root", str(outside)])
+    assert rc == sb.EXIT_USAGE_ERROR
+    assert "usage error" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
