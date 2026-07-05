@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
+.venv-*/
 env/
 venv/
 .pytest_cache/
@@ -55,6 +56,12 @@ regression_report.json
 .regression_gate_junit.xml
 *.html
 !README.html
+
+# phoenix-live workflow — self-hosted Phoenix log (see .github/workflows/phoenix-live.yml).
+phoenix-server.log
+
+# Superpowers session artifacts (planning/spec scratch — never committed).
+docs/superpowers/
 
 # Calibrated merge gate runtime artifacts (F-010, F-032…F-035 / ADR 0018).
 # The authoritative store lives on the merge-gate-data branch; these are
