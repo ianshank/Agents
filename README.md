@@ -137,6 +137,14 @@ python scripts/check_protected_changes.py --base-ref origin/main
   (`scripts/.coveragerc`) in `eval-harness-ci.yml`; `scripts/validations/F_031.py` asserts the
   enforcement itself cannot silently regress. Baseline and rationale:
   [docs/gap-analysis-2026-07.md](docs/gap-analysis-2026-07.md).
+- **Live Phoenix validation (opt-in)** — `.github/workflows/phoenix-live.yml`
+  (`workflow_dispatch`, `timeout-minutes: 20`) validates the reversible Phoenix spike
+  end-to-end on a networked runner: a `dep-resolve` dry-run job surfaces the
+  `pyarrow>=14,<20` vs `arize-phoenix-evals` (`pandas`/`numpy`) constraint without
+  installing, and a `live` job boots pinned `arize-phoenix==17.18.0` via `phoenix serve`
+  and runs `tests/test_phoenix_live.py` against the real OTLP collector plus the Phoenix
+  evals judge. See [`docs/phoenix-spike.md`](docs/phoenix-spike.md) for the reversible-
+  adoption pattern.
 
 The regression gate and protected-path guard run in
 `.github/workflows/quality-gates.yml`. The auto-fix loop (`F-008`) is disabled and is
@@ -156,17 +164,21 @@ snyk monitor --file=requirements.txt --package-manager=pip --skip-unresolved
 
 ```
 src/eval_harness/
-  config/          versioned models, migrations, env-interpolating loader
-  core/            types, interfaces, generic registry
-  scorers/         exact_match, regex_match, contains, json_keys, llm_judge
-  datasets/        inline, jsonl, langfuse
-  targets/         echo, callable (dynamic import)
-  sinks/           console, json_file, langfuse
-  judges/          mock (deterministic), openai (Nemotron/GPT), bedrock
-  langfuse_client/ interface + null + SDK adapter
-  gating/          config-driven quality gate
-  engine.py        orchestration
-  cli.py           entry point
+  config/            versioned models, migrations, env-interpolating loader
+  core/              types, interfaces, generic registry
+  scorers/           exact_match, regex_match, contains, json_keys, llm_judge, weighted
+  datasets/          inline, jsonl, langfuse
+  targets/           echo, callable (dynamic import)
+  sinks/             console, json_file, html_file, langfuse, phoenix
+  judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
+                     phoenix_evals, budgeted (wraps another judge with a cost cap)
+  langfuse_client/   Langfuse tracing + score export (SDK-optional seam)
+  phoenix_client/    Phoenix tracing + score export (SDK-optional seam; mirrors
+                     langfuse_client — see docs/phoenix-spike.md)
+  agent_core_adapter/  agent_core bridge (BudgetLedger, calibration surface)
+  gating/            config-driven quality gate
+  engine.py          orchestration
+  cli.py             entry point
 
 scripts/
   .coveragerc             operational-scripts coverage gate (>=85%, F-031)
@@ -184,7 +196,12 @@ scripts/
   validations/            per-feature validation scripts (F_0NN.py)
 
 skills/
-  openai-judge/     skill: OpenAI-compatible LLM judge evaluation
+  marketplace.yaml          registry of local skills (schema in marketplace.schema.json)
+  openai-judge/             OpenAI-compatible LLM judge evaluation
+  architecture-drift-guard/ import-graph → C4 drift detector + mermaid freshness gate
+  eval-corpus-forge/        synthetic-corpus construction and validation
+  model-bench/              model benchmark orchestration
+
 
 docs/
   c4_architecture.md  C4 context/container/component diagrams

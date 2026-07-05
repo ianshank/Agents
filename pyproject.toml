@@ -88,6 +88,15 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
 
+# Known limitation: when phoenix-evals is installed alongside dev, its transitive
+# numpy 2.5+ dependency uses Python 3.12 `type` statement syntax in its stubs, and
+# mypy under python_version = "3.10" cannot parse them. mypy `follow_imports` in
+# `[[tool.mypy.overrides]]` does NOT skip stub parsing, so a per-module override
+# can't fix this. eval-harness-ci.yml's test job intentionally does not install
+# phoenix-evals (`pip install -e ".[dev,langfuse,openai,parquet]"`), so mypy stays
+# green in CI. For local mypy runs with the full extras, either pin the mypy venv
+# to CI's install set or bump python_version to 3.12 (revisit after 3.10 EOL).
+
 [tool.coverage.run]
 branch = true
 source = ["eval_harness"]

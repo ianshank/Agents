@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
+.venv-*/
 env/
 venv/
 *.egg-info/
@@ -55,6 +56,7 @@ regression_report.json
 !README.html
 merge_outcomes.jsonl
 merge_decisions.jsonl
+phoenix-server.log
 
 # Docs (not needed in container)
 docs/

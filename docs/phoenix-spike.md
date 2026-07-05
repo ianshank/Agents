@@ -51,8 +51,10 @@ sinks:
 ```bash
 pip install -e '.[phoenix]'            # tracing + OpenInference instrumentors
 
-# Self-hosted Phoenix as a separate process (pin the tag — do not use :latest):
-PHOENIX_IMAGE="arizephoenix/phoenix:<pin-a-release>"   # see hub.docker.com/r/arizephoenix/phoenix/tags
+# Self-hosted Phoenix as a separate process. Pin the tag; do not use :latest.
+# The `phoenix-live` workflow uses arize-phoenix==17.18.0 — keep pip and Docker aligned.
+# Check hub.docker.com/r/arizephoenix/phoenix/tags for a newer stable release before bumping.
+PHOENIX_IMAGE="arizephoenix/phoenix:17.18.0"
 docker run -p 6006:6006 "$PHOENIX_IMAGE"               # SQLite by default; Postgres via PHOENIX_SQL_DATABASE_URL
 
 export PHOENIX_COLLECTOR_ENDPOINT="http://localhost:6006"
@@ -105,6 +107,22 @@ coverage offline; the no-op / ImportError fallbacks run for real.
 pytest tests/test_phoenix_config.py tests/test_phoenix_tracing.py \
        tests/test_phoenix_sink.py tests/test_phoenix_cli.py -q
 ```
+
+## Live validation (networked runner)
+
+The pieces that can't run in the air-gapped suite are covered by opt-in artifacts:
+
+- **`tests/test_phoenix_live.py`** — `@pytest.mark.integration` tests that self-skip unless the
+  `[phoenix]` / `[phoenix-evals]` extras are installed **and** `PHOENIX_COLLECTOR_ENDPOINT` /
+  `OPENAI_API_KEY` are set. They run for real against a live Phoenix + model.
+- **`.github/workflows/phoenix-live.yml`** — `workflow_dispatch` (manual). Job `dep-resolve` runs the
+  dependency dry-run (Item 2); job `live` starts a self-hosted Phoenix via `phoenix serve` and runs the
+  live tracing + evals tests (Items 1 & 3). Add an `OPENAI_API_KEY` repo secret, then run it from the
+  Actions tab.
+
+**Item 4 — full e2e suite.** The Phoenix-specific e2e angle is covered by the `phoenix-live`
+workflow above. The broader end-to-end suite that also exercises live Langfuse + judge
+providers is tracked separately; see `NEXT_STEPS.md` for its current state.
 
 ## Rollback
 

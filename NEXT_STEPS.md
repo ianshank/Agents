@@ -2,6 +2,16 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Live Phoenix validation (opt-in)** — `.github/workflows/phoenix-live.yml`
+  (`workflow_dispatch`) validates the reversible Phoenix spike end-to-end on a
+  networked runner: `dep-resolve` runs `pip install '.[phoenix,phoenix-evals,parquet]'
+  --dry-run` to confirm pandas/numpy vs the `pyarrow>=14,<20` pin, then `live` boots
+  `arize-phoenix==17.18.0` via `phoenix serve` and runs `tests/test_phoenix_live.py`
+  against the real OTLP collector + Phoenix evals judge. Both jobs have
+  `timeout-minutes: 20`; all mutable identifiers (project name, span name, judge
+  name, eval model) are env-driven with defaults. Offline suite unaffected (the
+  seam degrades to a no-op when the SDK is absent). Rollback: see
+  `docs/phoenix-spike.md`.
 - [x] **Real-data activation (F-032…F-035, ADR 0018)** — the calibrated merge gate now
   runs on real data: the outcome store persists on the `merge-gate-data` branch
   (`agent_core.store_sync`, F-032), a daily labeller resolves matured records with

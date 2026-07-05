@@ -1,0 +1,68 @@
+name: phoenix-live (opt-in)
+
+# Manually triggered: needs network egress to PyPI and an OPENAI_API_KEY secret, so it
+# is deliberately NOT part of the offline PR gate. It validates the Phoenix spike
+# end-to-end on a networked runner — dependency resolution, live tracing, and the live
+# evals judge — the pieces that cannot run in the air-gapped suite.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phoenix-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dep-resolve:
+    name: dependency dry-run (evals vs parquet pin)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip "setuptools>=68"
+      # Item 2 — surface pandas/numpy vs the pyarrow>=14,<20 pin WITHOUT installing.
+      - name: Resolve [phoenix,phoenix-evals,parquet] (dry-run)
+        run: pip install -e ".[phoenix,phoenix-evals,parquet]" --dry-run
+
+  live:
+    name: live tracing + evals judge
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: dep-resolve
+    env:
+      # OTLP HTTP path — phoenix.otel.register() accepts the full URL; being explicit
+      # avoids relying on the SDK's URL-composition heuristic.
+      PHOENIX_COLLECTOR_ENDPOINT: http://localhost:6006/v1/traces
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip "setuptools>=68"
+      - run: pip install -e "./agent-core"
+      # Extras under test + the Phoenix server itself (pinned; matches the Docker image
+      # tag used by the runbook so the OTLP surface behaves identically).
+      - run: pip install -e ".[dev,openai,phoenix,phoenix-evals]" arize-phoenix==17.18.0
+      - name: Start self-hosted Phoenix
+        run: |
+          nohup phoenix serve > phoenix-server.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -sf "$PHOENIX_COLLECTOR_ENDPOINT" >/dev/null && { echo "Phoenix is up"; break; }
+            sleep 2
+          done
+      # Items 1 & 3 — live integration tests (each skips itself if its secret is absent).
+      - name: Live Phoenix integration tests
+        run: python -m pytest tests/test_phoenix_live.py -v -rs
+      - name: Phoenix server log (debug)
+        if: always()
+        run: tail -n 50 phoenix-server.log || true
