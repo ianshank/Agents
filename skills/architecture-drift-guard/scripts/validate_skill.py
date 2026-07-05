@@ -183,6 +183,66 @@ def grade(
     return res(False, f"unknown assertion type {t!r}")
 
 
+def _exec(cmd: str, skill_dir: str, timeout: int) -> subprocess.CompletedProcess[str] | None:
+    """Run one shell command in *skill_dir*; return the process, or None on timeout."""
+    try:
+        return subprocess.run(
+            cmd,
+            shell=True,
+            cwd=skill_dir,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+
+
+def _validate_eval_shape(eid: str, asserts: list[Any], has_run: bool, errs: list[str]) -> bool:
+    """Structural checks on one eval. Returns False only when it must be skipped."""
+    if not asserts:
+        errs.append(f"eval {eid}: no assertions")
+        return False
+    if not (has_run or any(a.get("type") == "command_exit_zero" for a in asserts)):
+        errs.append(f"eval {eid}: executes nothing (needs a 'run' or a command_exit_zero assertion)")
+    if not any(a.get("type") in BEHAVIORAL_TYPES for a in asserts):
+        errs.append(f"eval {eid}: only existence checks — add a behavioral assertion")
+    return True
+
+
+def _run_one_eval(ev: dict[str, Any], skill_dir: str, timeout: int, errs: list[str]) -> dict[str, Any] | None:
+    """Execute setup+run and grade one eval. Returns its result record, or None if skipped."""
+    eid = ev.get("id", "?")
+    asserts = ev.get("assertions", [])
+    has_run = bool(ev.get("run"))
+    if not _validate_eval_shape(eid, asserts, has_run, errs):
+        return None
+    if ev.get("setup"):
+        sp = _exec(ev["setup"], skill_dir, timeout)
+        if sp is None:
+            errs.append(f"eval {eid}: setup timed out after {timeout}s")
+            return None
+        if sp.returncode != 0:
+            detail = (sp.stdout + sp.stderr).strip()[:500]
+            errs.append(f"eval {eid}: setup failed (exit {sp.returncode}): {detail}")
+            return None
+    run_rc, run_out = 0, ""
+    if has_run:
+        r = _exec(ev["run"], skill_dir, timeout)
+        if r is None:
+            run_rc, run_out = 124, f"[timeout after {timeout}s]"
+            errs.append(f"eval {eid}: run timed out after {timeout}s")
+        else:
+            run_rc, run_out = r.returncode, (r.stdout + r.stderr)
+    graded = [grade(a, run_rc, run_out, has_run, skill_dir, timeout) for a in asserts]
+    for g in graded:
+        if not g["passed"]:
+            errs.append(f"eval {eid}: {g['text']} — {g['evidence']}")
+    return {"eval_id": eid, "prompt": ev.get("prompt", ""), "expectations": graded}
+
+
 def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]:
     errs: list[str] = []
     results: list[dict[str, Any]] = []
@@ -194,63 +254,9 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work, exist_ok=True)
     for ev in spec.get("evals", []):
-        eid = ev.get("id", "?")
-        asserts = ev.get("assertions", [])
-        has_run = bool(ev.get("run"))
-        if not asserts:
-            errs.append(f"eval {eid}: no assertions")
-            continue
-        if not (has_run or any(a.get("type") == "command_exit_zero" for a in asserts)):
-            errs.append(f"eval {eid}: executes nothing (needs a 'run' or a command_exit_zero assertion)")
-        if not any(a.get("type") in BEHAVIORAL_TYPES for a in asserts):
-            errs.append(f"eval {eid}: only existence checks — add a behavioral assertion")
-        if ev.get("setup"):
-            try:
-                sp = subprocess.run(
-                    ev["setup"],
-                    shell=True,
-                    cwd=skill_dir,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=timeout,
-                )
-            except subprocess.TimeoutExpired:
-                errs.append(f"eval {eid}: setup timed out after {timeout}s")
-                continue
-            if sp.returncode != 0:
-                detail = (sp.stdout + sp.stderr).strip()[:500]
-                errs.append(f"eval {eid}: setup failed (exit {sp.returncode}): {detail}")
-                continue
-        run_rc, run_out = 0, ""
-        if has_run:
-            try:
-                r = subprocess.run(
-                    ev["run"],
-                    shell=True,
-                    cwd=skill_dir,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=timeout,
-                )
-                run_rc, run_out = r.returncode, (r.stdout + r.stderr)
-            except subprocess.TimeoutExpired:
-                run_rc, run_out = 124, f"[timeout after {timeout}s]"
-                errs.append(f"eval {eid}: run timed out after {timeout}s")
-        graded = [grade(a, run_rc, run_out, has_run, skill_dir, timeout) for a in asserts]
-        for g in graded:
-            if not g["passed"]:
-                errs.append(f"eval {eid}: {g['text']} — {g['evidence']}")
-        results.append(
-            {
-                "eval_id": eid,
-                "prompt": ev.get("prompt", ""),
-                "expectations": graded,
-            }
-        )
+        record = _run_one_eval(ev, skill_dir, timeout, errs)
+        if record is not None:
+            results.append(record)
     with open(os.path.join(work, "grading.json"), "w", encoding="utf-8") as f:
         json.dump({"results": results}, f, indent=2)
     return errs
