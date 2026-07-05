@@ -18,6 +18,7 @@ jobs:
   dep-resolve:
     name: dependency dry-run (evals vs parquet pin)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
@@ -33,9 +34,12 @@ jobs:
   live:
     name: live tracing + evals judge
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: dep-resolve
     env:
-      PHOENIX_COLLECTOR_ENDPOINT: http://localhost:6006
+      # OTLP HTTP path — phoenix.otel.register() accepts the full URL; being explicit
+      # avoids relying on the SDK's URL-composition heuristic.
+      PHOENIX_COLLECTOR_ENDPOINT: http://localhost:6006/v1/traces
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -46,8 +50,9 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install --upgrade pip "setuptools>=68"
       - run: pip install -e "./agent-core"
-      # Extras under test + the Phoenix server itself (provides the `phoenix serve` CLI).
-      - run: pip install -e ".[dev,openai,phoenix,phoenix-evals]" arize-phoenix
+      # Extras under test + the Phoenix server itself (pinned; matches the Docker image
+      # tag used by the runbook so the OTLP surface behaves identically).
+      - run: pip install -e ".[dev,openai,phoenix,phoenix-evals]" arize-phoenix==17.18.0
       - name: Start self-hosted Phoenix
         run: |
           nohup phoenix serve > phoenix-server.log 2>&1 &
