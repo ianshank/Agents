@@ -12,14 +12,24 @@ prompt never breaks evaluation — it degrades to the inline ``text``.
 from __future__ import annotations
 
 import logging
-
-from .config.models import PromptSourceConfig
-from .langfuse_client import LangfuseClient
+from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
 
-def resolve_prompt(spec: PromptSourceConfig, client: LangfuseClient | None) -> str | None:
+class PromptSource(Protocol):
+    source: str
+    text: str | None
+    name: str | None
+    version: int | None
+    label: str | None
+
+
+class PromptClient(Protocol):
+    def get_prompt(self, name: str, version: int | None = None, label: str | None = None) -> str | None: ...
+
+
+def resolve_prompt(spec: PromptSource, client: PromptClient | None) -> str | None:
     """Return the system prompt for ``spec``, or ``None`` if nothing resolves.
 
     * ``source='yaml'`` -> the inline ``text``.

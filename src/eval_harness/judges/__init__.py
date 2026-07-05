@@ -53,7 +53,7 @@ class BedrockJudge(Judge):  # pragma: no cover - requires boto3 + network
         score_field: str = "score",
     ):
         try:
-            import boto3
+            import boto3  # type: ignore[import-untyped]
         except ImportError as exc:
             raise RuntimeError(
                 "BedrockJudge requires boto3. Install with: pip install 'langfuse-eval-harness[bedrock]'"
@@ -213,7 +213,7 @@ class OpenAIJudge(Judge):
 
         if isinstance(client, SDKLangfuseClient):
             try:
-                from langfuse.openai import OpenAI as LFOpenAI
+                from langfuse.openai import OpenAI as LFOpenAI  # type: ignore[import-not-found]
 
                 self.client = LFOpenAI(
                     base_url=str(self.client.base_url) if self.client.base_url else None, api_key=self.client.api_key
@@ -322,7 +322,7 @@ class PhoenixEvalJudge(Judge):
         choices: dict[str, float] | None = None,
     ):
         try:
-            from phoenix.evals import LLM, ClassificationEvaluator
+            from phoenix.evals import LLM, ClassificationEvaluator  # type: ignore[import-not-found]
         except ImportError as exc:
             raise RuntimeError(
                 "PhoenixEvalJudge requires arize-phoenix-evals. "

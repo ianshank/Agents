@@ -17,9 +17,9 @@ from __future__ import annotations
 
 import html as _html
 from dataclasses import dataclass
+from typing import Any
 
 from ._formatting import _fmt
-from .config.models import ComparisonConfig, EvalConfig
 from .core.types import RunResult
 from .langfuse_client import LangfuseClient
 
@@ -109,8 +109,8 @@ def _score_names(runs: list[tuple[str, RunResult]]) -> list[str]:
 
 
 def run_comparison(
-    config: EvalConfig,
-    comparison: ComparisonConfig | None = None,
+    config: Any,
+    comparison: Any | None = None,
     *,
     langfuse_client: LangfuseClient | None = None,
 ) -> ComparisonResult:
@@ -121,7 +121,7 @@ def run_comparison(
     """
     from .engine import EvalEngine
 
-    comp = comparison if comparison is not None else config.comparison
+    comp = comparison if comparison is not None else getattr(config, "comparison", None)
     if comp is None:
         raise ValueError("run_comparison requires a comparison config (config.comparison or arg)")
 

@@ -55,9 +55,7 @@ def _install_fake_phoenix_evals(monkeypatch, evaluator) -> None:
 
 
 def _judge(model="m", **params):
-    from eval_harness.judges import PhoenixEvalJudge
-
-    return PhoenixEvalJudge(model=model, **params)
+    return JUDGES.create("phoenix_evals", {"model": model, **params})
 
 
 def test_phoenix_eval_judge_is_registered() -> None:
@@ -65,10 +63,8 @@ def test_phoenix_eval_judge_is_registered() -> None:
 
 
 def test_construct_without_sdk_raises_clear_install_error() -> None:
-    from eval_harness.judges import PhoenixEvalJudge
-
     with pytest.raises(RuntimeError, match="phoenix-evals"):
-        PhoenixEvalJudge(model="m")  # arize-phoenix-evals genuinely absent here
+        JUDGES.create("phoenix_evals", {"model": "m"})  # arize-phoenix-evals genuinely absent here
 
 
 def test_evaluate_maps_label_score_explanation_to_verdict(monkeypatch) -> None:

@@ -49,6 +49,7 @@ desktop.ini
 .benchmarks/
 
 # Generated reports
+artifacts/
 out/
 results/
 regression_report.json

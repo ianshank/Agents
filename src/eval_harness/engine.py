@@ -14,6 +14,8 @@ import uuid
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
+from importlib import import_module
+from typing import Any, cast
 
 from .config.models import EvalConfig
 from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
@@ -98,10 +100,11 @@ class EvalEngine:
             # F-026: resolve the judge system prompt from Langfuse (or YAML fallback)
             # and inject it as the judge's `system` param. Additive — absent
             # judge_prompt leaves params untouched.
-            if config.judge_prompt is not None:
+            judge_prompt = getattr(config, "judge_prompt", None)
+            if judge_prompt is not None:
                 from .prompts import resolve_prompt
 
-                resolved = resolve_prompt(config.judge_prompt, langfuse_client)
+                resolved = resolve_prompt(judge_prompt, cast(Any, langfuse_client))
                 if resolved is not None:
                     judge_params = {**judge_params, "system": resolved}
             judge = JUDGES.create(config.judge.type, judge_params)
@@ -115,10 +118,13 @@ class EvalEngine:
 
         # Wrap the judge with a cost cap when enabled (F-022). Imported lazily so
         # the offline path never pulls in agent_core unless budgeting is on.
-        if judge is not None and config.judge_budget is not None and config.judge_budget.enabled:
-            from .agent_core_adapter import build_budgeted_judge
-
-            judge = build_budgeted_judge(judge, config.judge_budget)
+        judge_budget = getattr(config, "judge_budget", None)
+        if judge is not None and judge_budget is not None and judge_budget.enabled:
+            adapter = import_module("eval_harness.agent_core_adapter")
+            build_budgeted_judge = getattr(adapter, "build_budgeted_judge", None)
+            if build_budgeted_judge is None:  # pragma: no cover - defensive compatibility guard
+                raise RuntimeError("eval_harness.agent_core_adapter.build_budgeted_judge is unavailable")
+            judge = build_budgeted_judge(judge, judge_budget)
 
         engine = cls(
             config,

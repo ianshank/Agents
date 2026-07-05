@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
@@ -16,20 +17,22 @@ from eval_harness.version import SCHEMA_VERSION
 _ITEMS = [{"id": "1", "inputs": {"a": "x", "b": "y"}, "expected": "x"}]
 
 
-def _config(**comparison) -> EvalConfig:
-    return EvalConfig(
-        schema_version=SCHEMA_VERSION,
-        run={"name": "cmp"},
-        dataset={"type": "inline", "params": {"items": _ITEMS}},
-        target={"type": "echo", "params": {}},  # overridden per-model
-        scorers=[{"type": "exact_match", "params": {}}],
-        comparison={
+def _config(**comparison: Any) -> EvalConfig:
+    return EvalConfig.model_validate(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "run": {"name": "cmp"},
+            "dataset": {"type": "inline", "params": {"items": _ITEMS}},
+            "target": {"type": "echo", "params": {}},  # overridden per-model
+            "scorers": [{"type": "exact_match", "params": {}}],
+            "comparison": {
             "models": [
                 {"name": "good", "target": {"type": "echo", "params": {"output_key": "a"}}},
                 {"name": "bad", "target": {"type": "echo", "params": {"output_key": "b"}}},
             ],
             **comparison,
-        },
+            },
+        }
     )
 
 
