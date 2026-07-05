@@ -46,6 +46,26 @@ def _read(rel_path: str) -> str:
         return fh.read()
 
 
+def _read_store_sync_impl() -> str:
+    """Concatenated source of the ``agent_core.store_sync`` implementation.
+
+    The seam was refactored from a single ``store_sync.py`` module into a
+    ``store_sync/`` package (models / serialization / store / git_sync / CLI)
+    to stay under the file-size budget. The load-bearing pieces this gate
+    checks for still exist — they just live in submodules now — so the check
+    reads every module in the package and greps the union.
+    """
+    pkg_dir = os.path.join(_ROOT, "agent-core", "agent_core", "store_sync")
+    if os.path.isfile(pkg_dir + ".py"):  # tolerate the pre-refactor single-module layout
+        return _read(os.path.join("agent-core", "agent_core", "store_sync.py"))
+    parts = [
+        _read(os.path.join("agent-core", "agent_core", "store_sync", name))
+        for name in sorted(os.listdir(pkg_dir))
+        if name.endswith(".py")
+    ]
+    return "\n".join(parts)
+
+
 def _workflow_triggers(text: str) -> set[str]:
     """Trigger names of a workflow file (yaml 'on:' keys; parses True as 'on')."""
     doc = yaml.safe_load(text)
@@ -61,7 +81,7 @@ def validate_f032() -> int:
     configure_logging()
     errors: list[str] = []
 
-    module = _read(os.path.join("agent-core", "agent_core", "store_sync.py"))
+    module = _read_store_sync_impl()
     for needle, why in [
         ("class StoreSyncConfig", "config dataclass exists"),
         ("def merge_records", "canonical merge exists"),
@@ -70,7 +90,7 @@ def validate_f032() -> int:
         ("[skip ci]", "data-branch commits skip CI"),
         ("FETCH_HEAD", "fetch-gated FETCH_HEAD read exists"),
     ]:
-        _check(needle in module, f"store_sync.py: {why}", errors)
+        _check(needle in module, f"store_sync: {why}", errors)
 
     _check(
         os.path.exists(os.path.join(_ROOT, "agent-core", "tests", "test_store_sync.py")),

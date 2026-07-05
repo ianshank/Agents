@@ -34,7 +34,7 @@ markers = [
 [tool.coverage.run]
 branch = true
 source = ["agent_core"]
-omit = ["agent_core/__init__.py"]
+omit = ["agent_core/__init__.py", "agent_core/store_sync/__main__.py"]
 
 [tool.coverage.report]
 show_missing = true
