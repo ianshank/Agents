@@ -20,9 +20,18 @@ try:
     def _wmi_query_disabled(*_args, **_kwargs):
         raise OSError("WMI disabled by e2e harness (query hangs on this host)")
 
-    # Only patch if the hanging symbol exists (Python >= 3.12 on Windows).
+    # Only patch if the hanging symbol exists (Python >= 3.12 on Windows). If a
+    # future CPython renames/removes it, leave a stderr breadcrumb so a returning
+    # startup hang is diagnosable instead of silently un-shimmed.
     if hasattr(platform, "_wmi_query"):
         platform._wmi_query = _wmi_query_disabled  # type: ignore[attr-defined]
+    else:
+        import sys
+
+        print(
+            "sitecustomize(e2e_shims): platform._wmi_query not found; WMI shim inactive",
+            file=sys.stderr,
+        )
 except Exception:
     # Never let the shim break interpreter startup.
     pass

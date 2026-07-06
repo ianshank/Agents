@@ -124,17 +124,21 @@ def check_structural(skill_dir: str, evals_path: str) -> tuple[list[str], list[s
 def _run_eval(cmd: str, cwd: str, timeout: int) -> subprocess.CompletedProcess[str]:
     """Execute an eval command portably on the native shell.
 
-    Eval commands write ``python`` to mean *this* interpreter, so a standalone
-    ``python`` token is rewritten to ``sys.executable`` — evals then run in the
-    validator's own environment instead of whatever ``python`` a PATH lookup finds
-    (on Windows that is often a different interpreter without the skill's deps).
+    Eval commands write ``python`` (or ``python3``) to mean *this* interpreter, so a
+    standalone interpreter token is rewritten to ``sys.executable`` — evals then run
+    in the validator's own environment instead of whatever ``python`` a PATH lookup
+    finds (on Windows that is often a different interpreter without the skill's deps).
     The command runs through ``shell=True`` (``cmd.exe`` on Windows, ``/bin/sh``
     elsewhere); eval authors keep commands to constructs both shells accept (no
     ``/dev/null``/``test``/pipes) — see the cross-platform one-liner idiom in the
     skills' ``evals.json``.
     """
     exe = f'"{sys.executable}"' if os.name == "nt" else shlex.quote(sys.executable)
-    prepared = re.sub(r"\bpython\b", lambda _m: exe, cmd)
+    # Match a bare ``python``/``python3`` *word*, not a substring: the lookarounds
+    # exclude a preceding path/word char and a following ``.``/word char, so
+    # ``python.exe``, ``/usr/bin/python``, and ``mypython`` are left untouched while
+    # ``python3`` (the default command on many POSIX systems) is rewritten too.
+    prepared = re.sub(r"(?<![\w./\\])python3?(?![\w.])", lambda _m: exe, cmd)
     return subprocess.run(
         prepared,
         shell=True,

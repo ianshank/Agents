@@ -51,8 +51,13 @@ Set-StrictMode -Version Latest
 # ---------------------------------------------------------------------------
 $RepoRoot = Split-Path -Parent $PSScriptRoot            # scripts/ -> repo root
 Set-Location $RepoRoot
-$Py = Join-Path $RepoRoot '.venv\Scripts\python.exe'
-if (-not (Test-Path $Py)) { throw "venv python not found at $Py (expected a provisioned .venv)" }
+# Resolve the venv interpreter for whichever OS PowerShell is running on:
+# Windows layout (.venv\Scripts\python.exe) or POSIX layout (.venv/bin/python).
+$Py = @(
+    (Join-Path $RepoRoot '.venv\Scripts\python.exe'),
+    (Join-Path $RepoRoot '.venv/bin/python')
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $Py) { throw "venv python not found under $RepoRoot\.venv (expected a provisioned .venv)" }
 
 $Report = Join-Path $RepoRoot 'artifacts\e2e-report'
 if (Test-Path $Report) { Remove-Item -Recurse -Force $Report }
@@ -82,7 +87,7 @@ $env:PYTHONUTF8 = '1'
 
 # ---------------------------------------------------------------------------
 # .env loader (BOM-safe). IMPORTANT: .env holds live endpoints/keys (Langfuse,
-# Phoenix). We must NOT inject them into the offline tiers — several SDK-optional
+# Phoenix). We must NOT inject them into the offline tiers -- several SDK-optional
 # tests assert failsafe behaviour when no endpoint is configured, and a live
 # PHOENIX_COLLECTOR_ENDPOINT would make them try to reach localhost:6006. So we
 # parse .env into a table now and only apply it just before Tier D.
@@ -173,9 +178,17 @@ function Invoke-Py {
         return $LASTEXITCODE
     } -ArgumentList $Py, $PyArgs, $WorkDir, $log, $env:PYTHONPATH, $env:HYPOTHESIS_PROFILE, $env:OUT_DIR
     if (Wait-Job $job -Timeout $TimeoutSec) {
-        $code = Receive-Job $job
+        # Receive-Job returns everything the job wrote to the success stream. The
+        # exit code is the scriptblock's final `return`, so it is the last value on
+        # the stream; take the last int-parseable item so any stray host/profile
+        # output from the child session cannot crash the [int] cast.
+        $out = @(Receive-Job $job)
         Remove-Job $job -Force
-        return [int]$code
+        for ($i = $out.Count - 1; $i -ge 0; $i--) {
+            $n = $out[$i] -as [int]
+            if ($null -ne $n) { return $n }
+        }
+        return 1   # no exit code captured -> treat as a failure, not a pass
     }
     Stop-Job $job; Remove-Job $job -Force
     return $script:TimeoutExit
