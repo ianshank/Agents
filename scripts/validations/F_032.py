@@ -62,10 +62,13 @@ def _read_store_sync_impl() -> str:
         # Neither the module nor the package exists (partial checkout / future refactor):
         # return empty so the needle checks fail cleanly via _check, not with a crash.
         return ""
+    # Only read regular *.py files: a directory/symlink with a .py suffix, or a file that
+    # vanishes during a partial checkout, must not crash _read — the needle checks should
+    # still fail cleanly via _check.
     parts = [
         _read(os.path.join("agent-core", "agent_core", "store_sync", name))
         for name in sorted(os.listdir(pkg_dir))
-        if name.endswith(".py")
+        if name.endswith(".py") and os.path.isfile(os.path.join(pkg_dir, name))
     ]
     return "\n".join(parts)
 

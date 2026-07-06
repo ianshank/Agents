@@ -90,6 +90,14 @@ def test_unparseable_file_is_skipped_not_crashed(tmp_path: Path) -> None:
     assert sb.scan_file(path, tmp_path) == []
 
 
+def test_non_utf8_file_does_not_crash_the_scan(tmp_path: Path) -> None:
+    # A CI gate must survive an undecodable byte instead of raising UnicodeDecodeError.
+    path = tmp_path / "latin1.py"
+    path.write_bytes(b"x = '\xff\xfe'\n")  # invalid UTF-8
+    findings = sb.scan_file(path, tmp_path)  # must not raise
+    assert isinstance(findings, list)
+
+
 # ---------------------------------------------------------------------------
 # exclusion + discovery
 # ---------------------------------------------------------------------------
