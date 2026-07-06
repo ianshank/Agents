@@ -28,6 +28,7 @@ from agent_core.store_sync import (
     UNPARSED_STATS_KEY,
     StoreSyncConfig,
     SyncStatus,
+    _commit_store,
     _run,
     canonical_key,
     main,
@@ -64,6 +65,21 @@ def _rec(
 def _cfg(clone: Path, **kw: object) -> StoreSyncConfig:
     kw.setdefault("backoff_base_s", 0.0)
     return StoreSyncConfig(repo_dir=str(clone), **kw)  # type: ignore[arg-type]
+
+
+def test_committed_store_is_readable_by_filename_no_crlf(tmp_path):
+    r"""Regression (Windows CRLF): the git runner used ``text=True``, so stdin ``\n``
+    was translated to ``\r\n`` — a ``git mktree`` line's trailing ``\n`` became ``\r\n``
+    and the tree entry name became ``<name>\r``. ``git show <commit>:<name>`` then never
+    found the store file, so every fresh-clone pull read an empty store. The byte-oriented
+    runner keeps ``\n`` as ``\n``; the file is retrievable by its plain name on all platforms.
+    """
+    _git(tmp_path, "init", "-q")
+    cfg = _cfg(tmp_path)
+    commit = _commit_store(cfg, None, "hello\n", "tester", _run)
+    shown = _run(["git", "-C", str(tmp_path), "show", f"{commit}:{cfg.store_filename}"], 10)
+    assert shown.returncode == 0, shown.stderr
+    assert shown.stdout == "hello\n"
 
 
 # --- config validation ---------------------------------------------------------

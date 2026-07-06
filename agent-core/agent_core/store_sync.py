@@ -94,16 +94,32 @@ def _run(
     args: Sequence[str], timeout: float, input_text: str | None = None
 ) -> subprocess.CompletedProcess[str]:
     """Fail-safe runner (detectors idiom, plus stdin support for git plumbing):
-    a missing binary or a timeout becomes a non-zero result, never an exception."""
+    a missing binary or a timeout becomes a non-zero result, never an exception.
+
+    Byte-oriented on purpose: text mode (``text=True``) would translate ``\\n`` to
+    ``\\r\\n`` on Windows when writing stdin, corrupting git plumbing input — e.g. a
+    ``mktree`` line ``... blob <sha>\\t<name>\\n`` becomes ``...\\r\\n``, so the tree
+    entry name ends up as ``<name>\\r`` and a later ``git show <tip>:<name>`` cannot
+    find it. We therefore encode stdin and decode stdout/stderr as UTF-8 ourselves so
+    ``\\n`` stays ``\\n`` on every platform."""
     argv = list(args)
     try:
-        return subprocess.run(
-            argv, capture_output=True, text=True, timeout=timeout, input=input_text
+        proc = subprocess.run(
+            argv,
+            capture_output=True,
+            timeout=timeout,
+            input=input_text.encode("utf-8") if input_text is not None else None,
         )
     except FileNotFoundError:
         return subprocess.CompletedProcess(argv, _RC_NOT_FOUND, "", "executable not found")
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(argv, _RC_TIMED_OUT, "", "timed out")
+    return subprocess.CompletedProcess(
+        argv,
+        proc.returncode,
+        proc.stdout.decode("utf-8", "replace"),
+        proc.stderr.decode("utf-8", "replace"),
+    )
 
 
 @dataclass(frozen=True)

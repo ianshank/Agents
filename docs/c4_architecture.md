@@ -266,6 +266,12 @@ flowchart TB
     FIX[fix_loop.py<br/>DESIGN-ONLY / DISABLED] -.->|ScopeGuard blocks protected writes| MATCH
 ```
 
+These CI gates run per-file/per-package. For a local, whole-repo pass, `scripts/run_all_e2e.ps1`
+is a **test orchestrator** (not a runtime component — it adds no edges to the import graph above):
+it runs every package suite, every `features.yaml` functionality gate (Tier B calls `validate.py`),
+every package CLI journey, the skill/hook e2e tests, and credential-gated live integrations, and
+aggregates one report under `artifacts/e2e-report/`. See [e2e-runbook.md](e2e-runbook.md).
+
 ## Data Flow
 
 ```mermaid

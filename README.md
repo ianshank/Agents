@@ -92,6 +92,23 @@ mypy src/eval_harness/
 mypy scripts/
 ```
 
+### End-to-end / user-journey harness
+
+To exercise **everything** at once — every package suite, every `features.yaml` functionality
+gate, every package CLI journey, the skill/hook e2e tests, and (credential-gated) live
+integrations — run the one-command orchestrator and read the aggregated report from
+`artifacts/e2e-report/`:
+
+```powershell
+pwsh scripts/run_all_e2e.ps1 -Tiers offline   # A–C, no network/credentials
+pwsh scripts/run_all_e2e.ps1 -Tiers all       # + live tiers when creds are present
+```
+
+The sibling packages are made importable via `PYTHONPATH` (no install needed), and on this
+Windows host a `scripts/e2e_shims/sitecustomize.py` neutralizes a hanging `platform` WMI call
+that would otherwise wedge every pytest run. See [docs/e2e-runbook.md](docs/e2e-runbook.md)
+for tiers, flags, credentials, and how to read the report.
+
 Every package and skill enforces a **≥95% branch-coverage floor** (the root harness gate is
 96%; the quality-gate tooling stays at 85% — its `git worktree`/subprocess paths are
 impractical to cover further, see
@@ -181,13 +198,19 @@ scripts/
   check_protected_changes.py   CI guard: flags protected changes lacking approval
   check_skill_script_drift.py  CI guard: vendored skill scripts == canonical copy
   fix_loop.py             auto-fix loop scaffolding (DESIGN-ONLY, disabled)
+  run_all_e2e.ps1         one-command e2e/user-journey harness (all tiers -> artifacts/e2e-report/)
+  e2e_shims/              sitecustomize.py: neutralizes the Windows platform-WMI hang for pytest
   validations/            per-feature validation scripts (F_0NN.py)
 
 skills/
-  openai-judge/     skill: OpenAI-compatible LLM judge evaluation
+  openai-judge/            skill: OpenAI-compatible LLM judge evaluation
+  architecture-drift-guard/ skill: import-graph -> C4 drift + freshness gate
+  eval-corpus-forge/       skill: eval-corpus construction
+  model-bench/             skill: multi-model comparison / A-B campaigns
 
 docs/
   c4_architecture.md  C4 context/container/component diagrams
+  e2e-runbook.md      how to run and read the one-command e2e harness
   decisions/          Architecture Decision Records (ADRs)
   gap-analysis-2026-07.md  measured lint/type/coverage baseline + remediation record
   plans/              cross-repo planning docs (claude-foundation plugin plan + review)

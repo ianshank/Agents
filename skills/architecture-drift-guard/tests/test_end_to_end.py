@@ -26,7 +26,10 @@ def _run(script, *args):
 
 
 def _manifest(tmp_path, *, fixture_sub, pkg, dependencies: str) -> str:
-    src_dir = os.path.join(FIXTURES, fixture_sub)
+    # Forward slashes: this path is embedded in a YAML double-quoted scalar, where a
+    # Windows backslash path (C:\Users\...) is parsed as invalid escape sequences.
+    # Forward slashes are valid YAML and accepted on sys.path on every platform.
+    src_dir = os.path.join(FIXTURES, fixture_sub).replace("\\", "/")
     body = textwrap.dedent(
         f"""
         schema_version: "1.0.0"

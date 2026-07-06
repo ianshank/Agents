@@ -22,6 +22,10 @@ htmlcov/
 .skill-validation/
 grading.json
 
+# Import-graph & property-test caches
+.grimp_cache/
+.hypothesis/
+
 # IDE
 .vscode/
 .idea/
@@ -49,6 +53,7 @@ desktop.ini
 # Generated output
 out/
 results/
+artifacts/
 regression_report.json
 .regression_gate_junit.xml
 *.html

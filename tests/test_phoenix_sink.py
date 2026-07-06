@@ -96,7 +96,10 @@ def test_build_score_client_returns_null_when_disabled() -> None:
     assert isinstance(build_score_client(enabled=False), NullPhoenixScoreClient)
 
 
-def test_build_score_client_falls_back_to_null_without_sdk(caplog) -> None:
+def test_build_score_client_falls_back_to_null_without_sdk(monkeypatch, caplog) -> None:
+    # Simulate the SDK being absent (hermetic even with the phoenix extra installed):
+    # a None entry forces the lazy `from phoenix.otel import register` to ImportError.
+    monkeypatch.setitem(sys.modules, "phoenix.otel", None)
     with caplog.at_level(logging.WARNING):
         client = build_score_client(enabled=True)  # phoenix absent → warn + no-op
     assert isinstance(client, NullPhoenixScoreClient)

@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Tooling — one-command E2E / user-journey harness
+- **`scripts/run_all_e2e.ps1` + `docs/e2e-runbook.md`:** a single orchestrator that runs
+  every test across the monorepo and writes an aggregated report to `artifacts/e2e-report/`
+  (per-suite JUnit XML + `summary.json`/`summary.md`). Tiers: (A) all package pytest suites
+  with their coverage floors; (B) every `features.yaml` functionality gate via
+  `scripts/validate.py`; (C) user-journey CLIs (`eval-harness run/compare/campaign/list-plugins`,
+  `bregress`, `agent_core.merge_gate_ci`, `skill_marketplace.py`) plus the skill/hook
+  `*_e2e`/`test_end_to_end` tests; (D) credential-gated live integrations (Langfuse/Phoenix
+  smokes + live judge/sink journeys, skipped cleanly when creds are absent). A pre-flight import
+  guard and a per-suite "> 0 tests collected" assertion prevent a mis-set `PYTHONPATH` from
+  reporting a vacuous green run.
+
+### Fixed — Windows / cross-platform portability
+- **`agent_core.store_sync`:** the git-plumbing runner used `text=True`, so on Windows
+  stdin `\n` was CRLF-translated — a `git mktree` line's trailing `\n` became `\r\n` and the
+  tree entry name became `<file>\r`, breaking every push/pull round-trip. The runner is now
+  byte-oriented (UTF-8 encode/decode), so `\n` stays `\n` on all platforms.
+- **`foundation_tools.validate`:** findings emitted OS-native `\` path separators; now
+  `.as_posix()` so findings are deterministic (forward slashes) across platforms.
+- **`skills/architecture-drift-guard` e2e test:** the generated manifest embedded a Windows
+  `\` path inside a YAML double-quoted scalar (invalid escape sequences); it now uses forward
+  slashes.
+- **Phoenix optional-dependency tests** (`tests/test_phoenix_{tracing,sink,eval_judge}.py`):
+  the "SDK-absent failsafe" tests assumed the extra was uninstalled and failed in an
+  all-extras environment; they are now hermetic via `sys.modules[...] = None` injection (the
+  repo's established idiom), so they exercise the failsafe path in any environment.
+- **`claude-foundation` symlink test:** skips cleanly when the host lacks the symlink privilege
+  (Windows without Developer Mode, `WinError 1314`) instead of erroring.
+- **`scripts/validate_skill.py`** (canonical + all 4 drift-guarded skill copies): eval commands
+  ran bare `python`, which on Windows resolved to a non-venv interpreter without the skill's
+  dependencies. The runner now rewrites a standalone `python` token to `sys.executable`; the
+  three POSIX-only `command_exit_zero` evals in `architecture-drift-guard/evals/evals.json`
+  were rewritten as cross-platform python one-liners (no `/dev/null`, `test $? -eq 1`, or pipes).
+
 ### Hardening
 - **Real-data activation gap-analysis round (F-032…F-035):** post-implementation
   adversarial review + CI-parity battery fixed three defects before merge: reader

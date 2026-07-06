@@ -43,7 +43,7 @@ def check_manifests(root: Path) -> list[str]:
     manifest_dir = root / ".claude-plugin"
     plugin_path = manifest_dir / "plugin.json"
     if not plugin_path.exists():
-        return [f"{plugin_path.relative_to(root)}: missing plugin manifest"]
+        return [f"{plugin_path.relative_to(root).as_posix()}: missing plugin manifest"]
 
     plugin_name = None
     try:
@@ -83,7 +83,7 @@ def check_skills(root: Path) -> list[str]:
     if not skills_dir.is_dir():
         return errors
     for skill_dir in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
-        rel = skill_dir.relative_to(root)
+        rel = skill_dir.relative_to(root).as_posix()
         skill_md = skill_dir / "SKILL.md"
         if not skill_md.exists():
             errors.append(f"{rel}: missing SKILL.md")
@@ -123,7 +123,7 @@ def check_agents(root: Path) -> list[str]:
     if not agents_dir.is_dir():
         return errors
     for agent_md in sorted(agents_dir.rglob("*.md")):
-        rel = agent_md.relative_to(root)
+        rel = agent_md.relative_to(root).as_posix()
         try:
             front, _ = load_frontmatter(agent_md)
             fm = AgentFrontmatter.model_validate(front)
