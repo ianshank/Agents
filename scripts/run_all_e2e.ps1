@@ -51,15 +51,20 @@ Set-StrictMode -Version Latest
 # ---------------------------------------------------------------------------
 $RepoRoot = Split-Path -Parent $PSScriptRoot            # scripts/ -> repo root
 Set-Location $RepoRoot
-# Resolve the venv interpreter for whichever OS PowerShell is running on:
-# Windows layout (.venv\Scripts\python.exe) or POSIX layout (.venv/bin/python).
-$Py = @(
-    (Join-Path $RepoRoot '.venv\Scripts\python.exe'),
-    (Join-Path $RepoRoot '.venv/bin/python')
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $Py) { throw "venv python not found under $RepoRoot\.venv (expected a provisioned .venv)" }
+# Multi-segment paths are built with [IO.Path]::Combine so the native separator is
+# used on whichever OS PowerShell runs on (embedding '\' in a leaf would become a
+# literal char on POSIX). Combine works on both Windows PowerShell 5.1 and pwsh 7
+# (Join-Path's 3+ segment form does not exist before PS 6).
 
-$Report = Join-Path $RepoRoot 'artifacts\e2e-report'
+# Resolve the venv interpreter for whichever OS PowerShell is running on:
+# Windows layout (.venv/Scripts/python.exe) or POSIX layout (.venv/bin/python).
+$Py = @(
+    [System.IO.Path]::Combine($RepoRoot, '.venv', 'Scripts', 'python.exe'),
+    [System.IO.Path]::Combine($RepoRoot, '.venv', 'bin', 'python')
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $Py) { throw "venv python not found under $RepoRoot/.venv (expected a provisioned .venv)" }
+
+$Report = [System.IO.Path]::Combine($RepoRoot, 'artifacts', 'e2e-report')
 if (Test-Path $Report) { Remove-Item -Recurse -Force $Report }
 New-Item -ItemType Directory -Force -Path $Report | Out-Null
 $Fixtures = Join-Path $Report 'fixtures'
@@ -71,16 +76,17 @@ New-Item -ItemType Directory -Force -Path $Fixtures | Out-Null
 #    without this every pytest suite wedges before collecting a single test).
 #  - sibling packages: NOT installed, made importable here. Order matters
 #    (behavioral_regression imports agent_core/flow_corpus at module load); note
-#    claude-foundation exposes `foundation_tools` under tools\.
+#    claude-foundation exposes `foundation_tools` under tools/.
 $PkgPaths = @(
-    (Join-Path $RepoRoot 'scripts\e2e_shims'),
+    [System.IO.Path]::Combine($RepoRoot, 'scripts', 'e2e_shims'),
     (Join-Path $RepoRoot 'flow-protocol'),
     (Join-Path $RepoRoot 'flow-corpus'),
     (Join-Path $RepoRoot 'behavioral-regression'),
-    (Join-Path $RepoRoot 'claude-foundation\tools'),
+    [System.IO.Path]::Combine($RepoRoot, 'claude-foundation', 'tools'),
     (Join-Path $RepoRoot 'agent-core')
 )
-$env:PYTHONPATH = ($PkgPaths -join ';')
+# Native path-list separator: ';' on Windows, ':' on POSIX.
+$env:PYTHONPATH = ($PkgPaths -join [System.IO.Path]::PathSeparator)
 $env:HYPOTHESIS_PROFILE = $HypothesisProfile
 $env:OUT_DIR = $Report          # keep run-journey artifacts inside the report dir
 $env:PYTHONUTF8 = '1'
@@ -491,8 +497,9 @@ gate: { rules: [] }
 # ===========================================================================
 if ($IncludeEnterprise) {
     Write-Host "`n== Tier E: Enterprise live integration suite ==" -ForegroundColor Cyan
-    $entDir = Join-Path (Split-Path -Parent $RepoRoot) 'Enterprise\files\langfuse-eval-harness\langfuse-eval-harness'
-    $entTests = Join-Path $entDir 'tests\integration'
+    $entDir = [System.IO.Path]::Combine(
+        (Split-Path -Parent $RepoRoot), 'Enterprise', 'files', 'langfuse-eval-harness', 'langfuse-eval-harness')
+    $entTests = [System.IO.Path]::Combine($entDir, 'tests', 'integration')
     if (Test-Path $entTests) {
         $entXml = Join-Path $Report 'enterprise.xml'
         Invoke-PytestStep 'E' 'enterprise:integration' `
