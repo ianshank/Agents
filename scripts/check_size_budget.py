@@ -128,7 +128,7 @@ def _public_method_count(node: ast.ClassDef) -> int:
     Deduplicated by name so ``@overload`` stubs and property getter/setter/deleter trios
     (each a separate ``FunctionDef`` with the same name) count once, not several times.
     """
-    methods = (child for child in node.body if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef))
+    methods = (child for child in node.body if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)))
     return len({m.name for m in methods if not m.name.startswith("_")})
 
 
@@ -155,7 +155,7 @@ def scan_file(path: Path, repo_root: Path) -> list[Finding]:
         return findings
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             span = _node_line_span(node)
             if span > MAX_FUNCTION_LINES:
                 findings.append(Finding("function_lines", rel, node.name, span, MAX_FUNCTION_LINES, hard=False))
