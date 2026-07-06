@@ -26,11 +26,11 @@ def _config(**comparison: Any) -> EvalConfig:
             "target": {"type": "echo", "params": {}},  # overridden per-model
             "scorers": [{"type": "exact_match", "params": {}}],
             "comparison": {
-            "models": [
-                {"name": "good", "target": {"type": "echo", "params": {"output_key": "a"}}},
-                {"name": "bad", "target": {"type": "echo", "params": {"output_key": "b"}}},
-            ],
-            **comparison,
+                "models": [
+                    {"name": "good", "target": {"type": "echo", "params": {"output_key": "a"}}},
+                    {"name": "bad", "target": {"type": "echo", "params": {"output_key": "b"}}},
+                ],
+                **comparison,
             },
         }
     )

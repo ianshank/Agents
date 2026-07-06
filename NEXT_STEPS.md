@@ -2,6 +2,17 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **One-command E2E / user-journey harness + Windows portability** —
+  `scripts/run_all_e2e.ps1` (+ `docs/e2e-runbook.md`) runs every package suite, every
+  `features.yaml` gate, every package CLI journey, and the skill/hook e2e tests in one
+  command, with credential-gated live-integration tiers. Shaking the whole tree out on
+  Windows surfaced and fixed six cross-platform defects (byte-oriented `store_sync` git
+  plumbing; `foundation_tools` posix-path findings; a YAML-escaped path in the drift e2e
+  test; hermetic Phoenix optional-dependency tests; a symlink test that skips without the
+  privilege; and `validate_skill.py` running evals under the venv interpreter with
+  cross-platform eval commands). Baseline offline result: **20 pass / 0 fail**. See the
+  CHANGELOG "Windows / cross-platform portability" entry. Follow-ups: wire the harness into a
+  nightly CI job, and pin the eval-corpus-forge golden values so they match on Windows too.
 - [x] **Live Phoenix validation (opt-in)** — `.github/workflows/phoenix-live.yml`
   (`workflow_dispatch`) validates the reversible Phoenix spike end-to-end on a
   networked runner: `dep-resolve` runs `pip install '.[phoenix,phoenix-evals,parquet]'

@@ -45,8 +45,11 @@ def test_configure_tracing_returns_none_when_tracing_off() -> None:
 # -- configure_tracing: fail-safe (never breaks an eval run) -----------------
 
 
-def test_configure_tracing_without_sdk_is_failsafe(caplog) -> None:
-    # phoenix is genuinely absent → ImportError path → warn + None, no exception.
+def test_configure_tracing_without_sdk_is_failsafe(monkeypatch, caplog) -> None:
+    # Simulate the SDK being absent so this is hermetic even when the phoenix extra
+    # is installed: a None entry in sys.modules forces the lazy
+    # `from phoenix.otel import register` to raise ImportError → warn + None, no exception.
+    monkeypatch.setitem(sys.modules, "phoenix.otel", None)
     with caplog.at_level(logging.WARNING):
         result = configure_tracing(PhoenixConfig(enabled=True))
     assert result is None
