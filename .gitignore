@@ -12,6 +12,10 @@ venv/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+# Tooling env / build caches (also excluded by scripts/check_size_budget.py).
+.tox/
+.nox/
+.eggs/
 *.egg-info/
 dist/
 build/

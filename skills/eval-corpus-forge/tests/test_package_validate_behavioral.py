@@ -183,6 +183,21 @@ def test_tool_order_lost_detected(tmp_path):
     assert not passed and "behavioral.tool_order_lost" in _checks(errors)
 
 
+def test_unhashable_scenario_id_in_tool_view_does_not_crash(tmp_path):
+    # A malformed tool_invocation_eval row carrying a list (unhashable) scenario_id must not
+    # crash the canonical-trace lookup: by_id is keyed by _key(...), so the lookup uses it too.
+    out = str(tmp_path / "pkg")
+    _build(out)
+    _rewrite_jsonl(
+        os.path.join(out, "views", "tool_invocation_eval.jsonl"),
+        [{"scenario_id": ["not", "hashable"], "tool_names": ["a"], "tool_invocation_order": ["a"]}],
+    )
+    passed, errors = validate_package(out)  # must not raise TypeError
+    assert not passed
+    # The malformed row is surfaced as a validation error (unknown scenario), not a crash.
+    assert "structural.view_dangling" in _checks(errors)
+
+
 def test_ground_truth_not_separate_detected(tmp_path):
     out = str(tmp_path / "pkg")
     _canonicals, gt, _vd = _build(out)

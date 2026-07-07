@@ -56,7 +56,15 @@ jobs:
       - run: mypy src/eval_harness
       - run: mypy scripts
       - run: mypy tests
-      - run: python -m pytest --cov --cov-report=term-missing
+      - run: python -m pytest --cov --cov-report=term-missing --cov-report=html
+      # Publish the browsable HTML coverage report (one matrix leg is enough).
+      - name: Upload HTML coverage report
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: coverage-html
+          path: htmlcov/
+          if-no-files-found: ignore
       # Operational scripts carry their own coverage gate (validations/F_* gates are
       # one-shot CI checks executed via features.yaml, not unit-test targets).
       - run: python -m pytest tests --cov=scripts --cov-config=scripts/.coveragerc --cov-report=term-missing

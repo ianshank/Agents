@@ -34,7 +34,7 @@ markers = [
 [tool.coverage.run]
 branch = true
 source = ["agent_core"]
-omit = ["agent_core/__init__.py"]
+omit = ["agent_core/__init__.py", "agent_core/store_sync/__main__.py"]
 
 [tool.coverage.report]
 show_missing = true
@@ -52,7 +52,12 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
+# C901 enforces the project's cyclomatic-complexity budget (< 15) via mccabe below.
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "C901"]
+
+[tool.ruff.lint.mccabe]
+# max-complexity is the highest ALLOWED value, so 14 fails anything >= 15.
+max-complexity = 14
 
 [tool.ruff.lint.per-file-ignores]
 # Tests use throwaway data where explicit-strict zip adds nothing.

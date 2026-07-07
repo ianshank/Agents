@@ -64,10 +64,16 @@ def load_evals(skill_dir: str, evals_path: str, errs: list[str]) -> dict[str, An
         return None
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f)  # type: ignore[no-any-return]
+            data = json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         errs.append(f"cannot parse {evals_path}: {e}")
         return None
+    # Valid JSON of the wrong shape (e.g. a top-level list) must surface as a readable
+    # structural error, not crash a later ``spec.get(...)`` with an AttributeError.
+    if not isinstance(data, dict):
+        errs.append(f"{evals_path} must be a JSON object, got {type(data).__name__}")
+        return None
+    return data
 
 
 def first_path_token(cmd: str) -> str | None:
@@ -75,6 +81,53 @@ def first_path_token(cmd: str) -> str | None:
         if "/" in tok and not tok.startswith("-"):
             return tok
     return None
+
+
+def _check_name(name: str, skill_dir: str, errs: list[str], warns: list[str]) -> None:
+    """Validate the frontmatter ``name``: presence, casing, and dir agreement."""
+    if not name or "{{" in name:
+        errs.append(f"frontmatter 'name' missing or placeholder: {name!r}")
+        return
+    if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name):
+        warns.append(f"name {name!r} isn't lowercase-hyphen; some loaders require that")
+    dirbase = os.path.basename(os.path.abspath(skill_dir))
+    if dirbase != name:
+        warns.append(f"dir '{dirbase}' != skill name '{name}'")
+
+
+def _check_description(desc: str, errs: list[str], warns: list[str]) -> None:
+    """Validate the frontmatter ``description``: presence, length, trigger cue."""
+    if not desc or "{{" in desc:
+        errs.append("frontmatter 'description' missing or placeholder (it is the only trigger signal)")
+        return
+    if len(desc) < 40:
+        warns.append("description very short; triggering will be weak")
+    if not re.search(r"\b(use|when|whenever)\b", desc, re.I):
+        warns.append("description lacks a 'when to use' cue; add a trigger phrase")
+
+
+def _eval_entries(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """The dict entries under ``evals``.
+
+    A non-list ``evals`` value or non-dict entries are dropped so a malformed (but
+    valid-JSON) evals file degrades to a readable ``no evals`` outcome instead of
+    crashing a later ``ev.get(...)`` with an ``AttributeError``.
+    """
+    evals = spec.get("evals", [])
+    if not isinstance(evals, list):
+        return []
+    return [ev for ev in evals if isinstance(ev, dict)]
+
+
+def _check_eval_file_refs(skill_dir: str, spec: dict[str, Any], warns: list[str]) -> None:
+    """Warn when an eval's ``run``/``setup`` references a script/bin file that is absent."""
+    for ev in _eval_entries(spec):
+        for key in ("run", "setup"):
+            cmd = ev.get(key)
+            if cmd:
+                tok = first_path_token(cmd)
+                if tok and tok.split("/")[0] in ("scripts", "bin") and not os.path.exists(os.path.join(skill_dir, tok)):
+                    warns.append(f"eval {ev.get('id', '?')}: {key} references missing file {tok}")
 
 
 def check_structural(skill_dir: str, evals_path: str) -> tuple[list[str], list[str]]:
@@ -86,38 +139,13 @@ def check_structural(skill_dir: str, evals_path: str) -> tuple[list[str], list[s
     fm, nlines = parse_frontmatter(skill_md)
     if fm is None:
         return ["SKILL.md has no YAML frontmatter (--- ... ---)"], []
-    name = fm.get("name", "")
-    desc = fm.get("description", "")
-    if not name or "{{" in name:
-        errs.append(f"frontmatter 'name' missing or placeholder: {name!r}")
-    else:
-        if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name):
-            warns.append(f"name {name!r} isn't lowercase-hyphen; some loaders require that")
-        dirbase = os.path.basename(os.path.abspath(skill_dir))
-        if dirbase != name:
-            warns.append(f"dir '{dirbase}' != skill name '{name}'")
-    if not desc or "{{" in desc:
-        errs.append("frontmatter 'description' missing or placeholder (it is the only trigger signal)")
-    else:
-        if len(desc) < 40:
-            warns.append("description very short; triggering will be weak")
-        if not re.search(r"\b(use|when|whenever)\b", desc, re.I):
-            warns.append("description lacks a 'when to use' cue; add a trigger phrase")
+    _check_name(fm.get("name", ""), skill_dir, errs, warns)
+    _check_description(fm.get("description", ""), errs, warns)
     if nlines > 500:
         warns.append(f"SKILL.md is {nlines} lines (>500); move detail into references/")
     spec = load_evals(skill_dir, evals_path, errs)  # missing evals.json is fine at this tier
     if spec:
-        for ev in spec.get("evals", []):
-            for key in ("run", "setup"):
-                cmd = ev.get(key)
-                if cmd:
-                    tok = first_path_token(cmd)
-                    if (
-                        tok
-                        and tok.split("/")[0] in ("scripts", "bin")
-                        and not os.path.exists(os.path.join(skill_dir, tok))
-                    ):
-                        warns.append(f"eval {ev.get('id', '?')}: {key} references missing file {tok}")
+        _check_eval_file_refs(skill_dir, spec, warns)
     return errs, warns
 
 
@@ -197,6 +225,62 @@ def grade(
     return res(False, f"unknown assertion type {t!r}")
 
 
+def _exec(cmd: str, skill_dir: str, timeout: int) -> subprocess.CompletedProcess[str] | None:
+    """Run one eval command in *skill_dir*; return the process, or None on timeout.
+
+    Delegates to :func:`_run_eval` for the portable execution (``sys.executable`` rewrite,
+    ``stdin=DEVNULL``) and adapts its ``TimeoutExpired`` into the ``None`` sentinel the
+    single-eval flow below uses.
+    """
+    try:
+        return _run_eval(cmd, skill_dir, timeout)
+    except subprocess.TimeoutExpired:
+        return None
+
+
+def _validate_eval_shape(eid: str, asserts: list[Any], has_run: bool, errs: list[str]) -> bool:
+    """Structural checks on one eval. Returns False only when it must be skipped."""
+    if not asserts:
+        errs.append(f"eval {eid}: no assertions")
+        return False
+    if not (has_run or any(a.get("type") == "command_exit_zero" for a in asserts)):
+        errs.append(f"eval {eid}: executes nothing (needs a 'run' or a command_exit_zero assertion)")
+    if not any(a.get("type") in BEHAVIORAL_TYPES for a in asserts):
+        errs.append(f"eval {eid}: only existence checks — add a behavioral assertion")
+    return True
+
+
+def _run_one_eval(ev: dict[str, Any], skill_dir: str, timeout: int, errs: list[str]) -> dict[str, Any] | None:
+    """Execute setup+run and grade one eval. Returns its result record, or None if skipped."""
+    eid = ev.get("id", "?")
+    asserts = ev.get("assertions", [])
+    has_run = bool(ev.get("run"))
+    if not _validate_eval_shape(eid, asserts, has_run, errs):
+        return None
+    if ev.get("setup"):
+        sp = _exec(ev["setup"], skill_dir, timeout)
+        if sp is None:
+            errs.append(f"eval {eid}: setup timed out after {timeout}s")
+            return None
+        if sp.returncode != 0:
+            detail = (sp.stdout + sp.stderr).strip()[:500]
+            errs.append(f"eval {eid}: setup failed (exit {sp.returncode}): {detail}")
+            return None
+    run_rc, run_out = 0, ""
+    if has_run:
+        r = _exec(ev["run"], skill_dir, timeout)
+        if r is None:
+            run_rc, run_out = 124, f"[timeout after {timeout}s]"
+            errs.append(f"eval {eid}: run timed out after {timeout}s")
+        else:
+            run_rc, run_out = r.returncode, (r.stdout + r.stderr)
+    graded = [grade(a, run_rc, run_out, has_run, skill_dir, timeout) for a in asserts]
+    for g in graded:
+        if not g["passed"]:
+            errs.append(f"eval {eid}: {g['text']} — {g['evidence']}")
+    return {"eval_id": eid, "prompt": ev.get("prompt", ""), "expectations": graded}
+
+
 def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]:
     errs: list[str] = []
     results: list[dict[str, Any]] = []
@@ -207,46 +291,10 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
     work = os.path.join(skill_dir, WORKDIR)
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work, exist_ok=True)
-    for ev in spec.get("evals", []):
-        eid = ev.get("id", "?")
-        asserts = ev.get("assertions", [])
-        has_run = bool(ev.get("run"))
-        if not asserts:
-            errs.append(f"eval {eid}: no assertions")
-            continue
-        if not (has_run or any(a.get("type") == "command_exit_zero" for a in asserts)):
-            errs.append(f"eval {eid}: executes nothing (needs a 'run' or a command_exit_zero assertion)")
-        if not any(a.get("type") in BEHAVIORAL_TYPES for a in asserts):
-            errs.append(f"eval {eid}: only existence checks — add a behavioral assertion")
-        if ev.get("setup"):
-            try:
-                sp = _run_eval(ev["setup"], skill_dir, timeout)
-            except subprocess.TimeoutExpired:
-                errs.append(f"eval {eid}: setup timed out after {timeout}s")
-                continue
-            if sp.returncode != 0:
-                detail = (sp.stdout + sp.stderr).strip()[:500]
-                errs.append(f"eval {eid}: setup failed (exit {sp.returncode}): {detail}")
-                continue
-        run_rc, run_out = 0, ""
-        if has_run:
-            try:
-                r = _run_eval(ev["run"], skill_dir, timeout)
-                run_rc, run_out = r.returncode, (r.stdout + r.stderr)
-            except subprocess.TimeoutExpired:
-                run_rc, run_out = 124, f"[timeout after {timeout}s]"
-                errs.append(f"eval {eid}: run timed out after {timeout}s")
-        graded = [grade(a, run_rc, run_out, has_run, skill_dir, timeout) for a in asserts]
-        for g in graded:
-            if not g["passed"]:
-                errs.append(f"eval {eid}: {g['text']} — {g['evidence']}")
-        results.append(
-            {
-                "eval_id": eid,
-                "prompt": ev.get("prompt", ""),
-                "expectations": graded,
-            }
-        )
+    for ev in _eval_entries(spec):
+        record = _run_one_eval(ev, skill_dir, timeout, errs)
+        if record is not None:
+            results.append(record)
     with open(os.path.join(work, "grading.json"), "w", encoding="utf-8") as f:
         json.dump({"results": results}, f, indent=2)
     return errs

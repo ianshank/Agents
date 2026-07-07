@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Changed
+- **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted
+  tech-debt pass on top of the size-budget work. Config-drove the one remaining hard-coded
+  threshold (`BRConfig.sycophancy_label_threshold`, additive/backwards-compatible); extracted
+  two duplicated, drifted `agent_core` idioms into reusable stdlib utilities
+  (`subprocess_util.run_failsafe`, `atomic_io.atomic_write_text`) — recovering the logging the
+  drifted copies had lost; added structured logging to the `behavioral_regression` CLI's report
+  writes and decision; and decomposed `validate_skill.check_behavioral` below the function-length
+  budget (5 vendored copies synced). Hardened the new `check_size_budget` gate and `F_032` against
+  crashes on bad input, and typed the `package_validate` error sink. All coverage floors,
+  `ruff`/`mypy --strict`, and the eval-integrity/drift guards stay green; no schema bump, no new
+  dependency. The gap-analysis doc records what was intentionally left (cohesive long functions,
+  pure-core logging) and why.
+- **Merged latest `main`** (E2E harness + Windows/cross-platform fixes, below) into this branch.
+  Two areas that `main` independently fixed had been refactored here, so the fixes were ported
+  forward rather than lost: `main`'s byte-oriented git-plumbing runner (the Windows CRLF-in-stdin
+  fix for `store_sync`) now lives in the shared `subprocess_util.run_failsafe` — so `detectors`
+  and `store_sync` both get it — and `main`'s portable `_run_eval` (`sys.executable` rewrite,
+  `stdin=DEVNULL`) is now the single execution helper behind `validate_skill.check_behavioral`'s
+  decomposed `_run_one_eval`. `_commit_store` is re-exported from the `store_sync` package for
+  `main`'s round-trip tests. No behaviour lost from either side; all suites/gates green.
+
 ### Tooling — one-command E2E / user-journey harness
 - **`scripts/run_all_e2e.ps1` + `docs/e2e-runbook.md`:** a single orchestrator that runs
   every test across the monorepo and writes an aggregated report to `artifacts/e2e-report/`
@@ -41,6 +63,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   were rewritten as cross-platform python one-liners (no `/dev/null`, `test $? -eq 1`, or pipes).
 
 ### Added
+- **Structural size-budget enforcement (ADR 0019):** two of the project's four documented
+  structural limits are now enforced gates instead of prose. Cyclomatic complexity `< 15`
+  is enforced repo-wide via ruff `C901` + `[tool.ruff.lint.mccabe] max-complexity = 14`
+  (added to the root and every sub-package config; skills inherit it). File length `≤ 500`
+  is enforced by a new stdlib gate `scripts/check_size_budget.py`, wired into
+  `quality-gates.yml` with its own unit tests under the `scripts/` ≥85% floor. Function
+  length (`≤ 50`) and public-method count (`≤ 15`) are reported as **non-blocking warnings**
+  (41 functions exceed the line budget — argparse `main()`s and validation gates — so
+  hard-gating them would churn protected paths; the backlog is surfaced, not hidden).
+  Pre-existing complexity violations in `behavioral_regression.config`, `validate_skill`,
+  and `eval-corpus-forge` were refactored by extracting single-responsibility helpers;
+  behaviour and error messages are unchanged.
+- **Browsable HTML coverage artifact:** `eval-harness-ci.yml` now emits `--cov-report=html`
+  and uploads `htmlcov/` as the `coverage-html` artifact (one matrix leg).
+- **Per-package gap-analysis docs:** `flow-corpus/GAP_ANALYSIS.md` and
+  `behavioral-regression/GAP_ANALYSIS.md` mirror `agent-core/GAP_ANALYSIS.md`, so every
+  package now carries the same candour surface (design choices, known limitations, coverage
+  residual).
 - **Live Phoenix validation (opt-in workflow_dispatch):** `.github/workflows/phoenix-live.yml`
   runs a two-job matrix — `dep-resolve` performs a `pip install '.[phoenix,phoenix-evals,parquet]'
   --dry-run` to surface the pandas/numpy vs `pyarrow>=14,<20` interaction without installing,

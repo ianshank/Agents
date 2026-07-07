@@ -18,8 +18,12 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from agent_core.logging_util import get_logger
+
 from .config import BRConfig
 from .pipeline import run_pipeline
+
+_log = get_logger("behavioral_regression.cli")
 
 
 def _coerce(value: str) -> Any:
@@ -63,18 +67,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     cfg = _build_config(args.overrides)
+    _log.info("behavioral-regression run starting: seed=%d", args.seed)
     report = run_pipeline(cfg, seed=args.seed)
     payload = json.dumps(report.to_dict(), sort_keys=True, separators=(",", ":"))
 
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(payload + "\n", encoding="utf-8")
+        _log.info("wrote JSON report to %s", args.out)
     else:
         print(payload)
     if args.html:
         Path(args.html).parent.mkdir(parents=True, exist_ok=True)
         Path(args.html).write_text(report.to_html(), encoding="utf-8")
+        _log.info("wrote HTML report to %s", args.html)
 
+    _log.info("behavioural-regression decision: %s", report.decision.value)
     print(f"decision: {report.decision.value}", file=sys.stderr)
     return 0
 

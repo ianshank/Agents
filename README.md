@@ -164,6 +164,11 @@ python scripts/check_protected_changes.py --base-ref origin/main
   skill stays self-contained). Run `python scripts/check_skill_script_drift.py`. The
   rationale for the kept compatibility shims and the uniform 95% coverage floor is recorded
   in [`docs/decisions/0009-tech-debt-audit-and-compat-surface.md`](docs/decisions/0009-tech-debt-audit-and-compat-surface.md).
+- **Structural size budget** (ADR 0019) enforces two of the project's structural limits:
+  cyclomatic complexity `< 15` repo-wide via ruff `C901` (`max-complexity = 14`), and source
+  file length `≤ 500` lines via `python scripts/check_size_budget.py` (wired into
+  `quality-gates.yml`). Function length (`≤ 50`) and public-method count (`≤ 15`) print as
+  non-blocking warnings — run the gate locally to see the backlog.
 - **Operational-scripts quality gates** (`F-031`) keep `scripts/` lint-clean (`ruff check` +
   `ruff format --check`), type-clean (`mypy scripts`), and coverage-gated at ≥85%
   (`scripts/.coveragerc`) in `eval-harness-ci.yml`; `scripts/validations/F_031.py` asserts the

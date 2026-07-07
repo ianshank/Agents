@@ -66,8 +66,14 @@ line-length = 120
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
+# C901 enforces the project's cyclomatic-complexity budget (< 15) via mccabe below.
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "C901"]
 ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.mccabe]
+# Functions must stay under the project's cyclomatic-complexity limit of 15
+# (max-complexity is the highest ALLOWED value, so 14 fails anything >= 15).
+max-complexity = 14
 
 [tool.ruff.lint.per-file-ignores]
 # Standalone validation gates bootstrap sys.path before imports (E402) and are

@@ -5,6 +5,24 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 
 ## [Unreleased]
 
+### Added
+- **`subprocess_util.run_failsafe`** and **`atomic_io.atomic_write_text`** — stdlib-only shared
+  utilities extracting two idioms that were duplicated and had drifted: the fail-safe subprocess
+  runner (previously copied in `detectors` and `store_sync/git_sync`, the latter having lost its
+  warning logs) and the atomic tmp-then-`os.replace` writer (previously copied in `persistence`
+  and `store_sync/store`, the latter not logging cleanup). `detectors` and `store_sync` now bind
+  `_run = run_failsafe`, preserving the `agent_core.*._run` monkeypatch seam, and the previously
+  log-less paths gain observability. agent-core stays zero-runtime-dependency.
+
+### Changed
+- **`store_sync` refactored from a single module into a package** (`agent_core/store_sync/`:
+  `models` / `serialization` / `store` / `git_sync` / CLI) to satisfy the ≤500-line file
+  budget (ADR 0019); the previous module was 546 lines. **Non-breaking:** every previously
+  importable name (the full public API plus the `_run` seam) still resolves from
+  `agent_core.store_sync`, `python -m agent_core.store_sync` is unchanged, and the CLI
+  monkeypatch seam is preserved byte-for-byte. The F-032 validation gate was migrated to
+  grep the package's modules for the same load-bearing pieces (no check weakened).
+
 ### Added (F-032 — outcome-store persistence sync)
 - `store_sync` module (ADR 0018): syncs the merge-gate outcome store with a dedicated
   git data branch (default `merge-gate-data`). `StoreSyncConfig` (all tunables; no

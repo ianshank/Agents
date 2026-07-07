@@ -61,7 +61,7 @@ def run_pipeline(
             kappa.n_codeterminate,
         )
 
-        v1_ind, v2_ind = sycophancy_indicators(pairs)
+        v1_ind, v2_ind = sycophancy_indicators(pairs, cfg.sycophancy_label_threshold)
         estimate = RegressionDetector(cfg).detect(
             v1_ind, v2_ind, verdicts, human_labels, seed=seed + 2
         )

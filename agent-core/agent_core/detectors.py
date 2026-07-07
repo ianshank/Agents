@@ -25,13 +25,13 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from .logging_util import get_logger
+from .subprocess_util import run_failsafe
 from .timeutil import parse_iso8601
 
 logger = get_logger(__name__)
@@ -44,9 +44,6 @@ _REMOTE_RE = re.compile(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?$")
 _DEFAULT_FAILING: frozenset[str] = frozenset({"failure", "timed_out", "startup_failure"})
 _DEFAULT_GIT_TIMEOUT_S = 10.0
 _DEFAULT_GH_TIMEOUT_S = 15.0
-# Conventional shell exit codes reused for the fail-safe synthetic results.
-_RC_TIMED_OUT = 124
-_RC_NOT_FOUND = 127
 
 
 @dataclass(frozen=True)
@@ -58,18 +55,9 @@ class DetectorConfig:
     failing_conclusions: frozenset[str] = _DEFAULT_FAILING
 
 
-def _run(args: Sequence[str], timeout: float) -> subprocess.CompletedProcess[str]:
-    """Run a subprocess without ever raising or hanging: a missing binary or a
-    timeout becomes a non-zero result so callers degrade to 'no signal'."""
-    argv = list(args)
-    try:
-        return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
-    except FileNotFoundError:
-        logger.warning("executable not found: %s; degrading to 'no signal'", argv[0])
-        return subprocess.CompletedProcess(argv, _RC_NOT_FOUND, "", "executable not found")
-    except subprocess.TimeoutExpired:
-        logger.warning("%s timed out after %.1fs; degrading to 'no signal'", argv[0], timeout)
-        return subprocess.CompletedProcess(argv, _RC_TIMED_OUT, "", "timed out")
+# Shared fail-safe runner, bound as a module attribute so tests keep monkeypatching
+# ``agent_core.detectors._run``; see :mod:`agent_core.subprocess_util`.
+_run = run_failsafe
 
 
 def _sha_prefix_match(a: str, b: str) -> bool:

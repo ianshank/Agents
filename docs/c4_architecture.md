@@ -122,7 +122,7 @@ C4Component
         Component(ci, "merge_gate_ci", "CLI entrypoint", "exit 0/10/20 (+1 internal, +2 usage); --audit-log JSONL")
         Component(decide, "merge_gate.decide()", "pure function", "REJECT mech-fail -> ESCALATE protected -> calibrated trust + Wilson bin floor -> AUTO_MERGE")
         Component(store, "outcome_store", "append-only JSONL", "OutcomeStore, BinningCalibrator, build_domain_models (held-out fold)")
-        Component(sync, "store_sync", "module + CLI (F-032)", "pull/push/stats vs merge-gate-data branch; canonical merge, opaque-line preservation, retry-backoff; exit 0/4/5")
+        Component(sync, "store_sync", "package + CLI (F-032)", "models/serialization/store/git_sync submodules; pull/push/stats vs merge-gate-data branch; canonical merge, opaque-line preservation, retry-backoff; byte-oriented git-plumbing runner (shared subprocess_util); exit 0/4/5")
         Component(labeller, "outcome_labeller", "module", "passive revert / CI-failure / timeout-clean labels (alerting only)")
         Component(sampler, "audit_sampler", "module", "unbiased stratified sampling + HUMAN_AUDIT verdicts")
         Component(detectors, "detectors", "module", "GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo; DetectorConfig timeouts, fail-safe")
