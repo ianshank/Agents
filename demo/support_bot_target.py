@@ -79,12 +79,15 @@ _ROUTES: tuple[tuple[tuple[str, ...], str], ...] = (
 _FALLBACK = "I'm not sure about that one. Please contact our support team for help."
 
 
-def answer(inputs: dict) -> str:
+def answer(inputs: dict | None) -> str:
     """Return a canned support answer for ``inputs['question']``.
 
-    Falls back to a generic "contact support" reply for unrouted questions so the
-    eval surfaces real quality differences rather than always scoring perfectly.
+    Falls back to a generic "contact support" reply for unrouted questions (and
+    for a malformed ``inputs``) so the eval surfaces real quality differences
+    rather than always scoring perfectly.
     """
+    if not isinstance(inputs, dict):
+        return _FALLBACK
     question = str(inputs.get("question", "")).lower()
     for keywords, response in _ROUTES:
         if all(word in question for word in keywords):
