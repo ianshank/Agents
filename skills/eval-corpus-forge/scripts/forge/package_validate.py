@@ -225,7 +225,9 @@ def _check_view_projection(
                 fail("behavioral.view_duplicates_canonical", f"{name} row duplicates canonical for {sid}", sid)
             # tool order preserved when tool data present
             if name == "tool_invocation_eval":
-                canon_trace = (by_id.get(sid) or {}).get("trace") or {}
+                # by_id is keyed by _key(...), so an unhashable sid (list/dict) from a
+                # malformed row must be looked up the same way, never with the raw value.
+                canon_trace = (by_id.get(_key(sid)) or {}).get("trace") or {}
                 if row.get("tool_invocation_order") != canon_trace.get("tool_invocation_order"):
                     fail("behavioral.tool_order_lost", f"tool order not preserved for {sid}", sid)
 
