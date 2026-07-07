@@ -1,0 +1,63 @@
+schema_version: "1.0"
+
+# Same eval as eval.pass.yaml, with ONE stricter gate threshold (helpfulness
+# mean >= 0.95). The bot scores 0.85, so this config FAILS its quality gate and
+# the process exits NON-ZERO — exactly what breaks a CI build.
+# Run: PYTHONPATH=. eval-harness run --config demo/configs/eval.fail.yaml --offline
+
+run:
+  name: "support-bot-demo-strict"
+  seed: 7
+
+dataset:
+  type: jsonl
+  params:
+    path: demo/data/support_bot.jsonl
+
+target:
+  type: callable
+  params:
+    path: "demo.support_bot_target:answer"
+
+scorers:
+  - type: contains
+    params: { name: mentions_settings, substring: "Settings" }
+  - type: regex_match
+    params: { name: actionable_step, pattern: 'Settings\s*>' }
+  - type: weighted
+    params:
+      name: answer_quality
+      strategy: weighted_mean
+      pass_threshold: 0.5
+      components:
+        - { type: contains, params: { substring: "Settings" }, weight: 1.0 }
+        - { type: regex_match, params: { pattern: 'Settings\s*>' }, weight: 1.0 }
+  - type: llm_judge
+    params:
+      name: helpfulness
+      threshold: 0.6
+
+judge:
+  type: mock
+  params:
+    default_score: 0.9
+    rules:
+      - { contains: "cancel", score: 0.4 }
+
+sinks:
+  - type: console
+    params: { verbose: false }
+  - type: json_file
+    params: { path: "${OUT_DIR:-out/demo}/results-fail.json" }
+  - type: html_file
+    params:
+      path: "${OUT_DIR:-out/demo}/report-fail.html"
+      title: "Support Bot Eval (strict gate)"
+
+# The ONLY change from eval.pass.yaml: helpfulness must average >= 0.95. It won't
+# (the cancellation answer is penalised to 0.4), so the gate FAILS.
+gate:
+  rules:
+    - { score: helpfulness,       metric: mean,      min: 0.95 }
+    - { score: mentions_settings, metric: pass_rate, min: 0.80 }
+    - { score: actionable_step,   metric: pass_rate, min: 0.80 }

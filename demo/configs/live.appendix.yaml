@@ -1,0 +1,67 @@
+schema_version: "1.0"
+
+# OPTIONAL LIVE APPENDIX — requires provider credentials. Skip this for the
+# offline demo; it is here to show the SAME eval graded against a REAL model.
+#
+# It swaps only the `target` (offline callable -> live `model`) and the `judge`
+# (offline mock -> a real LLM judge). Everything else — dataset, scorers, gate —
+# is identical to eval.pass.yaml, proving the harness is model-agnostic.
+#
+# Every secret/endpoint is an env var via ${VAR:-default}; nothing is hard-coded.
+# Run (with creds in your environment / .env):
+#   PYTHONPATH=. eval-harness run --config demo/configs/live.appendix.yaml
+
+run:
+  name: "support-bot-demo-live"
+  seed: 7
+
+dataset:
+  type: jsonl
+  params:
+    path: demo/data/support_bot.jsonl
+
+# A real model answers each support question instead of the offline stub.
+target:
+  type: model
+  params:
+    provider: ${EVAL_PROVIDER:-openai}     # openai | bedrock | anthropic
+    model: ${EVAL_MODEL}                    # required — no default literal
+    base_url: ${EVAL_BASE_URL:-}            # openai-compatible endpoint (LM Studio, Nemotron, …)
+    api_key: ${EVAL_API_KEY:-}              # optional; SDK also reads the provider env var
+    region: ${AWS_REGION:-}                 # bedrock only
+    prompt_template: "You are a customer support assistant. Answer concisely and point the user to the right Settings page.\n\nQuestion: {question}"
+    max_tokens: ${EVAL_MAX_TOKENS:-256}
+    temperature: ${EVAL_TEMPERATURE:-0.0}
+
+scorers:
+  - type: contains
+    params: { name: mentions_settings, substring: "Settings" }
+  - type: regex_match
+    params: { name: actionable_step, pattern: 'Settings\s*>' }
+  - type: llm_judge
+    params:
+      name: helpfulness
+      threshold: ${JUDGE_THRESHOLD:-0.6}
+
+# A REAL judge grades helpfulness. Swap `type` to openai / bedrock / anthropic;
+# each reads its own provider env var. (Kept as `anthropic` here as an example.)
+judge:
+  type: ${EVAL_JUDGE:-anthropic}
+  params:
+    model: ${EVAL_JUDGE_MODEL:-}
+
+sinks:
+  - type: console
+    params: { verbose: true }
+  - type: html_file
+    params:
+      path: "${OUT_DIR:-out/demo}/report-live.html"
+      title: "Support Bot Eval (live model)"
+  # Stream traces + scores to Langfuse when creds are present (no-op offline).
+  - type: langfuse
+    params: { min_value_to_log: 0.0 }
+
+gate:
+  rules:
+    - { score: helpfulness,       metric: mean,      min: 0.70 }
+    - { score: mentions_settings, metric: pass_rate, min: 0.80 }
