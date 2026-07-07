@@ -116,8 +116,17 @@ def _is_virtualenv_dir(directory: Path) -> bool:
     set of names, so a developer's local env — whatever it is called (``.venv-ci``,
     ``env``, ``py312``) — is skipped and never raises spurious findings against the
     third-party code vendored inside it.
+
+    Called on every directory during the walk, so it must never raise: ``Path.is_file()``
+    re-raises ``OSError`` (e.g. ``PermissionError``) for an inaccessible path on Python
+    < 3.13, which would abort the whole scan. Such a directory is treated as "not a
+    virtualenv" (it is still descended into and reported like any other source dir).
     """
-    return (directory / VENV_MARKER).is_file()
+    try:
+        return (directory / VENV_MARKER).is_file()
+    except OSError as exc:
+        logger.debug("cannot stat %s for a virtualenv marker (%s); treating as non-venv", directory, exc)
+        return False
 
 
 def iter_source_files(roots: Iterable[Path], repo_root: Path) -> list[Path]:
@@ -127,7 +136,10 @@ def iter_source_files(roots: Iterable[Path], repo_root: Path) -> list[Path]:
     gate also works when invoked on a single file (e.g. from a pre-commit hook). Excluded
     directories (see :data:`EXCLUDED_DIR_NAMES`) and virtualenvs (see
     :func:`_is_virtualenv_dir`) are pruned during the walk, so the scan never descends into
-    them — cheaper than descending-then-filtering, and robust to any virtualenv name.
+    them — cheaper than descending-then-filtering, and robust to any virtualenv name. Each
+    discovered file is still passed through :func:`_is_excluded`, so a root pointed *directly*
+    at an excluded directory (e.g. ``--root tests``) yields nothing — pruning is an
+    optimization, not the correctness boundary.
     """
     seen: set[Path] = set()
     for root in roots:
@@ -143,7 +155,9 @@ def iter_source_files(roots: Iterable[Path], repo_root: Path) -> list[Path]:
             dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIR_NAMES and not _is_virtualenv_dir(here / d)]
             for filename in filenames:
                 if filename.endswith(".py"):
-                    seen.add(here / filename)
+                    path = here / filename
+                    if not _is_excluded(path, repo_root):
+                        seen.add(path)
     return sorted(seen)
 
 

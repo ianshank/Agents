@@ -145,6 +145,25 @@ def test_is_virtualenv_dir_detects_marker(tmp_path: Path) -> None:
     assert sb._is_virtualenv_dir(tmp_path.parent) is False
 
 
+def test_is_virtualenv_dir_survives_permission_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Path.is_file() re-raises PermissionError for an inaccessible dir on Python < 3.13;
+    # called on every dir during the walk, so it must degrade to False, never propagate.
+    def boom(_self: Path) -> bool:
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(Path, "is_file", boom)
+    assert sb._is_virtualenv_dir(tmp_path) is False  # must not raise
+
+
+def test_root_pointed_directly_at_excluded_dir_yields_nothing(tmp_path: Path) -> None:
+    # Passing --root at an excluded directory name (e.g. tests/) scans nothing: the per-file
+    # _is_excluded check is the correctness boundary, not just the descend-time pruning.
+    _write(tmp_path, "tests/test_x.py", _lines(sb.MAX_FILE_LINES + 50))
+    assert sb.iter_source_files([tmp_path / "tests"], tmp_path) == []
+    # And via scan(): the oversize file under tests/ must not surface as a hard finding.
+    assert [f for f in sb.scan([tmp_path / "tests"], repo_root=tmp_path) if f.hard] == []
+
+
 def test_path_outside_root_is_not_excluded(tmp_path: Path) -> None:
     # _is_excluded must not raise for a path that is not under root.
     outside = tmp_path.parent / "elsewhere" / "x.py"
