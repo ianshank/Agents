@@ -208,3 +208,62 @@ def test_check_behavioral_failing_setup(tmp_path):
     )
     errs = check_behavioral(str(tmp_path), "evals.json", 10)
     assert any("setup failed (exit 3)" in e for e in errs)
+
+
+# ---------------------------------------------------------------------------
+# malformed-but-valid-JSON evals files must degrade to a readable error, never crash
+# ---------------------------------------------------------------------------
+
+
+def test_check_structural_evals_top_level_list_is_readable_error(tmp_path):
+    """A valid-JSON evals file that is a list (not an object) must not crash spec.get()."""
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text(
+        "---\nname: my-skill\ndescription: Use when the user asks to validate a skill.\n---\nBody", encoding="utf-8"
+    )
+    (tmp_path / "evals").mkdir()
+    (tmp_path / "evals" / "evals.json").write_text(json.dumps([{"id": "x"}]), encoding="utf-8")
+    errs, _warns = check_structural(str(tmp_path), "evals/evals.json")  # must not raise AttributeError
+    assert any("must be a JSON object" in e for e in errs)
+
+
+def test_check_behavioral_top_level_list_is_readable_error(tmp_path):
+    """A top-level JSON list in the behavioral tier surfaces a parse error, not a crash."""
+    (tmp_path / "evals.json").write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
+    errs = check_behavioral(str(tmp_path), "evals.json", 10)  # must not raise
+    assert any("must be a JSON object" in e for e in errs)
+    assert any("needs a parseable" in e for e in errs)
+
+
+def test_check_behavioral_ignores_non_dict_eval_entries(tmp_path):
+    """Non-dict entries under ``evals`` are dropped, not crashed on with ev.get()."""
+    (tmp_path / "evals.json").write_text(
+        json.dumps(
+            {
+                "skill": "my-skill",
+                "evals": [
+                    "bogus-string-entry",
+                    {
+                        "id": "real",
+                        "run": "python -c \"print('success')\"",
+                        "assertions": [{"type": "exit_zero"}],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    errs = check_behavioral(str(tmp_path), "evals.json", 10)  # must not raise on the string entry
+    assert not errs
+
+
+def test_check_structural_non_list_evals_does_not_crash(tmp_path):
+    """A non-list ``evals`` value is ignored rather than iterated into an error."""
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text(
+        "---\nname: my-skill\ndescription: Use when the user asks to validate a skill.\n---\nBody", encoding="utf-8"
+    )
+    (tmp_path / "evals").mkdir()
+    (tmp_path / "evals" / "evals.json").write_text(json.dumps({"evals": "oops"}), encoding="utf-8")
+    errs, _warns = check_structural(str(tmp_path), "evals/evals.json")  # must not raise
+    assert not errs

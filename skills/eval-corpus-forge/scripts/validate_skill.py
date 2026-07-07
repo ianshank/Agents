@@ -64,10 +64,16 @@ def load_evals(skill_dir: str, evals_path: str, errs: list[str]) -> dict[str, An
         return None
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f)  # type: ignore[no-any-return]
+            data = json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         errs.append(f"cannot parse {evals_path}: {e}")
         return None
+    # Valid JSON of the wrong shape (e.g. a top-level list) must surface as a readable
+    # structural error, not crash a later ``spec.get(...)`` with an AttributeError.
+    if not isinstance(data, dict):
+        errs.append(f"{evals_path} must be a JSON object, got {type(data).__name__}")
+        return None
+    return data
 
 
 def first_path_token(cmd: str) -> str | None:
@@ -100,9 +106,22 @@ def _check_description(desc: str, errs: list[str], warns: list[str]) -> None:
         warns.append("description lacks a 'when to use' cue; add a trigger phrase")
 
 
+def _eval_entries(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """The dict entries under ``evals``.
+
+    A non-list ``evals`` value or non-dict entries are dropped so a malformed (but
+    valid-JSON) evals file degrades to a readable ``no evals`` outcome instead of
+    crashing a later ``ev.get(...)`` with an ``AttributeError``.
+    """
+    evals = spec.get("evals", [])
+    if not isinstance(evals, list):
+        return []
+    return [ev for ev in evals if isinstance(ev, dict)]
+
+
 def _check_eval_file_refs(skill_dir: str, spec: dict[str, Any], warns: list[str]) -> None:
     """Warn when an eval's ``run``/``setup`` references a script/bin file that is absent."""
-    for ev in spec.get("evals", []):
+    for ev in _eval_entries(spec):
         for key in ("run", "setup"):
             cmd = ev.get(key)
             if cmd:
@@ -272,7 +291,7 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
     work = os.path.join(skill_dir, WORKDIR)
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work, exist_ok=True)
-    for ev in spec.get("evals", []):
+    for ev in _eval_entries(spec):
         record = _run_one_eval(ev, skill_dir, timeout, errs)
         if record is not None:
             results.append(record)
