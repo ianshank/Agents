@@ -137,7 +137,7 @@ and `judge` blocks change — proof the harness is model-agnostic.
 export EVAL_PROVIDER=openai EVAL_MODEL=gpt-4o-mini OPENAI_API_KEY=...   # or bedrock/anthropic
 # For the real judge + Langfuse sink:
 export EVAL_JUDGE=anthropic ANTHROPIC_API_KEY=...
-export LANGFUSE_PUBLIC_KEY=... LANGFUSE_SECRET_KEY=... LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
+export LANGFUSE_PUBLIC_KEY=... LANGFUSE_SECRET_KEY=... LANGFUSE_BASE_URL=<your-langfuse-endpoint>  # see .env.example
 PYTHONPATH=. eval-harness run --config demo/configs/live.appendix.yaml
 ```
 Every secret/endpoint is an env var (`${VAR:-default}`) — nothing hard-coded. You

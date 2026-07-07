@@ -9,7 +9,7 @@
 #
 # NOTE: this is the only shell script in an otherwise Python(+one .ps1) repo; it
 # exists because a copy-paste-able terminal script is the point of a live demo.
-set -uo pipefail
+set -euo pipefail               # fail fast; Beat 3 (the intentional gate failure) is quarantined below
 cd "$(dirname "$0")/.."          # repo root
 export PYTHONPATH=.              # so `demo.support_bot_target:answer` imports
 
@@ -35,8 +35,10 @@ note "PASS -> exit $?"
 
 banner "3. The gate has teeth (FAIL -> non-zero exit)"
 note "Same eval, one stricter threshold (helpfulness mean >= 0.95). This is what breaks CI."
+set +e                          # this run is MEANT to exit non-zero; don't let -e abort the demo
 eval-harness run --config demo/configs/eval.fail.yaml --offline
 fail_rc=$?
+set -e
 note "FAIL -> exit $fail_rc (a real CI step would stop the build here)"
 
 banner "4. Multi-model comparison"
@@ -58,7 +60,7 @@ echo "  no clear change ->"; bregress --seed 7 --set v2_sycophancy_mean=0.30 \
 banner "Done — reports written to $OUT/"
 for f in report.html report-fail.html compare.html \
          bregress_ship.html bregress_hold.html bregress_escalate.html; do
-  [[ -f "$OUT/$f" ]] && echo "  $OUT/$f"
+  [[ -f "$OUT/$f" ]] && echo "  $OUT/$f" || true
 done
 # Open the eval report if a desktop is available (best-effort, never fatal).
 if command -v xdg-open >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
