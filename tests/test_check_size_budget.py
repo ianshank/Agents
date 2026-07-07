@@ -229,11 +229,16 @@ def test_root_outside_repo_returns_usage_error(tmp_path: Path, capsys: pytest.Ca
 
 
 # ---------------------------------------------------------------------------
-# the real repository must satisfy the hard gate
+# smoke test against a real subtree (full-repo enforcement is the CI workflow step)
 # ---------------------------------------------------------------------------
 
 
-def test_repository_has_no_oversize_source_file() -> None:
-    """Dogfood: this repo's own source tree must pass the hard file-length gate."""
-    hard = [f for f in sb.scan() if f.hard]
+def test_scripts_subtree_has_no_oversize_source_file() -> None:
+    """Smoke: scanning a real subtree (`scripts/`) works end-to-end and is under budget.
+
+    Full-repo enforcement is the dedicated ``check_size_budget`` step in ``quality-gates.yml``;
+    this test only exercises ``scan()`` on real files (not a second whole-tree scan in CI).
+    """
+    root = sb._repo_root() / "scripts"
+    hard = [f for f in sb.scan([root]) if f.hard]
     assert hard == [], f"oversize files: {[(f.path, f.value) for f in hard]}"

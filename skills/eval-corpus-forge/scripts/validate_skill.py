@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -129,6 +130,37 @@ def check_structural(skill_dir: str, evals_path: str) -> tuple[list[str], list[s
     return errs, warns
 
 
+def _run_eval(cmd: str, cwd: str, timeout: int) -> subprocess.CompletedProcess[str]:
+    """Execute an eval command portably on the native shell.
+
+    Eval commands write ``python`` (or ``python3``) to mean *this* interpreter, so a
+    standalone interpreter token is rewritten to ``sys.executable`` — evals then run
+    in the validator's own environment instead of whatever ``python`` a PATH lookup
+    finds (on Windows that is often a different interpreter without the skill's deps).
+    The command runs through ``shell=True`` (``cmd.exe`` on Windows, ``/bin/sh``
+    elsewhere); eval authors keep commands to constructs both shells accept (no
+    ``/dev/null``/``test``/pipes) — see the cross-platform one-liner idiom in the
+    skills' ``evals.json``.
+    """
+    exe = f'"{sys.executable}"' if os.name == "nt" else shlex.quote(sys.executable)
+    # Match a bare ``python``/``python3`` *word*, not a substring: the lookarounds
+    # exclude a preceding path/word char and a following ``.``/word char, so
+    # ``python.exe``, ``/usr/bin/python``, and ``mypython`` are left untouched while
+    # ``python3`` (the default command on many POSIX systems) is rewritten too.
+    prepared = re.sub(r"(?<![\w./\\])python3?(?![\w.])", lambda _m: exe, cmd)
+    return subprocess.run(
+        prepared,
+        shell=True,
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,  # eval commands never read from the terminal
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
+
+
 def grade(
     a: dict[str, Any],
     run_rc: int,
@@ -167,16 +199,7 @@ def grade(
         return res(needle in body, f"{a['path']} {'contains' if needle in body else 'lacks'} {needle!r}")
     if t == "command_exit_zero":
         try:
-            r = subprocess.run(
-                a["cmd"],
-                shell=True,
-                cwd=skill_dir,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-            )
+            r = _run_eval(a["cmd"], skill_dir, timeout)
             return res(r.returncode == 0, f"`{a['cmd']}` exit={r.returncode}")
         except subprocess.TimeoutExpired:
             return res(False, f"`{a['cmd']}` timed out after {timeout}s")
@@ -184,18 +207,14 @@ def grade(
 
 
 def _exec(cmd: str, skill_dir: str, timeout: int) -> subprocess.CompletedProcess[str] | None:
-    """Run one shell command in *skill_dir*; return the process, or None on timeout."""
+    """Run one eval command in *skill_dir*; return the process, or None on timeout.
+
+    Delegates to :func:`_run_eval` for the portable execution (``sys.executable`` rewrite,
+    ``stdin=DEVNULL``) and adapts its ``TimeoutExpired`` into the ``None`` sentinel the
+    single-eval flow below uses.
+    """
     try:
-        return subprocess.run(
-            cmd,
-            shell=True,
-            cwd=skill_dir,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-        )
+        return _run_eval(cmd, skill_dir, timeout)
     except subprocess.TimeoutExpired:
         return None
 

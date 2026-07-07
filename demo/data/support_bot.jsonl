@@ -1,0 +1,10 @@
+{"id": "pw-reset", "inputs": {"question": "how do I reset my password"}, "expected": "Go to Settings > Security and use Reset password to get a reset link."}
+{"id": "pw-forgot", "inputs": {"question": "I forgot my password, what now"}, "expected": "Manage your password under Settings > Security and use Reset password."}
+{"id": "cancel-plan", "inputs": {"question": "how do I cancel my plan"}, "expected": "Cancel from Settings > Billing > Cancel plan; access lasts until the period ends."}
+{"id": "refund", "inputs": {"question": "can I get a refund for my last charge"}, "expected": "Request a refund from Settings > Billing > Payment history."}
+{"id": "invoice", "inputs": {"question": "where can I find my invoices"}, "expected": "Invoices are under Settings > Billing > Payment history as downloadable PDFs."}
+{"id": "upgrade", "inputs": {"question": "how do I upgrade my subscription"}, "expected": "Upgrade under Settings > Billing > Change plan; the price is prorated."}
+{"id": "twofa", "inputs": {"question": "how do I set up 2fa on my account"}, "expected": "Enable it under Settings > Security > Two-factor authentication."}
+{"id": "export", "inputs": {"question": "how do I export my data"}, "expected": "Export from Settings > Privacy > Export data; we email a download link."}
+{"id": "api-key", "inputs": {"question": "how do I create an api key"}, "expected": "Create and rotate API keys under Settings > Developer > API keys."}
+{"id": "out-of-scope", "inputs": {"question": "what is the meaning of life"}, "expected": "This is out of scope for the support bot."}

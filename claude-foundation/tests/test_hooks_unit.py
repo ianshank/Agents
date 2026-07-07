@@ -117,7 +117,11 @@ def test_symlink_alias_read_is_blocked(monkeypatch: pytest.MonkeyPatch, tmp_path
     project.mkdir()
     (project / ".env").write_text("SECRET=1\n", encoding="utf-8")
     link = project / "notes.txt"
-    link.symlink_to(project / ".env")
+    try:
+        link.symlink_to(project / ".env")
+    except OSError as exc:
+        # Windows without Developer Mode/admin has no symlink privilege (WinError 1314).
+        pytest.skip(f"symlink creation not permitted on this host: {exc}")
     monkeypatch.setenv(pre_tool_guard.PROJECT_DIR_ENV, str(project))
     assert pre_tool_guard.check(_event("Read", file_path=str(link))) is not None
 

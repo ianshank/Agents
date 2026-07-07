@@ -56,6 +56,21 @@ eval-harness run --config config/eval.example.yaml --set run.sample_rate=0.1
 The process exits non-zero when the quality gate fails, so it drops directly
 into a CI step.
 
+## Demo
+
+A repeatable, fully offline demo (zero credentials, deterministic) lives in
+[`demo/`](demo/README.md). One command runs the whole story — pluggable harness,
+a passing then CI-failing quality gate, multi-model comparison, and calibrated
+ship/hold/escalate decisions:
+
+```bash
+PYTHONPATH=. bash demo/run_demo.sh
+```
+
+See [`demo/README.md`](demo/README.md) for the spoken runbook (per-beat commands,
+expected output, and an engineer/leader narration) and `demo/deck.html` for a
+self-contained visual walkthrough.
+
 ## Extend (no core changes)
 
 ```python
@@ -91,6 +106,23 @@ ruff format --check src/ tests/ scripts/
 mypy src/eval_harness/
 mypy scripts/
 ```
+
+### End-to-end / user-journey harness
+
+To exercise **everything** at once — every package suite, every `features.yaml` functionality
+gate, every package CLI journey, the skill/hook e2e tests, and (credential-gated) live
+integrations — run the one-command orchestrator and read the aggregated report from
+`artifacts/e2e-report/`:
+
+```powershell
+pwsh scripts/run_all_e2e.ps1 -Tiers offline   # A–C, no network/credentials
+pwsh scripts/run_all_e2e.ps1 -Tiers all       # + live tiers when creds are present
+```
+
+The sibling packages are made importable via `PYTHONPATH` (no install needed), and on this
+Windows host a `scripts/e2e_shims/sitecustomize.py` neutralizes a hanging `platform` WMI call
+that would otherwise wedge every pytest run. See [docs/e2e-runbook.md](docs/e2e-runbook.md)
+for tiers, flags, credentials, and how to read the report.
 
 Every package and skill enforces a **≥95% branch-coverage floor** (the root harness gate is
 96%; the quality-gate tooling stays at 85% — its `git worktree`/subprocess paths are
@@ -198,6 +230,8 @@ scripts/
   check_protected_changes.py   CI guard: flags protected changes lacking approval
   check_skill_script_drift.py  CI guard: vendored skill scripts == canonical copy
   fix_loop.py             auto-fix loop scaffolding (DESIGN-ONLY, disabled)
+  run_all_e2e.ps1         one-command e2e/user-journey harness (all tiers -> artifacts/e2e-report/)
+  e2e_shims/              sitecustomize.py: neutralizes the Windows platform-WMI hang for pytest
   validations/            per-feature validation scripts (F_0NN.py)
 
 skills/
@@ -207,9 +241,9 @@ skills/
   eval-corpus-forge/        synthetic-corpus construction and validation
   model-bench/              model benchmark orchestration
 
-
 docs/
   c4_architecture.md  C4 context/container/component diagrams
+  e2e-runbook.md      how to run and read the one-command e2e harness
   decisions/          Architecture Decision Records (ADRs)
   gap-analysis-2026-07.md  measured lint/type/coverage baseline + remediation record
   plans/              cross-repo planning docs (claude-foundation plugin plan + review)

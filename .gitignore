@@ -12,6 +12,10 @@ venv/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+# Tooling env / build caches (also excluded by scripts/check_size_budget.py).
+.tox/
+.nox/
+.eggs/
 *.egg-info/
 dist/
 build/
@@ -57,6 +61,7 @@ regression_report.json
 .regression_gate_junit.xml
 *.html
 !README.html
+!demo/deck.html
 
 # phoenix-live workflow — self-hosted Phoenix log (see .github/workflows/phoenix-live.yml).
 phoenix-server.log

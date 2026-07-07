@@ -62,9 +62,13 @@ def test_phoenix_eval_judge_is_registered() -> None:
     assert "phoenix_evals" in JUDGES.names()
 
 
-def test_construct_without_sdk_raises_clear_install_error() -> None:
+def test_construct_without_sdk_raises_clear_install_error(monkeypatch) -> None:
+    # Simulate the SDK being absent (hermetic even with the phoenix-evals extra
+    # installed): a None entry forces the lazy `from phoenix.evals import ...` to
+    # ImportError, so the clear install-error message is raised on every platform.
+    monkeypatch.setitem(sys.modules, "phoenix.evals", None)
     with pytest.raises(RuntimeError, match="phoenix-evals"):
-        JUDGES.create("phoenix_evals", {"model": "m"})  # arize-phoenix-evals genuinely absent here
+        JUDGES.create("phoenix_evals", {"model": "m"})
 
 
 def test_evaluate_maps_label_score_explanation_to_verdict(monkeypatch) -> None:

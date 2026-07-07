@@ -1,0 +1,70 @@
+schema_version: "1.0"
+
+# Demo eval: a realistic (offline, deterministic) support bot graded by several
+# scorers, then gated. This config PASSES its quality gate → exit code 0.
+# Run: PYTHONPATH=. eval-harness run --config demo/configs/eval.pass.yaml --offline
+
+run:
+  name: "support-bot-demo"
+  seed: 7
+
+# Real answers loaded from a JSONL corpus (not inline toy data).
+dataset:
+  type: jsonl
+  params:
+    path: demo/data/support_bot.jsonl
+
+# The system-under-test: a deterministic keyword-routing support bot. Swap this
+# one block for `type: model` (see live.appendix.yaml) to grade a real LLM.
+target:
+  type: callable
+  params:
+    path: "demo.support_bot_target:answer"
+
+scorers:
+  # Cheap deterministic checks ...
+  - type: contains
+    params: { name: mentions_settings, substring: "Settings" }
+  - type: regex_match
+    params: { name: actionable_step, pattern: 'Settings\s*>' }
+  # ... rolled into one composite quality number ...
+  - type: weighted
+    params:
+      name: answer_quality
+      strategy: weighted_mean
+      pass_threshold: 0.5
+      components:
+        - { type: contains, params: { substring: "Settings" }, weight: 1.0 }
+        - { type: regex_match, params: { pattern: 'Settings\s*>' }, weight: 1.0 }
+  # ... plus an LLM-as-judge score (offline mock here; a real judge in production).
+  - type: llm_judge
+    params:
+      name: helpfulness
+      threshold: 0.6
+
+# Deterministic offline judge: 0.9 by default, but penalises the cancellation
+# answer to 0.4 — so the eval surfaces a real weak spot instead of scoring flat.
+judge:
+  type: mock
+  params:
+    default_score: 0.9
+    rules:
+      - { contains: "cancel", score: 0.4 }
+
+sinks:
+  - type: console
+    params: { verbose: true }
+  - type: json_file
+    params: { path: "${OUT_DIR:-out/demo}/results.json" }
+  - type: html_file
+    params:
+      path: "${OUT_DIR:-out/demo}/report.html"
+      title: "Support Bot Eval"
+
+# The quality gate: the process exits non-zero if any rule fails, so this config
+# drops straight into a CI step. These thresholds pass on the current bot.
+gate:
+  rules:
+    - { score: helpfulness,       metric: mean,      min: 0.70 }
+    - { score: mentions_settings, metric: pass_rate, min: 0.80 }
+    - { score: actionable_step,   metric: pass_rate, min: 0.80 }

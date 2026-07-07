@@ -40,6 +40,11 @@ The repo enforces protected paths via `scripts/check_protected_changes.py` and t
 
 Read `scripts/eval_protected_paths.py` for the authoritative list.
 
+`scripts/validate_skill.py` is separately guarded by `check_skill_script_drift.py`: it is
+duplicated byte-identically into each `skills/<skill>/scripts/`. If you edit the canonical
+copy, re-sync every vendored copy (`cp scripts/validate_skill.py skills/<skill>/scripts/`) or
+the drift guard fails.
+
 ## Non-negotiable constraints
 
 Every one of these is enforced by CI. Failing any breaks the merge.
@@ -60,6 +65,7 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 | Install a sibling package | `pip install -e ./agent-core[dev]` (same for `behavioral-regression`, `flow-corpus`, `flow-protocol`) |
 | Run the CLI | `eval-harness run --config config/eval.example.yaml` |
 | Full offline gate (mirrors `eval-harness-ci.yml`) | `ruff check src tests scripts && ruff format --check src tests scripts && mypy src/eval_harness && mypy tests && python -m pytest --cov` |
+| **Whole-repo e2e / user-journey harness** | `pwsh scripts/run_all_e2e.ps1 -Tiers offline` — runs every package suite, `features.yaml` gate, package CLI journey, and skill/hook e2e test; report at `artifacts/e2e-report/`. See [docs/e2e-runbook.md](docs/e2e-runbook.md). |
 | Live Phoenix e2e (mirrors `phoenix-live.yml`) | `docker run -p 6006:6006 arizephoenix/phoenix:17.18.0` then `pytest tests/test_phoenix_live.py -v -rs` with `PHOENIX_COLLECTOR_ENDPOINT` and `OPENAI_API_KEY` set |
 | Regression sibling package | `pytest behavioral-regression/tests --cov=behavioral_regression` |
 | Behavioural-regression detector CLI | `python -m behavioral_regression --config <cfg>` — see `behavioral-regression/README.md` |
@@ -73,7 +79,7 @@ The following files implement "SDK-optional" seams: the real dependency is impor
 - `src/eval_harness/judges/*.py` — `MockJudge` (offline default), `OpenAIJudge`, `AnthropicJudge`, `BedrockJudge`, `PhoenixEvalJudge`.
 - `src/eval_harness/sinks/__init__.py` — `console`, `json_file`, `html_file`, `langfuse`, `phoenix`.
 
-Test the "SDK absent" path via `sys.modules` injection, not `@patch(...)` — see `feedback_agents_offline_optional_dep_testing` behaviour documented in existing tests. `@patch("phoenix.otel.register")` raises `ModuleNotFoundError` at patch time when the SDK isn't installed.
+Test the "SDK absent" path via `sys.modules` injection, not `@patch(...)` — see `feedback_agents_offline_optional_dep_testing` behaviour documented in existing tests. `@patch("phoenix.otel.register")` raises `ModuleNotFoundError` at patch time when the SDK isn't installed. The concrete idiom is `monkeypatch.setitem(sys.modules, "phoenix.otel", None)`, which forces the lazy import to `ImportError` even when the extra *is* installed (this venv installs all extras).
 
 ## Testing conventions
 
@@ -82,6 +88,15 @@ Test the "SDK absent" path via `sys.modules` injection, not `@patch(...)` — se
 - Hypothesis: run with `HYPOTHESIS_PROFILE=ci` when reproducing CI behaviour locally (matches `agent-core-ci.yml`).
 - Do NOT patch `os.environ.clear()` — replace with `monkeypatch.delenv` for surgical env manipulation. See `CHANGELOG.md` note under [1.2.0-dev] `Testing`.
 - New tests trigger the protected-paths guard; adding a test file requires the `eval-change-approved` label on the PR.
+
+## Windows / cross-platform gotchas
+
+The offline suite must pass on Windows as well as Linux CI. Known traps (all were real bugs — see the CHANGELOG "Windows / cross-platform portability" entry):
+
+- **`platform.uname()` hangs on some locked-down Windows hosts** (WMI blocked), and Hypothesis calls it at import — so *every* pytest run wedges before collecting a test. `scripts/e2e_shims/sitecustomize.py` neutralizes the hanging `platform._wmi_query`; put `scripts/e2e_shims/` on `PYTHONPATH` when running pytest by hand there (the e2e harness does this automatically).
+- **Never send git-plumbing stdin through text mode.** `subprocess.run(..., text=True)` CRLF-translates `\n`→`\r\n` on Windows, which corrupts `mktree`/`hash-object` input (a tree entry name became `<file>\r`). Use byte I/O — see `agent_core.store_sync._run`.
+- **Emit path/finding strings with `.as_posix()`**, not OS-native separators, so output is deterministic across platforms.
+- **Keep eval commands and generated YAML free of Windows `\` paths and POSIX-only shell** (`/dev/null`, `test $? -eq 1`, pipes). `validate_skill.py` rewrites a standalone `python` token to `sys.executable`; write `command_exit_zero` evals as cross-platform python one-liners.
 
 ## Logging
 
@@ -109,7 +124,9 @@ pytest agent-core/tests --cov=agent_core                          # ≥ 95%
 pip install '.[phoenix-evals,parquet]' --dry-run                  # numpy/pyarrow resolve
 ```
 
-If any step fails, do NOT push — either fix the root cause or ask a human. Do not disable failing gates.
+On Windows, `pwsh scripts/run_all_e2e.ps1 -Tiers offline` is the equivalent whole-repo pass
+(it applies the WMI shim and per-package coverage floors). If any step fails, do NOT push —
+either fix the root cause or ask a human. Do not disable failing gates.
 
 ## Rebuilding this file
 
