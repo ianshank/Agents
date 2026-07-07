@@ -1,0 +1,59 @@
+schema_version: "1.0"
+
+# Multi-model comparison: the real support bot vs. a naive "echo" baseline that
+# just parrots the question back. Same dataset, scorers, and judge for both, so
+# the ranking is apples-to-apples.
+# Run: PYTHONPATH=. eval-harness compare --config demo/configs/compare.yaml --offline
+
+run:
+  name: "support-bot-compare"
+  seed: 7
+
+dataset:
+  type: jsonl
+  params:
+    path: demo/data/support_bot.jsonl
+
+# Required by the schema; the per-model targets below are what actually run.
+target:
+  type: echo
+  params: { output_key: question }
+
+scorers:
+  - type: contains
+    params: { name: mentions_settings, substring: "Settings" }
+  - type: regex_match
+    params: { name: actionable_step, pattern: 'Settings\s*>' }
+  - type: weighted
+    params:
+      name: answer_quality
+      strategy: weighted_mean
+      pass_threshold: 0.5
+      components:
+        - { type: contains, params: { substring: "Settings" }, weight: 1.0 }
+        - { type: regex_match, params: { pattern: 'Settings\s*>' }, weight: 1.0 }
+  - type: llm_judge
+    params:
+      name: helpfulness
+      threshold: 0.6
+
+judge:
+  type: mock
+  params:
+    default_score: 0.9
+    rules:
+      - { contains: "cancel", score: 0.4 }
+
+comparison:
+  models:
+    - name: support_bot
+      target:
+        type: callable
+        params: { path: "demo.support_bot_target:answer" }
+    - name: echo_baseline
+      target:
+        type: echo
+        params: { output_key: question }
+  baseline: echo_baseline
+  rank_by: answer_quality
+  rank_metric: mean

@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>langfuse-eval-harness — demo walkthrough</title>
+<style>
+  /* ---- tokens: cool, blue-biased neutrals + an instrument teal accent ---- */
+  :root {
+    --ground: #f5f7f8; --surface: #ffffff; --surface-2: #eef2f4;
+    --ink: #131a1e; --muted: #586470; --faint: #8493a0;
+    --hairline: #e2e7ea; --hairline-2: #d3dade;
+    --accent: #2b6f8c; --accent-soft: #e2edf1;
+    --ship: #1a7f37; --hold: #bf8700; --escalate: #cf222e;
+    --shadow: 0 1px 2px rgba(19,26,30,.06), 0 8px 24px -12px rgba(19,26,30,.14);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0d1114; --surface: #141a1e; --surface-2: #1b232a;
+      --ink: #e9eef1; --muted: #99a6b0; --faint: #6c7a85;
+      --hairline: #232b31; --hairline-2: #2d373f;
+      --accent: #5fb2d0; --accent-soft: #16303a;
+      --ship: #3fb968; --hold: #e0a52a; --escalate: #f0616c;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #f5f7f8; --surface: #ffffff; --surface-2: #eef2f4;
+    --ink: #131a1e; --muted: #586470; --faint: #8493a0;
+    --hairline: #e2e7ea; --hairline-2: #d3dade;
+    --accent: #2b6f8c; --accent-soft: #e2edf1;
+    --ship: #1a7f37; --hold: #bf8700; --escalate: #cf222e;
+    --shadow: 0 1px 2px rgba(19,26,30,.06), 0 8px 24px -12px rgba(19,26,30,.14);
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1114; --surface: #141a1e; --surface-2: #1b232a;
+    --ink: #e9eef1; --muted: #99a6b0; --faint: #6c7a85;
+    --hairline: #232b31; --hairline-2: #2d373f;
+    --accent: #5fb2d0; --accent-soft: #16303a;
+    --ship: #3fb968; --hold: #e0a52a; --escalate: #f0616c;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .deck {
+    background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.6;
+    -webkit-font-smoothing: antialiased; font-size: 16px;
+    padding: 0 20px 72px;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; }
+  .col { max-width: 720px; }
+
+  /* ---- top bar ---- */
+  .bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    max-width: 820px; margin: 0 auto; padding: 16px 0 14px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .brand { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+  .brand b { color: var(--accent); }
+  .status {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ship); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ship) 20%, transparent); }
+
+  /* ---- eyebrow / headings ---- */
+  .eyebrow {
+    font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+    margin: 0 0 12px;
+  }
+  h1 {
+    font-size: clamp(30px, 5.2vw, 46px); line-height: 1.08; letter-spacing: -.02em;
+    font-weight: 800; margin: 0 0 18px; text-wrap: balance;
+  }
+  h1 .u { color: var(--accent); }
+  .lede { font-size: 19px; color: var(--muted); margin: 0; max-width: 640px; text-wrap: pretty; }
+
+  .hero { padding: 52px 0 30px; }
+  .runline {
+    margin-top: 26px; display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+
+  /* ---- code / command blocks ---- */
+  code, .cmd, .out { font-family: var(--mono); }
+  .cmd {
+    display: block; background: #0f1518; color: #d7e2e8;
+    border: 1px solid var(--hairline-2); border-radius: 9px;
+    padding: 13px 15px; font-size: 13.5px; line-height: 1.65;
+    overflow-x: auto; white-space: pre;
+  }
+  .cmd .p { color: #5f7683; }        /* prompt sigil            */
+  .cmd .c { color: #7fb0c4; }        /* command / subcommand    */
+  .cmd .f { color: #cf9b6b; }        /* flags                   */
+  .cmd .k { color: #86c99a; }        /* good / key value        */
+  :root[data-theme="light"] .cmd, .cmd { }  /* code block stays dark in both themes by design */
+
+  /* ---- beats ---- */
+  .beat { padding: 34px 0; border-top: 1px solid var(--hairline); }
+  .beat-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 6px; }
+  .num {
+    font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--accent);
+    border: 1px solid var(--hairline-2); border-radius: 6px; padding: 3px 8px;
+    flex: none; background: var(--surface); line-height: 1;
+  }
+  .beat h2 { font-size: 22px; letter-spacing: -.01em; margin: 0; font-weight: 700; text-wrap: balance; }
+  .beat .sub { color: var(--muted); margin: 2px 0 18px; }
+  .beat-body { padding-left: 46px; }
+  @media (max-width: 560px) { .beat-body { padding-left: 0; } }
+
+  .out {
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 9px; padding: 12px 15px; font-size: 13px; color: var(--muted);
+    overflow-x: auto; white-space: pre; margin-top: 12px; box-shadow: var(--shadow);
+  }
+  .out .pass { color: var(--ship); font-weight: 700; }
+  .out .fail { color: var(--escalate); font-weight: 700; }
+
+  /* ---- scorecard table ---- */
+  .card {
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 11px; box-shadow: var(--shadow); overflow: hidden; margin-top: 14px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 16px; }
+  thead th {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--faint); font-weight: 600; border-bottom: 1px solid var(--hairline);
+  }
+  tbody tr + tr td { border-top: 1px solid var(--hairline); }
+  td.metric, th.metric { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+  .scorename { font-family: var(--mono); font-size: 13px; }
+  .barcell { width: 180px; }
+  .bar { height: 7px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+
+  /* ---- engineer / leader split ---- */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  @media (max-width: 560px) { .split { grid-template-columns: 1fr; } }
+  .lens {
+    border: 1px solid var(--hairline); border-radius: 9px; padding: 13px 15px; background: var(--surface);
+  }
+  .lens .who {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 5px;
+  }
+  .lens p { margin: 0; font-size: 14px; color: var(--ink); line-height: 1.5; }
+
+  /* ---- payoff: decision cards ---- */
+  .payoff { padding: 40px 0 8px; border-top: 2px solid var(--hairline-2); }
+  .decisions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px; }
+  @media (max-width: 720px) { .decisions { grid-template-columns: 1fr; } }
+  .dcard {
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px;
+    box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column;
+  }
+  .dcard .top { padding: 15px 16px 4px; }
+  .dcard .verdict {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: .04em;
+    padding: 4px 10px; border-radius: 6px; color: #fff;
+  }
+  .v-ship { background: var(--ship); } .v-hold { background: var(--hold); } .v-esc { background: var(--escalate); }
+  .dcard .scenario { font-size: 13.5px; color: var(--muted); margin: 11px 0 3px; line-height: 1.45; }
+  .dcard .knob { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+  .dcard .knob b { color: var(--accent); font-weight: 600; }
+  /* the embedded report SVG is a physical artifact — keep it on light "paper" in both themes */
+  .artifact {
+    margin: 12px; border: 1px solid var(--hairline-2); border-radius: 8px;
+    background: #fafafa; padding: 6px; overflow: hidden;
+  }
+  .artifact svg { display: block; width: 100%; height: auto; }
+  /* the report ships its own inline decision chip; hide it — the card header already states the verdict */
+  .artifact > div > div:first-child { display: none; }
+  .artifact > div > br:first-of-type { display: none; }
+  .caption {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--faint); text-align: center; padding: 0 0 12px;
+  }
+
+  /* ---- callout / governance ---- */
+  .callout {
+    margin-top: 20px; border: 1px solid var(--hairline); border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 9px; padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .callout h3 { margin: 0 0 8px; font-size: 16px; }
+  .callout p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  ul.gates { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  ul.gates li { font-size: 14px; padding-left: 20px; position: relative; color: var(--ink); }
+  ul.gates li::before { content: "→"; position: absolute; left: 0; color: var(--accent); font-family: var(--mono); }
+
+  .foot {
+    margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--hairline);
+    font-family: var(--mono); font-size: 12px; color: var(--faint);
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="deck">
+  <header class="bar">
+    <span class="brand">langfuse-<b>eval-harness</b></span>
+    <span class="status"><span class="dot"></span>offline · deterministic · zero credentials</span>
+  </header>
+
+  <div class="wrap">
+    <section class="hero col">
+      <p class="eyebrow">Demo walkthrough</p>
+      <h1>An LLM evaluation harness you <span class="u">can't quietly weaken</span>.</h1>
+      <p class="lede">Config-driven grading that gates CI, multi-model comparison, and calibrated
+        ship / hold / escalate decisions that fail safe to a human. Five beats, about six minutes,
+        nothing to log into.</p>
+      <div class="runline">
+        <code class="cmd"><span class="p">$ </span><span class="c">bash</span> demo/run_demo.sh</code>
+      </div>
+    </section>
+
+    <!-- BEAT 1 -->
+    <section class="beat col">
+      <div class="beat-head"><span class="num">01</span>
+        <h2>A real, pluggable harness</h2></div>
+      <div class="beat-body">
+        <p class="sub">Every component self-registers; third parties add their own with zero edits to the package.</p>
+        <code class="cmd"><span class="p">$ </span><span class="c">eval-harness</span> <span class="f">list-plugins</span></code>
+        <div class="out">scorers:  contains, exact_match, json_keys, llm_judge, regex_match, weighted
+datasets: csv, inline, jsonl, langfuse, parquet
+targets:  callable, echo, model
+sinks:    console, html_file, json_file, langfuse, phoenix
+judges:   anthropic, bedrock, mock, openai, phoenix_evals</div>
+        <div class="split">
+          <div class="lens"><p class="who">Engineer</p><p>Add a scorer or judge via an entry-point group — no fork, no core change.</p></div>
+          <div class="lens"><p class="who">Leader</p><p>It's a platform, not a script. Extensible without owning the codebase.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BEAT 2 -->
+    <section class="beat col">
+      <div class="beat-head"><span class="num">02</span>
+        <h2>Config in, graded out</h2></div>
+      <div class="beat-body">
+        <p class="sub">A realistic offline support bot, four scorers, then a quality gate — all config, no hard-coded values.</p>
+        <code class="cmd"><span class="p">$ </span><span class="c">eval-harness</span> <span class="f">run</span> --config demo/configs/eval.pass.yaml <span class="f">--offline</span></code>
+        <div class="card">
+          <table>
+            <thead><tr><th>Score</th><th class="barcell">Mean</th><th class="metric">mean</th><th class="metric">pass</th></tr></thead>
+            <tbody>
+              <tr><td class="scorename">mentions_settings</td><td><div class="bar"><i style="width:90%"></i></div></td><td class="metric">0.900</td><td class="metric">0.90</td></tr>
+              <tr><td class="scorename">actionable_step</td><td><div class="bar"><i style="width:90%"></i></div></td><td class="metric">0.900</td><td class="metric">0.90</td></tr>
+              <tr><td class="scorename">answer_quality</td><td><div class="bar"><i style="width:90%"></i></div></td><td class="metric">0.900</td><td class="metric">0.90</td></tr>
+              <tr><td class="scorename">helpfulness</td><td><div class="bar"><i style="width:85%"></i></div></td><td class="metric">0.850</td><td class="metric">0.90</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="out"><span class="pass">QUALITY GATE: PASS</span>   (exit 0)</div>
+        <div class="split">
+          <div class="lens"><p class="who">Engineer</p><p>Dataset, target, scorers, sinks, and the gate are one YAML file. A self-contained HTML scorecard drops out.</p></div>
+          <div class="lens"><p class="who">Leader</p><p>Every release gets the same scorecard, automatically and identically.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BEAT 3 -->
+    <section class="beat col">
+      <div class="beat-head"><span class="num">03</span>
+        <h2>The gate has teeth</h2></div>
+      <div class="beat-body">
+        <p class="sub">Same eval, one stricter threshold. The process exits non-zero — this is what breaks a CI build.</p>
+        <code class="cmd"><span class="p">$ </span><span class="c">eval-harness</span> <span class="f">run</span> --config demo/configs/eval.fail.yaml <span class="f">--offline</span></code>
+        <div class="out"><span class="fail">QUALITY GATE: FAIL</span>
+  - helpfulness.mean=0.850 below min 0.95      (exit 1)</div>
+        <div class="split">
+          <div class="lens"><p class="who">Engineer</p><p><code>run</code> is a CI gate: a non-zero exit fails the pipeline. No extra glue.</p></div>
+          <div class="lens"><p class="who">Leader</p><p>A quality drop can't silently ship. The build goes red instead.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BEAT 4 -->
+    <section class="beat col">
+      <div class="beat-head"><span class="num">04</span>
+        <h2>Compare models head-to-head</h2></div>
+      <div class="beat-body">
+        <p class="sub">The real bot vs. a naive echo baseline — same dataset, scorers, and judge, so the ranking is apples-to-apples.</p>
+        <code class="cmd"><span class="p">$ </span><span class="c">eval-harness</span> <span class="f">compare</span> --config demo/configs/compare.yaml <span class="f">--offline</span></code>
+        <div class="out">ranked by answer_quality (mean): <span class="pass">support_bot</span> &gt; echo_baseline</div>
+        <div class="split">
+          <div class="lens"><p class="who">Engineer</p><p>Point two — or ten — targets at one config; get a ranked leaderboard.</p></div>
+          <div class="lens"><p class="who">Leader</p><p>"Which model is better for us?" becomes a repeatable measurement.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAYOFF -->
+    <section class="payoff col">
+      <div class="beat-head"><span class="num">05</span>
+        <h2>Calibrated ship / hold / escalate</h2></div>
+      <p class="sub" style="padding-left:46px">Did v2 get more sycophantic than v1? The tool validates its own judge (κ + power),
+        puts a calibrated interval on the change, proves it can separate a known regression — and only then decides.
+        Crucially, it <b>never rubber-stamps</b>.</p>
+
+      <div class="decisions">
+        <!-- SHIP -->
+        <div class="dcard">
+          <div class="top">
+            <span class="verdict v-ship">SHIP ✅</span>
+            <p class="scenario">v2 is measurably <b>better</b> — less sycophantic, and the interval excludes zero.</p>
+            <p class="knob"><b>v2_sycophancy_mean</b> = 0.15</p>
+          </div>
+          <div class="artifact"><div><div style="display:inline-block;padding:6px 14px;border-radius:6px;background:#1a7f37;color:#fff;font-weight:700;font-family:sans-serif">SHIP</div><br/><svg width="300" height="220" viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#fafafa"/><line x1="0" y1="200" x2="280" y2="0" stroke="#888" stroke-dasharray="4"/><circle cx="20.1" cy="16.7" r="4" fill="#1a7f37"></circle><circle cx="40.9" cy="12.2" r="4" fill="#1a7f37"></circle><circle cx="70.1" cy="25.6" r="4" fill="#1a7f37"></circle><circle cx="96.4" cy="18.5" r="4" fill="#1a7f37"></circle><circle cx="124.3" cy="16.7" r="4" fill="#1a7f37"></circle><circle cx="150.2" cy="0.0" r="4" fill="#1a7f37"></circle><circle cx="170.3" cy="0.0" r="4" fill="#1a7f37"></circle><circle cx="200.3" cy="0.0" r="4" fill="#1a7f37"></circle><text x="6" y="214" font-size="10" font-family="sans-serif">reliability (x: confidence, y: accuracy)</text></svg></div></div>
+          <p class="caption">actual report output</p>
+        </div>
+        <!-- HOLD -->
+        <div class="dcard">
+          <div class="top">
+            <span class="verdict v-hold">HOLD ⛔</span>
+            <p class="scenario">v2 has a <b>real regression</b> — detected with calibrated confidence above the risk target.</p>
+            <p class="knob"><b>v2_sycophancy_mean</b> = 0.55</p>
+          </div>
+          <div class="artifact"><div><div style="display:inline-block;padding:6px 14px;border-radius:6px;background:#bf8700;color:#fff;font-weight:700;font-family:sans-serif">HOLD</div><br/><svg width="300" height="220" viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#fafafa"/><line x1="0" y1="200" x2="280" y2="0" stroke="#888" stroke-dasharray="4"/><circle cx="21.1" cy="21.1" r="4" fill="#bf8700"></circle><circle cx="41.0" cy="12.2" r="4" fill="#bf8700"></circle><circle cx="69.3" cy="15.0" r="4" fill="#bf8700"></circle><circle cx="97.3" cy="21.9" r="4" fill="#bf8700"></circle><circle cx="123.4" cy="15.9" r="4" fill="#bf8700"></circle><circle cx="148.9" cy="0.0" r="4" fill="#bf8700"></circle><circle cx="181.3" cy="28.6" r="4" fill="#bf8700"></circle><circle cx="205.7" cy="66.7" r="4" fill="#bf8700"></circle><text x="6" y="214" font-size="10" font-family="sans-serif">reliability (x: confidence, y: accuracy)</text></svg></div></div>
+          <p class="caption">actual report output</p>
+        </div>
+        <!-- ESCALATE -->
+        <div class="dcard">
+          <div class="top">
+            <span class="verdict v-esc">ESCALATE 🔎</span>
+            <p class="scenario">No clear change — the tool <b>can't confirm it's safe</b>, so it fails safe to a human.</p>
+            <p class="knob"><b>v2_sycophancy_mean</b> = 0.30</p>
+          </div>
+          <div class="artifact"><div><div style="display:inline-block;padding:6px 14px;border-radius:6px;background:#cf222e;color:#fff;font-weight:700;font-family:sans-serif">ESCALATE</div><br/><svg width="300" height="220" viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg"><rect width="300" height="220" fill="#fafafa"/><line x1="0" y1="200" x2="280" y2="0" stroke="#888" stroke-dasharray="4"/><circle cx="21.1" cy="19.0" r="4" fill="#cf222e"></circle><circle cx="40.9" cy="10.9" r="4" fill="#cf222e"></circle><circle cx="67.5" cy="24.0" r="4" fill="#cf222e"></circle><circle cx="98.6" cy="16.2" r="4" fill="#cf222e"></circle><circle cx="125.8" cy="40.0" r="4" fill="#cf222e"></circle><circle cx="154.1" cy="0.0" r="4" fill="#cf222e"></circle><circle cx="195.8" cy="0.0" r="4" fill="#cf222e"></circle><text x="6" y="214" font-size="10" font-family="sans-serif">reliability (x: confidence, y: accuracy)</text></svg></div></div>
+          <p class="caption">actual report output</p>
+        </div>
+      </div>
+
+      <div class="split" style="margin-top:20px">
+        <div class="lens"><p class="who">Engineer</p><p>Stats are reused from proven primitives — Wilson &amp; bootstrap CIs, a κ-gate. Byte-reproducible from (config, seed).</p></div>
+        <div class="lens"><p class="who">Leader</p><p>When the measurement can't tell, it escalates to a person instead of guessing. That's the trust story.</p></div>
+      </div>
+    </section>
+
+    <!-- CLOSE -->
+    <section class="beat col" style="border-top:2px solid var(--hairline-2)">
+      <p class="eyebrow">The reason it holds up</p>
+      <h2 style="font-size:22px;margin:0 0 6px">Why you can't game the eval</h2>
+      <p class="sub">The cheapest way to pass an eval is to weaken the eval. Two gates make that hard.</p>
+      <div class="callout">
+        <h3>Governance, not vibes</h3>
+        <ul class="gates">
+          <li>Eval-defining files (gates, scorers, judges, thresholds) can't change without a human-reviewed label.</li>
+          <li>A regression gate blocks <b>net-new</b> lint/test failures relative to the base branch.</li>
+          <li>Every offline run is deterministic — reproducible from <code>(config, seed)</code>, no network.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer class="foot col">
+      <span>demo/README.md · the full spoken runbook</span>
+      <span>offline · deterministic · zero credentials</span>
+    </footer>
+  </div>
+</div>
+
+</body>
+</html>

@@ -56,6 +56,21 @@ eval-harness run --config config/eval.example.yaml --set run.sample_rate=0.1
 The process exits non-zero when the quality gate fails, so it drops directly
 into a CI step.
 
+## Demo
+
+A repeatable, fully offline demo (zero credentials, deterministic) lives in
+[`demo/`](demo/README.md). One command runs the whole story — pluggable harness,
+a passing then CI-failing quality gate, multi-model comparison, and calibrated
+ship/hold/escalate decisions:
+
+```bash
+PYTHONPATH=. bash demo/run_demo.sh
+```
+
+See [`demo/README.md`](demo/README.md) for the spoken runbook (per-beat commands,
+expected output, and an engineer/leader narration) and `demo/deck.html` for a
+self-contained visual walkthrough.
+
 ## Extend (no core changes)
 
 ```python
