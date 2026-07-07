@@ -5,3 +5,4 @@
 {"agent_version": null, "change_id": "19994cc9e5315c94161720d3400a561e98542060", "domain": "human/eval-harness", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-05T13:06:02-04:00", "raw_confidence": 0.0}
 {"agent_version": null, "change_id": "19994cc9e5315c94161720d3400a561e98542060", "domain": "human/eval-harness", "label": false, "label_source": "ci_failure", "labeled_at": "2026-07-06T06:48:32.244375+00:00", "merged_at": "2026-07-05T13:06:02-04:00", "raw_confidence": 0.0}
 {"agent_version": null, "change_id": "61e5b706904632e17c33cbb6d63e19bb78a7cc09", "domain": "human/agent-core", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-06T19:40:36-04:00", "raw_confidence": 0.0}
+{"agent_version": null, "change_id": "607d3cb580857fc9f05d04dfd463cef9bf63f86d", "domain": "human/docs", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-07T17:37:25-04:00", "raw_confidence": 0.0}
