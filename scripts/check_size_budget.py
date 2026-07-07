@@ -31,6 +31,7 @@ import argparse
 import ast
 import json
 import logging
+import os
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
@@ -45,8 +46,11 @@ MAX_FILE_LINES = 500
 MAX_FUNCTION_LINES = 50
 MAX_PUBLIC_METHODS = 15
 
-# Directory names never scanned: test suites (legitimately long), caches, virtualenvs,
-# build output, VCS, and synthetic fixtures whose shape is deliberate.
+# Directory names never scanned: test suites (legitimately long), caches, build output,
+# VCS, and synthetic fixtures whose shape is deliberate. The common virtualenv names are a
+# cheap fast-path; env directories under *any* name are additionally caught by their
+# ``pyvenv.cfg`` marker (see :func:`_is_virtualenv_dir`), so ``.venv-ci`` / ``env311`` /
+# ``py312`` are skipped too — no reliance on a hardcoded name matching the developer's env.
 EXCLUDED_DIR_NAMES = frozenset(
     {
         "tests",
@@ -60,8 +64,6 @@ EXCLUDED_DIR_NAMES = frozenset(
         ".mypy_cache",
         ".ruff_cache",
         ".pytest_cache",
-        # in-tree virtualenvs / tooling envs: scanning these wastes time and can raise
-        # spurious findings against third-party code that isn't project source.
         ".venv",
         "venv",
         ".tox",
@@ -69,6 +71,9 @@ EXCLUDED_DIR_NAMES = frozenset(
         ".eggs",
     }
 )
+
+# Canonical marker of a PEP 405 virtualenv: a ``pyvenv.cfg`` at the environment root.
+VENV_MARKER = "pyvenv.cfg"
 
 # Exit code for a configuration / usage error (matches the module docstring contract).
 EXIT_USAGE_ERROR = 2
@@ -104,11 +109,25 @@ def _is_excluded(path: Path, root: Path) -> bool:
     return any(part in EXCLUDED_DIR_NAMES for part in relative.parts)
 
 
+def _is_virtualenv_dir(directory: Path) -> bool:
+    """True when *directory* is the root of a PEP 405 virtualenv.
+
+    Detects the environment by its canonical ``pyvenv.cfg`` marker instead of a hardcoded
+    set of names, so a developer's local env — whatever it is called (``.venv-ci``,
+    ``env``, ``py312``) — is skipped and never raises spurious findings against the
+    third-party code vendored inside it.
+    """
+    return (directory / VENV_MARKER).is_file()
+
+
 def iter_source_files(roots: Iterable[Path], repo_root: Path) -> list[Path]:
     """All non-excluded ``*.py`` files under *roots*, sorted for deterministic output.
 
     A root may be a directory (walked recursively) or an individual ``*.py`` file, so the
-    gate also works when invoked on a single file (e.g. from a pre-commit hook).
+    gate also works when invoked on a single file (e.g. from a pre-commit hook). Excluded
+    directories (see :data:`EXCLUDED_DIR_NAMES`) and virtualenvs (see
+    :func:`_is_virtualenv_dir`) are pruned during the walk, so the scan never descends into
+    them — cheaper than descending-then-filtering, and robust to any virtualenv name.
     """
     seen: set[Path] = set()
     for root in roots:
@@ -116,9 +135,15 @@ def iter_source_files(roots: Iterable[Path], repo_root: Path) -> list[Path]:
             if root.suffix == ".py" and not _is_excluded(root, repo_root):
                 seen.add(root)
             continue
-        for path in root.rglob("*.py"):
-            if path.is_file() and not _is_excluded(path, repo_root):
-                seen.add(path)
+        if _is_virtualenv_dir(root):  # a root pointed directly at an env: skip wholesale
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            here = Path(dirpath)
+            # Prune in place so os.walk never descends into excluded dirs or virtualenvs.
+            dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIR_NAMES and not _is_virtualenv_dir(here / d)]
+            for filename in filenames:
+                if filename.endswith(".py"):
+                    seen.add(here / filename)
     return sorted(seen)
 
 

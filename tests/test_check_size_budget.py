@@ -121,6 +121,30 @@ def test_in_tree_virtualenv_is_skipped(tmp_path: Path) -> None:
     assert [p.name for p in files] == ["mod.py"]
 
 
+def test_arbitrarily_named_virtualenv_is_skipped(tmp_path: Path) -> None:
+    # An env under a non-standard name (not in EXCLUDED_DIR_NAMES) is still skipped
+    # because it carries the canonical PEP 405 ``pyvenv.cfg`` marker.
+    _write(tmp_path, "mod.py", "x = 1\n")
+    _write(tmp_path, ".venv-ci/pyvenv.cfg", "home = /usr\n")
+    _write(tmp_path, ".venv-ci/Lib/site-packages/huge.py", _lines(sb.MAX_FILE_LINES + 50))
+    assert ".venv-ci" not in sb.EXCLUDED_DIR_NAMES  # guard: not caught by name
+    files = sb.iter_source_files([tmp_path], tmp_path)
+    assert [p.name for p in files] == ["mod.py"]
+
+
+def test_root_pointed_directly_at_virtualenv_is_skipped(tmp_path: Path) -> None:
+    # Passing --root at an env directory itself scans nothing (the marker is at its top).
+    _write(tmp_path, "env/pyvenv.cfg", "home = /usr\n")
+    _write(tmp_path, "env/Lib/site-packages/huge.py", _lines(sb.MAX_FILE_LINES + 50))
+    assert sb.iter_source_files([tmp_path / "env"], tmp_path) == []
+
+
+def test_is_virtualenv_dir_detects_marker(tmp_path: Path) -> None:
+    (tmp_path / "pyvenv.cfg").write_text("home = /usr\n", encoding="utf-8")
+    assert sb._is_virtualenv_dir(tmp_path) is True
+    assert sb._is_virtualenv_dir(tmp_path.parent) is False
+
+
 def test_path_outside_root_is_not_excluded(tmp_path: Path) -> None:
     # _is_excluded must not raise for a path that is not under root.
     outside = tmp_path.parent / "elsewhere" / "x.py"
