@@ -52,6 +52,12 @@ eval-harness = "eval_harness.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# PEP 561: ship the inline-type marker so downstream type checkers treat
+# eval_harness as typed. Without this stanza the marker file is not packaged
+# into the wheel (mirrors the sub-packages' package-data declarations).
+eval_harness = ["py.typed"]
+
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]

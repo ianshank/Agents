@@ -119,6 +119,8 @@
   `ParquetDataset` (`parquet`/`parquet_file`) with column mappings and `DATA_ROOT`
   path confinement (F-019).
 - [x] **`py.typed` Marker** — Ship PEP 561 marker for downstream type checkers.
+  Root `eval_harness` marker + `[tool.setuptools.package-data]` added so the wheel
+  actually carries it (the sub-packages already shipped theirs).
 
 ## Medium Term (v1.3.0)
 
