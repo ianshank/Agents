@@ -669,3 +669,21 @@ features:
     implemented_in: "54986893ed95530e6fe942462826b385a9fe0ceb"
     depends_on: ["F-031"]
     notes: "Sweep scope and evidence: three read-only assessment passes over the branch (static tooling, suite baselines, debt scan) — findings and dispositions recorded in the PR. numpy tooling was requested but numpy is not a dependency anywhere; docstring-convention enforcement deliberately not adopted. vulture not adopted: ruff F401/F841 already active in root+agent-core. types-PyYAML deliberately not added: mypy 2.1.0 under the root config passes without it (verified by uninstall)."
+
+  - id: "F-038"
+    epic: "Quality Gate"
+    name: "Credential scrub + secret-scan gate (gitleaks)"
+    description: "Scrubs the rotated Langfuse secret/public key pair from the three tracked files that still carried it (HARNESS_SPEC.md, docs/decisions/0003-langfuse-integration.md, progress.md) to a <REDACTED — rotated, see incident record> placeholder, and adds a fail-closed secret-scan gate: a config-driven .gitleaks.toml (extends the default ruleset; stores no secret literal itself) drives a secret-scan job in quality-gates.yml that scans the working tree fail-closed (gitleaks detect --no-git) and git history report-only (--exit-code 0). No history rewrite (ADR 0020): the keys are rotated and already public in history, so a rewrite would break clones / open-PR bases / provenance SHAs / merge-gate-data lineage for zero real gain."
+    category: "non-functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "No sk-lf-/pk-lf- key literal survives in the scrubbed files (HARNESS_SPEC.md, ADR 0003, progress.md); each carries the redaction placeholder instead"
+      - ".gitleaks.toml exists, extends the default ruleset, declares an allowlist, and stores no secret literal itself"
+      - "quality-gates.yml runs gitleaks fail-closed on the working tree (detect --no-git, config-driven) and report-only over history (--exit-code 0), per ADR 0020"
+      - "ADR 0020 (no history rewrite) records rotation-as-mitigation and the blast-radius rationale"
+    validation_command: "python scripts/validations/F_038.py"
+    implemented_in: null
+    depends_on: []
+    notes: "Rotation of the sk-lf-/pk-lf- pair was confirmed before merge and is recorded in the scrub PR (G1 gate). The gitleaks binary is pinned in the workflow (bump the VERSION there to upgrade). History stays as-is (ADR 0020); only the working tree is fail-closed."

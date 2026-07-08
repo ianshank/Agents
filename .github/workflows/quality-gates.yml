@@ -112,3 +112,25 @@ jobs:
           python-version: "3.12"
       # Pure-stdlib guard; no install needed. Flags eval-defining changes lacking approval.
       - run: python scripts/check_protected_changes.py
+
+  secret-scan:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0  # the history scan needs full history
+      - name: Install gitleaks (pinned; bump the version here to upgrade)
+        run: |
+          VERSION=8.18.4
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks version
+      # Fail-closed on the working tree: any secret in the CURRENT files fails the job.
+      - name: gitleaks — working tree (fail-closed)
+        run: ./gitleaks detect --no-git --source . --config .gitleaks.toml --redact --verbose
+      # Report-only over history: the one known finding (rotated Langfuse pair) is not
+      # rewritten out of history per ADR 0020; --exit-code 0 keeps this informational.
+      - name: gitleaks — git history (report-only, ADR 0020)
+        run: ./gitleaks detect --source . --config .gitleaks.toml --redact --exit-code 0

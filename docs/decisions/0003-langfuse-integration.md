@@ -4,8 +4,8 @@
 
 **Context:**
 We need to support first-class tracing and dataset-hosting integrations with Langfuse, utilizing the user's specific credentials while maintaining backwards compatibility and offline support. Specifically:
-- Secret key: `sk-lf-e220d788-d2e0-4e82-bbde-6d1a57ba149f`
-- Public key: `pk-lf-ad617cfc-ce1b-4c23-8c76-7868605ee6f1`
+- Secret key: `REDACTED — rotated, see incident record`
+- Public key: `REDACTED — rotated, see incident record`
 - Base URL: `https://us.cloud.langfuse.com`
 
 **Decision:**
