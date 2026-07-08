@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Security
+- **Rotated Langfuse keys scrubbed + fail-closed secret-scan gate (F-038)**: the rotated Langfuse
+  secret/public key pair was removed from the three tracked files that still carried it (redacted to
+  a `<REDACTED — rotated, see incident record>` placeholder), and a config-driven `.gitleaks.toml`
+  now drives a `secret-scan` job that fails CI on any secret in the working tree (`gitleaks detect
+  --no-git`); the git-history scan is report-only and history is not rewritten (ADR 0020). Rotation
+  was confirmed before merge.
+
 ### Changed
 - **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted
   tech-debt pass on top of the size-budget work. Config-drove the one remaining hard-coded

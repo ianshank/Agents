@@ -1,0 +1,27 @@
+# gitleaks configuration — ianshank/Agents (F-038, ADR 0020).
+#
+# Fail-closed secret scanning. The CI working-tree scan (`gitleaks detect --no-git`)
+# fails on ANY secret in the current files. The git-history scan is report-only: the
+# one historical finding — the Langfuse key pair, now rotated (ADR 0020) — is known
+# and intentionally NOT rewritten out of history.
+#
+# No secret literal is stored in this config (that would reintroduce the very string
+# being scrubbed and defeat the working-tree gate). Allowlisting is by path/regex of
+# documented false positives only.
+
+title = "agents-secret-scan"
+
+[extend]
+# Start from gitleaks' built-in ruleset (AWS, GCP, generic API keys, etc.).
+useDefault = true
+
+[allowlist]
+description = "Documented false positives — no real secrets."
+paths = [
+  # The env template ships only empty placeholders (KEY=), never values.
+  '''\.env\.example$''',
+]
+regexes = [
+  # Redaction placeholder left where a rotated key used to be ('.' matches the em dash).
+  '''REDACTED . rotated, see incident record''',
+]

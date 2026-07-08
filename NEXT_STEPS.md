@@ -2,6 +2,10 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Credential scrub + secret-scan gate (F-038)** — the rotated Langfuse key pair is scrubbed
+  from the three files that still carried it (`<REDACTED — rotated, see incident record>`), and a
+  config-driven `.gitleaks.toml` drives a fail-closed `secret-scan` job in `quality-gates.yml` (the
+  working tree fails on any secret; the history scan is report-only). No history rewrite (ADR 0020).
 - [x] **One-command E2E / user-journey harness + Windows portability** —
   `scripts/run_all_e2e.ps1` (+ `docs/e2e-runbook.md`) runs every package suite, every
   `features.yaml` gate, every package CLI journey, and the skill/hook e2e tests in one

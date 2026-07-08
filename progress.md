@@ -1,6 +1,29 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 012 — 2026-07-07
+
+### Features
+- F-038 (credential scrub + secret-scan gate): scrub the rotated Langfuse key pair from the three
+  tracked files + add a fail-closed gitleaks gate; status todo → done
+
+### Changes (F-038)
+- Scrubbed sk-lf-/pk-lf- literals in HARNESS_SPEC.md, docs/decisions/0003-langfuse-integration.md,
+  and this file → `<REDACTED — rotated, see incident record>` (keys rotated; confirmed before merge)
+- `.gitleaks.toml` (config-driven; extends the default ruleset; stores no literal) + a `secret-scan`
+  job in `.github/workflows/quality-gates.yml` scanning the working tree fail-closed
+  (`gitleaks detect --no-git`) and git history report-only (`--exit-code 0`)
+- ADR 0020 (no history rewrite); `scripts/validations/F_038.py`; `features.yaml` F-038 entry
+
+### Validation evidence
+- `python scripts/validations/F_038.py` exits 0 (offline); `git grep` confirms no key literal in
+  tracked files; ruff + strict mypy clean on the validator
+
+### Next
+- G1 (human gate): confirm rotation recorded in the scrub PR, then merge. Remaining plan items are
+  gated (Phase 1 extraction, Phase 2 triage, Phase 3 soak / branch protection)
+
+---
 ## Session 011 — 2026-06-30
 
 ### Features
@@ -249,7 +272,7 @@
 **Structural changes:**
 - Added central `scripts/validate_skill.py` for tiered structural & behavioral validation.
 - Implemented first self-validating skill `skills/openai-judge/` conforming to structural rules and behavioral evals.
-- Integrated Langfuse tracing into CLI/engine with fallback default credentials (`LANGFUSE_SECRET_KEY="sk-lf-e220d788-d2e0-4e82-bbde-6d1a57ba149f"`, `LANGFUSE_PUBLIC_KEY="pk-lf-ad617cfc-ce1b-4c23-8c76-7868605ee6f1"`, `LANGFUSE_BASE_URL="https://us.cloud.langfuse.com"`).
+- Integrated Langfuse tracing into CLI/engine with fallback default credentials (`LANGFUSE_SECRET_KEY="<REDACTED — rotated, see incident record>"`, `LANGFUSE_PUBLIC_KEY="<REDACTED — rotated, see incident record>"`, `LANGFUSE_BASE_URL="https://us.cloud.langfuse.com"`).
 - Added automatic trace linking to dataset run items and fallback no-op decorators.
 - Added comprehensive unit tests for `validate_skill.py` and Langfuse client fallback logic.
 **ADRs:** Added ADR-0002 (Skill Framework) and ADR-0003 (Langfuse Integration).

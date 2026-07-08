@@ -306,8 +306,8 @@ python scripts/validate_skill.py --skill skills/openai-judge --tier structural,b
 
 ### Langfuse Tracing & Credentials
 By default, the harness instruments all runs with `@observe()` decorators and links dataset run items. When run without the `--offline` flag, it defaults to using the following cloud environment credentials if not overridden:
-- `LANGFUSE_SECRET_KEY`: `sk-lf-e220d788-d2e0-4e82-bbde-6d1a57ba149f`
-- `LANGFUSE_PUBLIC_KEY`: `pk-lf-ad617cfc-ce1b-4c23-8c76-7868605ee6f1`
+- `LANGFUSE_SECRET_KEY`: `REDACTED — rotated, see incident record`
+- `LANGFUSE_PUBLIC_KEY`: `REDACTED — rotated, see incident record`
 - `LANGFUSE_BASE_URL`: `https://us.cloud.langfuse.com`
 
 When the `langfuse` library is not installed, tracing gracefully falls back to a no-op mode without interrupting harness execution.
