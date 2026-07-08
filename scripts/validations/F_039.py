@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -58,10 +59,17 @@ def _check_dogfood_config(errors: list[str]) -> None:
         "settings registers the claude-foundation marketplace at the extracted repo",
         errors,
     )
-    _check(bool(src.get("ref")), "marketplace pins a released tag (source ref)", errors)
+    ref = src.get("ref")
+    # Pin must be a semver release tag (rejects empty/garbage refs) — matched by pattern
+    # rather than a hardcoded version so deliberate pin bumps don't require editing the gate.
     _check(
-        "foundation@claude-foundation" in settings.get("enabledPlugins", {}),
-        "the foundation plugin is enabled",
+        bool(ref and re.fullmatch(r"v\d+\.\d+\.\d+", ref)),
+        "marketplace pins a semver release tag via the source ref (e.g. v1.0.0)",
+        errors,
+    )
+    _check(
+        settings.get("enabledPlugins", {}).get("foundation@claude-foundation") is True,
+        "the foundation plugin is enabled (explicit true)",
         errors,
     )
 
