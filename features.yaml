@@ -684,6 +684,6 @@ features:
       - "stats CLI --soak-target adds a reserved '_soak' block (no domain-name collision, matching the _unparsed convention); absent the flag, the stats JSON is byte-identical to the prior contract"
       - "store.py stays at 100% branch coverage under the agent-core 95 floor; ruff (incl. C901<15) + ruff format + strict mypy clean; store_sync stays under the 500-line file budget"
     validation_command: "python scripts/validations/F_040.py"
-    implemented_in: null
+    implemented_in: "0f19ecaa81639f8afbf66fcad54869186b02f5c4"
     depends_on: ["F-032"]
-    notes: "Extends the existing store_sync package (F-032 / ADR 0018): soak_progress lives beside store_stats in store.py, the CLI flag beside the stats subparser. Soak enablement itself stays time-gated (N>=20 + >=1 human verdict + weekly audits per ADR 0005) — this feature only makes progress observable. F-036 (real-transcript corpus bridge) remains deferred. implemented_in backfilled post-commit (repo provenance convention)."
+    notes: "Extends the existing store_sync package (F-032 / ADR 0018): soak_progress lives beside store_stats in store.py, the CLI flag beside the stats subparser. Soak enablement itself stays time-gated (N>=20 + >=1 human verdict + weekly audits per ADR 0005) — this feature only makes progress observable. F-036 (real-transcript corpus bridge) remains deferred."
