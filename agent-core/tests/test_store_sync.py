@@ -38,6 +38,7 @@ from agent_core.store_sync import (
     read_store,
     read_store_lines,
     serialize_store,
+    soak_progress,
     store_stats,
     write_store,
 )
@@ -495,3 +496,126 @@ def test_cli_internal_error_and_usage(tmp_path, capsys, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         main([])  # missing subcommand
     assert exc.value.code == 2
+
+
+# --- F-040: soak progress (pure, read-only over already-parsed records) ----------
+def test_soak_progress_empty_store_is_zeroed_and_velocity_none():
+    p = soak_progress([], target=20)
+    assert p["total"] == 0 and p["pending"] == 0 and p["labeled"] == 0
+    assert p["human_audit"] == 0
+    assert p["per_domain_cold_start"] == {}
+    assert p["n_vs_target"] == {"n": 0, "target": 20, "shortfall": 20}
+    assert p["velocity_per_day"] is None
+    assert p["days_to_target"] is None
+
+
+def test_soak_progress_single_record_cannot_establish_a_rate():
+    # The current live state: exactly one pending record on merge-gate-data.
+    p = soak_progress([_rec()], target=20)
+    assert p["total"] == 1 and p["pending"] == 1 and p["labeled"] == 0
+    assert p["velocity_per_day"] is None
+    assert p["days_to_target"] is None
+    assert p["n_vs_target"] == {"n": 1, "target": 20, "shortfall": 19}
+
+
+def test_soak_progress_counts_labeled_pending_and_human_audit():
+    recs = [
+        _rec(change_id="c1"),
+        _rec(
+            change_id="c2",
+            label=True,
+            label_source="timeout_clean",
+            labeled_at="2026-01-05T00:00:00+00:00",
+        ),
+        _rec(
+            change_id="c3",
+            label=False,
+            label_source="human_audit",
+            labeled_at="2026-01-06T00:00:00+00:00",
+        ),
+    ]
+    p = soak_progress(recs, target=20)
+    assert p["total"] == 3 and p["labeled"] == 2 and p["pending"] == 1
+    assert p["human_audit"] == 1  # only HUMAN_AUDIT is called out (it alone feeds tau/health)
+
+
+def test_soak_progress_velocity_and_days_to_target():
+    # 5 records spanning 4 days -> 4/4 = 1.0 rec/day; shortfall 15 -> 15 days.
+    days = ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05"]
+    recs = [_rec(change_id=f"c{i}", merged_at=f"{d}T00:00:00+00:00") for i, d in enumerate(days)]
+    p = soak_progress(recs, target=20)
+    assert p["velocity_per_day"] == pytest.approx(1.0)
+    assert p["days_to_target"] == pytest.approx(15.0)
+
+
+def test_soak_progress_span_under_one_day_has_no_velocity():
+    recs = [
+        _rec(change_id="c1", merged_at="2026-01-01T00:00:00+00:00"),
+        _rec(change_id="c2", merged_at="2026-01-01T06:00:00+00:00"),
+    ]
+    assert soak_progress(recs, target=20)["velocity_per_day"] is None
+
+
+def test_soak_progress_ignores_unparseable_merged_at_for_velocity():
+    # A bad stamp is dropped from the rate calc (not crashed on); it still counts in total.
+    recs = [
+        _rec(change_id="c1", merged_at="not-a-timestamp"),
+        _rec(change_id="c2", merged_at="2026-01-01T00:00:00+00:00"),
+    ]
+    p = soak_progress(recs, target=20)
+    assert p["velocity_per_day"] is None  # only one parseable stamp remains
+    assert p["total"] == 2
+
+
+def test_soak_progress_cold_start_keyed_on_audit_floor_not_a_literal():
+    audited = [
+        _rec(
+            change_id=f"c{i}",
+            domain="human/x",
+            label=True,
+            label_source="human_audit",
+            labeled_at="2026-01-02T00:00:00+00:00",
+        )
+        for i in range(3)
+    ]
+    assert soak_progress(audited, target=20, audit_floor=3)["per_domain_cold_start"] == {
+        "human/x": False
+    }
+    assert soak_progress(audited, target=20, audit_floor=4)["per_domain_cold_start"] == {
+        "human/x": True
+    }
+
+
+def test_soak_progress_default_audit_floor_is_the_audit_config_field():
+    from agent_core.audit_sampler import AuditConfig
+
+    rec = [
+        _rec(label=True, label_source="human_audit", labeled_at="2026-01-02T00:00:00+00:00"),
+    ]
+    # one audit, default floor (>1) -> still cold; provenance is the config, not a literal.
+    assert soak_progress(rec, target=20)["per_domain_cold_start"] == {"human/agent-core": True}
+    assert AuditConfig.per_domain_floor > 1
+
+
+@given(records=_records_strategy, target=st.integers(min_value=0, max_value=50))
+def test_soak_progress_never_mutates_its_input(records, target):
+    before = [r.to_json() for r in records]
+    n = len(records)
+    soak_progress(records, target)
+    assert [r.to_json() for r in records] == before
+    assert len(records) == n
+
+
+def test_cli_stats_soak_target_adds_reserved_block_default_unchanged(tmp_path, capsys):
+    store = tmp_path / "s.jsonl"
+    write_store(store, [_rec()])
+    base = ["stats", "--store", str(store)]
+    # Default output stays byte-identical to the pre-F-040 stats contract.
+    assert main(base) == EXIT_OK
+    assert json.loads(capsys.readouterr().out.strip()) == {"human/agent-core": {"pending": 1}}
+    # --soak-target opts into the reserved _soak block; domain stats are preserved.
+    assert main([*base, "--soak-target", "20"]) == EXIT_OK
+    out = json.loads(capsys.readouterr().out.strip())
+    assert out["human/agent-core"] == {"pending": 1}
+    assert out["_soak"]["n_vs_target"] == {"n": 1, "target": 20, "shortfall": 19}
+    assert out["_soak"]["velocity_per_day"] is None

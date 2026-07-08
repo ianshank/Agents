@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added
+- **Merge-gate soak-stats (F-040)**: `agent_core.store_sync.soak_progress(records, target)` — a
+  pure, read-only summary (total/pending/labeled, HUMAN_AUDIT count, per-domain cold-start keyed on
+  `AuditConfig.per_domain_floor`, n-vs-target, merge velocity/day, days-to-target) — plus an opt-in
+  `store_sync stats --soak-target N` that adds a reserved `_soak` block. Default `stats` output is
+  byte-identical; no store mutation (property-tested), no TCB change, no schema bump. Soak
+  enablement stays time-gated (ADR 0005); this only makes progress observable.
+
 ### Changed
 - **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted
   tech-debt pass on top of the size-budget work. Config-drove the one remaining hard-coded

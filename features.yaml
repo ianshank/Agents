@@ -669,3 +669,21 @@ features:
     implemented_in: "54986893ed95530e6fe942462826b385a9fe0ceb"
     depends_on: ["F-031"]
     notes: "Sweep scope and evidence: three read-only assessment passes over the branch (static tooling, suite baselines, debt scan) — findings and dispositions recorded in the PR. numpy tooling was requested but numpy is not a dependency anywhere; docstring-convention enforcement deliberately not adopted. vulture not adopted: ruff F401/F841 already active in root+agent-core. types-PyYAML deliberately not added: mypy 2.1.0 under the root config passes without it (verified by uninstall)."
+
+  - id: "F-040"
+    epic: "Quality Gate"
+    name: "Merge-gate soak-stats (store_sync.soak_progress + stats --soak-target)"
+    description: "Adds a pure agent_core.store_sync.soak_progress(records, target) summary over raw outcome records: total/pending/labeled, the HUMAN_AUDIT count (the only label source that feeds tau/health, called out separately), per-domain cold-start flags keyed on AuditConfig.per_domain_floor (a config field, not a literal), n-vs-target with shortfall, merge velocity (records/day across the merged_at span; None under two dated records or a sub-day span), and days-to-target (None at zero/None velocity). The stats CLI gains an opt-in --soak-target N that adds a reserved _soak block to the JSON; without the flag the bare-stats output is byte-identical. No new module, no TCB edit, no store mutation (property-tested), no SCHEMA_VERSION bump."
+    category: "non-functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "agent_core.store_sync.soak_progress is a pure read over already-parsed OutcomeRecords: it never mutates its input (hypothesis property test) and touches no git or TCB state"
+      - "per-domain cold-start flags use AuditConfig.per_domain_floor (the audit sampler's config field), not a hardcoded floor; velocity is None for <2 dated records or a span under one day; days_to_target is None at zero/None velocity"
+      - "stats CLI --soak-target adds a reserved '_soak' block (no domain-name collision, matching the _unparsed convention); absent the flag, the stats JSON is byte-identical to the prior contract"
+      - "store.py stays at 100% branch coverage under the agent-core 95 floor; ruff (incl. C901<15) + ruff format + strict mypy clean; store_sync stays under the 500-line file budget"
+    validation_command: "python scripts/validations/F_040.py"
+    implemented_in: null
+    depends_on: ["F-032"]
+    notes: "Extends the existing store_sync package (F-032 / ADR 0018): soak_progress lives beside store_stats in store.py, the CLI flag beside the stats subparser. Soak enablement itself stays time-gated (N>=20 + >=1 human verdict + weekly audits per ADR 0005) — this feature only makes progress observable. F-036 (real-transcript corpus bridge) remains deferred. implemented_in backfilled post-commit (repo provenance convention)."

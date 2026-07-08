@@ -2,6 +2,13 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Merge-gate soak-stats (F-040)** — `agent_core.store_sync.soak_progress(records, target)`
+  makes progress toward the ADR 0005 enablement threshold observable: a pure, read-only summary
+  (total/pending/labeled, HUMAN_AUDIT count, per-domain cold-start keyed on
+  `AuditConfig.per_domain_floor`, n-vs-target, merge velocity/day, days-to-target) plus an opt-in
+  `store_sync stats --soak-target N` that adds a reserved `_soak` block (bare-stats output
+  byte-identical). No TCB edit, no store mutation (property-tested), no schema bump. Soak
+  enablement itself stays time-gated (N≥20 + ≥1 human verdict + weekly audits).
 - [x] **One-command E2E / user-journey harness + Windows portability** —
   `scripts/run_all_e2e.ps1` (+ `docs/e2e-runbook.md`) runs every package suite, every
   `features.yaml` gate, every package CLI journey, and the skill/hook e2e tests in one
