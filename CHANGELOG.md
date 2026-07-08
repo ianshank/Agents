@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed
+- **`py.typed` now ships in the root wheel (PEP 561)**: `src/eval_harness/py.typed` was
+  missing and there was no `[tool.setuptools.package-data]` stanza, so the root `eval_harness`
+  package was not advertised as typed to downstream consumers (the sub-packages already shipped
+  theirs). Added both; verified the built wheel contains `eval_harness/py.typed`.
+
 ### Changed
 - **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted
   tech-debt pass on top of the size-budget work. Config-drove the one remaining hard-coded
