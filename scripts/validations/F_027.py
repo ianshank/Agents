@@ -79,12 +79,17 @@ def validate_f027() -> int:
 
     from eval_harness.config.models import EvalConfig
 
-    cfg = EvalConfig(
-        schema_version=SCHEMA_VERSION,
-        run={"name": "m"},
-        dataset={"type": "inline", "params": {"items": [{"id": "1", "inputs": {"prompt": "x"}}]}},
-        target={"type": "model", "params": {"provider": "openai", "model": "m"}},
-        scorers=[{"type": "exact_match", "params": {}}],
+    # Build from a raw mapping via model_validate (Pydantic coerces the nested dicts into
+    # the typed sub-models) — keeps mypy honest about the dict->model boundary without
+    # loosening the model's field types.
+    cfg = EvalConfig.model_validate(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "run": {"name": "m"},
+            "dataset": {"type": "inline", "params": {"items": [{"id": "1", "inputs": {"prompt": "x"}}]}},
+            "target": {"type": "model", "params": {"provider": "openai", "model": "m"}},
+            "scorers": [{"type": "exact_match", "params": {}}],
+        }
     )
     _check(cfg.target.type == "model", "EvalConfig accepts the model target", errors)
     _check(SCHEMA_VERSION == "1.0", "SCHEMA_VERSION unchanged", errors)

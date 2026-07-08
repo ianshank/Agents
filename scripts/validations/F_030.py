@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from typing import cast
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -45,7 +46,7 @@ def validate_f030() -> int:
     try:
         from agent_core import BudgetExceededError
 
-        from eval_harness.agent_core_adapter import build_budgeted_judge
+        from eval_harness.agent_core_adapter import BudgetedJudge, build_budgeted_judge
     except ImportError:
         # agent_core is the optional extra this feature builds on; treat absence as a skip-pass.
         logger.info("agent_core not installed; F-030 offline check skipped (feature is opt-in)")
@@ -102,7 +103,9 @@ def validate_f030() -> int:
     _check(cap_tripped, "cumulative cap still trips independently of the window", errors)
 
     # Feature off when window absent → byte-identical (no limiter).
-    j4 = build_budgeted_judge(MockJudge(), JudgeBudgetConfig(enabled=True, cap=5.0))
+    # build_budgeted_judge is annotated to return the Judge interface, but always
+    # constructs a BudgetedJudge; cast to assert the private _limiter wiring detail.
+    j4 = cast(BudgetedJudge, build_budgeted_judge(MockJudge(), JudgeBudgetConfig(enabled=True, cap=5.0)))
     _check(j4._limiter is None, "no limiter attached when window fields omitted", errors)
 
     return report(logger, "F-030", errors)

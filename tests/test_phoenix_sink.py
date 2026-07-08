@@ -11,26 +11,42 @@ from __future__ import annotations
 import logging
 import sys
 import types
-from types import SimpleNamespace
+from datetime import datetime, timezone
+from typing import cast
 
+from eval_harness.core.types import (
+    EvalItem,
+    ItemResult,
+    RunResult,
+    ScoreResult,
+    TargetOutput,
+)
 from eval_harness.phoenix_client import (
     NullPhoenixScoreClient,
     SDKPhoenixScoreClient,
     build_score_client,
 )
 from eval_harness.plugins import SINKS
+from eval_harness.sinks import PhoenixSink
 
 
-def _run(*scores: tuple[str, float, str | None]) -> SimpleNamespace:
-    """A RunResult-shaped stand-in (the sink only reads these attributes)."""
-    return SimpleNamespace(
+def _run(*scores: tuple[str, float, str | None]) -> RunResult:
+    """A minimal real ``RunResult`` (the sink only reads run_id / items / scores)."""
+    now = datetime.now(timezone.utc)
+    item = EvalItem(id="item-1", inputs={})
+    return RunResult(
         run_id="run-1",
+        config_name="test",
         items=[
-            SimpleNamespace(
-                item=SimpleNamespace(id="item-1"),
-                scores=[SimpleNamespace(name=n, value=v, comment=c) for (n, v, c) in scores],
+            ItemResult(
+                item=item,
+                output=TargetOutput(output=None),
+                scores=[ScoreResult(name=n, value=v, comment=c) for (n, v, c) in scores],
             )
         ],
+        aggregate={},
+        started_at=now,
+        finished_at=now,
     )
 
 
@@ -150,13 +166,18 @@ def test_sdk_score_client_omits_comment_attribute_when_absent() -> None:
 
 
 def test_phoenix_sink_registered_and_logs_scores_offline() -> None:
-    sink = SINKS.create("phoenix", {})  # enabled defaults False → Null client, no network
+    # SINKS.create is typed to the ResultSink protocol; cast to the concrete sink to
+    # reach its private ``_client`` (offline that client is a NullPhoenixScoreClient,
+    # the only variant exposing recorded .scores / .flushed).
+    sink = cast(PhoenixSink, SINKS.create("phoenix", {}))  # enabled defaults False → Null client
+    client = cast(NullPhoenixScoreClient, sink._client)
     sink.emit(_run(("acc", 0.9, "ok"), ("f1", 0.5, None)))
-    assert [s["name"] for s in sink._client.scores] == ["acc", "f1"]
-    assert sink._client.flushed is True
+    assert [s["name"] for s in client.scores] == ["acc", "f1"]
+    assert client.flushed is True
 
 
 def test_phoenix_sink_respects_min_value_to_log() -> None:
-    sink = SINKS.create("phoenix", {"min_value_to_log": 0.6})
+    sink = cast(PhoenixSink, SINKS.create("phoenix", {"min_value_to_log": 0.6}))
+    client = cast(NullPhoenixScoreClient, sink._client)
     sink.emit(_run(("acc", 0.9, None), ("low", 0.3, None)))
-    assert [s["name"] for s in sink._client.scores] == ["acc"]  # 0.3 filtered out
+    assert [s["name"] for s in client.scores] == ["acc"]  # 0.3 filtered out

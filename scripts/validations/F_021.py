@@ -22,6 +22,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -98,8 +99,12 @@ def main() -> int:
             )
             _check("<b>hi</b>" not in text, "user output is HTML-escaped", errors)
 
-            # determinism: re-render the same RunResult
-            second = sink.render(run)
+            # determinism: re-render the same RunResult. SINKS.create returns the
+            # ResultSink protocol (emit-only); render() is HtmlFileSink-specific, so
+            # cast to assert the concrete sink this test constructed.
+            from eval_harness.sinks import HtmlFileSink
+
+            second = cast(HtmlFileSink, sink).render(run)
             _check(second == text, "same RunResult renders byte-identically", errors)
     except Exception as exc:
         errors.append(f"HtmlFileSink emit/render failed: {exc}")

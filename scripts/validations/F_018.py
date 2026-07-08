@@ -67,9 +67,13 @@ def main() -> int:
         logger.info("OK: RunSettings(max_workers=0) correctly rejected")
 
     # 3. Sequential and parallel produce identical aggregate means
-    cfg_base = {
+    # Type the run sub-dict precisely: without this, mypy infers the heterogeneous
+    # cfg_base values as Collection[...], and {**cfg_base["run"], ...} below fails
+    # because a Collection isn't a valid mapping to unpack.
+    run_base: dict[str, str | int] = {"name": "f018", "run_id": "f018-val", "seed": 99}
+    cfg_base: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
-        "run": {"name": "f018", "run_id": "f018-val", "seed": 99},
+        "run": run_base,
         "dataset": {
             "type": "inline",
             "params": {"items": [{"id": str(i), "inputs": {"q": f"q{i}"}, "expected": f"q{i}"} for i in range(8)]},
@@ -87,7 +91,7 @@ def main() -> int:
     try:
         # Sequential
         cfg_seq = dict(cfg_base)
-        cfg_seq["run"] = {**cfg_base["run"], "max_workers": 1}
+        cfg_seq["run"] = {**run_base, "max_workers": 1}
         config_seq = load_config_dict(cfg_seq)
         engine_seq = EvalEngine.from_config(config_seq, langfuse_client=NullLangfuseClient())
         engine_seq.clock = _clock
@@ -95,7 +99,7 @@ def main() -> int:
 
         # Parallel
         cfg_par = dict(cfg_base)
-        cfg_par["run"] = {**cfg_base["run"], "max_workers": 4}
+        cfg_par["run"] = {**run_base, "max_workers": 4}
         config_par = load_config_dict(cfg_par)
         engine_par = EvalEngine.from_config(config_par, langfuse_client=NullLangfuseClient())
         engine_par.clock = _clock
