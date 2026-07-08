@@ -55,10 +55,13 @@
   coverage, mypy strict), inert CI workflow, docs+ADRs. Verified end-to-end via
   `claude --plugin-dir` headless load. Staging is CI-neutral here (per ADR 0017 the
   plugin's final home is its own repo).
-- [ ] **Extract `claude-foundation/` to its own repository** — create
-  `ianshank/claude-foundation`, move the staging directory (history via
-  `git filter-repo` or fresh import), activate its CI, tag v1.0.0, then run the M7
-  dogfood (config-only install here per ADR 0017).
+- [x] **Extracted `claude-foundation/` to its own repository (F-039)** — created the private
+  `ianshank/claude-foundation` via **fresh import** (provenance-stamped first commit), activated its
+  CI (deterministic merge gate green on 3.11/3.12), enabled branch protection, and tagged **v1.0.0**.
+  Agents now consumes the generic layer by config (`.claude/settings.json` → marketplace pinned to
+  the v1.0.0 source ref; the 4 domain skills stay unchanged, ADR 0017/0021). The staging dir + its
+  inert root workflow were deleted together in the single-revert extraction PR. See
+  [docs/foundation-plugin.md](docs/foundation-plugin.md).
 - [x] **`claude-foundation` M7 reconciliation ADR** — decided in
   [ADR 0017](docs/decisions/0017-claude-foundation-reconciliation.md): this repo keeps its
   4 domain skills and custom marketplace unchanged; foundation supplies only the generic
