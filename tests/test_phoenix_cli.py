@@ -45,8 +45,9 @@ def test_run_activates_tracing_with_phoenix_config(monkeypatch) -> None:
     rc = cli._cmd_run(Namespace(config="cfg.yaml", overrides=[], offline=True))
 
     assert rc == 0
+    assert cfg.phoenix is not None, "phoenix block must survive config validation"
     assert captured["pc"] is cfg.phoenix
-    assert captured["pc"].enabled is True
+    assert cfg.phoenix.enabled is True
 
 
 def test_run_passes_none_when_no_phoenix_block(monkeypatch) -> None:

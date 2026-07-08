@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   missing and there was no `[tool.setuptools.package-data]` stanza, so the root `eval_harness`
   package was not advertised as typed to downstream consumers (the sub-packages already shipped
   theirs). Added both; verified the built wheel contains `eval_harness/py.typed`.
+  Making the package typed also made the repo's own `mypy` resolve `eval_harness` against its
+  real types, which (a) required adding `src` to `[tool.mypy] mypy_path` so the path-based
+  `mypy src/eval_harness` names files by the package (not `src.eval_harness.*`) and stops
+  resolving each file twice, and (b) surfaced 32 latent type mismatches in validation scripts
+  and Phoenix tests. All fixed with no field-type loosening: config gates now build via
+  `EvalConfig.model_validate({...})` (Pydantic coerces the raw mapping, mirroring YAML loading),
+  the two Phoenix tests use a real `RunResult` and proper None-narrowing, and a few
+  implementation-detail reaches use `cast(...)` with comments.
 
 ### Changed
 - **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted

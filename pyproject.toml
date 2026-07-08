@@ -91,9 +91,12 @@ max-complexity = 14
 
 [tool.mypy]
 python_version = "3.10"
-# Lets `mypy scripts` resolve the validation gates' runtime `from _common import ...`
-# bootstrap imports; explicit_package_bases keeps module naming stable for it.
-mypy_path = "scripts/validations"
+# scripts/validations: lets `mypy scripts` resolve the gates' runtime `from _common import ...`.
+# src: makes path-based `mypy src/eval_harness` name files by the package (`eval_harness.*`),
+# matching the typed editable install. Without it, shipping py.typed makes mypy resolve each
+# file twice ("src.eval_harness.*" AND "eval_harness.*") and fail. explicit_package_bases
+# keeps module naming stable for both.
+mypy_path = "scripts/validations, src"
 explicit_package_bases = true
 warn_return_any = true
 warn_unused_configs = true

@@ -87,12 +87,17 @@ def validate_f026() -> int:
     _check(NullLangfuseClient().get_prompt("x") is None, "NullLangfuseClient.get_prompt is None", errors)
 
     # 6. EvalConfig accepts judge_prompt, schema version unchanged
-    cfg = EvalConfig(
-        schema_version=SCHEMA_VERSION,
-        dataset={"type": "inline", "params": {}},
-        target={"type": "echo", "params": {}},
-        judge={"type": "mock", "params": {}},
-        judge_prompt={"source": "langfuse", "name": "judge-rubric", "text": "FB"},
+    # Build from a raw mapping via model_validate (Pydantic coerces the nested dicts into
+    # the typed sub-models) — keeps mypy honest about the dict->model boundary without
+    # loosening the model's field types.
+    cfg = EvalConfig.model_validate(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "dataset": {"type": "inline", "params": {}},
+            "target": {"type": "echo", "params": {}},
+            "judge": {"type": "mock", "params": {}},
+            "judge_prompt": {"source": "langfuse", "name": "judge-rubric", "text": "FB"},
+        }
     )
     _check(cfg.judge_prompt is not None, "EvalConfig carries judge_prompt", errors)
     _check(cfg.schema_version == SCHEMA_VERSION, "schema_version unchanged", errors)

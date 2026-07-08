@@ -34,19 +34,24 @@ _ITEMS = [{"id": "1", "inputs": {"a": "x", "b": "y"}, "expected": "x"}]
 
 
 def _config() -> EvalConfig:
-    return EvalConfig(
-        schema_version=SCHEMA_VERSION,
-        run={"name": "cmp"},
-        dataset={"type": "inline", "params": {"items": _ITEMS}},
-        target={"type": "echo", "params": {}},
-        scorers=[{"type": "exact_match", "params": {}}],
-        comparison={
-            "baseline": "good",
-            "models": [
-                {"name": "good", "target": {"type": "echo", "params": {"output_key": "a"}}},
-                {"name": "bad", "target": {"type": "echo", "params": {"output_key": "b"}}},
-            ],
-        },
+    # Build from a raw mapping via model_validate (Pydantic coerces the nested dicts into
+    # the typed sub-models) — mirrors how configs load from YAML and keeps mypy honest
+    # about the dict->model boundary without loosening the model's field types.
+    return EvalConfig.model_validate(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "run": {"name": "cmp"},
+            "dataset": {"type": "inline", "params": {"items": _ITEMS}},
+            "target": {"type": "echo", "params": {}},
+            "scorers": [{"type": "exact_match", "params": {}}],
+            "comparison": {
+                "baseline": "good",
+                "models": [
+                    {"name": "good", "target": {"type": "echo", "params": {"output_key": "a"}}},
+                    {"name": "bad", "target": {"type": "echo", "params": {"output_key": "b"}}},
+                ],
+            },
+        }
     )
 
 

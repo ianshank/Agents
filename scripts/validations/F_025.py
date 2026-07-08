@@ -42,26 +42,44 @@ def _items(n: int) -> list[dict]:
     return [{"id": str(i), "inputs": {"good": "x", "bad": "y"}, "expected": "x"} for i in range(n)]
 
 
+def _ab_block(min_sample: int = 30) -> dict:
+    return {
+        "campaign_id": "c1",
+        "arm_a": {"name": "lo", "target": {"type": "echo", "params": {"output_key": "bad"}}},
+        "arm_b": {"name": "hi", "target": {"type": "echo", "params": {"output_key": "good"}}},
+        "score": "exact_match",
+        "min_sample": min_sample,
+    }
+
+
 def _config(n: int, min_sample: int = 30) -> EvalConfig:
-    return EvalConfig(
-        schema_version=SCHEMA_VERSION,
-        dataset={"type": "inline", "params": {"items": _items(n)}},
-        target={"type": "echo", "params": {}},
-        scorers=[{"type": "exact_match", "params": {}}],
-        ab_campaign={
-            "campaign_id": "c1",
-            "arm_a": {"name": "lo", "target": {"type": "echo", "params": {"output_key": "bad"}}},
-            "arm_b": {"name": "hi", "target": {"type": "echo", "params": {"output_key": "good"}}},
-            "score": "exact_match",
-            "min_sample": min_sample,
-        },
+    # Build from a raw mapping via model_validate (Pydantic coerces the nested dicts into
+    # the typed sub-models) — keeps mypy honest about the dict->model boundary without
+    # loosening the model's field types.
+    return EvalConfig.model_validate(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "dataset": {"type": "inline", "params": {"items": _items(n)}},
+            "target": {"type": "echo", "params": {}},
+            "scorers": [{"type": "exact_match", "params": {}}],
+            "ab_campaign": _ab_block(min_sample),
+        }
     )
+
+
+def _campaign(min_sample: int = 30) -> ABCampaignConfig:
+    # analyze() requires a non-optional ABCampaignConfig; validate the same raw block
+    # directly so the value's type is the concrete model rather than EvalConfig.ab_campaign
+    # (which is Optional). Identical block -> identical runtime behavior.
+    return ABCampaignConfig.model_validate(_ab_block(min_sample))
 
 
 def _distinct_arms_enforced() -> bool:
     arm = {"name": "x", "target": {"type": "echo"}}
     try:
-        ABCampaignConfig(campaign_id="c", arm_a=arm, arm_b=arm, score="s")
+        # Validate a raw mapping so Pydantic coerces the arm dicts into ModelSpec and still
+        # runs the @model_validator (which rejects identical arm names) — same runtime check.
+        ABCampaignConfig.model_validate({"campaign_id": "c", "arm_a": arm, "arm_b": arm, "score": "s"})
         return False
     except Exception:
         return True
@@ -82,7 +100,7 @@ def validate_f025() -> int:
         _check(len(recs) == 2, "record_run writes one record per arm", errors)
         _check(store.totals("c1", "hi") == (5, 5), "store accumulates per-arm totals", errors)
         _check(
-            analyze(store, cfg_small.ab_campaign).decision is Decision.CANT_TELL,
+            analyze(store, _campaign(min_sample=30)).decision is Decision.CANT_TELL,
             "below the power floor -> CANT_TELL (no claim)",
             errors,
         )
@@ -91,7 +109,7 @@ def validate_f025() -> int:
         store2 = CampaignStore(Path(tmp) / "big.jsonl")
         cfg_big = _config(30, min_sample=30)
         record_run(store2, cfg_big, now=FIXED)
-        result = analyze(store2, cfg_big.ab_campaign)
+        result = analyze(store2, _campaign(min_sample=30))
         _check(result.decision is Decision.B_BETTER, "powered + separated -> B_BETTER", errors)
         _check(result.delta == 1.0, "delta computed (hi 1.0 - lo 0.0)", errors)
 
