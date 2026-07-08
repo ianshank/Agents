@@ -669,3 +669,21 @@ features:
     implemented_in: "54986893ed95530e6fe942462826b385a9fe0ceb"
     depends_on: ["F-031"]
     notes: "Sweep scope and evidence: three read-only assessment passes over the branch (static tooling, suite baselines, debt scan) — findings and dispositions recorded in the PR. numpy tooling was requested but numpy is not a dependency anywhere; docstring-convention enforcement deliberately not adopted. vulture not adopted: ruff F401/F841 already active in root+agent-core. types-PyYAML deliberately not added: mypy 2.1.0 under the root config passes without it (verified by uninstall)."
+
+  - id: "F-039"
+    epic: "Quality Gate"
+    name: "claude-foundation extraction to its own repo + M7 config-only dogfood"
+    description: "Extracts the generic Claude Code plugin from the claude-foundation/ staging tree to its own repository (ianshank/claude-foundation, private) via fresh import, tagged v1.0.0 with its CI active + branch protection. Agents now consumes the generic layer by config — .claude/settings.json registers the claude-foundation marketplace pinned to the v1.0.0 source ref and enables the foundation plugin (config-only, never vendored, per ADR 0017). The staging directory and its inert root workflow (claude-foundation/ and .github/workflows/claude-foundation-ci.yml) are deleted together in this single-revert PR. The four domain skills stay unchanged; no generic skill is duplicated into skills/."
+    category: "infrastructure"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "claude-foundation/ staging dir and .github/workflows/claude-foundation-ci.yml are both removed (F-037's exist-or-vanish-together now resolves to neither present)"
+      - ".claude/settings.json registers the claude-foundation marketplace at ianshank/claude-foundation pinned via the v1.0.0 source ref and enables foundation@claude-foundation"
+      - "the four domain skills (openai-judge, architecture-drift-guard, eval-corpus-forge, model-bench) survive as real tracked dirs (not symlinks) with SKILL.md; no generic skill (plan/code-review/test-first/c4-docs) is duplicated into skills/"
+      - "ADR 0021 records the fresh-import + v1.0.0-pin + single-revert-delete decision (config-only dogfood per ADR 0017)"
+    validation_command: "python scripts/validations/F_039.py"
+    implemented_in: "e8c8defa616442cf4b3169dd0e0a91233e2c1779"
+    depends_on: ["F-037"]
+    notes: "Fresh import (not git filter-repo), consistent with ADR 0020 (no history rewrite). The new repo is PRIVATE; consumers need read access and the pinned ref is bumped deliberately per foundation release. Follow-up gap noted for the extracted repo: its ci.yml gates the release-gate job on refs/tags/v* but only triggers on push:branches/pull_request, so tagging never fires it (add on: push: tags). implemented_in backfilled post-commit."

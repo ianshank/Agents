@@ -1,0 +1,14 @@
+{
+  "extraKnownMarketplaces": {
+    "claude-foundation": {
+      "source": {
+        "source": "github",
+        "repo": "ianshank/claude-foundation",
+        "ref": "v1.0.0"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "foundation@claude-foundation": true
+  }
+}

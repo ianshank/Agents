@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   theirs). Added both; verified the built wheel contains `eval_harness/py.typed`.
 
 ### Changed
+- **claude-foundation extracted to its own repository (F-039)**: the generic Claude Code plugin
+  moved from the `claude-foundation/` staging tree to the private `ianshank/claude-foundation`
+  (fresh import, tagged `v1.0.0`, CI + branch protection). Agents now consumes the generic layer by
+  config — `.claude/settings.json` pins the marketplace to the `v1.0.0` source ref and enables
+  `foundation@claude-foundation` (never vendored, ADR 0017/0021). The staging directory and its
+  inert root workflow (`claude-foundation-ci.yml`) were removed together in the single-revert
+  extraction PR; `scripts/validations/F_039.py` guards the post-extraction state. The four domain
+  skills are unchanged. See `docs/foundation-plugin.md`.
 - **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted
   tech-debt pass on top of the size-budget work. Config-drove the one remaining hard-coded
   threshold (`BRConfig.sycophancy_label_threshold`, additive/backwards-compatible); extracted
