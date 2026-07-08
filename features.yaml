@@ -684,6 +684,6 @@ features:
       - "quality-gates.yml runs gitleaks fail-closed on the working tree (detect --no-git, config-driven) and report-only over history (--exit-code 0), per ADR 0020"
       - "ADR 0020 (no history rewrite) records rotation-as-mitigation and the blast-radius rationale"
     validation_command: "python scripts/validations/F_038.py"
-    implemented_in: null
+    implemented_in: "eb6bc808d5cdd202d8d68f6330e3525c57daaea6"
     depends_on: []
     notes: "Rotation of the sk-lf-/pk-lf- pair was confirmed before merge and is recorded in the scrub PR (G1 gate). The gitleaks binary is pinned in the workflow (bump the VERSION there to upgrade). History stays as-is (ADR 0020); only the working tree is fail-closed."
