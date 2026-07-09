@@ -82,9 +82,14 @@ def main() -> int:
     # 2-4. emit, self-contained, determinism
     try:
         run = _sample_run()
+        from eval_harness.sinks import HtmlFileSink
+
         with tempfile.TemporaryDirectory() as td:
             out = Path(td) / "nested" / "report.html"
             sink = SINKS.create("html_file", {"path": str(out)})
+            # SINKS.create returns the ResultSink protocol; narrow to HtmlFileSink
+            # (runtime-checked) so the concrete .render() call below type-checks.
+            assert isinstance(sink, HtmlFileSink)
             sink.emit(run)
             _check(out.exists(), "emit wrote the HTML file (nested dir created)", errors)
             text = out.read_text(encoding="utf-8")

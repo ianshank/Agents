@@ -46,7 +46,8 @@ def test_run_activates_tracing_with_phoenix_config(monkeypatch) -> None:
 
     assert rc == 0
     assert captured["pc"] is cfg.phoenix
-    assert captured["pc"].enabled is True
+    assert cfg.phoenix is not None
+    assert cfg.phoenix.enabled is True
 
 
 def test_run_passes_none_when_no_phoenix_block(monkeypatch) -> None:

@@ -41,6 +41,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `main`'s round-trip tests. No behaviour lost from either side; all suites/gates green.
 
 ### Fixed
+- **`py.typed` mypy fallout — `mypy src/eval_harness` + 32 latent errors** (see
+  [`docs/gap-analysis-2026-07-py-typed-mypy.md`](docs/gap-analysis-2026-07-py-typed-mypy.md)):
+  shipping `py.typed` made mypy follow the editable-installed `eval_harness`, so
+  `mypy src/eval_harness` failed with *"Source file found twice"* (`src.eval_harness.*` vs
+  `eval_harness.*`) — a red already on `main@1fb53b9`. Fixed config-only by adding `src` to
+  `[tool.mypy].mypy_path` (with the existing `explicit_package_bases`). Unblocking that CI step
+  exposed 32 real type errors in `scripts/validations/F_018,F_021,F_024,F_025,F_026,F_027,F_030`
+  and `tests/test_phoenix_{sink,cli}.py` that `py.typed` had surfaced (typed `eval_harness`
+  reaching callers that passed loosely-typed dicts). Fixed with the repo's own idioms —
+  `EvalConfig.model_validate({...})` for config construction, `assert isinstance(...)` /
+  `is not None` narrowing, and reusable `_phoenix_sink`/`_null_client` test helpers — all
+  behaviour-preserving (gates still exit 0). `mypy` (src/scripts/tests), `ruff`, and every
+  package coverage floor are green.
 - **`py.typed` now ships in the root wheel (PEP 561)**: `src/eval_harness/py.typed` was
   missing and there was no `[tool.setuptools.package-data]` stanza, so the root `eval_harness`
   package was not advertised as typed to downstream consumers (the sub-packages already shipped

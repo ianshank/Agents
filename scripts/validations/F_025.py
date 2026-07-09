@@ -43,25 +43,27 @@ def _items(n: int) -> list[dict]:
 
 
 def _config(n: int, min_sample: int = 30) -> EvalConfig:
-    return EvalConfig(
-        schema_version=SCHEMA_VERSION,
-        dataset={"type": "inline", "params": {"items": _items(n)}},
-        target={"type": "echo", "params": {}},
-        scorers=[{"type": "exact_match", "params": {}}],
-        ab_campaign={
-            "campaign_id": "c1",
-            "arm_a": {"name": "lo", "target": {"type": "echo", "params": {"output_key": "bad"}}},
-            "arm_b": {"name": "hi", "target": {"type": "echo", "params": {"output_key": "good"}}},
-            "score": "exact_match",
-            "min_sample": min_sample,
-        },
+    return EvalConfig.model_validate(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "dataset": {"type": "inline", "params": {"items": _items(n)}},
+            "target": {"type": "echo", "params": {}},
+            "scorers": [{"type": "exact_match", "params": {}}],
+            "ab_campaign": {
+                "campaign_id": "c1",
+                "arm_a": {"name": "lo", "target": {"type": "echo", "params": {"output_key": "bad"}}},
+                "arm_b": {"name": "hi", "target": {"type": "echo", "params": {"output_key": "good"}}},
+                "score": "exact_match",
+                "min_sample": min_sample,
+            },
+        }
     )
 
 
 def _distinct_arms_enforced() -> bool:
     arm = {"name": "x", "target": {"type": "echo"}}
     try:
-        ABCampaignConfig(campaign_id="c", arm_a=arm, arm_b=arm, score="s")
+        ABCampaignConfig.model_validate({"campaign_id": "c", "arm_a": arm, "arm_b": arm, "score": "s"})
         return False
     except Exception:
         return True
@@ -78,11 +80,15 @@ def validate_f025() -> int:
         # below power -> cant_tell
         store = CampaignStore(Path(tmp) / "small.jsonl")
         cfg_small = _config(5, min_sample=30)
+        # _config always populates ab_campaign; bind + assert so the Optional is narrowed
+        # for analyze() (which requires a concrete ABCampaignConfig).
+        campaign_small = cfg_small.ab_campaign
+        assert campaign_small is not None
         recs = record_run(store, cfg_small, now=FIXED)
         _check(len(recs) == 2, "record_run writes one record per arm", errors)
         _check(store.totals("c1", "hi") == (5, 5), "store accumulates per-arm totals", errors)
         _check(
-            analyze(store, cfg_small.ab_campaign).decision is Decision.CANT_TELL,
+            analyze(store, campaign_small).decision is Decision.CANT_TELL,
             "below the power floor -> CANT_TELL (no claim)",
             errors,
         )
@@ -90,8 +96,10 @@ def validate_f025() -> int:
         # powered + separated -> b_better
         store2 = CampaignStore(Path(tmp) / "big.jsonl")
         cfg_big = _config(30, min_sample=30)
+        campaign_big = cfg_big.ab_campaign
+        assert campaign_big is not None
         record_run(store2, cfg_big, now=FIXED)
-        result = analyze(store2, cfg_big.ab_campaign)
+        result = analyze(store2, campaign_big)
         _check(result.decision is Decision.B_BETTER, "powered + separated -> B_BETTER", errors)
         _check(result.delta == 1.0, "delta computed (hi 1.0 - lo 0.0)", errors)
 
