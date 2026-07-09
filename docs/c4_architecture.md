@@ -221,6 +221,7 @@ flowchart TB
     PR --> REG[regression_gate.py]
     PR --> GUARD[check_protected_changes.py]
     PR --> DRIFT[check_skill_script_drift.py<br/>vendored skill copies == canonical]
+    PR --> CHARTER[check_charter_drift.py<br/>docs/CHARTER.md references resolve — via test suite]
     PR --> MG[calibrated-merge-gate.yml<br/>F-010 acting job — default-off]
     PR --> SHADOW[shadow job F-035<br/>log-only, never blocks]
 

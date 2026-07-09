@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (stdlib-only, `_cli.configure_logging`, exit `0/1/2`) parses every markdown link target
   in the charter and asserts each local file/ADR reference resolves, skipping externals,
   anchors, and glob patterns to avoid false positives; covered by
-  `tests/test_check_charter_drift.py`. `AGENTS.md` now lists the charter as the tier-0 read.
+  `tests/test_check_charter_drift.py`. `AGENTS.md` now lists the charter as the tier-0 read,
+  and the C4 "Quality & Eval-Integrity Gates" diagram (`docs/c4_architecture.md`) lists the
+  new guard.
 
 ### Changed
 - **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted
