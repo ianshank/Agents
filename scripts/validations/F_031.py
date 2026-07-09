@@ -103,10 +103,12 @@ def main() -> int:
     )
     # Assert the invariant (scripts/validations is on mypy_path) rather than an exact
     # literal, so a legitimate additional base (e.g. "src" for the package layout) does
-    # not trip this guard while an accidental removal still does.
+    # not trip this guard while an accidental removal still does. Match the *quoted* TOML
+    # entry so a different path that merely contains the substring (e.g.
+    # "scripts/validations-other") cannot false-pass.
     mypy_path = re.search(r"^mypy_path\s*=\s*(?P<value>.+)$", pyproject, re.MULTILINE)
     _check(
-        mypy_path is not None and "scripts/validations" in mypy_path.group("value"),
+        mypy_path is not None and '"scripts/validations"' in mypy_path.group("value"),
         "mypy resolves the validation gates' bootstrap imports",
         errors,
     )

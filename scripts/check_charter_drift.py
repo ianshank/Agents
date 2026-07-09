@@ -80,15 +80,37 @@ _EXTERNAL_PREFIXES = ("http://", "https://", "mailto:", "//", "#")
 
 @dataclass(frozen=True)
 class DeadLink:
-    """One markdown link whose local target does not resolve to a repo path."""
+    """One markdown link whose local target does not resolve to a valid repo path."""
 
     target: str  # the raw target as written in the charter
     resolved: str  # absolute path it resolved to (POSIX), for the report
+    reason: str  # why it is dead: "missing" or "outside repo root"
 
 
 def _repo_root() -> Path:
     """Repo root (parent of the ``scripts/`` directory holding this file)."""
     return Path(__file__).resolve().parent.parent
+
+
+def _containing_root(charter_path: Path) -> Path:
+    """The repository root that scopes valid references for *charter_path*.
+
+    Resolved link targets must stay within this root — a link that escapes it (e.g.
+    ``../../etc/passwd``) is invalid even if the OS path exists, since the charter validates
+    *repo* references. The root is the nearest ancestor of the charter that contains a
+    ``.git`` entry; if none is found (a charter outside a git checkout, e.g. a test fixture in
+    a temp dir), it falls back to the charter's own directory.
+    """
+    base = charter_path.resolve().parent
+    for candidate in (base, *base.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return base
+
+
+def _within_root(path: Path, root: Path) -> bool:
+    """True when the resolved *path* is the root itself or lives beneath it."""
+    return path == root or root in path.parents
 
 
 def _default_charter() -> Path:
@@ -168,20 +190,28 @@ def extract_local_targets(text: str) -> list[str]:
 
 
 def find_dead_links(charter_path: Path) -> list[DeadLink]:
-    """Return every local link target in *charter_path* that does not resolve.
+    """Return every local link target in *charter_path* that is not a valid repo reference.
 
-    Targets resolve relative to the charter file's own directory, per markdown semantics.
-    A target is considered live if it exists as either a file or a directory.
+    Targets resolve relative to the charter file's own directory, per markdown semantics. A
+    target is live only when it (a) stays within the repository root (see
+    :func:`_containing_root`) and (b) exists as a file or directory. A target that escapes
+    the repo (e.g. ``../../etc/passwd``) is dead even if the OS path exists — the charter
+    validates *repo* references, not arbitrary filesystem paths.
     """
     text = charter_path.read_text(encoding="utf-8")
     base = charter_path.resolve().parent
+    root = _containing_root(charter_path)
     dead: list[DeadLink] = []
     for target in extract_local_targets(text):
         resolved = (base / target).resolve()
+        if not _within_root(resolved, root):
+            logger.debug("reference %s -> %s (OUTSIDE %s)", target, resolved.as_posix(), root.as_posix())
+            dead.append(DeadLink(target, resolved.as_posix(), "outside repo root"))
+            continue
         exists = resolved.exists()
         logger.debug("reference %s -> %s (%s)", target, resolved.as_posix(), "ok" if exists else "MISSING")
         if not exists:
-            dead.append(DeadLink(target, resolved.as_posix()))
+            dead.append(DeadLink(target, resolved.as_posix(), "missing"))
     return dead
 
 
@@ -222,7 +252,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         logger.warning("charter-drift: %d dead reference(s) in %s", len(dead), charter.as_posix())
         print(f"charter-drift: FAIL - {len(dead)} dead reference(s) in {charter.as_posix()}:")
         for link in dead:
-            print(f"  {link.target} -> {link.resolved} (missing)")
+            print(f"  {link.target} -> {link.resolved} ({link.reason})")
         return 1
 
     logger.info("charter-drift: OK - all references in %s resolve", charter.as_posix())

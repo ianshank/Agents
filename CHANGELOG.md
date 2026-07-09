@@ -21,7 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workflow's ≥85% tooling-coverage gate. `AGENTS.md` now lists the charter as the tier-0 read,
   and the C4 "Quality & Eval-Integrity Gates" diagram (`docs/c4_architecture.md`) lists the
   new guard. The drift-detected path now emits a `logger.warning` (parity with the
-  usage-error/success paths) so CI surfaces it in structured logs.
+  usage-error/success paths) so CI surfaces it in structured logs. Hardening (review
+  feedback): the guard rejects targets that escape the repository root (e.g.
+  `../../etc/passwd`) as invalid even when the OS path exists — it validates *repo*
+  references, not arbitrary filesystem paths — and F-031 matches the exact quoted
+  `"scripts/validations"` TOML entry so a different path containing that substring cannot
+  false-pass.
 
 ### Changed
 - **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted

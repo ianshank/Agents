@@ -102,11 +102,37 @@ def test_extract_local_targets_dedupes_and_strips_fragments() -> None:
 
 
 def test_find_dead_links_returns_structured_findings(tmp_path: Path) -> None:
-    """find_dead_links reports each missing target with its resolved POSIX path."""
+    """find_dead_links reports each missing target with its resolved POSIX path + reason."""
     charter = _write_charter(tmp_path, "[x](nope_a.md) [y](nope_b.md)\n")
     dead = guard.find_dead_links(charter)
     assert {d.target for d in dead} == {"nope_a.md", "nope_b.md"}
     assert all(d.resolved.endswith(".md") for d in dead)
+    assert all(d.reason == "missing" for d in dead)
+
+
+def test_target_escaping_repo_root_is_dead(tmp_path: Path) -> None:
+    """A link resolving OUTSIDE the repo root is dead even if the OS path exists.
+
+    The containment root is pinned deterministically with a ``.git`` marker so the test does
+    not depend on where the temp dir lives.
+    """
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)  # pins _containing_root() at `repo`
+    (tmp_path / "outside.md").write_text("real but out of repo\n", encoding="utf-8")
+    charter = _write_charter(repo, "Escape attempt: [x](../outside.md)\n")
+
+    assert guard.main(["--charter", str(charter)]) == 1
+    dead = guard.find_dead_links(charter)
+    assert [d.reason for d in dead] == ["outside repo root"]
+
+
+def test_in_repo_reference_still_live_with_git_root(tmp_path: Path) -> None:
+    """Within the pinned root, an existing target is still live (no false positive)."""
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    (repo / "NEXT_STEPS.md").write_text("x\n", encoding="utf-8")
+    charter = _write_charter(repo, "See [next](NEXT_STEPS.md).\n")
+    assert guard.main(["--charter", str(charter)]) == 0
 
 
 def test_titled_link_url_is_extracted(tmp_path: Path) -> None:
