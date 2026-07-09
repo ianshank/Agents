@@ -6,11 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
-### Fixed
-- **`py.typed` now ships in the root wheel (PEP 561)**: `src/eval_harness/py.typed` was
-  missing and there was no `[tool.setuptools.package-data]` stanza, so the root `eval_harness`
-  package was not advertised as typed to downstream consumers (the sub-packages already shipped
-  theirs). Added both; verified the built wheel contains `eval_harness/py.typed`.
+### Added
+- **Project charter (`docs/CHARTER.md`) + drift guard:** a north-star governance document
+  modelled on the drone-comms charter structure (Status & Purpose / Vision / Mission /
+  Scope + non-goals + ratified amendments / Invariants / Roadmap / How-agents-use-it),
+  synthesized from `README.md`, `AGENTS.md`, and `docs/decisions/*`. It ratifies what is
+  already true and references drift-prone values (coverage floors, schema versions) at
+  their source rather than restating them. A new `scripts/check_charter_drift.py` guard
+  (stdlib-only, `_cli.configure_logging`, exit `0/1/2`) parses every markdown link target
+  in the charter and asserts each local file/ADR reference resolves, skipping externals,
+  anchors, and glob patterns to avoid false positives; covered by
+  `tests/test_check_charter_drift.py`. The guard runs as a first-class step in
+  `quality-gates.yml` (mirroring the sibling drift/size-budget guards) and is wired into that
+  workflow's ≥85% tooling-coverage gate. `AGENTS.md` now lists the charter as the tier-0 read,
+  and the C4 "Quality & Eval-Integrity Gates" diagram (`docs/c4_architecture.md`) lists the
+  new guard. The drift-detected path now emits a `logger.warning` (parity with the
+  usage-error/success paths) so CI surfaces it in structured logs. Hardening (review
+  feedback): the guard rejects targets that escape the repository root (e.g.
+  `../../etc/passwd`) as invalid even when the OS path exists — it validates *repo*
+  references, not arbitrary filesystem paths — and F-031 matches the exact quoted
+  `"scripts/validations"` TOML entry (tolerating single-line, multi-line, and string
+  `mypy_path` forms via a `re.DOTALL` capture; still dependency-free for the Python 3.10
+  gate) so a different path containing that substring cannot false-pass and a harmless
+  multi-line reformat cannot break the gate.
 
 ### Changed
 - **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted
@@ -33,6 +51,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `stdin=DEVNULL`) is now the single execution helper behind `validate_skill.check_behavioral`'s
   decomposed `_run_one_eval`. `_commit_store` is re-exported from the `store_sync` package for
   `main`'s round-trip tests. No behaviour lost from either side; all suites/gates green.
+
+### Fixed
+- **`py.typed` mypy fallout — `mypy src/eval_harness` + 32 latent errors** (see
+  [`docs/gap-analysis-2026-07-py-typed-mypy.md`](docs/gap-analysis-2026-07-py-typed-mypy.md)):
+  shipping `py.typed` made mypy follow the editable-installed `eval_harness`, so
+  `mypy src/eval_harness` failed with *"Source file found twice"* (`src.eval_harness.*` vs
+  `eval_harness.*`) — a red already on `main@1fb53b9`. Fixed config-only by adding `src` to
+  `[tool.mypy].mypy_path` (with the existing `explicit_package_bases`). Unblocking that CI step
+  exposed 32 real type errors in `scripts/validations/F_018,F_021,F_024,F_025,F_026,F_027,F_030`
+  and `tests/test_phoenix_{sink,cli}.py` that `py.typed` had surfaced (typed `eval_harness`
+  reaching callers that passed loosely-typed dicts). Fixed with the repo's own idioms —
+  `EvalConfig.model_validate({...})` for config construction, `assert isinstance(...)` /
+  `is not None` narrowing, and reusable `_phoenix_sink`/`_null_client` test helpers — all
+  behaviour-preserving (gates still exit 0). `mypy` (src/scripts/tests), `ruff`, and every
+  package coverage floor are green.
+- **`py.typed` now ships in the root wheel (PEP 561)**: `src/eval_harness/py.typed` was
+  missing and there was no `[tool.setuptools.package-data]` stanza, so the root `eval_harness`
+  package was not advertised as typed to downstream consumers (the sub-packages already shipped
+  theirs). Added both; verified the built wheel contains `eval_harness/py.typed`.
 
 ### Tooling — one-command E2E / user-journey harness
 - **`scripts/run_all_e2e.ps1` + `docs/e2e-runbook.md`:** a single orchestrator that runs

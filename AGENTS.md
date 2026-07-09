@@ -23,6 +23,7 @@ A monorepo of five Python packages plus vendored skills and CI:
 
 Before writing code, read in order:
 
+0. `docs/CHARTER.md` — the north-star charter: Vision / Mission / Scope (+ non-goals) / Invariants / Roadmap. Changes rarely; keep work within its §3 scope and §4 invariants and escalate anything that would violate them. Drift-checked by `scripts/check_charter_drift.py`.
 1. `README.md` — install / test / gate commands and repo layout.
 2. `architecture.mmd` + `architecture.yaml` — canonical C4-style architecture. Agents MUST update these when adding or removing a component that changes the diagram.
 3. `docs/decisions/` — Architecture Decision Records. **`ADR-0009`** is the tech-debt baseline: no hard-coded secrets, config-driven defaults, per-package coverage gates. **New code should not regress that baseline.**
@@ -51,7 +52,7 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 
 - **No hard-coded secrets, absolute paths, or production URLs in source.** Credentials come from environment variables (`LANGFUSE_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `PHOENIX_COLLECTOR_ENDPOINT`, `AWS_*`). See `.env.example` for the canonical set.
 - **No hard-coded numeric defaults at call sites.** They belong in a `*Config` dataclass field with the default documented on the field. Example: `JudgeBudgetConfig.skip_score` replaces a literal `0.0` at the call site.
-- **`SCHEMA_VERSION` is single-sourced.** Do not touch it in a feature branch. Bumps happen in dedicated release commits and require migration code (see `config/__init__.py`).
+- **`SCHEMA_VERSION` is single-sourced** in `src/eval_harness/version.py`. Do not touch it in a feature branch. Bumps happen in dedicated release commits and require migration code (see `src/eval_harness/config/migrations.py`).
 - **`from_dict` is strict.** Unknown keys raise `ConfigError`. Do not add permissive fallbacks.
 - **`ClaimId` is opaque `str`.** Never sanitize `CycleState.unresolved`.
 - **Ruff and mypy are pinned** in the `dev` extra (`ruff==0.15.20`, `mypy==2.1.0`). Do not bump them casually — CI/local skew broke `ruff format --check` before.

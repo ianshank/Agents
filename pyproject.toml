@@ -91,9 +91,17 @@ max-complexity = 14
 
 [tool.mypy]
 python_version = "3.10"
-# Lets `mypy scripts` resolve the validation gates' runtime `from _common import ...`
-# bootstrap imports; explicit_package_bases keeps module naming stable for it.
-mypy_path = "scripts/validations"
+# Package bases for explicit_package_bases (below). mypy picks the longest matching base
+# per file.
+#   * "src" makes `mypy src/eval_harness` name the package `eval_harness.*` (stripping the
+#     `src/` prefix) instead of `src.eval_harness.*`. Without it the same file is reachable
+#     both as `src.eval_harness.*` (from the CLI path) and as `eval_harness.*` (via the
+#     editable install, which mypy follows now that the package ships `py.typed`), producing
+#     a "Source file found twice under different module names" error. This is the src-layout
+#     fix — no per-file `__init__.py` shim or CI-flag workaround needed.
+#   * "scripts/validations" lets `mypy scripts` resolve the validation gates' runtime
+#     `from _common import ...` bootstrap imports.
+mypy_path = ["src", "scripts/validations"]
 explicit_package_bases = true
 warn_return_any = true
 warn_unused_configs = true

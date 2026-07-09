@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ def main() -> int:
         logger.info("OK: RunSettings(max_workers=0) correctly rejected")
 
     # 3. Sequential and parallel produce identical aggregate means
-    cfg_base = {
+    cfg_base: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "run": {"name": "f018", "run_id": "f018-val", "seed": 99},
         "dataset": {

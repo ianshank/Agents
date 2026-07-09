@@ -11,9 +11,9 @@ docs/gap-analysis-2026-07.md):
     5. The ruff per-file-ignores stay scoped to the three deliberate patterns
        (bootstrap E402, feature-ID N999, docstring typography RUF00x) - no
        blanket exemptions.
-    6. ``mypy scripts`` resolution config (mypy_path to the validations dir)
-       is present, so the type gate cannot silently regress to unresolvable
-       ``_common`` imports.
+    6. ``mypy scripts`` resolution config keeps ``scripts/validations`` on
+       ``mypy_path`` (as a bare string or one entry of a list), so the type gate
+       cannot silently regress to unresolvable ``_common`` imports.
 
 Deterministic and offline: reads config/workflow files only, runs nothing.
 
@@ -27,6 +27,7 @@ from __future__ import annotations
 import configparser
 import logging
 import os
+import re
 import sys
 
 # Ensure scripts/ and this directory are importable when run directly.
@@ -100,8 +101,15 @@ def main() -> int:
         "per-file-ignores allow docstring typography only",
         errors,
     )
+    # Assert the invariant (scripts/validations is on mypy_path) rather than an exact
+    # literal, so a legitimate additional base (e.g. "src" for the package layout) does not
+    # trip this guard while an accidental removal still does. The value may be a quoted string
+    # or a list, and the list may span multiple lines (a valid TOML reformat) — capture either
+    # form with re.DOTALL. The *quoted* "scripts/validations" token (not a bare substring)
+    # avoids a false-pass on a different path such as "scripts/validations-other".
+    mypy_path = re.search(r'mypy_path\s*=\s*(?P<value>\[.*?\]|"[^"]*")', pyproject, re.DOTALL)
     _check(
-        'mypy_path = "scripts/validations"' in pyproject,
+        mypy_path is not None and '"scripts/validations"' in mypy_path.group("value"),
         "mypy resolves the validation gates' bootstrap imports",
         errors,
     )
