@@ -25,8 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   feedback): the guard rejects targets that escape the repository root (e.g.
   `../../etc/passwd`) as invalid even when the OS path exists — it validates *repo*
   references, not arbitrary filesystem paths — and F-031 matches the exact quoted
-  `"scripts/validations"` TOML entry so a different path containing that substring cannot
-  false-pass.
+  `"scripts/validations"` TOML entry (tolerating single-line, multi-line, and string
+  `mypy_path` forms via a `re.DOTALL` capture; still dependency-free for the Python 3.10
+  gate) so a different path containing that substring cannot false-pass and a harmless
+  multi-line reformat cannot break the gate.
 
 ### Changed
 - **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted
