@@ -133,7 +133,10 @@ def _is_checkable_local_link(target: str) -> bool:
     """
     if not target or target.startswith(_EXTERNAL_PREFIXES):
         return False
-    if Path(target).is_absolute():
+    # A POSIX-style absolute target ("/docs/...") is not recognized as absolute by
+    # Path.is_absolute() on Windows, so check the leading separator explicitly too — this
+    # keeps the guard (and its tests) deterministic across platforms.
+    if target.startswith(("/", "\\")) or Path(target).is_absolute():
         return False
     return not any(char in target for char in _GLOB_CHARS)
 
