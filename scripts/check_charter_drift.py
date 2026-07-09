@@ -217,6 +217,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"charter-drift: usage error — cannot read {charter.as_posix()}: {exc}", file=sys.stderr)
         return EXIT_USAGE_ERROR
     if dead:
+        # Drift is the outcome an operator most wants in structured CI logs — emit a log
+        # record (the usage-error and success paths already log), not just stdout.
+        logger.warning("charter-drift: %d dead reference(s) in %s", len(dead), charter.as_posix())
         print(f"charter-drift: FAIL - {len(dead)} dead reference(s) in {charter.as_posix()}:")
         for link in dead:
             print(f"  {link.target} -> {link.resolved} (missing)")
