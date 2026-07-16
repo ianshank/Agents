@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **BrainTrust integration — Phase 2 (dataset source):** a `braintrust` dataset source
+  (`@DATASETS.register("braintrust")`) that pulls a dataset via the SDK's `init_dataset` and maps
+  each `DatasetEvent` (`id`/`input`/`expected`/`metadata`) onto the harness record shape. It is
+  self-wiring (credentials from the environment) and **fail-fast** — it raises a clear install
+  error when the `braintrust` SDK is absent, because a dataset is essential input and must not
+  silently degrade to an empty eval (mirrors `ParquetDataset`). Verified against the installed
+  `braintrust` 0.27 SDK; offline-tested via fake-`sys.modules` injection, with a live path and an
+  LLM `autoevals` (`Factuality`) path in `tests/test_braintrust_live.py`. Adds the
+  `datasets → braintrust_client` architecture edge. Managed-prompt fetch remains deferred (see
+  `docs/braintrust-spike.md`): BrainTrust prompts are chat-message arrays, which don't map
+  cleanly onto the harness's single-string judge-prompt seam. Formalized as feature **F-038**
+  with an offline validation gate (`scripts/validations/F_038.py`).
+- **BrainTrust integration — peer-review hardening:** an objective review pass added logging on
+  the previously-silent paths (`autoevals` scorer failures now `logger.warning`; dataset fetch
+  and sink export log counts; `build_client`/`flush` log at debug), extended the `AutoevalsScorer`
+  fail-safe to cover result parsing, fixed a shared `_to_item` id-collision (a `None` id now falls
+  back to the positional index instead of the string `"None"` — also fixing the latent Langfuse
+  peer bug), aligned the dataset param to `project_name`, and consolidated the duplicated fake-SDK
+  test doubles into shared `conftest.py` fixtures (with added assertions for `init` plumbing,
+  the `min_value_to_log` boundary, scoreless items, and id-less records).
+- **BrainTrust integration (additive, SDK-optional; Phase 1):** a `braintrust` result sink
+  that exports each eval item to a BrainTrust *experiment* via the native `experiment.log`
+  write-path (`input`/`output`/`expected` + a `{name: value}` scores dict per row), and an
+  `autoevals` scorer that bridges BrainTrust's `autoevals` library into the `Scorer` contract
+  (`Score`→`ScoreResult`, with skip/`None` and fail-safe handling). Both follow the reversible
+  Phoenix-spike pattern: a new `braintrust_client/` seam (`NullBrainTrustClient` +
+  injected-handle `SDKBrainTrustClient` + `build_client(enabled=…)` factory) that is a no-op
+  when the SDK is absent or `enabled=False`, so existing runs and the offline suite are
+  unaffected and `SCHEMA_VERSION` is unchanged. Shipped as two optional extras (`braintrust`,
+  `autoevals`); `braintrust` stays out of the offline CI job while `autoevals` (lightweight,
+  offline-safe heuristics) is installed there for real coverage. Credentials are read from the
+  environment (`BRAINTRUST_API_KEY` / `BRAINTRUST_API_URL`), never hardcoded. Documented in
+  `docs/braintrust-spike.md`; `architecture.yaml`/`.mmd` gain the `braintrust_client` component
+  and the `sinks → braintrust_client` edge. (The dataset source and LLM-based autoevals scorers
+  landed in the Phase 2 entry above; managed-prompt fetch remains the one deferred item.)
 - **Project charter (`docs/CHARTER.md`) + drift guard:** a north-star governance document
   modelled on the drone-comms charter structure (Status & Purpose / Vision / Mission /
   Scope + non-goals + ratified amendments / Invariants / Roadmap / How-agents-use-it),

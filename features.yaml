@@ -669,3 +669,21 @@ features:
     implemented_in: "54986893ed95530e6fe942462826b385a9fe0ceb"
     depends_on: ["F-031"]
     notes: "Sweep scope and evidence: three read-only assessment passes over the branch (static tooling, suite baselines, debt scan) — findings and dispositions recorded in the PR. numpy tooling was requested but numpy is not a dependency anywhere; docstring-convention enforcement deliberately not adopted. vulture not adopted: ruff F401/F841 already active in root+agent-core. types-PyYAML deliberately not added: mypy 2.1.0 under the root config passes without it (verified by uninstall)."
+
+  - id: "F-038"
+    epic: "Tracing"
+    name: "BrainTrust experiment export, dataset source, and autoevals scorer"
+    description: "SDK-optional BrainTrust integration mirroring the reversible phoenix-spike pattern: a `braintrust` result sink (per-item experiment.log), a `braintrust` dataset source (init_dataset), and an `autoevals` scorer bridge (Score->ScoreResult). Additive — SCHEMA_VERSION unchanged, offline suite unaffected, no-op when the SDK is absent or disabled. Managed prompts deferred (BrainTrust chat-prompts do not map onto the single-string judge-prompt seam)."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "braintrust sink registered; build_client(enabled=False) and absent-SDK both return NullBrainTrustClient (no-op); per-item experiment.log carries input/output/expected + a {name:value} scores dict"
+      - "autoevals scorer registered; bridges an autoevals Score to ScoreResult with None-skip and fail-safe handling; heuristic scorers are offline-safe"
+      - "braintrust dataset source registered; fetch_dataset_items maps DatasetEvent {id,input,expected,metadata}; fail-fast (RuntimeError) when the SDK is absent"
+      - "credentials read from BRAINTRUST_API_KEY / BRAINTRUST_API_URL env only, never hardcoded; SCHEMA_VERSION unchanged; braintrust kept out of the offline CI install line"
+    validation_command: "python scripts/validations/F_038.py"
+    implemented_in: "eda5d49cd7b2d44c4c043e38885ef11714f352c5"
+    depends_on: ["F-001"]
+    notes: "Mirrors docs/braintrust-spike.md. autoevals installed in the offline CI job (lightweight, offline-safe heuristics); braintrust SDK is not (no-op precedent from Phoenix). Neither extra pulls numpy/pandas, so no mypy stub quarantine is needed. Managed-prompt fetch tracked as a follow-up."

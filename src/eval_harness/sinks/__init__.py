@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import html as _html
 import json
+import logging
 from pathlib import Path
 
+from ..braintrust_client import BrainTrustClient, NullBrainTrustClient, build_client
 from ..core._serialize import as_text as _as_text
 from ..core.interfaces import ResultSink
 from ..core.types import RunResult
 from ..langfuse_client import LangfuseClient
 from ..phoenix_client import PhoenixScoreClient, build_score_client
 from ..plugins import SINKS
+
+logger = logging.getLogger(__name__)
 
 
 @SINKS.register("console")
@@ -211,3 +215,61 @@ class PhoenixSink(ResultSink):
                     comment=s.comment,
                 )
         self._client.flush()
+
+
+@SINKS.register("braintrust")
+class BrainTrustSink(ResultSink):
+    """Exports each eval item to a BrainTrust *experiment* via the native ``experiment.log``.
+
+    Additive and reversible: like ``PhoenixSink`` it self-constructs its own narrow client
+    (a no-op unless ``enabled`` *and* the ``braintrust`` SDK is installed), so it needs no
+    engine injection and cannot be cross-wired with the Langfuse client by the engine's
+    generic ``attach_client`` loop. Unlike the per-score Phoenix/Langfuse sinks, BrainTrust's
+    write-path is per *item*: each item logs one row carrying ``input``/``output``/``expected``
+    plus a ``{name: value}`` ``scores`` dict. The client is built in ``emit`` (not ``__init__``)
+    because the BrainTrust experiment is named after the run.
+
+    ``min_value_to_log`` filters which scores are attached to the row (the item is still logged,
+    preserving its input/output), mirroring the threshold semantics of the other sinks.
+    """
+
+    def __init__(
+        self,
+        enabled: bool = False,
+        project_name: str = "eval-harness",
+        min_value_to_log: float | None = None,
+    ):
+        self.enabled = enabled
+        self.project_name = project_name
+        self.min_value_to_log = min_value_to_log
+        # Placeholder until emit() builds the run-scoped client; keeps the attribute typed
+        # and lets the sink be constructed/inspected offline without the SDK.
+        self._client: BrainTrustClient = NullBrainTrustClient()
+
+    def emit(self, run: RunResult) -> None:
+        self._client = build_client(
+            enabled=self.enabled,
+            project_name=self.project_name,
+            experiment_name=run.run_id,
+        )
+        for ir in run.items:
+            scores = {
+                s.name: s.value for s in ir.scores if self.min_value_to_log is None or s.value >= self.min_value_to_log
+            }
+            self._client.log_item(
+                run_id=run.run_id,
+                item_id=ir.item.id,
+                input=ir.item.inputs,
+                output=ir.output.output,
+                expected=ir.item.expected,
+                scores=scores,
+                metadata={"config_name": run.config_name},
+            )
+        self._client.flush()
+        # Key the summary on the resolved client, not just ``enabled``: an enabled sink whose
+        # SDK is absent or whose init failed falls back to NullBrainTrustClient (build_client
+        # already logged why), so it must NOT claim an export that did not happen.
+        if isinstance(self._client, NullBrainTrustClient):
+            logger.debug("BrainTrust sink no-op; %d item(s) not exported", len(run.items))
+        else:
+            logger.info("BrainTrust sink: exported %d item(s) to experiment %s", len(run.items), run.run_id)
