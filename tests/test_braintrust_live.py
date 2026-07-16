@@ -2,8 +2,10 @@
 
 These exercise the pieces that cannot run in the air-gapped suite: the ``braintrust`` dataset
 source against a real dataset, and an LLM-based ``autoevals`` scorer against a real provider.
-They are marked ``integration`` and self-skip unless the relevant SDK is installed AND the
-required credentials/targets are present in the environment — so the offline suite stays green.
+Both are constructed through the dynamic registry (``DATASETS.create`` / ``SCORERS.create``) —
+the same path the engine uses — so registration is covered too. They are marked ``integration``
+and self-skip unless the relevant SDK is installed AND the required credentials/targets are
+present in the environment, so the offline suite stays green.
 """
 
 from __future__ import annotations
@@ -24,12 +26,13 @@ def test_braintrust_dataset_live() -> None:
     if not (project and dataset):
         pytest.skip("BRAINTRUST_TEST_PROJECT / BRAINTRUST_TEST_DATASET not set")
 
-    from eval_harness.braintrust_client import fetch_dataset_items
+    from eval_harness.core.types import EvalItem
+    from eval_harness.plugins import DATASETS
 
-    items = fetch_dataset_items(project_name=project, dataset_name=dataset)
-    assert isinstance(items, list)
+    ds = DATASETS.create("braintrust", {"project_name": project, "name": dataset})
+    items = list(ds.load())
     for it in items:
-        assert set(it) == {"id", "inputs", "expected", "metadata"}
+        assert isinstance(it, EvalItem)
 
 
 def test_autoevals_factuality_live() -> None:
@@ -38,9 +41,9 @@ def test_autoevals_factuality_live() -> None:
         pytest.skip("OPENAI_API_KEY not set")
 
     from eval_harness.core.types import EvalItem, RunContext, TargetOutput
-    from eval_harness.scorers import AutoevalsScorer
+    from eval_harness.plugins import SCORERS
 
-    scorer = AutoevalsScorer(scorer="Factuality")
+    scorer = SCORERS.create("autoevals", {"scorer": "Factuality"})
     res = scorer.score(
         EvalItem(id="1", inputs={"question": "What is 2+2?"}, expected="4"),
         TargetOutput(output="The answer is 4."),

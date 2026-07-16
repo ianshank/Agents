@@ -17,7 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   LLM `autoevals` (`Factuality`) path in `tests/test_braintrust_live.py`. Adds the
   `datasets → braintrust_client` architecture edge. Managed-prompt fetch remains deferred (see
   `docs/braintrust-spike.md`): BrainTrust prompts are chat-message arrays, which don't map
-  cleanly onto the harness's single-string judge-prompt seam.
+  cleanly onto the harness's single-string judge-prompt seam. Formalized as feature **F-038**
+  with an offline validation gate (`scripts/validations/F_038.py`).
+- **BrainTrust integration — peer-review hardening:** an objective review pass added logging on
+  the previously-silent paths (`autoevals` scorer failures now `logger.warning`; dataset fetch
+  and sink export log counts; `build_client`/`flush` log at debug), extended the `AutoevalsScorer`
+  fail-safe to cover result parsing, fixed a shared `_to_item` id-collision (a `None` id now falls
+  back to the positional index instead of the string `"None"` — also fixing the latent Langfuse
+  peer bug), aligned the dataset param to `project_name`, and consolidated the duplicated fake-SDK
+  test doubles into shared `conftest.py` fixtures (with added assertions for `init` plumbing,
+  the `min_value_to_log` boundary, scoreless items, and id-less records).
 - **BrainTrust integration (additive, SDK-optional; Phase 1):** a `braintrust` result sink
   that exports each eval item to a BrainTrust *experiment* via the native `experiment.log`
   write-path (`input`/`output`/`expected` + a `{name: value}` scores dict per row), and an
@@ -31,8 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   offline-safe heuristics) is installed there for real coverage. Credentials are read from the
   environment (`BRAINTRUST_API_KEY` / `BRAINTRUST_API_URL`), never hardcoded. Documented in
   `docs/braintrust-spike.md`; `architecture.yaml`/`.mmd` gain the `braintrust_client` component
-  and the `sinks → braintrust_client` edge. Datasets, managed prompts, and LLM-based autoevals
-  scorers are deferred to Phase 2 (they need SDK-source verification of the dataset/prompt APIs).
+  and the `sinks → braintrust_client` edge. (The dataset source and LLM-based autoevals scorers
+  landed in the Phase 2 entry above; managed-prompt fetch remains the one deferred item.)
 - **Project charter (`docs/CHARTER.md`) + drift guard:** a north-star governance document
   modelled on the drone-comms charter structure (Status & Purpose / Vision / Mission /
   Scope + non-goals + ratified amendments / Invariants / Roadmap / How-agents-use-it),

@@ -125,6 +125,7 @@ class SDKBrainTrustClient(BrainTrustClient):
     def flush(self) -> None:
         try:
             self._experiment.flush()
+            logger.debug("BrainTrust experiment flushed")
         except Exception as exc:
             logger.error("BrainTrust flush failed: %s", exc)
 
@@ -167,6 +168,7 @@ def build_client(*, enabled: bool, project_name: str, experiment_name: str) -> B
     except Exception as exc:
         logger.error("braintrust.init(project=%s) failed; export disabled (using no-op): %s", project_name, exc)
         return NullBrainTrustClient()
+    logger.debug("BrainTrust export initialized (project=%s, experiment=%s)", project_name, experiment_name)
     return SDKBrainTrustClient(experiment)
 
 
@@ -202,7 +204,7 @@ def fetch_dataset_items(
     if version is not None:
         kwargs["version"] = version
     dataset = braintrust.init_dataset(**kwargs)
-    return [
+    items = [
         {
             "id": rec.get("id"),
             "inputs": rec.get("input") or {},
@@ -211,3 +213,11 @@ def fetch_dataset_items(
         }
         for rec in dataset
     ]
+    logger.debug(
+        "Fetched %d item(s) from BrainTrust dataset %s/%s (version=%s)",
+        len(items),
+        project_name,
+        dataset_name,
+        version if version is not None else "latest",
+    )
+    return items

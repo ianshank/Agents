@@ -2,9 +2,10 @@
 
 The bridge is exercised against the real ``autoevals`` package (a lightweight, offline-safe
 dependency installed in the test job). Only the pure-Python **Heuristic** scorers are used
-here (``Levenshtein``); LLM/Embedding scorers are covered by opt-in live tests. Skip/error
-handling and the missing-package fallback are tested with fakes so no network or model is
-touched.
+here (``Levenshtein``) — no network or model is touched; LLM/Embedding scorers are covered by
+opt-in live tests. This module builds real ``AutoevalsScorer`` instances (which import
+``autoevals`` at construction), so it ``importorskip``s the package: it runs wherever the
+``autoevals`` extra is installed (the offline CI job installs it) and skips cleanly otherwise.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+
+pytest.importorskip("autoevals")  # the bridge constructs real autoevals scorers
 
 from eval_harness.core.types import EvalItem, RunContext, TargetOutput
 from eval_harness.plugins import SCORERS

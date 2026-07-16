@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html as _html
 import json
+import logging
 from pathlib import Path
 
 from ..braintrust_client import BrainTrustClient, NullBrainTrustClient, build_client
@@ -13,6 +14,8 @@ from ..core.types import RunResult
 from ..langfuse_client import LangfuseClient
 from ..phoenix_client import PhoenixScoreClient, build_score_client
 from ..plugins import SINKS
+
+logger = logging.getLogger(__name__)
 
 
 @SINKS.register("console")
@@ -263,3 +266,7 @@ class BrainTrustSink(ResultSink):
                 metadata={"config_name": run.config_name},
             )
         self._client.flush()
+        if self.enabled:
+            logger.info("BrainTrust sink: exported %d item(s) to experiment %s", len(run.items), run.run_id)
+        else:
+            logger.debug("BrainTrust sink disabled; %d item(s) not exported (no-op)", len(run.items))

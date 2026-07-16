@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
 
@@ -10,6 +11,8 @@ from ..core._serialize import as_text as _as_text
 from ..core.interfaces import Scorer
 from ..core.types import EvalItem, RunContext, ScoreResult, TargetOutput
 from ..plugins import SCORERS
+
+logger = logging.getLogger(__name__)
 
 
 @SCORERS.register("exact_match", aliases=("exact",))
@@ -280,17 +283,21 @@ class AutoevalsScorer(Scorer):
         return _as_text(value) if self.coerce_text and value is not None else value
 
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        # Fail-safe covers the whole call AND result normalization (evaluator, metadata
+        # access, score coercion): a provider/parse error must not abort the run.
         try:
             result = self._evaluator(
                 output=self._prep(output.output),
                 expected=self._prep(item.expected),
                 input=self._prep(item.inputs),
             )
-        except Exception as exc:  # fail-safe: a scorer/provider error must not abort the run
+            raw_metadata = getattr(result, "metadata", None)
+            metadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
+            raw_score = result.score
+            value = None if raw_score is None else float(raw_score)
+        except Exception as exc:
+            logger.warning("autoevals scorer %r failed for item %s: %s", self.scorer_name, item.id, exc)
             return ScoreResult(self.name, value=0.0, passed=False, comment=f"autoevals error: {exc}")
-        raw_metadata = getattr(result, "metadata", None)
-        metadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
-        value = result.score
         if value is None:  # autoevals returns None on skip; ScoreResult.value is non-optional
             return ScoreResult(
                 self.name,
@@ -299,7 +306,6 @@ class AutoevalsScorer(Scorer):
                 comment="autoevals skipped (score=None)",
                 metadata=metadata,
             )
-        value = float(value)
         comment = metadata.get("rationale") if isinstance(metadata.get("rationale"), str) else None
         return ScoreResult(
             self.name,

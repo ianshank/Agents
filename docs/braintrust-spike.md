@@ -47,7 +47,7 @@ source:
 # eval config — read a BrainTrust dataset, run an autoevals scorer, export back to BrainTrust
 dataset:
   type: braintrust
-  params: { project: my-eval-project, name: my-dataset }   # version: "..." optionally pins one
+  params: { project_name: my-eval-project, name: my-dataset }   # version: "..." optionally pins one
 scorers:
   - type: autoevals
     params: { scorer: Levenshtein, name: edit_distance, threshold: 0.6 }
