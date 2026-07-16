@@ -35,6 +35,10 @@ components:
   # lazily so the offline suite runs with zero external dependencies. See
   # docs/phoenix-spike.md for the reversible-adoption pattern.
   phoenix_client: [eval_harness.phoenix_client]
+  # BrainTrust experiment-export seam — mirrors phoenix_client/langfuse_client. The real
+  # `braintrust` SDK is imported lazily so the offline suite runs with zero external
+  # dependencies. See docs/braintrust-spike.md for the reversible-adoption pattern.
+  braintrust_client: [eval_harness.braintrust_client]
   agent_core_adapter: [eval_harness.agent_core_adapter]
   engine: [eval_harness.engine]
   cli: [eval_harness.cli]
@@ -65,7 +69,7 @@ dependencies:
   judges: [core, langfuse_client, plugins]
   plugins: [core, datasets, judges, scorers, sinks, targets]
   scorers: [core, plugins]
-  sinks: [core, langfuse_client, phoenix_client, plugins]
+  sinks: [braintrust_client, core, langfuse_client, phoenix_client, plugins]
   targets: [core, plugins]
 
 output:

@@ -208,3 +208,82 @@ class LLMJudgeScorer(Scorer):
             passed=verdict.score >= self.threshold,
             comment=verdict.reasoning or None,
         )
+
+
+@SCORERS.register("autoevals")
+class AutoevalsScorer(Scorer):
+    """Bridges a BrainTrust ``autoevals`` scorer into the harness ``Scorer`` contract.
+
+    ``autoevals`` scorers return a ``Score(name, score: float|None, metadata)`` with
+    ``score`` in [0,1] (``None`` when skipped) — mapping cleanly onto ``ScoreResult``.
+    This adapter instantiates the named scorer once and, per item, calls it on the
+    documented sync surface (``evaluator(output=, expected=, input=)``), then converts
+    the ``Score`` to a ``ScoreResult``.
+
+    ``scorer`` is the autoevals class name (e.g. ``"Levenshtein"``, ``"Factuality"``);
+    the canonical names are preferred over back-compat aliases like ``LevenshteinScorer``.
+    Any extra params flow through to the scorer's constructor (e.g. ``model=``,
+    ``base_url=``), so provider selection is config-driven; provider credentials come from
+    the environment (e.g. ``OPENAI_API_KEY``), never hardcoded.
+
+    Heuristic scorers (``Levenshtein``, ``ExactMatch``, ``NumericDiff``, ``JSONDiff``) are
+    pure-Python — safe for the offline suite. LLM/Embedding scorers (``Factuality``,
+    ``ClosedQA``, ``EmbeddingSimilarity``, …) call a provider at runtime and — because they
+    do NOT route through ``ctx.judge`` — run OUTSIDE the harness ``judge_budget``/rate-limit
+    guard, which only wraps the ``Judge`` seam. ``braintrust`` itself is not required;
+    ``autoevals`` is a standalone, lazily-imported dependency.
+    """
+
+    default_name = "autoevals"
+
+    def __init__(
+        self,
+        name: str | None = None,
+        scorer: str = "Levenshtein",
+        threshold: float = 0.5,
+        on_skip: float = 0.0,
+        **scorer_kwargs: Any,
+    ):
+        # Default the emitted score name to the specific scorer (e.g. "Levenshtein") so
+        # several autoevals scorers in one run don't collide on the generic default.
+        super().__init__(name or scorer)
+        self.scorer_name = scorer
+        self.threshold = float(threshold)
+        self.on_skip = float(on_skip)
+        try:
+            import autoevals
+        except ImportError as exc:
+            raise RuntimeError(
+                f"The 'autoevals' package is required for the '{scorer}' autoevals scorer. "
+                "Install with: pip install 'langfuse-eval-harness[autoevals]'"
+            ) from exc
+        factory = getattr(autoevals, scorer, None)
+        if factory is None:
+            raise ValueError(f"unknown autoevals scorer {scorer!r}")
+        self._evaluator = factory(**scorer_kwargs)
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        try:
+            result = self._evaluator(output=output.output, expected=item.expected, input=item.inputs)
+        except Exception as exc:  # fail-safe: a scorer/provider error must not abort the run
+            return ScoreResult(self.name, value=0.0, passed=False, comment=f"autoevals error: {exc}")
+        raw_metadata = getattr(result, "metadata", None)
+        metadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
+        value = result.score
+        if value is None:  # autoevals returns None on skip; ScoreResult.value is non-optional
+            return ScoreResult(
+                self.name,
+                value=self.on_skip,
+                passed=None,
+                comment="autoevals skipped (score=None)",
+                metadata=metadata,
+            )
+        value = float(value)
+        comment = metadata.get("rationale") if isinstance(metadata.get("rationale"), str) else None
+        return ScoreResult(
+            self.name,
+            value=value,
+            passed=value >= self.threshold,
+            comment=comment,
+            metadata=metadata,
+        )

@@ -26,6 +26,8 @@ pip install -e .            # core (pydantic, pyyaml)
 pip install -e '.[langfuse]' # add the real Langfuse SDK
 pip install -e '.[openai]'   # add OpenAI + tenacity for judge
 pip install -e '.[bedrock]'  # add boto3 for the Bedrock judge
+pip install -e '.[braintrust]' # add the BrainTrust SDK for the braintrust sink
+pip install -e '.[autoevals]'  # add the autoevals scorer library
 pip install -e '.[dev]'      # pytest, coverage, ruff, mypy
 ```
 
@@ -38,6 +40,8 @@ pip install -e '.[dev]'      # pytest, coverage, ruff, mypy
 | `LANGFUSE_BASE_URL` | For Langfuse features | Langfuse API endpoint (e.g. `https://us.cloud.langfuse.com`) |
 | `NVIDIA_API_KEY` | For Nemotron judge | NVIDIA API key |
 | `OPENAI_API_KEY` | For OpenAI judge | OpenAI API key |
+| `BRAINTRUST_API_KEY` | For the braintrust sink | BrainTrust API key |
+| `BRAINTRUST_API_URL` | Self-hosted BrainTrust | Overrides `https://api.braintrust.dev` |
 
 Create a `.env` file from the template:
 ```bash
@@ -203,15 +207,18 @@ snyk monitor --file=requirements.txt --package-manager=pip --skip-unresolved
 src/eval_harness/
   config/            versioned models, migrations, env-interpolating loader
   core/              types, interfaces, generic registry
-  scorers/           exact_match, regex_match, contains, json_keys, llm_judge, weighted
+  scorers/           exact_match, regex_match, contains, json_keys, llm_judge, weighted,
+                     autoevals (bridges BrainTrust's autoevals scorer library)
   datasets/          inline, jsonl, langfuse
   targets/           echo, callable (dynamic import)
-  sinks/             console, json_file, html_file, langfuse, phoenix
+  sinks/             console, json_file, html_file, langfuse, phoenix, braintrust
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
                      phoenix_evals, budgeted (wraps another judge with a cost cap)
   langfuse_client/   Langfuse tracing + score export (SDK-optional seam)
   phoenix_client/    Phoenix tracing + score export (SDK-optional seam; mirrors
                      langfuse_client — see docs/phoenix-spike.md)
+  braintrust_client/ BrainTrust experiment export (SDK-optional seam; mirrors
+                     phoenix_client — see docs/braintrust-spike.md)
   agent_core_adapter/  agent_core bridge (BudgetLedger, calibration surface)
   gating/            config-driven quality gate
   engine.py          orchestration

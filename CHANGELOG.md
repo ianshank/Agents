@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **BrainTrust integration (additive, SDK-optional; Phase 1):** a `braintrust` result sink
+  that exports each eval item to a BrainTrust *experiment* via the native `experiment.log`
+  write-path (`input`/`output`/`expected` + a `{name: value}` scores dict per row), and an
+  `autoevals` scorer that bridges BrainTrust's `autoevals` library into the `Scorer` contract
+  (`Score`→`ScoreResult`, with skip/`None` and fail-safe handling). Both follow the reversible
+  Phoenix-spike pattern: a new `braintrust_client/` seam (`NullBrainTrustClient` +
+  injected-handle `SDKBrainTrustClient` + `build_client(enabled=…)` factory) that is a no-op
+  when the SDK is absent or `enabled=False`, so existing runs and the offline suite are
+  unaffected and `SCHEMA_VERSION` is unchanged. Shipped as two optional extras (`braintrust`,
+  `autoevals`); `braintrust` stays out of the offline CI job while `autoevals` (lightweight,
+  offline-safe heuristics) is installed there for real coverage. Credentials are read from the
+  environment (`BRAINTRUST_API_KEY` / `BRAINTRUST_API_URL`), never hardcoded. Documented in
+  `docs/braintrust-spike.md`; `architecture.yaml`/`.mmd` gain the `braintrust_client` component
+  and the `sinks → braintrust_client` edge. Datasets, managed prompts, and LLM-based autoevals
+  scorers are deferred to Phase 2 (they need SDK-source verification of the dataset/prompt APIs).
 - **Project charter (`docs/CHARTER.md`) + drift guard:** a north-star governance document
   modelled on the drone-comms charter structure (Status & Purpose / Vision / Mission /
   Scope + non-goals + ratified amendments / Invariants / Roadmap / How-agents-use-it),
