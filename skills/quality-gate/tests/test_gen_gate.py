@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ def _project(root: Path, *, broken: bool = False) -> None:
     (root / "tests" / "test_ok.py").write_text("def test_ok() -> None:\n    assert True\n", encoding="utf-8")
     (root / "pyproject.toml").write_text(
         '[project]\nname="demo"\nversion="0"\n'
+        '[project.optional-dependencies]\ndev=["pytest-cov"]\n'
         "[tool.ruff]\n[tool.mypy]\n[tool.pytest.ini_options]\ntestpaths=['tests']\n"
         '[tool.coverage.run]\nsource=["demo"]\n[tool.coverage.report]\nfail_under=0\n',
         encoding="utf-8",
@@ -51,6 +53,13 @@ def test_print_ci(tmp_path, capsys) -> None:
 def test_no_op_gate_warns(tmp_path, capsys) -> None:
     assert gen_gate.main(["--root", str(tmp_path)]) == 0  # empty project
     assert "no checks detected" in capsys.readouterr().err
+
+
+def test_verbose_logs_detected_facts(tmp_path, caplog) -> None:
+    _project(tmp_path)
+    with caplog.at_level(logging.DEBUG, logger="gategen"):
+        gen_gate.main(["--root", str(tmp_path), "--stdout", "--verbose"])
+    assert any("detected facts" in r.message for r in caplog.records)
 
 
 def test_check_up_to_date_drift_and_missing(tmp_path) -> None:

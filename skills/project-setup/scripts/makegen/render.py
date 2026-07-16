@@ -41,42 +41,44 @@ class _Target:
 
 
 def _lint_target(facts: ProjectFacts, delegate: bool) -> _Target | None:
+    # Never fabricate: no ruff -> no lint target, even when delegating (the gate script
+    # would omit the step and `quality-gate.sh lint` would error).
+    if not facts.has_ruff:
+        return None
     if delegate:
         return _Target("lint", "Lint (via the quality-gate script)", ("./scripts/quality-gate.sh lint",))
-    if facts.has_ruff:
-        return _Target("lint", "Lint the code", ("$(PYTHON) -m ruff check .",))
-    return None
+    return _Target("lint", "Lint the code", ("$(PYTHON) -m ruff check .",))
 
 
 def _typecheck_target(facts: ProjectFacts, delegate: bool) -> _Target | None:
+    if not facts.type_checker:
+        return None
     if delegate:
         return _Target(
             "typecheck", "Type-check (via the quality-gate script)", ("./scripts/quality-gate.sh typecheck",)
         )
     if facts.type_checker == "mypy":
         return _Target("typecheck", "Type-check the code", ("$(PYTHON) -m mypy $(TYPECHECK_PATHS)",))
-    if facts.type_checker == "pyright":
-        return _Target("typecheck", "Type-check the code", ("pyright $(TYPECHECK_PATHS)",))
-    return None
+    return _Target("typecheck", "Type-check the code", (f"{facts.type_checker} $(TYPECHECK_PATHS)",))
 
 
 def _test_target(facts: ProjectFacts, delegate: bool) -> _Target | None:
+    if not facts.has_pytest:
+        return None
     if delegate:
         return _Target("test", "Run tests (via the quality-gate script)", ("./scripts/quality-gate.sh test",))
-    if facts.has_pytest:
-        return _Target("test", "Run the test suite", ("$(PYTHON) -m pytest",))
-    return None
+    return _Target("test", "Run the test suite", ("$(PYTHON) -m pytest",))
 
 
 def _coverage_target(facts: ProjectFacts, delegate: bool) -> _Target | None:
+    if not facts.has_pytest_cov:
+        return None
     if delegate:
         return _Target(
             "coverage", "Run tests with coverage (via the quality-gate script)", ("./scripts/quality-gate.sh coverage",)
         )
-    if facts.has_pytest_cov:
-        cmd = "$(PYTHON) -m pytest --cov=$(COVERAGE_SOURCE) --cov-branch --cov-report=term-missing --cov-fail-under=$(COV_FAIL_UNDER)"
-        return _Target("coverage", "Run tests with a coverage threshold", (cmd,))
-    return None
+    cmd = "$(PYTHON) -m pytest --cov=$(COVERAGE_SOURCE) --cov-branch --cov-report=term-missing --cov-fail-under=$(COV_FAIL_UNDER)"
+    return _Target("coverage", "Run tests with a coverage threshold", (cmd,))
 
 
 def _check_target(facts: ProjectFacts, targets: list[_Target]) -> _Target | None:

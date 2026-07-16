@@ -17,11 +17,14 @@ Exit codes: 0 success (or ``--check`` up to date); 1 ``--check`` drift / missing
 from __future__ import annotations
 
 import argparse
+import logging
 import stat
 import sys
 from pathlib import Path
 
 from deploygen import DeployConfig, render_deploy
+
+logger = logging.getLogger("deploygen")
 
 
 def _check(out: Path, content: str) -> int:
@@ -52,14 +55,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", default=None, help="Output path (default: <root>/scripts/deploy.sh).")
     parser.add_argument("--stdout", action="store_true", help="Print the script instead of writing it.")
     parser.add_argument("--check", action="store_true", help="Advisory: exit 1 if the committed script is stale.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging (prints the deploy config).")
     args = parser.parse_args(argv)
 
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.WARNING,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
     config = DeployConfig(
         app=args.app,
         environment=args.environment,
         artifact=args.artifact,
         health_url=args.health_url,
     )
+    logger.debug("deploy config: %s", config)
     content = render_deploy(config)
 
     if args.stdout:

@@ -18,7 +18,7 @@ _HEADER = (
     "# placeholders (marked TODO) with your platform's commands. Secrets come from the",
     "# environment at run time - never inline them here.",
     "#",
-    "# Usage: ./deploy.sh [--dry-run] [--yes] <build|release|rollback|health-check>",
+    "# Usage: ./scripts/deploy.sh [--dry-run] [--yes] <build|release|rollback|health-check>",
     "set -euo pipefail",
 )
 
@@ -130,14 +130,28 @@ main "$@"
 """
 
 
+def _sh_escape(value: str) -> str:
+    r"""Escape a value for safe literal use inside a bash double-quoted default (``${VAR:-<here>}``).
+
+    User-provided config (app, artifact, health URL) is interpolated as the default of a
+    ``${VAR:-default}`` expansion. Without escaping, a value containing ``$`` or a backtick would
+    trigger parameter/command substitution when the script runs with ``VAR`` unset, and a ``"``
+    would break the string. Backslash is escaped first so the other escapes are not doubled.
+    """
+    out = value.replace("\\", "\\\\")
+    for ch in ("$", "`", '"'):
+        out = out.replace(ch, "\\" + ch)
+    return out
+
+
 def render_deploy(config: DeployConfig) -> str:
     """Return the full deploy-script text for ``config`` (ends with exactly one newline)."""
     variables = "\n".join(
         [
-            f'APP="${{APP:-{config.app}}}"',
-            f'ENVIRONMENT="${{ENVIRONMENT:-{config.environment}}}"',
-            f'ARTIFACT="${{ARTIFACT:-{config.artifact}}}"',
-            f'HEALTH_URL="${{HEALTH_URL:-{config.health_url}}}"',
+            f'APP="${{APP:-{_sh_escape(config.app)}}}"',
+            f'ENVIRONMENT="${{ENVIRONMENT:-{_sh_escape(config.environment)}}}"',
+            f'ARTIFACT="${{ARTIFACT:-{_sh_escape(config.artifact)}}}"',
+            f'HEALTH_URL="${{HEALTH_URL:-{_sh_escape(config.health_url)}}}"',
             "DRY_RUN=0",
             "ASSUME_YES=0",
         ]

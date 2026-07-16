@@ -52,12 +52,32 @@ def _has_table(data: dict[str, Any], *keys: str) -> bool:
 
 
 def _mentions(data: dict[str, Any], needle: str) -> bool:
-    """True if any declared dependency string mentions ``needle`` (e.g. ``pytest-cov``)."""
+    """True if any declared dependency mentions ``needle`` (e.g. ``pytest-cov``).
+
+    Scans PEP 621 ``[project].dependencies`` and ``optional-dependencies`` plus PEP 735
+    ``[dependency-groups]`` (only string requirements — ``include-group`` dicts are skipped).
+    """
     project = _table(data, "project")
     deps: list[Any] = list(project.get("dependencies", []) or [])
     for group in (project.get("optional-dependencies", {}) or {}).values():
         deps.extend(group or [])
-    return any(needle in str(dep) for dep in deps)
+    for group in (_table(data, "dependency-groups") or {}).values():
+        deps.extend(group or [])
+    return any(isinstance(dep, str) and needle in dep for dep in deps)
+
+
+def _coerce_threshold(value: Any) -> int:
+    """Coerce a coverage ``fail_under`` value to an int, tolerating strings like ``"85"``.
+
+    Falls back to 0 (no enforcement) on anything unparseable — a percent sign, a list, None —
+    rather than silently dropping a legitimately string-typed threshold.
+    """
+    if value is None:
+        return 0
+    try:
+        return int(float(value))
+    except (ValueError, TypeError):
+        return 0
 
 
 def _guess_source(data: dict[str, Any], root: Path, src_layout: bool) -> str:
@@ -85,9 +105,7 @@ def _detect_coverage(data: dict[str, Any], root: Path, src_layout: bool) -> tupl
         src = source
     if not src:
         src = _guess_source(data, root, src_layout)
-    fail_under = report.get("fail_under")
-    threshold = int(fail_under) if isinstance(fail_under, (int, float)) else 0
-    return src or ".", threshold
+    return src or ".", _coerce_threshold(report.get("fail_under"))
 
 
 def detect(root: Path | str) -> GateFacts:
@@ -106,7 +124,10 @@ def detect(root: Path | str) -> GateFacts:
         type_checker=checker,
         typecheck_paths="src" if src_layout else ".",
         has_pytest=_has_table(data, "tool", "pytest") or (root / "pytest.ini").is_file() or (root / "tests").is_dir(),
-        has_pytest_cov=_mentions(data, "pytest-cov") or _has_table(data, "tool", "coverage"),
+        # Precise signal: `pytest --cov` needs the pytest-cov plugin, so require it to be a
+        # declared dependency. A bare [tool.coverage] table (standalone coverage.py) is NOT
+        # enough — emitting `pytest --cov` there would fabricate a command that fails.
+        has_pytest_cov=_mentions(data, "pytest-cov"),
         coverage_source=cov_source,
         cov_fail_under=cov_fail_under,
     )

@@ -86,3 +86,15 @@ def test_ci_snippet_runs_same_script() -> None:
     snippet = render_ci_snippet()
     assert "./scripts/quality-gate.sh all" in snippet
     assert snippet.endswith("\n")
+
+
+def test_header_usage_references_scripts_path() -> None:
+    # The script is written to scripts/quality-gate.sh, so the header must not mislead.
+    out = render_gate(FULL)
+    assert "# Usage: ./scripts/quality-gate.sh [lint|typecheck|test|coverage|all]" in out
+
+
+def test_special_chars_in_source_are_shell_escaped() -> None:
+    # A detected value containing $ must be neutralised inside the ${VAR:-...} default.
+    out = render_gate(GateFacts(has_pytest_cov=True, coverage_source="pkg$x"))
+    assert 'COVERAGE_SOURCE="${COVERAGE_SOURCE:-pkg\\$x}"' in out

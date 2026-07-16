@@ -16,11 +16,14 @@ Exit codes: 0 success (or ``--check`` up to date); 1 ``--check`` drift / missing
 from __future__ import annotations
 
 import argparse
+import logging
 import stat
 import sys
 from pathlib import Path
 
 from gategen import detect, render_ci_snippet, render_gate
+
+logger = logging.getLogger("gategen")
 
 
 def _check(out: Path, content: str) -> int:
@@ -48,14 +51,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stdout", action="store_true", help="Print the script instead of writing it.")
     parser.add_argument("--check", action="store_true", help="Advisory: exit 1 if the committed script is stale.")
     parser.add_argument("--print-ci", action="store_true", help="Print a CI step that runs the same script, then exit.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging (prints detected facts).")
     args = parser.parse_args(argv)
 
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.WARNING,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
     if args.print_ci:
         sys.stdout.write(render_ci_snippet())
         return 0
 
     root = Path(args.root)
     facts = detect(root)
+    logger.debug("detected facts for %s: %s", root.as_posix(), facts)
     content = render_gate(facts)
 
     if args.stdout:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
@@ -102,3 +103,26 @@ def test_unknown_subcommand_is_usage_error(tmp_path) -> None:
     out = _gen(tmp_path)
     assert _run(out, "bogus").returncode == 2
     assert _run(out).returncode == 2  # no subcommand
+
+
+@pytest.mark.skipif(BASH is None, reason="bash not available")
+def test_shell_metacharacters_produce_valid_and_safe_script(tmp_path) -> None:
+    # A value with $()/backticks must not break syntax or execute when ARTIFACT is unset.
+    gen_deploy.main(
+        ["--root", str(tmp_path), "--app", "svc", "--artifact", "x$(id)`whoami`", "--health-url", "https://h/z"]
+    )
+    out = tmp_path / "scripts" / "deploy.sh"
+    assert subprocess.run([BASH, "-n", str(out)]).returncode == 0
+    if shutil.which("shellcheck"):
+        proc = subprocess.run(["shellcheck", str(out)], capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stdout
+    # Dry-run with ARTIFACT unset: the default expands to the LITERAL value, so nothing executes.
+    result = _run(out, "--dry-run", "--yes", "build")
+    assert result.returncode == 0
+    assert "uid=" not in result.stdout  # `id` never ran
+
+
+def test_verbose_logs_deploy_config(tmp_path, caplog) -> None:
+    with caplog.at_level(logging.DEBUG, logger="deploygen"):
+        gen_deploy.main(["--root", str(tmp_path), "--app", "svc", "--stdout", "--verbose"])
+    assert any("deploy config" in r.message for r in caplog.records)

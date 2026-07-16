@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 from pathlib import Path
@@ -68,6 +69,13 @@ def test_check_missing_file(tmp_path) -> None:
     _pip_src(tmp_path)
     rc = gen_makefile.main(["--root", str(tmp_path), "--out", str(tmp_path / "Makefile"), "--check"])
     assert rc == 1
+
+
+def test_verbose_logs_detected_facts(tmp_path, caplog) -> None:
+    _pip_src(tmp_path)
+    with caplog.at_level(logging.DEBUG, logger="makegen"):
+        gen_makefile.main(["--root", str(tmp_path), "--stdout", "--verbose"])
+    assert any("detected facts" in r.message for r in caplog.records)
 
 
 @pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")

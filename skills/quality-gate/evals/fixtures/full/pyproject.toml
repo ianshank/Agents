@@ -2,6 +2,9 @@
 name = "gated-demo"
 version = "0.1.0"
 
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "mypy"]
+
 [tool.ruff]
 line-length = 100
 

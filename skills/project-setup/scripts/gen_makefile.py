@@ -16,10 +16,13 @@ Exit codes: 0 success (or ``--check`` up to date); 1 ``--check`` drift / missing
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
 from makegen import detect, render_makefile
+
+logger = logging.getLogger("makegen")
 
 
 def _check(out: Path, content: str) -> int:
@@ -44,10 +47,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Advisory: exit 1 if the committed Makefile differs from a fresh render.",
     )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging (prints detected facts).")
     args = parser.parse_args(argv)
 
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.WARNING,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
     root = Path(args.root)
     facts = detect(root)
+    logger.debug("detected facts for %s: %s", root.as_posix(), facts)
     content = render_makefile(facts)
 
     if args.stdout:

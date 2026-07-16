@@ -26,5 +26,9 @@ class GateFacts:
 
     @property
     def has_any_step(self) -> bool:
-        """True when at least one gate step is emittable (else the gate is meaningless)."""
-        return bool(self.has_ruff or self.type_checker or self.has_pytest)
+        """True when at least one gate step is emittable (else the gate is meaningless).
+
+        Includes ``has_pytest_cov``: a project can supply a coverage step (pytest-cov declared)
+        without a separate pytest signal, and the renderer would still emit that step.
+        """
+        return bool(self.has_ruff or self.type_checker or self.has_pytest or self.has_pytest_cov)

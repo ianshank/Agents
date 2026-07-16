@@ -151,3 +151,34 @@ def test_malformed_pyproject_degrades_to_defaults(tmp_path: Path) -> None:
     facts = detect(tmp_path)
     assert facts.package_manager == "pip"
     assert facts.has_ruff is False
+
+
+# ------------------------------------------------------- pytest-cov (never fabricate)
+def test_pytest_cov_requires_declared_plugin(tmp_path: Path) -> None:
+    # [tool.coverage] alone (standalone coverage.py) must NOT imply pytest-cov, else the
+    # Makefile would fabricate a `pytest --cov` target that fails without the plugin.
+    _write(tmp_path, "pyproject.toml", "[tool.coverage.run]\nbranch=true\n[tool.pytest.ini_options]\n")
+    facts = detect(tmp_path)
+    assert facts.has_pytest is True
+    assert facts.has_pytest_cov is False
+
+
+def test_pytest_cov_from_dependency_groups(tmp_path: Path) -> None:
+    # PEP 735 [dependency-groups]; the include-group dict entry is skipped without error.
+    _write(
+        tmp_path,
+        "pyproject.toml",
+        '[dependency-groups]\nall = [{include-group = "test"}]\ntest = ["pytest", "pytest-cov"]\n',
+    )
+    assert detect(tmp_path).has_pytest_cov is True
+
+
+# -------------------------------------------------------------- fail_under coercion
+def test_fail_under_accepts_string(tmp_path: Path) -> None:
+    _write(tmp_path, "pyproject.toml", '[tool.coverage.report]\nfail_under = "87"\n')
+    assert detect(tmp_path).cov_fail_under == 87
+
+
+def test_fail_under_unparseable_defaults_zero(tmp_path: Path) -> None:
+    _write(tmp_path, "pyproject.toml", '[tool.coverage.report]\nfail_under = "lots"\n')
+    assert detect(tmp_path).cov_fail_under == 0

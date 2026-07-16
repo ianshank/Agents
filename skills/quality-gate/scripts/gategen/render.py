@@ -16,7 +16,7 @@ _HEADER = (
     "# Single source of truth for this project's checks: run it locally and in CI so the",
     "# two never drift. Safe to extend by hand.",
     "#",
-    "# Usage: ./quality-gate.sh [lint|typecheck|test|coverage|all]   (default: all)",
+    "# Usage: ./scripts/quality-gate.sh [lint|typecheck|test|coverage|all]   (default: all)",
     "set -euo pipefail",
 )
 
@@ -24,6 +24,19 @@ _HEADER = (
 _LOG = "log() { printf '\\n\\033[1m[quality-gate] %s\\033[0m\\n' \"$1\"; }"
 
 _ORDER = ("lint", "typecheck", "test", "coverage")
+
+
+def _sh_escape(value: str) -> str:
+    r"""Escape a value for safe literal use inside a bash double-quoted default (``${VAR:-<here>}``).
+
+    A detected value containing ``$``, a backtick, ``"`` or ``\`` would otherwise trigger
+    parameter/command substitution when the script runs with ``VAR`` unset, or break the
+    string. Backslash is escaped first so the other escapes are not doubled.
+    """
+    out = value.replace("\\", "\\\\")
+    for ch in ("$", "`", '"'):
+        out = out.replace(ch, "\\" + ch)
+    return out
 
 
 def _step_commands(facts: GateFacts) -> dict[str, list[str]]:
@@ -46,11 +59,11 @@ def _step_commands(facts: GateFacts) -> dict[str, list[str]]:
 
 
 def _variables(facts: GateFacts, steps: dict[str, list[str]]) -> list[str]:
-    out = [f'PYTHON="${{PYTHON:-{facts.python}}}"']
+    out = [f'PYTHON="${{PYTHON:-{_sh_escape(facts.python)}}}"']
     if "typecheck" in steps:
-        out.append(f'TYPECHECK_PATHS="${{TYPECHECK_PATHS:-{facts.typecheck_paths}}}"')
+        out.append(f'TYPECHECK_PATHS="${{TYPECHECK_PATHS:-{_sh_escape(facts.typecheck_paths)}}}"')
     if "coverage" in steps:
-        out.append(f'COVERAGE_SOURCE="${{COVERAGE_SOURCE:-{facts.coverage_source}}}"')
+        out.append(f'COVERAGE_SOURCE="${{COVERAGE_SOURCE:-{_sh_escape(facts.coverage_source)}}}"')
         out.append(f'COV_FAIL_UNDER="${{COV_FAIL_UNDER:-{facts.cov_fail_under}}}"')
     return out
 

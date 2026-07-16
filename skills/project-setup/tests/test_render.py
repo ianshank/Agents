@@ -123,3 +123,14 @@ def test_no_pip_variable_for_non_pip_install() -> None:
     out = render_makefile(ProjectFacts(package_manager="poetry", install_cmd="poetry install"))
     assert "PIP ?=" not in out
     assert "poetry install" in out
+
+
+def test_delegation_omits_absent_tools() -> None:
+    # Never fabricate: with a gate script present but only ruff configured, only `lint`
+    # delegates; typecheck/test/coverage are omitted (the gate script would not implement them).
+    out = render_makefile(ProjectFacts(has_ruff=True, has_quality_gate_script=True))
+    assert "./scripts/quality-gate.sh lint" in out
+    assert "quality-gate.sh typecheck" not in out
+    assert "quality-gate.sh test" not in out
+    assert "quality-gate.sh coverage" not in out
+    assert "./scripts/quality-gate.sh all" in out  # check still delegates to the aggregate

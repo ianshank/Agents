@@ -57,3 +57,21 @@ def test_variable_expansions_are_quoted() -> None:
 def test_deterministic() -> None:
     cfg = DeployConfig(app="a", artifact="r:1")
     assert render_deploy(cfg) == render_deploy(cfg)
+
+
+def test_header_usage_references_scripts_path() -> None:
+    out = render_deploy(DeployConfig())
+    assert "# Usage: ./scripts/deploy.sh [--dry-run] [--yes] <build|release|rollback|health-check>" in out
+
+
+def test_dollar_in_value_is_escaped_against_injection() -> None:
+    # A value with $ must be neutralised so it can't run a command when ARTIFACT is unset.
+    out = render_deploy(DeployConfig(artifact="x$(whoami)"))
+    line = next(ln for ln in out.splitlines() if ln.startswith("ARTIFACT="))
+    assert line == 'ARTIFACT="${ARTIFACT:-x\\$(whoami)}"'
+
+
+def test_backtick_quote_backslash_escaped() -> None:
+    out = render_deploy(DeployConfig(app='a`b"c\\d'))
+    line = next(ln for ln in out.splitlines() if ln.startswith("APP="))
+    assert line == 'APP="${APP:-a\\`b\\"c\\\\d}"'

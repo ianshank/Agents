@@ -18,6 +18,7 @@ def test_full_toolchain_src_layout(tmp_path: Path) -> None:
         tmp_path,
         "pyproject.toml",
         '[project]\nname="demo"\n'
+        '[project.optional-dependencies]\ndev=["pytest-cov"]\n'
         "[tool.ruff]\n[tool.mypy]\n[tool.pytest.ini_options]\n"
         '[tool.coverage.run]\nsource=["demo"]\n[tool.coverage.report]\nfail_under=88\n',
     )
@@ -102,3 +103,37 @@ def test_malformed_pyproject_degrades(tmp_path: Path) -> None:
     facts = detect(tmp_path)
     assert facts.has_ruff is False
     assert facts.has_any_step is False
+
+
+def test_pytest_cov_requires_declared_plugin(tmp_path: Path) -> None:
+    # [tool.coverage] alone must NOT imply pytest-cov (never fabricate a `pytest --cov` gate step).
+    _write(tmp_path, "pyproject.toml", "[tool.coverage.run]\nbranch=true\n[tool.pytest.ini_options]\n")
+    assert detect(tmp_path).has_pytest_cov is False
+
+
+def test_pytest_cov_from_dependency_groups(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "pyproject.toml",
+        '[dependency-groups]\nall = [{include-group = "test"}]\ntest = ["pytest-cov"]\n',
+    )
+    assert detect(tmp_path).has_pytest_cov is True
+
+
+def test_coverage_only_still_counts_as_a_step(tmp_path: Path) -> None:
+    # A project with pytest-cov but no pytest table still has an emittable coverage step.
+    _write(tmp_path, "pyproject.toml", '[project.optional-dependencies]\ndev=["pytest-cov"]\n')
+    facts = detect(tmp_path)
+    assert facts.has_pytest is False
+    assert facts.has_pytest_cov is True
+    assert facts.has_any_step is True
+
+
+def test_fail_under_accepts_string(tmp_path: Path) -> None:
+    _write(tmp_path, "pyproject.toml", '[tool.coverage.report]\nfail_under = "82"\n')
+    assert detect(tmp_path).cov_fail_under == 82
+
+
+def test_fail_under_unparseable_defaults_zero(tmp_path: Path) -> None:
+    _write(tmp_path, "pyproject.toml", '[tool.coverage.report]\nfail_under = "n/a"\n')
+    assert detect(tmp_path).cov_fail_under == 0

@@ -17,7 +17,7 @@ A monorepo of five Python packages plus vendored skills and CI:
 | `flow-corpus/` | Calibrated flow corpus (offline + deterministic) | `flow-corpus/pyproject.toml fail_under = 95` |
 | `flow-protocol/` | Cross-package flow protocol | `flow-protocol/pyproject.toml fail_under = 95` |
 | `scripts/` + `scripts/validations/` | Operational tooling — feature validators, CI guards | `scripts/.coveragerc fail_under = 85` |
-| `skills/` | Vendored skills registered via `skills/marketplace.yaml` | `skills/*/pyproject.toml` where present |
+| `skills/` | Vendored skills registered via `skills/marketplace.yaml` — eval skills plus deterministic generator skills (`project-setup`/`quality-gate`/`deploy`) that emit Makefiles/shell scripts (ADR 0020) | `skills/*` gate: pinned `ruff`/`mypy` + `pytest --cov-fail-under=95` per `skills-ci.yml` |
 
 ## The map
 

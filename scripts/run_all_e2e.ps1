@@ -304,6 +304,9 @@ Invoke-PytestStep 'C' 'e2e:skills+hooks' `
     @('-m', 'pytest',
       'skills/architecture-drift-guard/tests/test_end_to_end.py',
       'skills/eval-corpus-forge/tests/test_end_to_end.py',
+      'skills/project-setup/tests/test_gen_makefile.py',
+      'skills/quality-gate/tests/test_gen_gate.py',
+      'skills/deploy/tests/test_gen_deploy.py',
       'claude-foundation/tests/test_hooks_e2e.py',
       '-o', 'addopts=', '--import-mode=importlib', '-p', 'no:cacheprovider', "--junitxml=$e2eXml") `
     $RepoRoot $e2eXml
