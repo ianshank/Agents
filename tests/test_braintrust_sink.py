@@ -9,6 +9,8 @@ from ``conftest.py``) — never the real package.
 
 from __future__ import annotations
 
+import logging
+import sys
 from types import SimpleNamespace
 from typing import cast
 
@@ -116,3 +118,15 @@ def test_braintrust_sink_uses_sdk_experiment_when_enabled(fake_braintrust, recor
     assert recording_experiment.logged[0]["id"] == "i1"
     assert recording_experiment.logged[0]["scores"] == {"acc": 0.8}
     assert recording_experiment.logged[0]["metadata"] == {"config_name": "cfg", "run_id": "run-1"}
+
+
+def test_braintrust_sink_does_not_claim_export_when_sdk_absent(monkeypatch, caplog) -> None:
+    # enabled=True but the SDK is absent → build_client falls back to Null; the sink must NOT
+    # log a misleading "exported" line for an export that did not happen.
+    monkeypatch.setitem(sys.modules, "braintrust", None)
+    sink = _braintrust_sink({"enabled": True})
+    with caplog.at_level(logging.DEBUG):
+        sink.emit(_run(("i1", {}, "o", None, [("acc", 1.0)])))
+    assert isinstance(sink._client, NullBrainTrustClient)  # fell back to no-op
+    # No INFO-level "exported … to experiment" claim (the no-op path logs at DEBUG instead).
+    assert not any(r.levelno == logging.INFO and "exported" in r.getMessage() for r in caplog.records)

@@ -266,7 +266,10 @@ class BrainTrustSink(ResultSink):
                 metadata={"config_name": run.config_name},
             )
         self._client.flush()
-        if self.enabled:
-            logger.info("BrainTrust sink: exported %d item(s) to experiment %s", len(run.items), run.run_id)
+        # Key the summary on the resolved client, not just ``enabled``: an enabled sink whose
+        # SDK is absent or whose init failed falls back to NullBrainTrustClient (build_client
+        # already logged why), so it must NOT claim an export that did not happen.
+        if isinstance(self._client, NullBrainTrustClient):
+            logger.debug("BrainTrust sink no-op; %d item(s) not exported", len(run.items))
         else:
-            logger.debug("BrainTrust sink disabled; %d item(s) not exported (no-op)", len(run.items))
+            logger.info("BrainTrust sink: exported %d item(s) to experiment %s", len(run.items), run.run_id)
