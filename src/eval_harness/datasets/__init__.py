@@ -10,6 +10,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from ..braintrust_client import fetch_dataset_items
 from ..core.interfaces import DatasetSource
 from ..core.types import EvalItem
 from ..langfuse_client import LangfuseClient
@@ -115,6 +116,28 @@ class LangfuseDataset(DatasetSource):
         if self._client is None:
             raise RuntimeError("LangfuseDataset has no client attached")
         records = self._client.get_dataset_items(self.dataset_name)
+        return [_to_item(rec, i) for i, rec in enumerate(records)]
+
+
+@DATASETS.register("braintrust")
+class BrainTrustDataset(DatasetSource):
+    """Pulls a dataset from BrainTrust.
+
+    Self-wiring: credentials are read from the environment by the SDK (``BRAINTRUST_API_KEY`` /
+    ``BRAINTRUST_API_URL``), so — unlike ``LangfuseDataset`` — it needs no engine-injected
+    client. Fail-fast: :func:`fetch_dataset_items` raises when the ``braintrust`` SDK is absent,
+    because a dataset is essential input and must not silently degrade to an empty eval
+    (mirrors ``ParquetDataset``). ``version`` optionally pins a specific dataset version.
+    """
+
+    def __init__(self, project: str, name: str, version: str | int | None = None):
+        self.project = project
+        self.name = name
+        self.version = version
+
+    def load(self) -> Iterable[EvalItem]:
+        """Fetch dataset items from BrainTrust and yield :class:`EvalItem`."""
+        records = fetch_dataset_items(project_name=self.project, dataset_name=self.name, version=self.version)
         return [_to_item(rec, i) for i, rec in enumerate(records)]
 
 

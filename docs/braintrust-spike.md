@@ -9,15 +9,16 @@ BrainTrust is **off by default** and **imported lazily** — nothing changes for
 runs, `SCHEMA_VERSION` is unchanged, and the offline test suite needs no `braintrust` package
 installed (the sink degrades to a no-op).
 
-## What it adds (Phase 1)
+## What it adds
 
 | File | Purpose |
 |------|---------|
-| `src/eval_harness/braintrust_client/__init__.py` | The seam: `BrainTrustClient` ABC / `NullBrainTrustClient` / injected-handle `SDKBrainTrustClient` + `build_client(enabled=…)`. Mirrors `phoenix_client`. |
+| `src/eval_harness/braintrust_client/__init__.py` | The seam: `BrainTrustClient` ABC / `NullBrainTrustClient` / injected-handle `SDKBrainTrustClient` + `build_client(enabled=…)` (export); `fetch_dataset_items(...)` (Phase 2 dataset read). Mirrors `phoenix_client`. |
 | `src/eval_harness/sinks/__init__.py` | `@SINKS.register("braintrust") BrainTrustSink` — logs each item to a BrainTrust experiment; self-constructs its client, so **no engine wiring**. |
-| `src/eval_harness/scorers/__init__.py` | `@SCORERS.register("autoevals") AutoevalsScorer` — bridges the `autoevals` scorer library into the `Scorer` contract. |
+| `src/eval_harness/scorers/__init__.py` | `@SCORERS.register("autoevals") AutoevalsScorer` — bridges the `autoevals` scorer library into the `Scorer` contract (heuristic + LLM/Embedding). |
+| `src/eval_harness/datasets/__init__.py` | `@DATASETS.register("braintrust") BrainTrustDataset` (Phase 2) — pulls a dataset via `init_dataset`; self-wiring, **fail-fast** when the SDK is absent (a dataset is essential input, not optional telemetry). |
 | `pyproject.toml` | Optional `braintrust` / `autoevals` extras. `braintrust` is kept out of `dev`/CI; `autoevals` is installed in CI (offline-safe heuristics). |
-| `architecture.yaml` / `architecture.mmd` | New `braintrust_client` component + the `sinks → braintrust_client` edge. |
+| `architecture.yaml` / `architecture.mmd` | New `braintrust_client` component + the `sinks → braintrust_client` and `datasets → braintrust_client` edges. |
 
 ### Why the native `experiment.log` write-path (not the `Eval()` framework, not OTLP)
 
@@ -43,7 +44,10 @@ source:
 | `BRAINTRUST_API_URL` | Optional; overrides the default `https://api.braintrust.dev` for self-hosted stacks. |
 
 ```yaml
-# eval config — export results + run an autoevals scorer
+# eval config — read a BrainTrust dataset, run an autoevals scorer, export back to BrainTrust
+dataset:
+  type: braintrust
+  params: { project: my-eval-project, name: my-dataset }   # version: "..." optionally pins one
 scorers:
   - type: autoevals
     params: { scorer: Levenshtein, name: edit_distance, threshold: 0.6 }
@@ -76,6 +80,7 @@ eval-harness run --config config/eval.example.yaml   # scores appear in the Brai
 | `ScoreResult(name, value∈[0,1])` | `scores={name: value}`; `run_id`/`config_name` → `metadata` |
 | `EvalItem(inputs, expected)` / `TargetOutput(output)` | `input=` / `expected=` / `output=` |
 | `Scorer` | `autoevals` scorer class (`evaluator(output=, expected=, input=)` → `Score`) |
+| `DatasetSource` | `init_dataset(project, name, version)` → iterate `{id, input, expected, metadata}` |
 
 ## Testing (offline-first)
 
@@ -106,13 +111,25 @@ Fully reversible with no data migration and no change to existing users: delete
 `pyproject` extras, the `braintrust_client` component + edge in `architecture.yaml`/`.mmd`, and
 the three test files. Core depends only on the ABCs; nothing else imports BrainTrust.
 
-## Phase 2 (deferred — needs SDK-source verification)
+## Phase 2 status
 
-Datasets (`init_dataset` iteration → `{id, input, expected, metadata}`), managed-prompt text
-fetch (`load_prompt`/`.build` return shape), and the LLM/Embedding `autoevals` scorers. The
-exact dataset/prompt APIs could not be confirmed from BrainTrust's docs (some pages are
-Cloudflare-gated), so they must be verified against the installed SDK source before wiring and
-kept behind the `braintrust_client` seam so only `SDKBrainTrustClient` changes if the API
-differs. A top-level `BrainTrustConfig` block (peer to `PhoenixConfig`) is introduced then, if
-the dataset/prompt seams need shared config — it is intentionally omitted in Phase 1 to avoid
-config nothing reads.
+**Shipped:**
+- **Dataset source** (`@DATASETS.register("braintrust")`) — verified against the installed
+  `braintrust` 0.27 SDK: `init_dataset(project, name, version)` returns a `Dataset` whose
+  iteration yields `DatasetEvent` records (`id`, `input`, `expected`, `metadata`), mapped onto
+  the harness record shape. Offline-tested via fake-`sys.modules` injection; a live path is
+  covered by `tests/test_braintrust_live.py`.
+- **LLM/Embedding `autoevals` scorers** — already supported by the Phase 1 `AutoevalsScorer`
+  bridge (any `autoevals` class name + provider key from the env); a live `Factuality` test is
+  in `tests/test_braintrust_live.py`.
+
+**Still deferred — managed prompts.** BrainTrust's `load_prompt(project, slug, version)` →
+`Prompt`, and `Prompt.build()` returns OpenAI-client kwargs (`{messages, model, …}`) — a
+*chat-message* structure. The harness's managed-prompt seam (`PromptSourceConfig`, F-026) feeds
+a single judge **system string**, so mapping a BrainTrust chat prompt onto it is lossy and
+would touch two protected eval paths (`config/models.py` + `engine.py`) while overlapping the
+existing Langfuse prompt registry. This needs a small design decision (how to collapse chat
+messages to the judge system string, or whether to expose the full message array) before wiring
+— tracked as a follow-up rather than forced in. A top-level `BrainTrustConfig` block (peer to
+`PhoenixConfig`) would be introduced alongside it if shared config is needed; it is omitted so
+far because the sink and dataset source are fully configured by their own component params.

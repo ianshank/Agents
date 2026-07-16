@@ -168,3 +168,46 @@ def build_client(*, enabled: bool, project_name: str, experiment_name: str) -> B
         logger.error("braintrust.init(project=%s) failed; export disabled (using no-op): %s", project_name, exc)
         return NullBrainTrustClient()
     return SDKBrainTrustClient(experiment)
+
+
+# --------------------------------------------------------------------------- #
+# Dataset read-path (Phase 2). A dataset is *essential input*, not telemetry, so — unlike
+# the export sink — this RAISES when the SDK is absent (mirroring ParquetDataset and the
+# SDK-backed judges) rather than silently no-opping into an empty eval. Each BrainTrust
+# dataset record ({id, input, expected, metadata}) maps onto the harness record shape
+# ({id, inputs, expected, metadata}); credentials are read from the environment by the SDK.
+# --------------------------------------------------------------------------- #
+
+
+def fetch_dataset_items(
+    *,
+    project_name: str,
+    dataset_name: str,
+    version: str | int | None = None,
+) -> list[dict]:
+    """Return a BrainTrust dataset's items as harness records.
+
+    Reads ``BRAINTRUST_API_KEY`` / ``BRAINTRUST_API_URL`` from the environment (via the SDK).
+    Raises ``RuntimeError`` with an install hint when ``braintrust`` is not installed — a
+    dataset cannot silently degrade to empty. Maps each record's ``input``→``inputs`` and
+    passes ``id``/``expected``/``metadata`` through (BrainTrust's ``DatasetEvent`` fields).
+    """
+    try:
+        import braintrust
+    except ImportError as exc:
+        raise RuntimeError(
+            f"The 'braintrust' package is required for the braintrust dataset source. {INSTALL_HINT}"
+        ) from exc
+    kwargs: dict[str, Any] = {"project": project_name, "name": dataset_name}
+    if version is not None:
+        kwargs["version"] = version
+    dataset = braintrust.init_dataset(**kwargs)
+    return [
+        {
+            "id": rec.get("id"),
+            "inputs": rec.get("input") or {},
+            "expected": rec.get("expected"),
+            "metadata": rec.get("metadata") or {},
+        }
+        for rec in dataset
+    ]

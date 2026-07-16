@@ -209,7 +209,7 @@ src/eval_harness/
   core/              types, interfaces, generic registry
   scorers/           exact_match, regex_match, contains, json_keys, llm_judge, weighted,
                      autoevals (bridges BrainTrust's autoevals scorer library)
-  datasets/          inline, jsonl, langfuse
+  datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
   targets/           echo, callable (dynamic import)
   sinks/             console, json_file, html_file, langfuse, phoenix, braintrust
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,

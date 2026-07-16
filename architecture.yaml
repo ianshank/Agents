@@ -63,7 +63,7 @@ dependencies:
   flow_corpus: [flow_protocol, agent_core]
   behavioral_regression: [agent_core, flow_corpus]
   cli: [config, engine, gating, langfuse_client, phoenix_client, plugins]
-  datasets: [core, langfuse_client, plugins]
+  datasets: [braintrust_client, core, langfuse_client, plugins]
   engine: [agent_core_adapter, config, core, langfuse_client, plugins]
   gating: [config, core]
   judges: [core, langfuse_client, plugins]

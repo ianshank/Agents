@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **BrainTrust integration — Phase 2 (dataset source):** a `braintrust` dataset source
+  (`@DATASETS.register("braintrust")`) that pulls a dataset via the SDK's `init_dataset` and maps
+  each `DatasetEvent` (`id`/`input`/`expected`/`metadata`) onto the harness record shape. It is
+  self-wiring (credentials from the environment) and **fail-fast** — it raises a clear install
+  error when the `braintrust` SDK is absent, because a dataset is essential input and must not
+  silently degrade to an empty eval (mirrors `ParquetDataset`). Verified against the installed
+  `braintrust` 0.27 SDK; offline-tested via fake-`sys.modules` injection, with a live path and an
+  LLM `autoevals` (`Factuality`) path in `tests/test_braintrust_live.py`. Adds the
+  `datasets → braintrust_client` architecture edge. Managed-prompt fetch remains deferred (see
+  `docs/braintrust-spike.md`): BrainTrust prompts are chat-message arrays, which don't map
+  cleanly onto the harness's single-string judge-prompt seam.
 - **BrainTrust integration (additive, SDK-optional; Phase 1):** a `braintrust` result sink
   that exports each eval item to a BrainTrust *experiment* via the native `experiment.log`
   write-path (`input`/`output`/`expected` + a `{name: value}` scores dict per row), and an
