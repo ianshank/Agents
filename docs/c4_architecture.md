@@ -37,16 +37,18 @@ C4Container
     }
 
     Container_Boundary(components, "Pluggable Components") {
-        Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, llm_judge")
-        Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible)")
-        Container(datasets, "Datasets", "Python", "inline, jsonl, langfuse")
+        Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, weighted, llm_judge, autoevals")
+        Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible), anthropic, phoenix_evals")
+        Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust")
         Container(targets, "Targets", "Python", "echo, callable (dynamic import)")
-        Container(sinks, "Sinks", "Python", "console, json_file, langfuse")
+        Container(sinks, "Sinks", "Python", "console, json_file, html_file, langfuse, phoenix, braintrust")
         Container(gating, "Quality Gate", "Python", "Config-driven pass/fail for CI")
     }
 
     Container_Boundary(integration, "Integrations") {
         Container(lf_client, "LangfuseClient", "Python", "Interface + NullClient + SDKClient adapter")
+        Container(px_client, "PhoenixClient", "Python", "OTel span export (SDK-optional seam; mirrors LangfuseClient)")
+        Container(bt_client, "BrainTrustClient", "Python", "Experiment export + dataset read (SDK-optional seam)")
         Container(skill_fw, "Skill Framework", "Python", "validate_skill.py validation + marketplace (eval + deterministic generator skills)")
     }
 
@@ -65,6 +67,9 @@ C4Container
     Rel(engine, gating, "evaluate_gate()")
     Rel(engine, lf_client, "log_score(), link_dataset_item()")
     Rel(lf_client, langfuse, "HTTPS")
+    Rel(sinks, px_client, "log_score() as OTel spans")
+    Rel(sinks, bt_client, "log_item() per item")
+    Rel(datasets, bt_client, "fetch_dataset_items()")
     Rel(judges, llm_api, "chat.completions.create()")
 ```
 
@@ -291,5 +296,5 @@ flowchart LR
     J --> K[Quality Gate]
     K -->|Pass| L[Sink.emit]
     K -->|Fail| M[Exit code 1]
-    L --> N[Langfuse / JSON / Console]
+    L --> N[Langfuse / Phoenix / BrainTrust / JSON / Console]
 ```

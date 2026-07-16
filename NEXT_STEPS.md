@@ -13,6 +13,18 @@
   repo's own `quality-gates.yml` to a generated `quality-gate.sh`; add per-package targets to the
   root Makefile for the monorepo; consider converting the deterministic parts of the
   inference-heavy `claude-foundation/skills/*`.
+- [x] **BrainTrust integration (F-038, additive/SDK-optional; Phases 1–2)** — a `braintrust`
+  result sink (per-item `experiment.log`), a `braintrust` dataset source (`init_dataset`), and an
+  `autoevals` scorer bridge, all behind a new `braintrust_client` seam
+  (`NullBrainTrustClient` / injected-handle `SDKBrainTrustClient` / `build_client` /
+  `fetch_dataset_items`) that no-ops when the SDK is absent or disabled — `SCHEMA_VERSION`
+  unchanged, offline suite unaffected. Verified against the installed `braintrust` 0.27 SDK;
+  offline-tested via fake-`sys.modules` injection with a live path in `tests/test_braintrust_live.py`.
+  Credentials come from `BRAINTRUST_API_KEY` / `BRAINTRUST_API_URL` (env only). `braintrust` stays
+  out of the offline CI job (no-op precedent from Phoenix); `autoevals` (lightweight, offline-safe
+  heuristics) is installed in CI for real coverage. See `docs/braintrust-spike.md`.
+  Follow-ups: managed-prompt fetch (BrainTrust chat-prompt → single judge-string is lossy — needs a
+  design decision) and an opt-in `braintrust-live.yml` workflow mirroring `phoenix-live.yml`.
 - [x] **One-command E2E / user-journey harness + Windows portability** —
   `scripts/run_all_e2e.ps1` (+ `docs/e2e-runbook.md`) runs every package suite, every
   `features.yaml` gate, every package CLI journey, and the skill/hook e2e tests in one

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
 
@@ -10,6 +11,8 @@ from ..core._serialize import as_text as _as_text
 from ..core.interfaces import Scorer
 from ..core.types import EvalItem, RunContext, ScoreResult, TargetOutput
 from ..plugins import SCORERS
+
+logger = logging.getLogger(__name__)
 
 
 @SCORERS.register("exact_match", aliases=("exact",))
@@ -207,4 +210,107 @@ class LLMJudgeScorer(Scorer):
             value=verdict.score,
             passed=verdict.score >= self.threshold,
             comment=verdict.reasoning or None,
+        )
+
+
+@SCORERS.register("autoevals")
+class AutoevalsScorer(Scorer):
+    """Bridges a BrainTrust ``autoevals`` scorer into the harness ``Scorer`` contract.
+
+    ``autoevals`` scorers return a ``Score(name, score: float|None, metadata)`` with
+    ``score`` in [0,1] (``None`` when skipped) — mapping cleanly onto ``ScoreResult``.
+    This adapter instantiates the named scorer once and, per item, calls it on the
+    documented sync surface (``evaluator(output=, expected=, input=)``), then converts
+    the ``Score`` to a ``ScoreResult``.
+
+    ``scorer`` is the autoevals class name (e.g. ``"Levenshtein"``, ``"Factuality"``);
+    the canonical names are preferred over back-compat aliases like ``LevenshteinScorer``.
+    Any extra params flow through to the scorer's constructor (e.g. ``model=``,
+    ``base_url=``), so provider selection is config-driven; provider credentials come from
+    the environment (e.g. ``OPENAI_API_KEY``), never hardcoded. Set ``coerce_text=True`` to
+    stringify output/expected/input for string scorers when the target emits non-string data
+    (off by default so structured scorers like ``JSONDiff`` keep their raw inputs — see
+    :meth:`_prep`).
+
+    Heuristic scorers (``Levenshtein``, ``ExactMatch``, ``NumericDiff``, ``JSONDiff``) are
+    pure-Python — safe for the offline suite. LLM/Embedding scorers (``Factuality``,
+    ``ClosedQA``, ``EmbeddingSimilarity``, …) call a provider at runtime and — because they
+    do NOT route through ``ctx.judge`` — run OUTSIDE the harness ``judge_budget``/rate-limit
+    guard, which only wraps the ``Judge`` seam. ``braintrust`` itself is not required;
+    ``autoevals`` is a standalone, lazily-imported dependency.
+    """
+
+    default_name = "autoevals"
+
+    def __init__(
+        self,
+        name: str | None = None,
+        scorer: str = "Levenshtein",
+        threshold: float = 0.5,
+        on_skip: float = 0.0,
+        coerce_text: bool = False,
+        **scorer_kwargs: Any,
+    ):
+        # Default the emitted score name to the specific scorer (e.g. "Levenshtein") so
+        # several autoevals scorers in one run don't collide on the generic default.
+        super().__init__(name or scorer)
+        self.scorer_name = scorer
+        self.threshold = float(threshold)
+        self.on_skip = float(on_skip)
+        self.coerce_text = bool(coerce_text)
+        try:
+            import autoevals
+        except ImportError as exc:
+            raise RuntimeError(
+                f"The 'autoevals' package is required for the '{scorer}' autoevals scorer. "
+                "Install with: pip install 'langfuse-eval-harness[autoevals]'"
+            ) from exc
+        factory = getattr(autoevals, scorer, None)
+        if factory is None:
+            raise ValueError(f"unknown autoevals scorer {scorer!r}")
+        self._evaluator = factory(**scorer_kwargs)
+
+    def _prep(self, value: Any) -> Any:
+        """Optionally coerce a value to text for string scorers.
+
+        Off by default: values pass through raw, because structured autoevals scorers
+        (``JSONDiff``, ``NumericDiff``, ``ValidJSON``) need the original dict/number/JSON —
+        blanket stringification would break them. Set ``coerce_text=True`` for string scorers
+        (``Levenshtein``, ``Factuality``, …) when the target emits non-string output, so it
+        scores the text instead of silently falling to the ``0.0`` fail-safe. ``None`` is left
+        as-is either way.
+        """
+        return _as_text(value) if self.coerce_text and value is not None else value
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        # Fail-safe covers the whole call AND result normalization (evaluator, metadata
+        # access, score coercion): a provider/parse error must not abort the run.
+        try:
+            result = self._evaluator(
+                output=self._prep(output.output),
+                expected=self._prep(item.expected),
+                input=self._prep(item.inputs),
+            )
+            raw_metadata = getattr(result, "metadata", None)
+            metadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
+            raw_score = result.score
+            value = None if raw_score is None else float(raw_score)
+        except Exception as exc:
+            logger.warning("autoevals scorer %r failed for item %s: %s", self.scorer_name, item.id, exc)
+            return ScoreResult(self.name, value=0.0, passed=False, comment=f"autoevals error: {exc}")
+        if value is None:  # autoevals returns None on skip; ScoreResult.value is non-optional
+            return ScoreResult(
+                self.name,
+                value=self.on_skip,
+                passed=None,
+                comment="autoevals skipped (score=None)",
+                metadata=metadata,
+            )
+        comment = metadata.get("rationale") if isinstance(metadata.get("rationale"), str) else None
+        return ScoreResult(
+            self.name,
+            value=value,
+            passed=value >= self.threshold,
+            comment=comment,
+            metadata=metadata,
         )

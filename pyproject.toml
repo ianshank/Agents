@@ -37,6 +37,16 @@ phoenix = [
 # offline spike). Split out because arize-phoenix-evals pulls pandas/numpy and its API
 # differs from older releases; resolve against `parquet`'s pyarrow pin on a networked env.
 phoenix-evals = ["arize-phoenix-evals>=0.29", "arize-phoenix-client>=2.11"]
+# BrainTrust experiment export (optional, additive). Kept OUT of `dev`/the offline test
+# job so it never needs the SDK — the `braintrust` sink degrades to a no-op when absent
+# (mirrors the phoenix seam). Pinned <1 because braintrust is pre-1.0 (breaking changes
+# permitted across minor bumps); bump deliberately after checking the changelog.
+braintrust = ["braintrust>=0.27,<1"]
+# autoevals scorer bridge. Lightweight (chevron/jsonschema/polyleven/pyyaml — no numpy/
+# pandas), and its Heuristic scorers are pure-Python & offline-safe, so — unlike braintrust
+# — this extra IS installed in the offline test job (see eval-harness-ci.yml) for real
+# coverage of the bridge's happy path. Pinned <1 (pre-1.0).
+autoevals = ["autoevals>=0.3,<1"]
 # ruff/mypy are pinned (not `>=`) so local and CI format/lint identically — unpinned
 # ruff drifted (0.8.0 local vs 0.15.20 CI) and broke `ruff format --check`. Same
 # reproducibility rationale as the grimp==3.14 pin above. Bump deliberately, in lockstep.

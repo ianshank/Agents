@@ -215,9 +215,11 @@ langfuse-eval-harness/
 │       ├── core/                # Orchestration, registry
 │       ├── judges/              # Judge implementations
 │       ├── scorers/             # Scoring functions
-│       ├── datasets/            # Dataset loaders
-│       ├── langfuse_client/     # Langfuse integrations
-│       └── sinks/               # Output sinks (Langfuse, file)
+│       ├── datasets/            # Dataset loaders (inline, jsonl, csv, parquet, langfuse, braintrust)
+│       ├── langfuse_client/     # Langfuse integration (SDK-optional seam)
+│       ├── phoenix_client/      # Arize Phoenix integration (SDK-optional seam)
+│       ├── braintrust_client/   # BrainTrust integration (SDK-optional seam)
+│       └── sinks/               # Output sinks (console, json, html, langfuse, phoenix, braintrust)
 ├── scripts/
 │   ├── validate.py              # Harness validation runner
 │   ├── validate_skill.py        # Skill validator runner
