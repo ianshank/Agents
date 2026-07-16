@@ -49,7 +49,7 @@ C4Container
         Container(lf_client, "LangfuseClient", "Python", "Interface + NullClient + SDKClient adapter")
         Container(px_client, "PhoenixClient", "Python", "OTel span export (SDK-optional seam; mirrors LangfuseClient)")
         Container(bt_client, "BrainTrustClient", "Python", "Experiment export + dataset read (SDK-optional seam)")
-        Container(skill_fw, "Skill Framework", "Python", "validate_skill.py — structural + behavioral validation")
+        Container(skill_fw, "Skill Framework", "Python", "validate_skill.py validation + marketplace (eval + deterministic generator skills)")
     }
 
     System_Ext(langfuse, "Langfuse Cloud", "")

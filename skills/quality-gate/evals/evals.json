@@ -1,0 +1,35 @@
+{
+  "skill": "quality-gate",
+  "evals": [
+    {
+      "id": "generate-gate",
+      "prompt": "Generate a quality-gate shell script for a project with ruff, mypy, pytest and coverage configured.",
+      "run": "python scripts/gen_gate.py --root evals/fixtures/full --out .skill-validation/quality-gate.sh",
+      "assertions": [
+        { "type": "exit_zero", "text": "generation succeeds" },
+        { "type": "file_contains", "path": ".skill-validation/quality-gate.sh", "contains": "set -euo pipefail", "text": "uses bash strict mode" },
+        { "type": "file_contains", "path": ".skill-validation/quality-gate.sh", "contains": "--cov-fail-under=\"$COV_FAIL_UNDER\"", "text": "enforces a coverage threshold" },
+        { "type": "file_contains", "path": ".skill-validation/quality-gate.sh", "contains": "main \"$@\"", "text": "dispatches subcommands" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import sys; c=open('.skill-validation/quality-gate.sh',encoding='utf-8').read(); sys.exit(0 if (c.startswith('#!/usr/bin/env bash') and 'set -euo pipefail' in c and 'do_all()' in c) else 1)\"", "text": "is a strict-mode script with an aggregate target" }
+      ]
+    },
+    {
+      "id": "stdout-mode",
+      "prompt": "Print the quality-gate script to stdout.",
+      "run": "python scripts/gen_gate.py --root evals/fixtures/full --stdout",
+      "assertions": [
+        { "type": "exit_zero", "text": "stdout mode succeeds" },
+        { "type": "output_contains", "contains": "do_coverage()", "text": "prints the coverage step" }
+      ]
+    },
+    {
+      "id": "print-ci-parity",
+      "prompt": "Print a CI step that runs the same gate script, so CI and local never drift.",
+      "run": "python scripts/gen_gate.py --print-ci",
+      "assertions": [
+        { "type": "exit_zero", "text": "print-ci succeeds" },
+        { "type": "output_contains", "contains": "./scripts/quality-gate.sh all", "text": "CI runs the identical script" }
+      ]
+    }
+  ]
+}

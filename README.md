@@ -247,6 +247,9 @@ skills/
   architecture-drift-guard/ import-graph → C4 drift detector + mermaid freshness gate
   eval-corpus-forge/        synthetic-corpus construction and validation
   model-bench/              model benchmark orchestration
+  project-setup/            deterministic Makefile generator (from detected toolchain)
+  quality-gate/             deterministic lint+type+test+coverage gate-script generator
+  deploy/                   safety-railed deployment-script generator (dry-run/confirm/rollback)
 
 docs/
   c4_architecture.md  C4 context/container/component diagrams

@@ -43,6 +43,9 @@ TRACKED_DUPLICATES: dict[str, tuple[str, ...]] = {
         "skills/architecture-drift-guard/scripts/validate_skill.py",
         "skills/eval-corpus-forge/scripts/validate_skill.py",
         "skills/model-bench/scripts/validate_skill.py",
+        "skills/project-setup/scripts/validate_skill.py",
+        "skills/quality-gate/scripts/validate_skill.py",
+        "skills/deploy/scripts/validate_skill.py",
     ),
 }
 
