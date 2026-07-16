@@ -93,10 +93,12 @@ def test_build_client_returns_sdk_when_backend_present(monkeypatch) -> None:
 
 def test_build_client_falls_back_to_null_when_init_raises(monkeypatch, caplog) -> None:
     _install_fake_braintrust(monkeypatch, _RecordingExperiment(), init_raises=True)
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.DEBUG):
         client = build_client(enabled=True, project_name="p", experiment_name="run-1")
     assert isinstance(client, NullBrainTrustClient)  # init failure → no-op, run continues
     assert caplog.records
+    # A failed init (SDK present) must log an error, NOT the "install the SDK" warning.
+    assert not any(r.levelno == logging.WARNING for r in caplog.records)
 
 
 # -- SDK client logs to the experiment ---------------------------------------

@@ -224,7 +224,10 @@ class AutoevalsScorer(Scorer):
     the canonical names are preferred over back-compat aliases like ``LevenshteinScorer``.
     Any extra params flow through to the scorer's constructor (e.g. ``model=``,
     ``base_url=``), so provider selection is config-driven; provider credentials come from
-    the environment (e.g. ``OPENAI_API_KEY``), never hardcoded.
+    the environment (e.g. ``OPENAI_API_KEY``), never hardcoded. Set ``coerce_text=True`` to
+    stringify output/expected/input for string scorers when the target emits non-string data
+    (off by default so structured scorers like ``JSONDiff`` keep their raw inputs — see
+    :meth:`_prep`).
 
     Heuristic scorers (``Levenshtein``, ``ExactMatch``, ``NumericDiff``, ``JSONDiff``) are
     pure-Python — safe for the offline suite. LLM/Embedding scorers (``Factuality``,
@@ -242,6 +245,7 @@ class AutoevalsScorer(Scorer):
         scorer: str = "Levenshtein",
         threshold: float = 0.5,
         on_skip: float = 0.0,
+        coerce_text: bool = False,
         **scorer_kwargs: Any,
     ):
         # Default the emitted score name to the specific scorer (e.g. "Levenshtein") so
@@ -250,6 +254,7 @@ class AutoevalsScorer(Scorer):
         self.scorer_name = scorer
         self.threshold = float(threshold)
         self.on_skip = float(on_skip)
+        self.coerce_text = bool(coerce_text)
         try:
             import autoevals
         except ImportError as exc:
@@ -262,9 +267,25 @@ class AutoevalsScorer(Scorer):
             raise ValueError(f"unknown autoevals scorer {scorer!r}")
         self._evaluator = factory(**scorer_kwargs)
 
+    def _prep(self, value: Any) -> Any:
+        """Optionally coerce a value to text for string scorers.
+
+        Off by default: values pass through raw, because structured autoevals scorers
+        (``JSONDiff``, ``NumericDiff``, ``ValidJSON``) need the original dict/number/JSON —
+        blanket stringification would break them. Set ``coerce_text=True`` for string scorers
+        (``Levenshtein``, ``Factuality``, …) when the target emits non-string output, so it
+        scores the text instead of silently falling to the ``0.0`` fail-safe. ``None`` is left
+        as-is either way.
+        """
+        return _as_text(value) if self.coerce_text and value is not None else value
+
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
         try:
-            result = self._evaluator(output=output.output, expected=item.expected, input=item.inputs)
+            result = self._evaluator(
+                output=self._prep(output.output),
+                expected=self._prep(item.expected),
+                input=self._prep(item.inputs),
+            )
         except Exception as exc:  # fail-safe: a scorer/provider error must not abort the run
             return ScoreResult(self.name, value=0.0, passed=False, comment=f"autoevals error: {exc}")
         raw_metadata = getattr(result, "metadata", None)

@@ -104,6 +104,22 @@ def test_autoevals_on_skip_override() -> None:
     assert _score(scorer, "a", "b").value == 0.5
 
 
+def test_autoevals_coerce_text_stringifies_inputs() -> None:
+    scorer = _autoevals({"scorer": "Levenshtein", "coerce_text": True})
+    seen: dict = {}
+
+    def _recorder(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(score=1.0, metadata={})
+
+    scorer._evaluator = _recorder  # type: ignore[assignment]
+    item = EvalItem(id="1", inputs={"a": 1}, expected=None)
+    scorer.score(item, TargetOutput(output=123), RunContext(config={}))
+    assert seen["output"] == "123"  # non-string output coerced to text
+    assert seen["expected"] is None  # None left as-is
+    assert isinstance(seen["input"], str)  # dict input coerced to text
+
+
 def test_autoevals_rationale_becomes_comment() -> None:
     scorer = _autoevals({"scorer": "Levenshtein"})
     scorer._evaluator = lambda **k: SimpleNamespace(score=0.8, metadata={"rationale": "close enough"})  # type: ignore[assignment]

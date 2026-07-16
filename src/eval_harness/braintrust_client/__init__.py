@@ -129,39 +129,42 @@ class SDKBrainTrustClient(BrainTrustClient):
             logger.error("BrainTrust flush failed: %s", exc)
 
 
-def _init_experiment(project_name: str, experiment_name: str) -> Any | None:
-    """Return a live BrainTrust experiment handle, or ``None`` if the SDK is absent.
+def _init_experiment(project_name: str, experiment_name: str) -> Any:
+    """Return a live BrainTrust experiment handle.
 
     Credentials come from the environment (``BRAINTRUST_API_KEY`` / ``BRAINTRUST_API_URL``),
-    read by the SDK itself — nothing is passed or hardcoded here. Never raises: an
-    ImportError or a failed ``init`` degrades to ``None`` so the caller can no-op.
+    read by the SDK itself — nothing is passed or hardcoded here. Raises ``ImportError`` if the
+    SDK is absent, or the SDK's own error if ``init`` fails; :func:`build_client` maps each to
+    the no-op client, distinguishing "not installed" from "init failed" in its logging.
     """
-    try:
-        import braintrust
-    except ImportError:
-        return None
-    try:
-        # Narrowest documented surface: init() opens/creates an experiment in a project.
-        return braintrust.init(project=project_name, experiment=experiment_name)
-    except Exception as exc:
-        logger.error("braintrust.init(project=%s) failed; export disabled: %s", project_name, exc)
-        return None
+    import braintrust
+
+    # Narrowest documented surface: init() opens/creates an experiment in a project.
+    return braintrust.init(project=project_name, experiment=experiment_name)
 
 
 def build_client(*, enabled: bool, project_name: str, experiment_name: str) -> BrainTrustClient:
     """Return the client for the ``braintrust`` sink.
 
-    ``NullBrainTrustClient`` unless ``enabled`` *and* the BrainTrust SDK is importable
-    *and* the experiment initializes. Fails safe: if export is requested but the SDK is
-    absent, logs a warning and returns the no-op client so the run still completes.
+    ``NullBrainTrustClient`` unless ``enabled`` *and* the BrainTrust SDK is importable *and* the
+    experiment initializes. Fails safe with a message that distinguishes the two failure modes:
+    a missing SDK warns with the install hint, while a failed ``init`` (e.g. a bad
+    ``BRAINTRUST_API_KEY``) logs the underlying error and silently no-ops — it does NOT suggest
+    installing an SDK that is already present.
     """
     if not enabled:
         return NullBrainTrustClient()
-    experiment = _init_experiment(project_name, experiment_name)
-    if experiment is None:
+    try:
+        import braintrust  # noqa: F401 — presence gate; the real init lives in _init_experiment
+    except ImportError:
         logger.warning(
-            "BrainTrust export requested but the 'braintrust' SDK is unavailable; using no-op. %s",
+            "BrainTrust export requested but the 'braintrust' SDK is not installed; using no-op. %s",
             INSTALL_HINT,
         )
+        return NullBrainTrustClient()
+    try:
+        experiment = _init_experiment(project_name, experiment_name)
+    except Exception as exc:
+        logger.error("braintrust.init(project=%s) failed; export disabled (using no-op): %s", project_name, exc)
         return NullBrainTrustClient()
     return SDKBrainTrustClient(experiment)
