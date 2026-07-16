@@ -1,0 +1,19 @@
+[project]
+name = "gated-demo"
+version = "0.1.0"
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["gated_demo"]
+
+[tool.coverage.report]
+fail_under = 85
