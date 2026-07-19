@@ -31,6 +31,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fields appended, not inserted). AGENTS.md/README gate commands now point at the script
   instead of restating the chain. CI rewiring is deliberately deferred to ADR 0021's
   labeled batch.
+- **Determinism phase P3+P4 — ADR 0022 and C4 semantics ownership:** ADR 0022 records the
+  determinism boundary for inference skills (consume-don't-contain; the two `--check`
+  conventions — fully-derived artifacts gate, hand-extensible scaffolds advise; the
+  c4-docs delegation seam; considered-and-deferred: hook wiring → post-extraction M7,
+  manifest-derived L2). The `plan`/`test-first`/`code-review` foundation skills now
+  consume a committed quality-gate script when the target project has one (generic
+  wording, fallback preserved; code-review's no-Bash fork isolation untouched), each with
+  a new eval case. `docs/c4_architecture.md` gained a provenance preamble declaring its
+  edges **runtime/call semantics** vs the generated **import-edge view**
+  (`architecture.yaml` → `architecture.mmd`), the missing `behavioral_regression` (+
+  `agent_core`/`flow_corpus`) sibling containers with verified runtime edges, and a split
+  of the conflated Plugin Registry box into `core` (Registry[T]) vs `plugins`
+  (entry-point discovery); the unreferenced `docs/c4_architecture.svg` was deleted, and
+  README/AGENTS architecture pointers now name which artifact owns which semantics.
 - **Deterministic generator skills — `project-setup`, `quality-gate`, `deploy` (ADR 0020):**
   three skills that emit committed, byte-stable build/CI artifacts for a Python project instead
   of re-inferring the steps at runtime. `project-setup` writes a self-documenting **Makefile**

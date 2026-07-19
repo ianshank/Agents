@@ -9,9 +9,13 @@
   is the root gate (lint + 3 mypy runs + cov ≥96 + the F-031 scripts gate below the marker),
   each sibling package has its own generated gate + Makefile, and `make check-all` runs all
   six green locally. ruff/mypy pins unified across all four previously-floating package dev
-  extras. Remaining phase steps: P3 (ADR 0022 + inference-skill delegation wording), P4 (C4
-  semantics migration), P5 (labeled protected batch: rewire the 4 per-package workflows to
-  the gate scripts, ADR 0021, architecture.yaml hygiene).
+  extras. P3 (ADR 0022 + `plan`/`test-first`/`code-review` gate delegation) and P4 (C4
+  runtime-vs-import semantics ownership in `docs/c4_architecture.md`, `behavioral_regression`
+  L2 coverage, c4-docs manifest-deference contract) landed in the same PR. Remaining: P5 —
+  the labeled protected batch (ADR 0021: rewire the 4 per-package workflows to the gate
+  scripts; `architecture.yaml` comment fix + unused-edge removal + `.mmd` regen; drift
+  workflow path filter; PROTECTED_PATTERNS/CODEOWNERS additions; cross-reference ADR 0021
+  in ADR 0022's Related list).
 - [x] **Deterministic generator skills — `project-setup` / `quality-gate` / `deploy` (ADR 0020)** —
   three skills that emit committed, byte-stable artifacts (a Makefile; a `set -euo pipefail`
   quality-gate script that CI and `make check` share so local == CI; a safety-railed deploy

@@ -6,8 +6,16 @@ framework.
 
 ## Architecture
 
-See [C4 Architecture Diagrams](docs/c4_architecture.md) for context, container,
-component, and data-flow views.
+Two artifacts with deliberately different edge semantics:
+
+- [docs/c4_architecture.md](docs/c4_architecture.md) — hand-maintained C4
+  context/container diagrams, narrative sub-component (L3) internals, and
+  data-flow views. Edges there are **runtime/call relations** (who calls whom,
+  over which protocol).
+- [architecture.mmd](architecture.mmd) — the **generated import-edge component
+  view**, derived deterministically from [architecture.yaml](architecture.yaml)
+  (`python skills/architecture-drift-guard/scripts/mermaid_gen.py --manifest architecture.yaml -o architecture.mmd`)
+  and drift-gated against the real import graph in CI.
 
 | Requirement | How it is met |
 |---|---|
@@ -252,7 +260,7 @@ skills/
   deploy/                   safety-railed deployment-script generator (dry-run/confirm/rollback)
 
 docs/
-  c4_architecture.md  C4 context/container/component diagrams
+  c4_architecture.md  hand-maintained C4 diagrams (runtime/call semantics; the import-edge view is generated at the repo root)
   e2e-runbook.md      how to run and read the one-command e2e harness
   decisions/          Architecture Decision Records (ADRs)
   gap-analysis-2026-07.md  measured lint/type/coverage baseline + remediation record

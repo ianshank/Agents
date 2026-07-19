@@ -25,7 +25,7 @@ Before writing code, read in order:
 
 0. `docs/CHARTER.md` — the north-star charter: Vision / Mission / Scope (+ non-goals) / Invariants / Roadmap. Changes rarely; keep work within its §3 scope and §4 invariants and escalate anything that would violate them. Drift-checked by `scripts/check_charter_drift.py`.
 1. `README.md` — install / test / gate commands and repo layout.
-2. `architecture.mmd` + `architecture.yaml` — canonical C4-style architecture. Agents MUST update these when adding or removing a component that changes the diagram.
+2. `architecture.mmd` + `architecture.yaml` — the canonical **import-edge component view** (package-level import dependencies, drift-gated in CI). Agents MUST update it when adding or removing a component or import edge — by editing `architecture.yaml` and regenerating (`python skills/architecture-drift-guard/scripts/mermaid_gen.py --manifest architecture.yaml -o architecture.mmd`), never by hand-editing the `.mmd`. Runtime/call-semantics diagrams (C4 context, containers, sub-component internals) live in `docs/c4_architecture.md`.
 3. `docs/decisions/` — Architecture Decision Records. **`ADR-0009`** is the tech-debt baseline: no hard-coded secrets, config-driven defaults, per-package coverage gates. **New code should not regress that baseline.**
 4. `CHANGELOG.md` `[1.3.0-dev]` — the section to add entries to for any user-visible change. Follow the existing `Hardening` / `Added` / `Changed` / `Fixed` structure.
 5. `docs/phoenix-spike.md` — reversible-adoption pattern the Phoenix seam demonstrates. Reference model for any future "SDK-optional" integration.

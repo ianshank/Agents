@@ -35,6 +35,28 @@
       ]
     },
     {
+      "id": "c4-defers-to-manifest-owned-component-view",
+      "prompt": "Document our architecture with C4 diagrams. Note: the repo root has an architecture manifest (a YAML file with a schema_version declaring components and their dependencies), a committed generated Mermaid component diagram, and a CI job that regenerates the diagram from the manifest and fails on drift against the real import graph.",
+      "expected_behavior": "The assistant invokes the c4-docs skill and, during discovery, identifies the manifest + generator + drift gate and records which level and granularity the generated view owns. It hand-writes Level 1 context and Level 2 container diagrams, but does not hand-infer a component diagram at the manifest's granularity - it references the committed generated diagram for that view instead. Any Level 3 content it writes sits below the manifest's resolution (internals of a single declared component) and does not contradict the generated view. It never edits the generated diagram file or the manifest.",
+      "assertions": [
+        "The discovery/inventory phase identifies the component manifest, the generated diagram, and the drift gate, and states which view the generated artifact owns.",
+        "No hand-written C4Component diagram is produced at the same granularity as the manifest-generated component view; the docs reference the generated artifact for that level instead.",
+        "Neither the manifest file nor the committed generated diagram is modified.",
+        "Any Level 3 diagram added covers only the internals of a single manifest-declared component and does not contradict the generated view."
+      ]
+    },
+    {
+      "id": "c4-gated-drift-routed-to-user",
+      "prompt": "Refresh our architecture docs. Our component diagram is generated from a repo-root manifest and CI runs a deterministic drift check against the import graph - I think the check has been failing since last week's refactor.",
+      "expected_behavior": "Because the component view is covered by a deterministic drift gate, the assistant runs the host's drift check rather than eyeballing the diagram, surfaces each undocumented or missing edge the check reports, and asks the user to decide per edge whether the new dependency is intended (declare it) or a mistake (fix the code). It does not edit the manifest or the generated diagram unilaterally, and it does not silently rewrite anything to make the gate pass. Hand-maintained levels not covered by the gate are handled with the normal drift procedure.",
+      "assertions": [
+        "The host repo's own drift check command is executed to enumerate drift at the gated level, rather than the assistant inferring drift by reading the diagram.",
+        "Each undocumented or missing edge reported by the drift check is listed explicitly in the summary.",
+        "The decision of whether each drifted edge is intended or a mistake is routed to the user; the manifest and generated diagram are left unedited pending that decision.",
+        "No change is made whose only purpose is to silence the drift gate."
+      ]
+    },
+    {
       "id": "c4-negative-api-reference",
       "prompt": "Write API reference docs for the endpoints in routes/users.py - parameters, response codes, and example payloads.",
       "expected_behavior": "The assistant does not invoke the c4-docs skill, because the request is for endpoint-level API reference documentation, not architecture diagrams. It produces the API reference content directly without creating C4 or Mermaid diagrams or touching docs/architecture/.",

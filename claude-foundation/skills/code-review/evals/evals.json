@@ -35,6 +35,17 @@
       ]
     },
     {
+      "id": "review-with-gate-evidence",
+      "prompt": "Review my branch's diff. I ran ./scripts/quality-gate.sh all first like the skill suggests; here is its output: lint PASS, typecheck PASS, test PASS (142 passed), coverage PASS (91%, floor 85%). The diff refactors our retry logic and adjusts two tests.",
+      "expected_behavior": "The assistant invokes the code-review skill, which stays read-only (no Bash) and treats the supplied quality-gate output as evidence: coverage and test-status claims in the report are grounded in the pasted gate results rather than speculation, while the review still independently checks whether the adjusted tests were weakened (a semantic judgment the gate cannot make). For secrets and hardcoded values, the review focuses on semantic instances rather than duplicating what deterministic regex scanners already cover. The report ends with a single verdict line.",
+      "assertions": [
+        "The review cites the supplied quality-gate output when discussing test or coverage status instead of guessing or claiming to have run commands.",
+        "No Bash, Edit, or Write tool calls occur; the review does not attempt to run the quality-gate script itself.",
+        "The review still independently evaluates whether the adjusted tests weaken assertions, rather than treating a passing gate as proof of honest tests.",
+        "The output ends with exactly one 'Verdict:' line."
+      ]
+    },
+    {
       "id": "review-negative-write-feature",
       "prompt": "Write a new pagination helper for our list endpoints and add tests for it.",
       "expected_behavior": "The assistant does not invoke the code-review skill, because the request is to author new code, not to review existing changes. It proceeds with normal implementation work (writing the helper and tests) without producing a severity-ranked findings report or a verdict line.",

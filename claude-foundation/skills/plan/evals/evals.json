@@ -36,6 +36,17 @@
       ]
     },
     {
+      "id": "plan-gate-delegation",
+      "prompt": "Our project has a committed scripts/quality-gate.sh with subcommands lint, typecheck, test, coverage, and all, and our Makefile's check target just calls it. Plan the work to add input validation to our CSV import module.",
+      "expected_behavior": "The assistant invokes the plan skill and, because the target project declares a quality-gate script, phrases success criteria and verification commands as gate subcommand invocations (./scripts/quality-gate.sh lint, test, coverage, or all exiting 0) rather than re-invented raw pytest/ruff/mypy commands. The hard constraints section treats the gate script's do_* functions and thresholds as the enumeration of enforced style/lint rules instead of rediscovering tools from configs. The feedback loop uses ./scripts/quality-gate.sh lint as the per-change fast check and ./scripts/quality-gate.sh all as the final verification.",
+      "assertions": [
+        "Success criteria in the objective function reference ./scripts/quality-gate.sh subcommand invocations rather than raw pytest, ruff, or mypy commands invented in parallel with the gate.",
+        "The feedback loop names ./scripts/quality-gate.sh lint as the per-change check and ./scripts/quality-gate.sh all as the final verification.",
+        "The hard constraints section defers to the committed gate script for enforced lint/style rules instead of enumerating tool flags rediscovered from config files.",
+        "The plan still contains all five section headings in a single markdown document."
+      ]
+    },
+    {
       "id": "plan-negative-trivial-fix",
       "prompt": "There's a typo in the README: 'recieve' should be 'receive'. Fix it.",
       "expected_behavior": "The assistant does not invoke the plan skill. It simply fixes the typo directly (edits the README) without producing a five-section constraint-programming plan, because the task is a trivial one-line fix outside the skill's stated scope.",
