@@ -1,6 +1,6 @@
 ---
 name: c4-docs
-description: Generates or updates C4 architecture documentation as Mermaid diagrams in the host repo (docs/architecture/ by default, or the repo's existing docs location). Produces Level 1 context and Level 2 container diagrams, plus Level 3 components only for the subsystem being changed. Updates existing diagrams in place and flags drift between diagrams and code instead of silently rewriting them.
+description: Generates or updates C4 architecture documentation as Mermaid diagrams in the host repo (docs/architecture/ by default, or the repo's existing docs location). Produces Level 1 context and Level 2 container diagrams, plus Level 3 components only for the subsystem being changed. Updates existing diagrams in place and flags drift between diagrams and code instead of silently rewriting them. Where the host derives a component view from a manifest with a deterministic generator and drift gate, references that generated artifact instead of hand-inferring or editing it.
 when_to_use: Use when the user asks for architecture documentation, C4 or Mermaid diagrams, a system overview, or when a structural change makes existing architecture docs stale. Not for API reference docs, READMEs, or inline code comments.
 ---
 
@@ -13,7 +13,13 @@ build step.
 
 1. **Locate the docs home.** If architecture docs already exist (search for
    `C4Context`, `C4Container`, or `docs/architecture`), use that location and update
-   in place. Otherwise create `docs/architecture/` at the repo root.
+   in place. Otherwise create `docs/architecture/` at the repo root. Also check
+   whether the repo derives a component view from a manifest: look for a repo-root
+   manifest declaring components/dependencies (e.g. an `architecture.yaml` with a
+   `schema_version`) alongside a committed generated diagram, a deterministic
+   generator script, and any CI drift or freshness gate wired to them. If found,
+   record which diagram level and granularity that generated view owns — it
+   constrains steps 5 and 8.
 
 2. **Inventory (read-only).** Scan the codebase without modifying it: entry points
    (main functions, servers, CLIs, handlers), top-level modules/packages, external
@@ -31,7 +37,12 @@ build step.
 
 5. **Level 3 — Components (scoped).** Only for the subsystem currently being changed
    or explicitly requested. Do not diagram every container to Level 3; that decays
-   fastest and costs most to maintain. Use `C4Component` syntax.
+   fastest and costs most to maintain. Use `C4Component` syntax. When the host repo
+   derives its component view from a drift-gated manifest (found in step 1), do NOT
+   hand-infer a diagram at that granularity — reference the generated artifact
+   instead. Hand-write Level 3 content only below the manifest's resolution (the
+   internals of a single declared component), and never in contradiction with the
+   generated view.
 
 6. **Keep it renderable.** Fence every diagram as ```` ```mermaid ```` and stick to
    Mermaid's C4 syntax (`C4Context`, `C4Container`, `C4Component`, `Person`,
@@ -43,11 +54,18 @@ build step.
    edit it. Never create `containers-v2.md` or a parallel diagram alongside a stale
    one.
 
-8. **Flag drift.** Where the existing diagram and the code disagree, do not silently
-   rewrite the diagram to match either side. List each discrepancy (diagram says X,
-   code at `<file>` shows Y) in your summary, update the diagram to match the code,
-   and note that the change reflects observed drift — so reviewers can catch cases
-   where the code, not the diagram, is wrong.
+8. **Flag drift — fork by coverage.**
+   - *Artifacts covered by a deterministic drift gate* (a manifest plus generated
+     diagram found in step 1): run the host's drift check, list every undocumented
+     or missing edge it reports, and route the intended-vs-mistake decision to the
+     user — they decide whether the code or the declaration is wrong. Never edit
+     the manifest or the generated diagram unilaterally.
+   - *Levels not covered by such a gate*: where the existing diagram and the code
+     disagree, do not silently rewrite the diagram to match either side. List each
+     discrepancy (diagram says X, code at `<file>` shows Y) in your summary, update
+     the diagram to match the code, and note that the change reflects observed
+     drift — so reviewers can catch cases where the code, not the diagram, is
+     wrong.
 
 ## Output
 

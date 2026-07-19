@@ -66,6 +66,10 @@ regression_report.json
 # phoenix-live workflow — self-hosted Phoenix log (see .github/workflows/phoenix-live.yml).
 phoenix-server.log
 
+# Claude Code session state: agent worktrees are transient harness checkouts
+# (nested git trees) - never repository content.
+.claude/worktrees/
+
 # Superpowers session artifacts (planning/spec scratch — never committed).
 docs/superpowers/
 

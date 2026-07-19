@@ -30,6 +30,20 @@
         { "type": "exit_zero", "text": "stdout mode succeeds" },
         { "type": "output_contains", "contains": ".DEFAULT_GOAL := help", "text": "prints the Makefile to stdout" }
       ]
+    },
+    {
+      "id": "workspace-fanout",
+      "prompt": "Monorepo mode: emit a root Makefile with per-member fan-out targets plus one Makefile per member package.",
+      "setup": "python -c \"import shutil; shutil.copytree('evals/fixtures/workspace', '.skill-validation/ws', dirs_exist_ok=True)\"",
+      "run": "python scripts/gen_makefile.py --root .skill-validation/ws --workspace",
+      "assertions": [
+        { "type": "exit_zero", "text": "workspace generation succeeds" },
+        { "type": "file_contains", "path": ".skill-validation/ws/Makefile", "contains": "check-member-one:", "text": "root gains an explicit per-member target" },
+        { "type": "file_contains", "path": ".skill-validation/ws/Makefile", "contains": "$(MAKE) -C member-one check", "text": "fan-out delegates via make -C (member cwd)" },
+        { "type": "file_contains", "path": ".skill-validation/ws/Makefile", "contains": "install-all:", "text": "aggregate install target exists" },
+        { "type": "file_exists", "path": ".skill-validation/ws/member-one/Makefile", "text": "each member gets its own Makefile" },
+        { "type": "command_exit_zero", "cmd": "python scripts/gen_makefile.py --root .skill-validation/ws --workspace --check", "text": "multi-artifact --check reports all artifacts fresh" }
+      ]
     }
   ]
 }

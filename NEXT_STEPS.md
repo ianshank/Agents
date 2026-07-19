@@ -2,6 +2,25 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Determinism phase P1+P2: workspace gates dogfooded (skills → 1.1.0)** — the
+  generators grew monorepo support (`--workspace` fan-out; repeatable `--lint-path`/
+  `--typecheck-path`; multi-source `--cov=`; provenance header; hand-extension marker with a
+  `do_extra()` hook) and the repo now runs on the results: `./scripts/quality-gate.sh all`
+  is the root gate (lint + 3 mypy runs + cov ≥96 + the F-031 scripts gate below the marker),
+  each sibling package has its own generated gate + Makefile, and `make check-all` runs all
+  six green locally. ruff/mypy pins unified across all four previously-floating package dev
+  extras. P3 (ADR 0022 + `plan`/`test-first`/`code-review` gate delegation) and P4 (C4
+  runtime-vs-import semantics ownership in `docs/c4_architecture.md`, `behavioral_regression`
+  L2 coverage, c4-docs manifest-deference contract) landed in the same PR. Remaining: P5 —
+  the labeled protected batch (ADR 0021: rewire the 4 per-package workflows to the gate
+  scripts; `architecture.yaml` comment fix + unused-edge removal + `.mmd` regen; drift
+  workflow path filter; PROTECTED_PATTERNS/CODEOWNERS additions; cross-reference ADR 0021
+  in ADR 0022's Related list). Review-round deferrals worth a future gategen minor: (a)
+  single-instrumented-run coverage — the root gate's `all` runs the suite twice (harness
+  cov + F-031 scripts cov); one run + two `coverage report` passes over shared data would
+  halve gate wall-clock but needs a combined run-config design; (b) individually
+  dispatchable named hand-steps (today `do_extra` is reachable only via `all`), which
+  would let CI call granular hand extensions without duplicating their commands.
 - [x] **Deterministic generator skills — `project-setup` / `quality-gate` / `deploy` (ADR 0020)** —
   three skills that emit committed, byte-stable artifacts (a Makefile; a `set -euo pipefail`
   quality-gate script that CI and `make check` share so local == CI; a safety-railed deploy

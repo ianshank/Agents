@@ -34,6 +34,17 @@
       ]
     },
     {
+      "id": "tdd-gate-delegation",
+      "prompt": "Our repo has a committed scripts/quality-gate.sh (subcommands lint, typecheck, test, coverage, all) whose test step runs pytest. Implement a parse_duration(text) helper that turns strings like '1h30m' into seconds.",
+      "expected_behavior": "The assistant invokes the test-first skill and takes the test framework from the committed gate script's test step instead of re-detecting it. The red phase (step 3) runs the new tests with a test-scoped command such as pytest path/to/test_file.py, not through the gate script, because the gate is suite-wide. After implementation, suite-wide verification delegates to ./scripts/quality-gate.sh test (or coverage), and the final report cites the stable gate invocation for the suite-wide runs alongside the test-scoped red-phase command.",
+      "assertions": [
+        "The red-phase failing run uses a test-scoped command (e.g. pytest on the specific new test file), not ./scripts/quality-gate.sh.",
+        "At least one post-implementation suite-wide run is invoked as ./scripts/quality-gate.sh test or ./scripts/quality-gate.sh coverage rather than a hand-rolled full-suite command.",
+        "The transcript does not show the assistant re-detecting the test framework (e.g. probing for alternative runners) when the gate script already names it.",
+        "The final report lists the gate invocation for the suite-wide green run and the test-scoped command for the red run."
+      ]
+    },
+    {
       "id": "tdd-negative-docs-change",
       "prompt": "Update the CONTRIBUTING.md to document our new branch naming convention: feature/<ticket-id>-<short-name>.",
       "expected_behavior": "The assistant does not invoke the test-first skill, because the task is a documentation-only change with no observable code behavior to test. It edits CONTRIBUTING.md directly without writing tests or running a test suite.",

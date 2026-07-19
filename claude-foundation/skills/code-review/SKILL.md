@@ -10,7 +10,11 @@ allowed-tools: Read, Grep, Glob
 
 Review the given diff or files against the checklist below. This skill runs in an
 isolated fork with read-only tools: do not edit files, do not propose inline patches,
-do not run commands. Return findings only.
+do not run commands. Return findings only. If the target project has a
+`scripts/quality-gate.sh`, callers SHOULD run `./scripts/quality-gate.sh all` before
+invoking this review and pass its output in as evidence — the fork cannot run it,
+and supplied gate output turns lint, type, test, and coverage questions from
+speculation into fact.
 
 ## Procedure
 
@@ -22,7 +26,10 @@ do not run commands. Return findings only.
    - **Injection / input validation**: SQL, shell, path, template, deserialization;
      untrusted input reaching a sink without sanitization.
    - **Secrets / credentials**: keys, tokens, passwords, connection strings committed
-     in code or test fixtures.
+     in code or test fixtures. Deterministic scanners own the regex-detectable
+     instances; this review hunts the semantic ones (a credential assembled from
+     parts, a token hiding in a fixture or comment, a secret laundered through an
+     innocuous variable name).
    - **Authz / authn changes**: new endpoints or paths that bypass existing checks;
      weakened permission logic.
    - **Error handling**: swallowed exceptions, fail-open behavior where fail-closed is
@@ -34,9 +41,12 @@ do not run commands. Return findings only.
    - **Backwards compatibility**: changes to public function signatures, wire formats,
      schemas, CLI flags, or config keys that break existing callers.
    - **Test coverage**: changed behavior with no corresponding test change; tests
-     deleted or weakened.
+     deleted or weakened. When the caller supplied quality-gate output, use it to
+     ground coverage claims in fact rather than inference.
    - **Hardcoded values**: literals (URLs, ports, timeouts, limits, paths) that belong
-     in config or environment.
+     in config or environment. Deterministic scanners own the regex-detectable
+     instances; this review hunts the semantic ones (a magic number whose meaning
+     depends on context, a literal that should co-vary with another).
 
 3. For each finding, record: severity (critical / high / medium / low), `file:line`,
    a one-sentence defect statement, and a concrete failure scenario (the input or

@@ -6,7 +6,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed
+- **Bot-review round (CodeRabbit):** workspace detection now skips a member directory named
+  `all` (reported via `WorkspaceFacts.skipped`, never emitted broken) — its `check-all`/
+  `install-all`/`clean-all` targets would collide with the generated aggregates, and GNU
+  Make's last-recipe-wins rule would silently drop the member's own delegation. The
+  quality-gate SKILL.md now documents that `--lint-path` without a detected ruff
+  configuration is ignored with a warning (parity with `--typecheck-path`), a hand-extension
+  test writes its sentinel path in POSIX form so it stays valid inside the generated bash
+  gate on Windows, and the real-`make` workspace test carries the `slow` marker.
+- **Generator review round (8-angle code review; 10 findings fixed):** the `# regenerate:`
+  provenance now embeds the generator path AS INVOKED (`sys.argv[0]`, cwd-relative like
+  `--root`) — the previous hardcoded `scripts/gen_gate.py` made every committed artifact's
+  header unrunnable; the root Makefile (and each member Makefile) gained the same provenance
+  line, and a flag-less regeneration over a fan-out Makefile now warns before dropping
+  `check-all`. `gen_gate.py --check` verifies the tail's `main "$@"` dispatch invariant (a
+  gate truncated at the marker used to pass `--check` while executing nothing), and
+  rewriting a pre-marker 1.0.x artifact warns loudly instead of silently discarding hand
+  edits. `install-all` delegates to each member's own `install` target so detected install
+  commands (dev extras, poetry) are honoured; an empty `check-all` aggregate is omitted
+  rather than fabricating a passing no-op; `--lint-path` without detected ruff now warns and
+  stays out of provenance (parity with `--typecheck-path`); multi-path gates emit a stderr
+  notice when an exported `TYPECHECK_PATHS`/`COVERAGE_SOURCE` override is ignored. The root
+  gate lints the WHOLE tree again (`demo/`+`examples/` had silently left the gate; both
+  reformatted). Internals: the env-form predicates are single-sourced (a divergence would
+  have emitted scripts referencing undefined variables under `set -u`), `_quoted` is reused
+  for `--cov` flags, all three GateFacts tuple fields share the empty→`"."` rule, and
+  `lint_paths` is appended at the end of the dataclass preserving 1.0.x positional
+  construction. Deferred with rationale (NEXT_STEPS): single-instrumented-run coverage for
+  the root gate's two suite passes; individually dispatchable named hand-steps.
+
 ### Added
+- **Workspace-wide deterministic gates (P1+P2 of the determinism phase; quality-gate &
+  project-setup skills → 1.1.0):** the generators gained monorepo support and the repo now
+  dogfoods it end to end. `gen_gate.py` accepts repeatable `--lint-path`/`--typecheck-path`
+  flags (multiple mypy paths render one invocation each — per-path runs avoid module-name
+  collisions; pyright keeps a single invocation), keeps ALL `[tool.coverage.run] source`
+  entries as repeated `--cov=` flags (taking `source[0]` silently measured a subset), embeds
+  a shell-quoted `# regenerate:` provenance comment (omitted entirely if an arg carries a
+  control character — a newline inside a quoted arg would escape the comment into executable
+  text), and owns only the content above a **hand-extension marker**: below it survives
+  regeneration, is ignored by the advisory `--check` (prefix-compare), and a `do_extra()`
+  defined there runs automatically in `all`. `gen_makefile.py --workspace` detects members
+  (immediate-child `pyproject.toml`, sorted, symlinks and unsafe names excluded), emits
+  explicit `check-<member>` fan-out targets (`$(MAKE) -C`, only for members whose own
+  Makefile has a `check` target — never fabricated), `check-all`/`install-all`/`clean-all`
+  aggregates, and one plain Makefile per member. Dogfooded artifacts: root + 5 member
+  `scripts/quality-gate.sh` (floors 96/95/95/95/95/85; root carries the F-031 scripts gate
+  below its marker, claude-foundation carries `foundation_tools.validate`/`scan`) and root +
+  5 member Makefiles — all byte-stable across regeneration and all executed green locally
+  (`make check-all`). ruff/mypy dev-extra pins unified (`ruff==0.15.20`, `mypy==2.1.0`) in
+  agent-core, flow-protocol, flow-corpus and behavioral-regression, which previously
+  floated. `GateFacts` keeps 1.0.x compatibility (string fields coerce to tuples; new
+  fields appended, not inserted). AGENTS.md/README gate commands now point at the script
+  instead of restating the chain. CI rewiring is deliberately deferred to ADR 0021's
+  labeled batch.
+- **Determinism phase P3+P4 — ADR 0022 and C4 semantics ownership:** ADR 0022 records the
+  determinism boundary for inference skills (consume-don't-contain; the two `--check`
+  conventions — fully-derived artifacts gate, hand-extensible scaffolds advise; the
+  c4-docs delegation seam; considered-and-deferred: hook wiring → post-extraction M7,
+  manifest-derived L2). The `plan`/`test-first`/`code-review` foundation skills now
+  consume a committed quality-gate script when the target project has one (generic
+  wording, fallback preserved; code-review's no-Bash fork isolation untouched), each with
+  a new eval case. `docs/c4_architecture.md` gained a provenance preamble declaring its
+  edges **runtime/call semantics** vs the generated **import-edge view**
+  (`architecture.yaml` → `architecture.mmd`), the missing `behavioral_regression` (+
+  `agent_core`/`flow_corpus`) sibling containers with verified runtime edges, and a split
+  of the conflated Plugin Registry box into `core` (Registry[T]) vs `plugins`
+  (entry-point discovery); the unreferenced `docs/c4_architecture.svg` was deleted, and
+  README/AGENTS architecture pointers now name which artifact owns which semantics.
 - **Deterministic generator skills — `project-setup`, `quality-gate`, `deploy` (ADR 0020):**
   three skills that emit committed, byte-stable build/CI artifacts for a Python project instead
   of re-inferring the steps at runtime. `project-setup` writes a self-documenting **Makefile**

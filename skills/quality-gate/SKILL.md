@@ -3,7 +3,7 @@ name: quality-gate
 description: Generate a deterministic quality-gate shell script (scripts/quality-gate.sh) that runs lint, type-check, tests and a coverage threshold for a Python project, using bash strict mode. Use this whenever the user wants a single command that runs all checks, a CI-and-local quality gate, a pre-merge or pre-commit check script, to enforce a coverage threshold, or to stop lint/test commands drifting between the Makefile and CI. Detects ruff, mypy/pyright, pytest and coverage config and bakes them into one ShellCheck-clean script that CI and `make check` both call.
 validator_version: '2.0'
 compatibility: python>=3.10 (tomli on 3.10)
-version: 1.0.0
+version: 1.1.0
 ---
 
 # quality-gate — gate-script writer
@@ -23,18 +23,33 @@ generator inspects the project once; the script it writes runs with zero inferen
 ## 2. Procedure (the E2E steps)
 
 ```bash
-python scripts/gen_gate.py --root <project> [--out <path>] [--stdout] [--check] [--print-ci]
+python scripts/gen_gate.py --root <project> [--lint-path P]... [--typecheck-path P]... \
+    [--out <path>] [--stdout] [--check] [--print-ci]
 ```
 
-1. **Inspect** the project: ruff, mypy vs pyright (+ paths), pytest, pytest-cov, coverage source
-   and `fail_under` threshold.
-2. **Emit** `scripts/quality-gate.sh` with strict mode, a `log` helper, one `do_<step>` function
+1. **Inspect** the project: ruff, mypy vs pyright (+ paths), pytest, pytest-cov, coverage
+   source(s) and `fail_under` threshold. ALL declared `[tool.coverage.run] source` entries are
+   kept (rendered as repeated `--cov=` flags) — measuring a subset would weaken the gate.
+2. **Explicit paths (optional, repeatable):** `--lint-path` / `--typecheck-path` record facts
+   that live outside `pyproject.toml` (e.g. a CI matrix that lints `src tests scripts` and runs
+   mypy per-path to avoid module-name collisions). Multiple typecheck paths render one
+   invocation each. The exact invocation is embedded as a `# regenerate:` provenance comment,
+   so the artifact documents its own reproduction. A `--typecheck-path` without a detected type
+   checker — or a `--lint-path` without a detected ruff configuration — is ignored with a
+   warning and excluded from the provenance comment: flags cannot fabricate a step.
+3. **Emit** `scripts/quality-gate.sh` with strict mode, a `log` helper, one `do_<step>` function
    per supported check, an aggregate `do_all` (which runs coverage instead of a bare test run when
    both exist, so tests never run twice), and a `main` dispatcher for
    `lint | typecheck | test | coverage | all` (default `all`).
-3. **Wire CI to the same script** (`--print-ci` prints a ready GitHub Actions step) so CI == local.
-4. **Review** and commit. Variables (`PYTHON`, `COVERAGE_SOURCE`, `COV_FAIL_UNDER`,
-   `TYPECHECK_PATHS`) are `${VAR:-default}` overridable.
+4. **Extend by hand below the marker.** Everything above the
+   `# --- hand-maintained extensions below ... ---` line is generator-owned; below it is yours
+   and survives regeneration. Define `do_extra()` there (before the final `main "$@"` line) and
+   `all` runs it automatically — project-specific steps join the gate without the generator
+   guessing them.
+5. **Wire CI to the same script** (`--print-ci` prints a ready GitHub Actions step) so CI == local.
+6. **Review** and commit. Variables (`PYTHON`, `COVERAGE_SOURCE`, `COV_FAIL_UNDER`,
+   `TYPECHECK_PATHS`) are `${VAR:-default}` overridable in single-path/source mode; multi-path
+   and multi-source commands render literal (quoted, escaped) arguments instead.
 
 ## 3. Output contract (postconditions — what "done" means)
 
@@ -53,10 +68,12 @@ python scripts/gen_gate.py --root <project> [--out <path>] [--stdout] [--check] 
 
 ## 5. `--check` is advisory, not a gate
 
-`--check` exits 1 when the committed script differs from a fresh render — an optional drift signal
-for teams who keep the script fully generated. The script is meant to be extended, so do not wire
-`--check` into CI as a blocking gate by default. (Wiring `quality-gate.sh` *itself* into CI is the
-point — that is what `--print-ci` is for.)
+`--check` exits 1 when the committed script's **generator-owned prefix** (everything above the
+hand-extension marker) differs from a fresh render — an optional drift signal. Hand-maintained
+content below the marker is never compared and is preserved by regeneration, so extending the
+script does not create permanent `--check` noise. Do not wire `--check` into CI as a blocking
+gate by default. (Wiring `quality-gate.sh` *itself* into CI is the point — that is what
+`--print-ci` is for.)
 
 ## 6. Validation gate (before declaring success)
 

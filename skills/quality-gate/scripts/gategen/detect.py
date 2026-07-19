@@ -93,19 +93,25 @@ def _guess_source(data: dict[str, Any], root: Path, src_layout: bool) -> str:
     return "."
 
 
-def _detect_coverage(data: dict[str, Any], root: Path, src_layout: bool) -> tuple[str, int]:
-    """Return ``(coverage_source, fail_under)`` from ``[tool.coverage]`` with safe fallbacks."""
+def _detect_coverage(data: dict[str, Any], root: Path, src_layout: bool) -> tuple[tuple[str, ...], int]:
+    """Return ``(coverage_sources, fail_under)`` from ``[tool.coverage]`` with safe fallbacks.
+
+    ALL declared sources are kept (a multi-source config like ``["pkg_a", "pkg_b"]`` renders
+    repeated ``--cov=`` flags). Taking only ``source[0]`` would silently measure a subset —
+    a gate-weakening bug, not a simplification.
+    """
     run = _table(data, "tool", "coverage", "run")
     report = _table(data, "tool", "coverage", "report")
     source = run.get("source")
-    src = ""
-    if isinstance(source, list) and source:
-        src = str(source[0])
-    elif isinstance(source, str):
-        src = source
-    if not src:
-        src = _guess_source(data, root, src_layout)
-    return src or ".", _coerce_threshold(report.get("fail_under"))
+    sources: tuple[str, ...] = ()
+    if isinstance(source, list):
+        sources = tuple(str(item) for item in source if str(item))
+    elif isinstance(source, str) and source:
+        sources = (source,)
+    if not sources:
+        # _guess_source always returns a non-empty string (its final fallback is ".").
+        sources = (_guess_source(data, root, src_layout),)
+    return sources, _coerce_threshold(report.get("fail_under"))
 
 
 def detect(root: Path | str) -> GateFacts:
@@ -118,16 +124,16 @@ def detect(root: Path | str) -> GateFacts:
         checker = "mypy"
     elif (root / "pyrightconfig.json").is_file() or _has_table(data, "tool", "pyright"):
         checker = "pyright"
-    cov_source, cov_fail_under = _detect_coverage(data, root, src_layout)
+    cov_sources, cov_fail_under = _detect_coverage(data, root, src_layout)
     return GateFacts(
         has_ruff=_has_table(data, "tool", "ruff") or (root / "ruff.toml").is_file() or (root / ".ruff.toml").is_file(),
         type_checker=checker,
-        typecheck_paths="src" if src_layout else ".",
+        typecheck_paths=("src",) if src_layout else (".",),
         has_pytest=_has_table(data, "tool", "pytest") or (root / "pytest.ini").is_file() or (root / "tests").is_dir(),
         # Precise signal: `pytest --cov` needs the pytest-cov plugin, so require it to be a
         # declared dependency. A bare [tool.coverage] table (standalone coverage.py) is NOT
         # enough — emitting `pytest --cov` there would fabricate a command that fails.
         has_pytest_cov=_mentions(data, "pytest-cov"),
-        coverage_source=cov_source,
+        coverage_source=cov_sources,
         cov_fail_under=cov_fail_under,
     )
