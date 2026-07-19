@@ -11,6 +11,7 @@ the tool commands inline so the Makefile is useful on its own.
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass, field
 
 from .model import ProjectFacts
@@ -118,11 +119,10 @@ def _build_targets(facts: ProjectFacts) -> list[_Target]:
     return targets
 
 
-def _variables(facts: ProjectFacts, workspace: WorkspaceFacts | None = None) -> list[str]:
+def _variables(facts: ProjectFacts) -> list[str]:
     delegate = facts.has_quality_gate_script
     out = [f"PYTHON ?= {facts.python}"]
-    # install-all uses $(PIP) even when the root's own install command does not.
-    if "$(PIP)" in facts.install_cmd or (workspace is not None and workspace.is_workspace):
+    if "$(PIP)" in facts.install_cmd:
         out.append("PIP ?= $(PYTHON) -m pip")
     if not delegate and facts.type_checker in ("mypy", "pyright"):
         out.append(f"TYPECHECK_PATHS ?= {facts.typecheck_paths}")
@@ -142,29 +142,38 @@ def supports_check(facts: ProjectFacts) -> bool:
     return any(t.name == "check" for t in _build_targets(facts))
 
 
-def _workspace_targets(
-    workspace: WorkspaceFacts, base_names: set[str], checkable: tuple[str, ...] | None
-) -> list[_Target]:
+def _workspace_targets(workspace: WorkspaceFacts, base_names: set[str], checkable: tuple[str, ...]) -> list[_Target]:
     """Fan-out targets for a monorepo root.
 
     ``$(MAKE) -C <member>`` (not root-cwd loops) is deliberate: cwd-correctness for ruff
     config discovery, mypy_path, pytest testpaths and coverage config falls out for free,
-    mirroring CI's per-package ``working-directory``. ``checkable`` restricts the check
-    fan-out to members whose own Makefile has a ``check`` target (None = all — callers who
-    have not detected member facts); install/clean aggregates always cover every member,
-    because those targets are unconditionally emitted in member Makefiles.
+    mirroring CI's per-package ``working-directory``. ``checkable`` names the members whose
+    own Makefile has a ``check`` target — only those get a check fan-out (never fabricate a
+    delegation that would fail with "No rule to make target"). install/clean aggregates
+    cover every member, because those targets are unconditionally emitted in member
+    Makefiles; ``install-all`` delegates to each member's own ``install`` target so each
+    member's DETECTED install command (dev extras, poetry, ...) is honoured.
     """
-    check_members = workspace.members if checkable is None else tuple(m for m in workspace.members if m in checkable)
+    check_members = tuple(m for m in workspace.members if m in set(checkable))
     targets: list[_Target] = []
     for member in check_members:
         targets.append(_Target(f"check-{member}", f"Run {member}'s quality checks", (f"$(MAKE) -C {member} check",)))
-    # Root's own `check` joins the aggregate only when the root actually has one
-    # (never fabricate a prerequisite on a target that does not exist).
+    # Root's own `check` joins the aggregate only when the root actually has one, and the
+    # aggregate itself exists only when it would check SOMETHING — a bare `check-all:` that
+    # exits 0 while checking nothing is exactly the fabricated pass this module forbids.
     aggregate: list[str] = ["check"] if "check" in base_names else []
     aggregate += [f"check-{m}" for m in check_members]
-    targets.append(_Target("check-all", "Run root and every member's quality checks", (), tuple(aggregate)))
-    install_cmd = "$(PIP) install " + " ".join(f"-e ./{m}" for m in workspace.members)
-    targets.append(_Target("install-all", "Editable-install every workspace member", (install_cmd,)))
+    if aggregate:
+        targets.append(_Target("check-all", "Run root and every member's quality checks", (), tuple(aggregate)))
+    install_prereqs = ("install",) if "install" in base_names else ()
+    targets.append(
+        _Target(
+            "install-all",
+            "Install the root and every member (each via its own detected install command)",
+            tuple(f"$(MAKE) -C {m} install" for m in workspace.members),
+            install_prereqs,
+        )
+    )
     targets.append(
         _Target(
             "clean-all",
@@ -188,30 +197,46 @@ def render_makefile(
     facts: ProjectFacts,
     workspace: WorkspaceFacts | None = None,
     checkable_members: tuple[str, ...] | None = None,
+    regen_args: tuple[str, ...] = (),
+    regen_program: str = "scripts/gen_makefile.py",
 ) -> str:
     """Return the full Makefile text for ``facts`` (ends with exactly one newline).
 
     ``workspace`` (optional, additive — single-package callers are unchanged) appends a
     fan-out section: one explicit ``check-<member>`` per check-capable member plus
-    ``check-all`` / ``install-all`` / ``clean-all`` aggregates. ``checkable_members``
-    (None = assume all) names the members whose own Makefile carries a ``check`` target —
-    see :func:`supports_check`. Explicit targets over pattern rules for greppability and
-    byte-stability. Env vars (e.g. HYPOTHESIS_PROFILE) propagate through ``$(MAKE) -C``
-    and recipes with no generator involvement.
+    aggregates. ``checkable_members`` names the members whose own Makefile carries a
+    ``check`` target (see :func:`supports_check`); **None or () means none** — the safe
+    default, because emitting ``$(MAKE) -C <member> check`` for a member without a
+    ``check`` target fabricates a guaranteed failure. ``gen_makefile.py`` supplies the
+    real list. ``regen_args``/``regen_program`` embed a ``# regenerate:`` provenance
+    comment (the program path as invoked, cwd-relative) so a later regeneration replays
+    the same inputs — without it, a flag-less rewrite would silently drop the fan-out.
+    Explicit targets over pattern rules for greppability and byte-stability. Env vars
+    (e.g. HYPOTHESIS_PROFILE) propagate through ``$(MAKE) -C`` with no generator
+    involvement.
     """
     targets = _build_targets(facts)
     ws_targets: list[_Target] = []
     if workspace is not None and workspace.is_workspace:
-        ws_targets = _workspace_targets(workspace, {t.name for t in targets}, checkable_members)
-    lines = [
+        ws_targets = _workspace_targets(workspace, {t.name for t in targets}, tuple(checkable_members or ()))
+    header = [
         "# Makefile - generated by the project-setup skill.",
         "# Deterministic scaffold: safe to extend by hand. Targets POSIX/GNU make",
         "# (Linux, macOS, WSL). Run `make help` for the available targets.",
+    ]
+    if regen_args:
+        joined = " ".join(shlex.quote(a) for a in (regen_program, *regen_args))
+        # Same control-character guard as the gate generator: a newline inside a quoted
+        # arg would escape the comment; such an invocation is unrepresentable — omit.
+        if "\n" not in joined and "\r" not in joined:
+            header.append("# regenerate: python " + joined)
+    lines = [
+        *header,
         "",
         ".DEFAULT_GOAL := help",
         ".DELETE_ON_ERROR:",
         "",
-        *_variables(facts, workspace),
+        *_variables(facts),
         "",
         ".PHONY: " + " ".join(t.name for t in [*targets, *ws_targets]),
         "",

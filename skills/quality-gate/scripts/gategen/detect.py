@@ -109,7 +109,8 @@ def _detect_coverage(data: dict[str, Any], root: Path, src_layout: bool) -> tupl
     elif isinstance(source, str) and source:
         sources = (source,)
     if not sources:
-        sources = (_guess_source(data, root, src_layout) or ".",)
+        # _guess_source always returns a non-empty string (its final fallback is ".").
+        sources = (_guess_source(data, root, src_layout),)
     return sources, _coerce_threshold(report.get("fail_under"))
 
 

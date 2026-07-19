@@ -128,12 +128,14 @@ def test_no_pip_variable_for_non_pip_install() -> None:
 # --------------------------------------------------------- 1.1.0: workspace mode
 def test_workspace_section_renders_fanout_targets() -> None:
     ws = WorkspaceFacts(members=("agent-core", "flow-corpus"))
-    out = render_makefile(ProjectFacts(has_ruff=True, has_pytest=True), workspace=ws)
+    out = render_makefile(ProjectFacts(has_ruff=True, has_pytest=True), workspace=ws, checkable_members=ws.members)
     assert "check-agent-core: ## " in out
     assert "$(MAKE) -C agent-core check" in out
     assert "check-all: check check-agent-core check-flow-corpus ## " in out  # root has a check
-    assert "install-all: ## " in out
-    assert "$(PIP) install -e ./agent-core -e ./flow-corpus" in out  # single sorted pip command
+    assert "install-all: install ## " in out  # root install joins the aggregate
+    # Each member installs via its OWN Makefile target, so its detected install command
+    # (dev extras, poetry, ...) is honoured — a bare `pip install -e ./m` skips toolchains.
+    assert "$(MAKE) -C agent-core install" in out and "$(MAKE) -C flow-corpus install" in out
     assert "clean-all: clean ## " in out
     assert "$(MAKE) -C flow-corpus clean" in out
     for name in ("check-agent-core", "check-flow-corpus", "check-all", "install-all", "clean-all"):
@@ -142,16 +144,35 @@ def test_workspace_section_renders_fanout_targets() -> None:
 
 def test_workspace_check_all_omits_missing_root_check() -> None:
     # Root with nothing gate-able has no `check`; the aggregate must not depend on it.
-    out = render_makefile(ProjectFacts(), workspace=WorkspaceFacts(members=("m1",)))
+    out = render_makefile(ProjectFacts(), workspace=WorkspaceFacts(members=("m1",)), checkable_members=("m1",))
     assert "check-all: check-m1 ## " in out
 
 
-def test_workspace_emits_pip_var_even_for_non_pip_root() -> None:
+def test_omitted_checkable_members_means_no_check_fanout() -> None:
+    # Safe default: without the supports_check-filtered list, no check delegation is
+    # fabricated — install/clean fan-out still covers the members.
+    ws = WorkspaceFacts(members=("m1",))
+    out = render_makefile(ProjectFacts(has_ruff=True, has_pytest=True), workspace=ws)
+    assert "check-m1" not in out
+    assert "check-all: check ## " in out  # root's own check still aggregates
+    assert "$(MAKE) -C m1 install" in out and "$(MAKE) -C m1 clean" in out
+
+
+def test_check_all_omitted_when_nothing_to_check() -> None:
+    # A bare `check-all:` that exits 0 while checking nothing is a fabricated pass.
+    out = render_makefile(ProjectFacts(), workspace=WorkspaceFacts(members=("m1",)), checkable_members=())
+    assert "check-all" not in out
+    assert "install-all" in out  # non-check aggregates survive
+
+
+def test_workspace_regen_provenance_line() -> None:
     out = render_makefile(
-        ProjectFacts(package_manager="poetry", install_cmd="poetry install"),
+        ProjectFacts(),
         workspace=WorkspaceFacts(members=("m1",)),
+        regen_args=("--root", ".", "--workspace"),
+        regen_program="skills/project-setup/scripts/gen_makefile.py",
     )
-    assert "PIP ?= $(PYTHON) -m pip" in out  # install-all needs it
+    assert "# regenerate: python skills/project-setup/scripts/gen_makefile.py --root . --workspace" in out
 
 
 def test_no_workspace_is_byte_identical_to_default() -> None:

@@ -46,6 +46,11 @@ def _write_one(out: Path, content: str) -> None:
     out.write_text(content, encoding="utf-8", newline="\n")
 
 
+def _program() -> str:
+    """The generator path AS INVOKED (cwd-relative, like --root) for provenance lines."""
+    return Path(sys.argv[0]).as_posix() if sys.argv and sys.argv[0] else "scripts/gen_makefile.py"
+
+
 def _artifacts(root: Path, out_override: str | None, use_workspace: bool) -> list[tuple[Path, str]]:
     """Deterministic (path, content) list: root Makefile first, then one per member."""
     workspace = None
@@ -68,9 +73,29 @@ def _artifacts(root: Path, out_override: str | None, use_workspace: bool) -> lis
     if workspace and len(checkable) != len(member_facts):
         skipped = sorted(set(member_facts) - set(checkable))
         logger.debug("members without a check target (no check fan-out): %s", skipped)
-    artifacts = [(root_out, render_makefile(facts, workspace=workspace, checkable_members=checkable))]
+    program = _program()
+    root_regen: list[str] = ["--root", root.as_posix()]
+    if use_workspace:
+        root_regen.append("--workspace")
+    if out_override:
+        root_regen += ["--out", out_override]
+    artifacts = [
+        (
+            root_out,
+            render_makefile(
+                facts,
+                workspace=workspace,
+                checkable_members=checkable,
+                regen_args=tuple(root_regen),
+                regen_program=program,
+            ),
+        )
+    ]
     for member, mf in member_facts.items():
-        artifacts.append((root / member / "Makefile", render_makefile(mf)))
+        member_regen = ("--root", (root / member).as_posix())
+        artifacts.append(
+            (root / member / "Makefile", render_makefile(mf, regen_args=member_regen, regen_program=program))
+        )
     return artifacts
 
 
@@ -110,6 +135,14 @@ def main(argv: list[str] | None = None) -> int:
         return verdict
 
     for path, content in artifacts:
+        # Guard against the silent-downgrade footgun: regenerating WITHOUT --workspace over
+        # a Makefile that has fan-out targets would delete check-all/check-<member>.
+        if path.is_file() and "check-all:" in path.read_text(encoding="utf-8") and "check-all:" not in content:
+            print(
+                f"[warn] {path.as_posix()} previously had workspace fan-out targets; this render drops them"
+                " (re-run with --workspace to keep check-all/check-<member>)",
+                file=sys.stderr,
+            )
         _write_one(path, content)
         print(f"wrote {path.as_posix()}")
     return 0

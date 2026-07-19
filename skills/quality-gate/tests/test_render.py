@@ -38,7 +38,7 @@ def test_variables_are_overridable_and_quoted() -> None:
     assert 'COVERAGE_SOURCE="${COVERAGE_SOURCE:-demo}"' in out
     assert 'COV_FAIL_UNDER="${COV_FAIL_UNDER:-90}"' in out
     # ShellCheck-cleanliness: every variable expansion in commands is double-quoted.
-    assert '"$PYTHON" -m ruff check .' in out
+    assert '"$PYTHON" -m ruff check "."' in out
     assert '--cov="$COVERAGE_SOURCE"' in out
 
 
@@ -113,15 +113,23 @@ def test_multi_typecheck_paths_render_one_invocation_each() -> None:
     assert '"$PYTHON" -m mypy "src/pkg"' in out
     assert '"$PYTHON" -m mypy "scripts"' in out
     assert '"$PYTHON" -m mypy "tests"' in out
-    # The single-path env override cannot hold a list; it must not be emitted here.
-    assert "TYPECHECK_PATHS" not in out
+    # The single-path env-var DEFINITION cannot hold a list; it must not be emitted here —
+    # but a notice line must warn when an exported override would be silently swallowed.
+    assert 'TYPECHECK_PATHS="${TYPECHECK_PATHS:-' not in out
+    assert "TYPECHECK_PATHS is ignored" in out
 
 
 def test_multi_coverage_sources_render_repeated_cov_flags() -> None:
     out = render_gate(GateFacts(has_pytest_cov=True, coverage_source=("pkg_a", "pkg_b"), cov_fail_under=85))
     assert '--cov="pkg_a" --cov="pkg_b"' in out
-    assert "COVERAGE_SOURCE" not in out  # no single-source env var in multi mode
+    assert 'COVERAGE_SOURCE="${COVERAGE_SOURCE:-' not in out  # no single-source env var in multi mode
+    assert "COVERAGE_SOURCE is ignored" in out  # ...and the swallowed override warns
     assert 'COV_FAIL_UNDER="${COV_FAIL_UNDER:-85}"' in out  # threshold override survives
+
+
+def test_single_path_forms_have_no_ignored_notice() -> None:
+    out = render_gate(FULL)  # single typecheck path + single coverage source
+    assert "is ignored" not in out
 
 
 def test_lint_paths_render_quoted_targets() -> None:
@@ -132,7 +140,12 @@ def test_lint_paths_render_quoted_targets() -> None:
 
 def test_default_lint_is_whole_tree() -> None:
     out = render_gate(GateFacts(has_ruff=True))
-    assert '"$PYTHON" -m ruff check .' in out
+    assert '"$PYTHON" -m ruff check "."' in out  # uniform quoted-tuple form
+
+
+def test_empty_lint_paths_normalize_to_whole_tree() -> None:
+    facts = GateFacts(has_ruff=True, lint_paths=())
+    assert facts.lint_paths == (".",)  # uniform with the other tuple fields
 
 
 # ------------------------------------------------- 1.1.0: marker, hook, provenance
@@ -174,7 +187,13 @@ def test_multi_path_pyright_renders_single_invocation() -> None:
     # startup cost is paid once, not once per path.
     out = render_gate(GateFacts(type_checker="pyright", typecheck_paths=("src", "tests")))
     assert 'pyright "src" "tests"' in out
-    assert out.count("pyright ") == 1
+    assert sum(line.strip().startswith("pyright ") for line in out.splitlines()) == 1
+
+
+def test_regen_program_is_embedded_as_given() -> None:
+    # The program path is recorded AS INVOKED (cwd-relative, like --root) so the line replays.
+    out = render_gate(FULL, regen_args=("--root", "."), regen_program="skills/quality-gate/scripts/gen_gate.py")
+    assert "# regenerate: python skills/quality-gate/scripts/gen_gate.py --root ." in out
 
 
 def test_provenance_args_are_shell_quoted() -> None:
@@ -197,7 +216,7 @@ def test_positional_construction_matches_1_0_field_order() -> None:
     facts = GateFacts("python3", True, "mypy", "src", True, True, "demo", 90)
     assert facts.has_ruff is True and facts.type_checker == "mypy"
     assert facts.typecheck_paths == ("src",) and facts.coverage_source == ("demo",)
-    assert facts.cov_fail_under == 90 and facts.lint_paths == ()
+    assert facts.cov_fail_under == 90 and facts.lint_paths == (".",)  # appended field, whole-tree default
 
 
 def test_empty_tuples_normalize_to_whole_tree_defaults() -> None:

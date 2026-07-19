@@ -97,11 +97,24 @@ def test_workspace_emits_root_and_member_makefiles(tmp_path) -> None:
     assert gen_makefile.main(["--root", str(tmp_path), "--workspace"]) == 0
     root_body = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "check-pkg-a:" in root_body and "check-pkg-b:" in root_body
-    assert "$(PIP) install -e ./pkg-a -e ./pkg-b" in root_body
+    assert "$(MAKE) -C pkg-a install" in root_body  # member installs via its own target
+    assert "# regenerate: python " in root_body and "--workspace" in root_body  # provenance
     for name in ("pkg-a", "pkg-b"):
         member_body = (tmp_path / name / "Makefile").read_text(encoding="utf-8")
         assert "lint:" in member_body and "check:" in member_body
         assert "check-" not in member_body  # members get the plain single-package render
+        assert "# regenerate: python " in member_body  # members carry provenance too
+
+
+def test_flagless_regen_over_workspace_makefile_warns(tmp_path, capsys) -> None:
+    # Regenerating WITHOUT --workspace over a fan-out Makefile silently deleted check-all
+    # before this guard; now it must warn loudly.
+    _workspace(tmp_path)
+    gen_makefile.main(["--root", str(tmp_path), "--workspace"])
+    assert gen_makefile.main(["--root", str(tmp_path)]) == 0  # flag-less rewrite
+    err = capsys.readouterr().err
+    assert "drops them" in err and "--workspace" in err
+    assert "check-all" not in (tmp_path / "Makefile").read_text(encoding="utf-8")
 
 
 def test_workspace_check_iterates_all_artifacts(tmp_path) -> None:
@@ -125,7 +138,7 @@ def test_uncheckable_member_gets_no_check_fanout(tmp_path) -> None:
     root_body = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "check-bare-pkg" not in root_body
     assert "check-pkg-a:" in root_body  # gate-able members keep their fan-out
-    assert "-e ./bare-pkg" in root_body  # install-all still covers everyone
+    assert "$(MAKE) -C bare-pkg install" in root_body  # install-all still covers everyone
     assert "$(MAKE) -C bare-pkg clean" in root_body  # so does clean-all
     member_body = (bare / "Makefile").read_text(encoding="utf-8")
     assert "check:" not in member_body  # consistent with the omission above

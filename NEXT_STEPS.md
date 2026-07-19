@@ -15,7 +15,12 @@
   the labeled protected batch (ADR 0021: rewire the 4 per-package workflows to the gate
   scripts; `architecture.yaml` comment fix + unused-edge removal + `.mmd` regen; drift
   workflow path filter; PROTECTED_PATTERNS/CODEOWNERS additions; cross-reference ADR 0021
-  in ADR 0022's Related list).
+  in ADR 0022's Related list). Review-round deferrals worth a future gategen minor: (a)
+  single-instrumented-run coverage — the root gate's `all` runs the suite twice (harness
+  cov + F-031 scripts cov); one run + two `coverage report` passes over shared data would
+  halve gate wall-clock but needs a combined run-config design; (b) individually
+  dispatchable named hand-steps (today `do_extra` is reachable only via `all`), which
+  would let CI call granular hand extensions without duplicating their commands.
 - [x] **Deterministic generator skills — `project-setup` / `quality-gate` / `deploy` (ADR 0020)** —
   three skills that emit committed, byte-stable artifacts (a Makefile; a `set -euo pipefail`
   quality-gate script that CI and `make check` share so local == CI; a safety-railed deploy

@@ -81,7 +81,9 @@ def test_path_flags_render_multi_path_gate_with_provenance(tmp_path) -> None:
     body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
     assert '"$PYTHON" -m ruff check "src" "tests"' in body
     assert '"$PYTHON" -m mypy "src/demo"' in body and '"$PYTHON" -m mypy "tests"' in body
-    assert "# regenerate: python scripts/gen_gate.py --root " in body
+    # Program path is sys.argv[0] as invoked (pytest's own path in-process), so assert the
+    # structure and args rather than a hardcoded program.
+    assert "# regenerate: python " in body
     assert "--lint-path src --lint-path tests" in body
 
 
@@ -101,6 +103,18 @@ def test_typecheck_flag_ignored_without_checker(tmp_path, caplog) -> None:
     assert any("ignoring --typecheck-path" in r.message for r in caplog.records)
     body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
     assert "do_typecheck" not in body
+    assert "--typecheck-path" not in body  # ignored flags never appear in provenance
+
+
+def test_lint_flag_ignored_without_ruff(tmp_path, caplog) -> None:
+    # Parity with --typecheck-path: no detected ruff -> warn, no lint step, no provenance lie.
+    (tmp_path / "pyproject.toml").write_text("[tool.mypy]\n", encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="gategen"):
+        gen_gate.main(["--root", str(tmp_path), "--lint-path", "src"])
+    assert any("ignoring --lint-path" in r.message for r in caplog.records)
+    body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
+    assert "do_lint" not in body
+    assert "--lint-path" not in body
 
 
 # ------------------------------------------- 1.1.0: hand-extension marker seam
@@ -132,6 +146,30 @@ def test_check_ignores_tail_edits_but_flags_prefix_drift(tmp_path) -> None:
     body = out.read_text(encoding="utf-8")
     out.write_text(body.replace("set -euo pipefail", "set -e"), encoding="utf-8")
     assert gen_gate.main([*args, "--check"]) == 1  # generated prefix drift IS drift
+
+
+def test_check_flags_missing_dispatch_line(tmp_path, capsys) -> None:
+    # A gate truncated at the marker defines every check and runs NONE (exit 0); --check
+    # must not certify that state as 'up to date'.
+    _project(tmp_path)
+    args = ["--root", str(tmp_path)]
+    gen_gate.main(args)
+    out = tmp_path / "scripts" / "quality-gate.sh"
+    body = out.read_text(encoding="utf-8")
+    out.write_text(body.replace('main "$@"', ""), encoding="utf-8")
+    assert gen_gate.main([*args, "--check"]) == 1
+    assert "dispatch line is missing" in capsys.readouterr().out
+
+
+def test_rewrite_over_premarker_artifact_warns(tmp_path, capsys) -> None:
+    # 1.0.x artifacts have no marker seam; rewriting them must be loud, never silent.
+    _project(tmp_path)
+    out = tmp_path / "scripts" / "quality-gate.sh"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("#!/usr/bin/env bash\n# 1.0.x era gate\ndo_security() { true; }\n", encoding="utf-8")
+    assert gen_gate.main(["--root", str(tmp_path)]) == 0
+    assert "NOT preserved" in capsys.readouterr().err
+    assert "do_security" not in out.read_text(encoding="utf-8")  # rewritten whole, as warned
 
 
 @pytest.mark.skipif(BASH is None, reason="bash not available")

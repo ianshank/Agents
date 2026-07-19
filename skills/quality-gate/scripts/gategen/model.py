@@ -36,7 +36,7 @@ class GateFacts:
     has_pytest_cov: bool = False
     coverage_source: tuple[str, ...] = (".",)
     cov_fail_under: int = 0
-    lint_paths: tuple[str, ...] = ()  # () -> lint the whole tree (".")
+    lint_paths: tuple[str, ...] = (".",)
 
     def __post_init__(self) -> None:
         # Backwards compatibility: 1.0.x typed these as single strings. Coerce str -> 1-tuple
@@ -47,13 +47,12 @@ class GateFacts:
                 object.__setattr__(self, name, (value,))
             else:
                 object.__setattr__(self, name, tuple(value))
-        # An EMPTY typecheck/coverage collection would render a step with no commands (a
-        # fabricated no-op that "passes"); normalize to the whole-tree default instead.
-        # lint_paths stays () — there it legitimately means "lint the whole tree".
-        if not self.typecheck_paths:
-            object.__setattr__(self, "typecheck_paths", (".",))
-        if not self.coverage_source:
-            object.__setattr__(self, "coverage_source", (".",))
+        # An EMPTY collection would render a step with no targets/commands (a fabricated
+        # no-op that "passes"); normalize every path field to the whole-tree default so all
+        # three tuple fields share one uniform "empty means '.'" rule.
+        for name in _TUPLE_FIELDS:
+            if not getattr(self, name):
+                object.__setattr__(self, name, (".",))
 
     @property
     def has_any_step(self) -> bool:

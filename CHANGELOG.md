@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed
+- **Generator review round (8-angle code review; 10 findings fixed):** the `# regenerate:`
+  provenance now embeds the generator path AS INVOKED (`sys.argv[0]`, cwd-relative like
+  `--root`) — the previous hardcoded `scripts/gen_gate.py` made every committed artifact's
+  header unrunnable; the root Makefile (and each member Makefile) gained the same provenance
+  line, and a flag-less regeneration over a fan-out Makefile now warns before dropping
+  `check-all`. `gen_gate.py --check` verifies the tail's `main "$@"` dispatch invariant (a
+  gate truncated at the marker used to pass `--check` while executing nothing), and
+  rewriting a pre-marker 1.0.x artifact warns loudly instead of silently discarding hand
+  edits. `install-all` delegates to each member's own `install` target so detected install
+  commands (dev extras, poetry) are honoured; an empty `check-all` aggregate is omitted
+  rather than fabricating a passing no-op; `--lint-path` without detected ruff now warns and
+  stays out of provenance (parity with `--typecheck-path`); multi-path gates emit a stderr
+  notice when an exported `TYPECHECK_PATHS`/`COVERAGE_SOURCE` override is ignored. The root
+  gate lints the WHOLE tree again (`demo/`+`examples/` had silently left the gate; both
+  reformatted). Internals: the env-form predicates are single-sourced (a divergence would
+  have emitted scripts referencing undefined variables under `set -u`), `_quoted` is reused
+  for `--cov` flags, all three GateFacts tuple fields share the empty→`"."` rule, and
+  `lint_paths` is appended at the end of the dataclass preserving 1.0.x positional
+  construction. Deferred with rationale (NEXT_STEPS): single-instrumented-run coverage for
+  the root gate's two suite passes; individually dispatchable named hand-steps.
+
 ### Added
 - **Workspace-wide deterministic gates (P1+P2 of the determinism phase; quality-gate &
   project-setup skills → 1.1.0):** the generators gained monorepo support and the repo now
