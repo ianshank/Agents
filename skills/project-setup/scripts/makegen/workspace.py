@@ -3,9 +3,9 @@
 A workspace member is an IMMEDIATE child directory of the root that contains its own
 ``pyproject.toml``. The immediate-child rule is load-bearing: it deterministically excludes
 nested trees (e.g. ``skills/*/evals/fixtures/*/pyproject.toml``) with no exclude list.
-Membership is a pure, sorted filesystem observation — no dist-name mapping and no ordering,
-because pip resolves co-listed local projects regardless of listing order (mirroring CI's
-single order-free install invocations).
+Membership is a pure, sorted filesystem observation — sorting exists solely for byte-stable
+output (fan-out targets and recipes render in a fixed order); no dependency ordering is
+implied, because every emitted aggregate delegates per member via ``$(MAKE) -C <member>``.
 """
 
 from __future__ import annotations
@@ -14,9 +14,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-# Member names must be usable verbatim as Make target suffixes and pip path arguments.
-# Anything else (spaces, ':', '$', ...) is skipped rather than emitted broken — the caller
-# surfaces skipped names so the omission is visible, never silent.
+# Member names must be usable verbatim as Make target suffixes (check-<member>) and as the
+# directory argument of `$(MAKE) -C <member>`. Anything else (spaces, ':', '$', ...) is
+# skipped rather than emitted broken — the caller surfaces skipped names so the omission is
+# visible, never silent.
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 

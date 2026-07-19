@@ -182,6 +182,15 @@ def test_split_at_marker_without_marker_is_all_prefix() -> None:
     assert prefix == "no marker here\n" and tail == ""
 
 
+def test_split_at_marker_handles_crlf_line_endings() -> None:
+    # A Windows-edited artifact must not yield a tail starting with a stray \r (that would
+    # corrupt tail preservation into mixed line endings and cause false drift).
+    text = "line one\r\n" + MARKER + "\r\nhand content\r\n"
+    prefix, tail = split_at_marker(text)
+    assert prefix.endswith(MARKER + "\r\n")
+    assert tail == "hand content\r\n"
+
+
 def test_multi_path_pyright_renders_single_invocation() -> None:
     # Unlike mypy (deliberate per-path runs), pyright takes all paths at once so its
     # startup cost is paid once, not once per path.

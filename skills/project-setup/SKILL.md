@@ -41,11 +41,14 @@ python scripts/gen_makefile.py --root <project> [--workspace] [--out <path>] [--
    commands inline so the Makefile stands alone.
 4. **Monorepo (`--workspace`, optional):** members are the immediate-child directories with
    their own `pyproject.toml` (a pure, sorted filesystem observation — nested fixture trees
-   never match). The root Makefile gains explicit `check-<member>` targets (`$(MAKE) -C
-   <member> check`, so each member's tool configs resolve in its own cwd), aggregate
-   `check-all` / `install-all` (one sorted `pip install -e ...` line) / `clean-all`, and every
-   member gets its own single-package Makefile. `--check` then iterates ALL artifacts.
-   Environment variables (e.g. `HYPOTHESIS_PROFILE`) propagate through `$(MAKE) -C` untouched.
+   never match; symlinks excluded). The root Makefile gains explicit `check-<member>` targets
+   (`$(MAKE) -C <member> check`, so each member's tool configs resolve in its own cwd — and
+   only for members whose own Makefile has a `check` target), aggregate `check-all` /
+   `install-all` / `clean-all`, and every member gets its own single-package Makefile.
+   `install-all` and `clean-all` also delegate per member (`$(MAKE) -C <member> install|clean`)
+   so each member's DETECTED install command — dev extras, poetry, and so on — is honoured.
+   `--check` then iterates ALL artifacts. Environment variables (e.g. `HYPOTHESIS_PROFILE`)
+   propagate through `$(MAKE) -C` untouched.
 5. **Review** the generated files with the user and commit them. They are scaffolds — extend freely.
 
 ## 3. Output contract (postconditions — what "done" means)

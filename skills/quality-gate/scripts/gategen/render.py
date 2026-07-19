@@ -57,14 +57,19 @@ def _quoted(paths: tuple[str, ...]) -> str:
 def split_at_marker(text: str) -> tuple[str, str]:
     """Split script text into (generator-owned prefix incl. marker line, hand tail).
 
-    The prefix ends with the marker line's newline. Text without a marker is all prefix
-    (older 1.0.x artifacts): callers treat that as "no hand region to preserve".
+    The prefix ends with the marker line's line terminator — ``\\r\\n`` is consumed as a
+    unit so a CRLF file (e.g. edited on Windows) never yields a tail starting with a stray
+    ``\\r`` (which would corrupt preservation into mixed line endings). Text without a
+    marker is all prefix (older 1.0.x artifacts): callers treat that as "no hand region to
+    preserve".
     """
     idx = text.find(MARKER)
     if idx < 0:
         return text, ""
     end = idx + len(MARKER)
-    if end < len(text) and text[end] == "\n":
+    if text.startswith("\r\n", end):
+        end += 2
+    elif end < len(text) and text[end] == "\n":
         end += 1
     return text[:end], text[end:]
 
