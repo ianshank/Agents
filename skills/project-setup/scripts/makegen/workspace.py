@@ -20,6 +20,12 @@ from pathlib import Path
 # visible, never silent.
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+# Names whose <verb>-<member> targets would collide with the generated aggregates
+# (check-all / install-all / clean-all). GNU Make treats duplicate standard rules as
+# "last recipe wins" with a warning, silently dropping the member's own delegation — so a
+# member directory named `all` is skipped (reported) rather than emitted broken.
+_RESERVED_NAMES = frozenset({"all"})
+
 
 @dataclass(frozen=True)
 class WorkspaceFacts:
@@ -52,7 +58,7 @@ def detect_workspace(root: Path | str) -> WorkspaceFacts:
             continue
         if not (child / "pyproject.toml").is_file():
             continue
-        if _SAFE_NAME.fullmatch(child.name):
+        if _SAFE_NAME.fullmatch(child.name) and child.name not in _RESERVED_NAMES:
             members.append(child.name)
         else:
             skipped.append(child.name)

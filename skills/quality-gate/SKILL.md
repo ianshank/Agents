@@ -35,7 +35,8 @@ python scripts/gen_gate.py --root <project> [--lint-path P]... [--typecheck-path
    mypy per-path to avoid module-name collisions). Multiple typecheck paths render one
    invocation each. The exact invocation is embedded as a `# regenerate:` provenance comment,
    so the artifact documents its own reproduction. A `--typecheck-path` without a detected type
-   checker is ignored with a warning — flags cannot fabricate a step.
+   checker — or a `--lint-path` without a detected ruff configuration — is ignored with a
+   warning and excluded from the provenance comment: flags cannot fabricate a step.
 3. **Emit** `scripts/quality-gate.sh` with strict mode, a `log` helper, one `do_<step>` function
    per supported check, an aggregate `do_all` (which runs coverage instead of a bare test run when
    both exist, so tests never run twice), and a `main` dispatcher for

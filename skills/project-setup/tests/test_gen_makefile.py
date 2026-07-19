@@ -166,6 +166,7 @@ def test_workspace_flag_off_is_backwards_compatible(tmp_path) -> None:
     assert not (tmp_path / "pkg-a" / "Makefile").exists()
 
 
+@pytest.mark.slow  # real make -> ruff + pytest subprocesses; can exceed 5s in CI
 @pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
 def test_workspace_check_all_runs_members_for_real(tmp_path) -> None:
     _workspace(tmp_path)

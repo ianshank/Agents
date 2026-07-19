@@ -51,6 +51,16 @@ def test_unsafe_names_are_skipped_not_emitted(tmp_path: Path) -> None:
     assert ws.skipped == ("bad pkg",)  # visible, never silently emitted broken
 
 
+def test_reserved_name_all_is_skipped(tmp_path: Path) -> None:
+    # A member named `all` would make check-all/install-all/clean-all duplicate targets
+    # (GNU Make: last recipe wins + warning), silently dropping the member's delegation.
+    _member(tmp_path, "all")
+    _member(tmp_path, "fine-pkg")
+    ws = detect_workspace(tmp_path)
+    assert ws.members == ("fine-pkg",)
+    assert ws.skipped == ("all",)
+
+
 def test_missing_root_is_empty_workspace(tmp_path: Path) -> None:
     ws = detect_workspace(tmp_path / "nope")
     assert ws.members == () and ws.is_workspace is False

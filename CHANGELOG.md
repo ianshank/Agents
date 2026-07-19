@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Fixed
+- **Bot-review round (CodeRabbit):** workspace detection now skips a member directory named
+  `all` (reported via `WorkspaceFacts.skipped`, never emitted broken) — its `check-all`/
+  `install-all`/`clean-all` targets would collide with the generated aggregates, and GNU
+  Make's last-recipe-wins rule would silently drop the member's own delegation. The
+  quality-gate SKILL.md now documents that `--lint-path` without a detected ruff
+  configuration is ignored with a warning (parity with `--typecheck-path`), a hand-extension
+  test writes its sentinel path in POSIX form so it stays valid inside the generated bash
+  gate on Windows, and the real-`make` workspace test carries the `slow` marker.
 - **Generator review round (8-angle code review; 10 findings fixed):** the `# regenerate:`
   provenance now embeds the generator path AS INVOKED (`sys.argv[0]`, cwd-relative like
   `--root`) — the previous hardcoded `scripts/gen_gate.py` made every committed artifact's

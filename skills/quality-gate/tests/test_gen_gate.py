@@ -178,7 +178,7 @@ def test_do_extra_hook_runs_in_all(tmp_path) -> None:
     gen_gate.main(["--root", str(tmp_path)])
     out = tmp_path / "scripts" / "quality-gate.sh"
     sentinel = tmp_path / "extra-ran.txt"
-    _extend_below_marker(out, f'do_extra() {{\n  echo yes > "{sentinel}"\n}}\n')
+    _extend_below_marker(out, f'do_extra() {{\n  echo yes > "{sentinel.as_posix()}"\n}}\n')
     result = _run_gate(tmp_path, "all")
     assert result.returncode == 0, result.stdout + result.stderr
     assert sentinel.is_file()  # the hand-extension hook executed as part of `all`
