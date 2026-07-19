@@ -78,6 +78,68 @@ def test_verbose_logs_detected_facts(tmp_path, caplog) -> None:
     assert any("detected facts" in r.message for r in caplog.records)
 
 
+# --------------------------------------------------------- 1.1.0: workspace mode
+def _workspace(root: Path) -> None:
+    """A monorepo: root project plus two members with their own toolchains."""
+    _pip_src(root)
+    for name in ("pkg-a", "pkg-b"):
+        member = root / name
+        (member / "tests").mkdir(parents=True)
+        (member / "pyproject.toml").write_text(
+            f'[project]\nname="{name}"\nversion="0"\n[tool.ruff]\n[tool.pytest.ini_options]\ntestpaths=["tests"]\n',
+            encoding="utf-8",
+        )
+        (member / "tests" / "test_ok.py").write_text("def test_ok() -> None:\n    assert True\n", encoding="utf-8")
+
+
+def test_workspace_emits_root_and_member_makefiles(tmp_path) -> None:
+    _workspace(tmp_path)
+    assert gen_makefile.main(["--root", str(tmp_path), "--workspace"]) == 0
+    root_body = (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert "check-pkg-a:" in root_body and "check-pkg-b:" in root_body
+    assert "$(PIP) install -e ./pkg-a -e ./pkg-b" in root_body
+    for name in ("pkg-a", "pkg-b"):
+        member_body = (tmp_path / name / "Makefile").read_text(encoding="utf-8")
+        assert "lint:" in member_body and "check:" in member_body
+        assert "check-" not in member_body  # members get the plain single-package render
+
+
+def test_workspace_check_iterates_all_artifacts(tmp_path) -> None:
+    _workspace(tmp_path)
+    args = ["--root", str(tmp_path), "--workspace"]
+    assert gen_makefile.main([*args, "--check"]) == 1  # nothing written yet
+    gen_makefile.main(args)
+    assert gen_makefile.main([*args, "--check"]) == 0  # all fresh
+    (tmp_path / "pkg-b" / "Makefile").write_text("stale\n", encoding="utf-8")
+    assert gen_makefile.main([*args, "--check"]) == 1  # one stale member is drift
+
+
+def test_workspace_warns_when_no_members(tmp_path, capsys) -> None:
+    _pip_src(tmp_path)
+    assert gen_makefile.main(["--root", str(tmp_path), "--workspace"]) == 0
+    assert "no member packages" in capsys.readouterr().err
+
+
+def test_workspace_flag_off_is_backwards_compatible(tmp_path) -> None:
+    _workspace(tmp_path)
+    gen_makefile.main(["--root", str(tmp_path)])  # no --workspace
+    root_body = (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert "check-all" not in root_body
+    assert not (tmp_path / "pkg-a" / "Makefile").exists()
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
+def test_workspace_check_all_runs_members_for_real(tmp_path) -> None:
+    _workspace(tmp_path)
+    gen_makefile.main(["--root", str(tmp_path), "--workspace"])
+    # `make -n check-all` resolves root check + both member delegations without running.
+    proc = subprocess.run(["make", "-n", "check-all"], capture_output=True, text=True, cwd=str(tmp_path))
+    assert proc.returncode == 0, proc.stderr
+    # Real run of one member target end-to-end (ruff + pytest inside pkg-a).
+    proc = subprocess.run(["make", "check-pkg-a"], capture_output=True, text=True, cwd=str(tmp_path))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
 @pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
 def test_generated_makefile_parses_with_make(tmp_path) -> None:
     _pip_src(tmp_path)

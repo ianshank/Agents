@@ -3,7 +3,7 @@ name: project-setup
 description: Generate a deterministic, self-documenting Makefile for a Python project by detecting its toolchain (ruff, mypy/pyright, pytest, coverage) and package manager. Use this whenever the user wants a Makefile, a `make` build/test/lint interface, one-command project tasks, to scaffold or standardize a repo's developer commands, or to stop re-deriving how to run a project's checks each time. Emits build/test/lint/typecheck/coverage/check targets and delegates to a quality-gate or deploy script when present.
 validator_version: '2.0'
 compatibility: python>=3.10 (tomli on 3.10)
-version: 1.0.0
+version: 1.1.0
 ---
 
 # project-setup — Makefile writer
@@ -27,7 +27,7 @@ time; the Makefile it writes needs zero inference to run thereafter.**
 Run the deterministic generator; do not hand-write the Makefile.
 
 ```bash
-python scripts/gen_makefile.py --root <project> [--out <path>] [--stdout] [--check]
+python scripts/gen_makefile.py --root <project> [--workspace] [--out <path>] [--stdout] [--check]
 ```
 
 1. **Inspect** the project: package manager, ruff/mypy/pyright/pytest/coverage config, `src/` vs
@@ -39,7 +39,14 @@ python scripts/gen_makefile.py --root <project> [--out <path>] [--stdout] [--che
 3. **Compose, don't duplicate:** when `scripts/quality-gate.sh` exists the lint/typecheck/test/
    coverage/check targets delegate to it (one source of truth); otherwise they emit the tool
    commands inline so the Makefile stands alone.
-4. **Review** the generated file with the user and commit it. It is a scaffold — extend it freely.
+4. **Monorepo (`--workspace`, optional):** members are the immediate-child directories with
+   their own `pyproject.toml` (a pure, sorted filesystem observation — nested fixture trees
+   never match). The root Makefile gains explicit `check-<member>` targets (`$(MAKE) -C
+   <member> check`, so each member's tool configs resolve in its own cwd), aggregate
+   `check-all` / `install-all` (one sorted `pip install -e ...` line) / `clean-all`, and every
+   member gets its own single-package Makefile. `--check` then iterates ALL artifacts.
+   Environment variables (e.g. `HYPOTHESIS_PROFILE`) propagate through `$(MAKE) -C` untouched.
+5. **Review** the generated files with the user and commit them. They are scaffolds — extend freely.
 
 ## 3. Output contract (postconditions — what "done" means)
 

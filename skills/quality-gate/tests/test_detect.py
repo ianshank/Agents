@@ -26,8 +26,8 @@ def test_full_toolchain_src_layout(tmp_path: Path) -> None:
     facts = detect(tmp_path)
     assert facts.has_ruff and facts.has_pytest and facts.has_pytest_cov
     assert facts.type_checker == "mypy"
-    assert facts.typecheck_paths == "src"
-    assert facts.coverage_source == "demo"
+    assert facts.typecheck_paths == ("src",)
+    assert facts.coverage_source == ("demo",)
     assert facts.cov_fail_under == 88
     assert facts.has_any_step is True
 
@@ -49,7 +49,7 @@ def test_pyright_detection(tmp_path: Path) -> None:
     _write(tmp_path, "pyrightconfig.json", "{}")
     facts = detect(tmp_path)
     assert facts.type_checker == "pyright"
-    assert facts.typecheck_paths == "."
+    assert facts.typecheck_paths == (".",)
 
 
 def test_mypy_ini_detection(tmp_path: Path) -> None:
@@ -73,29 +73,36 @@ def test_pytest_cov_via_dependency(tmp_path: Path) -> None:
 
 def test_coverage_source_as_string(tmp_path: Path) -> None:
     _write(tmp_path, "pyproject.toml", '[tool.coverage.run]\nsource="single"\n')
-    assert detect(tmp_path).coverage_source == "single"
+    assert detect(tmp_path).coverage_source == ("single",)
+
+
+def test_coverage_source_multi_keeps_all_sources(tmp_path: Path) -> None:
+    # ALL declared sources survive detection; taking source[0] only would silently
+    # measure a subset (a gate-weakening bug).
+    _write(tmp_path, "pyproject.toml", '[tool.coverage.run]\nsource=["pkg_a", "pkg_b"]\n')
+    assert detect(tmp_path).coverage_source == ("pkg_a", "pkg_b")
 
 
 def test_coverage_source_guessed_from_name(tmp_path: Path) -> None:
     _write(tmp_path, "pyproject.toml", '[project]\nname="my-lib"\n[tool.coverage.run]\nbranch=true\n')
-    assert detect(tmp_path).coverage_source == "my_lib"
+    assert detect(tmp_path).coverage_source == ("my_lib",)
 
 
 def test_coverage_source_from_src_package(tmp_path: Path) -> None:
     _write(tmp_path, "pyproject.toml", "[tool.coverage.run]\nbranch=true\n")
     _write(tmp_path, "src/pkg/__init__.py")
-    assert detect(tmp_path).coverage_source == "pkg"
+    assert detect(tmp_path).coverage_source == ("pkg",)
 
 
 def test_coverage_source_src_without_package(tmp_path: Path) -> None:
     _write(tmp_path, "pyproject.toml", '[project]\nname="named"\n[tool.coverage.run]\nbranch=true\n')
     _write(tmp_path, "src/notapackage.txt", "x")
-    assert detect(tmp_path).coverage_source == "named"
+    assert detect(tmp_path).coverage_source == ("named",)
 
 
 def test_coverage_source_dot_when_unknown(tmp_path: Path) -> None:
     _write(tmp_path, "pyproject.toml", "[tool.coverage.run]\nbranch=true\n")
-    assert detect(tmp_path).coverage_source == "."
+    assert detect(tmp_path).coverage_source == (".",)
 
 
 def test_malformed_pyproject_degrades(tmp_path: Path) -> None:

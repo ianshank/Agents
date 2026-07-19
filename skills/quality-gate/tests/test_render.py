@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gategen import GateFacts, render_ci_snippet, render_gate
+from gategen import MARKER, GateFacts, render_ci_snippet, render_gate, split_at_marker
 
 FULL = GateFacts(
     has_ruff=True,
@@ -98,3 +98,72 @@ def test_special_chars_in_source_are_shell_escaped() -> None:
     # A detected value containing $ must be neutralised inside the ${VAR:-...} default.
     out = render_gate(GateFacts(has_pytest_cov=True, coverage_source="pkg$x"))
     assert 'COVERAGE_SOURCE="${COVERAGE_SOURCE:-pkg\\$x}"' in out
+
+
+# ------------------------------------------------------------ 1.1.0: tuples & BC
+def test_str_fields_coerce_to_tuples_for_backwards_compat() -> None:
+    facts = GateFacts(typecheck_paths="src", coverage_source="demo", lint_paths="pkg")
+    assert facts.typecheck_paths == ("src",)
+    assert facts.coverage_source == ("demo",)
+    assert facts.lint_paths == ("pkg",)
+
+
+def test_multi_typecheck_paths_render_one_invocation_each() -> None:
+    out = render_gate(GateFacts(type_checker="mypy", typecheck_paths=("src/pkg", "scripts", "tests")))
+    assert '"$PYTHON" -m mypy "src/pkg"' in out
+    assert '"$PYTHON" -m mypy "scripts"' in out
+    assert '"$PYTHON" -m mypy "tests"' in out
+    # The single-path env override cannot hold a list; it must not be emitted here.
+    assert "TYPECHECK_PATHS" not in out
+
+
+def test_multi_coverage_sources_render_repeated_cov_flags() -> None:
+    out = render_gate(GateFacts(has_pytest_cov=True, coverage_source=("pkg_a", "pkg_b"), cov_fail_under=85))
+    assert '--cov="pkg_a" --cov="pkg_b"' in out
+    assert "COVERAGE_SOURCE" not in out  # no single-source env var in multi mode
+    assert 'COV_FAIL_UNDER="${COV_FAIL_UNDER:-85}"' in out  # threshold override survives
+
+
+def test_lint_paths_render_quoted_targets() -> None:
+    out = render_gate(GateFacts(has_ruff=True, lint_paths=("src", "tests", "scripts")))
+    assert '"$PYTHON" -m ruff check "src" "tests" "scripts"' in out
+    assert '"$PYTHON" -m ruff format --check "src" "tests" "scripts"' in out
+
+
+def test_default_lint_is_whole_tree() -> None:
+    out = render_gate(GateFacts(has_ruff=True))
+    assert '"$PYTHON" -m ruff check .' in out
+
+
+# ------------------------------------------------- 1.1.0: marker, hook, provenance
+def test_marker_and_default_tail_present() -> None:
+    out = render_gate(FULL)
+    assert MARKER in out
+    prefix, tail = split_at_marker(out)
+    assert prefix.endswith(MARKER + "\n")
+    assert 'main "$@"' in tail  # dispatch lives below the marker (hand region)
+    assert "do_extra()" in tail  # seam documentation
+
+
+def test_do_all_invokes_do_extra_hook_when_defined() -> None:
+    out = render_gate(FULL)
+    do_all = out.split("do_all() {")[1].split("}")[0]
+    assert "declare -F do_extra" in do_all
+    assert "do_extra" in do_all
+
+
+def test_regen_provenance_line_embedded_when_args_given() -> None:
+    out = render_gate(FULL, regen_args=("--root", ".", "--lint-path", "src"))
+    assert "# regenerate: python scripts/gen_gate.py --root . --lint-path src" in out
+    # Provenance is part of the generator-owned prefix (freshness-checked).
+    prefix, _ = split_at_marker(out)
+    assert "# regenerate:" in prefix
+
+
+def test_no_provenance_line_without_args() -> None:
+    assert "# regenerate:" not in render_gate(FULL)
+
+
+def test_split_at_marker_without_marker_is_all_prefix() -> None:
+    prefix, tail = split_at_marker("no marker here\n")
+    assert prefix == "no marker here\n" and tail == ""

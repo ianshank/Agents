@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from makegen import ProjectFacts, render_makefile
+from makegen import ProjectFacts, WorkspaceFacts, render_makefile
 
 
 def _recipe_lines(text: str) -> list[str]:
@@ -123,6 +123,42 @@ def test_no_pip_variable_for_non_pip_install() -> None:
     out = render_makefile(ProjectFacts(package_manager="poetry", install_cmd="poetry install"))
     assert "PIP ?=" not in out
     assert "poetry install" in out
+
+
+# --------------------------------------------------------- 1.1.0: workspace mode
+def test_workspace_section_renders_fanout_targets() -> None:
+    ws = WorkspaceFacts(members=("agent-core", "flow-corpus"))
+    out = render_makefile(ProjectFacts(has_ruff=True, has_pytest=True), workspace=ws)
+    assert "check-agent-core: ## " in out
+    assert "$(MAKE) -C agent-core check" in out
+    assert "check-all: check check-agent-core check-flow-corpus ## " in out  # root has a check
+    assert "install-all: ## " in out
+    assert "$(PIP) install -e ./agent-core -e ./flow-corpus" in out  # single sorted pip command
+    assert "clean-all: clean ## " in out
+    assert "$(MAKE) -C flow-corpus clean" in out
+    for name in ("check-agent-core", "check-flow-corpus", "check-all", "install-all", "clean-all"):
+        assert name in out.split(".PHONY: ")[1].splitlines()[0]
+
+
+def test_workspace_check_all_omits_missing_root_check() -> None:
+    # Root with nothing gate-able has no `check`; the aggregate must not depend on it.
+    out = render_makefile(ProjectFacts(), workspace=WorkspaceFacts(members=("m1",)))
+    assert "check-all: check-m1 ## " in out
+
+
+def test_workspace_emits_pip_var_even_for_non_pip_root() -> None:
+    out = render_makefile(
+        ProjectFacts(package_manager="poetry", install_cmd="poetry install"),
+        workspace=WorkspaceFacts(members=("m1",)),
+    )
+    assert "PIP ?= $(PYTHON) -m pip" in out  # install-all needs it
+
+
+def test_no_workspace_is_byte_identical_to_default() -> None:
+    # Backwards compatibility: omitting workspace (or passing an empty one) changes nothing.
+    facts = FULL
+    assert render_makefile(facts) == render_makefile(facts, workspace=None)
+    assert render_makefile(facts) == render_makefile(facts, workspace=WorkspaceFacts())
 
 
 def test_delegation_omits_absent_tools() -> None:

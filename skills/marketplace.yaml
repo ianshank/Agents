@@ -27,12 +27,12 @@ skills:
     description: Benchmark and A/B-test multiple LLMs on one dataset (multi-model comparison + A/B campaigns).
     compatibility: python>=3.10, langfuse-eval-harness
   - name: project-setup
-    version: 1.0.0
+    version: 1.1.0
     path: skills/project-setup
-    description: Generate a deterministic, self-documenting Makefile for a Python project from its detected toolchain.
+    description: Generate a deterministic, self-documenting Makefile for a Python project from its detected toolchain (monorepo workspace fan-out supported).
     compatibility: python>=3.10 (tomli on 3.10)
   - name: quality-gate
-    version: 1.0.0
+    version: 1.1.0
     path: skills/quality-gate
     description: Generate a deterministic quality-gate shell script (lint + type + test + coverage) that CI and make check both call.
     compatibility: python>=3.10 (tomli on 3.10)

@@ -10,19 +10,41 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# Field names whose values are path/source collections. Single strings are accepted and
+# coerced for backwards compatibility with the 1.0.x single-string fields.
+_TUPLE_FIELDS = ("lint_paths", "typecheck_paths", "coverage_source")
+
 
 @dataclass(frozen=True)
 class GateFacts:
-    """Everything the gate renderer needs, all derived deterministically."""
+    """Everything the gate renderer needs, all derived deterministically.
+
+    ``lint_paths``, ``typecheck_paths`` and ``coverage_source`` are tuples so a gate can
+    lint several trees, type-check several roots (e.g. mypy run per-path to avoid
+    module-name collisions), and measure coverage over several sources. A plain string is
+    accepted anywhere a tuple is expected (coerced in ``__post_init__``) so 1.0.x callers
+    keep working unchanged.
+    """
 
     python: str = "python3"
     has_ruff: bool = False
+    lint_paths: tuple[str, ...] = ()  # () -> lint the whole tree (".")
     type_checker: str | None = None  # "mypy" | "pyright" | None
-    typecheck_paths: str = "."
+    typecheck_paths: tuple[str, ...] = (".",)
     has_pytest: bool = False
     has_pytest_cov: bool = False
-    coverage_source: str = "."
+    coverage_source: tuple[str, ...] = (".",)
     cov_fail_under: int = 0
+
+    def __post_init__(self) -> None:
+        # Backwards compatibility: 1.0.x typed these as single strings. Coerce str -> 1-tuple
+        # (and any iterable -> tuple) so old constructors and new detection both normalize.
+        for name in _TUPLE_FIELDS:
+            value = getattr(self, name)
+            if isinstance(value, str):
+                object.__setattr__(self, name, (value,))
+            else:
+                object.__setattr__(self, name, tuple(value))
 
     @property
     def has_any_step(self) -> bool:
