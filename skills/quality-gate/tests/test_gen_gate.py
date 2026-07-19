@@ -85,6 +85,14 @@ def test_path_flags_render_multi_path_gate_with_provenance(tmp_path) -> None:
     assert "--lint-path src --lint-path tests" in body
 
 
+def test_provenance_includes_explicit_out(tmp_path) -> None:
+    _project(tmp_path)
+    out = tmp_path / "custom" / "gate.sh"
+    assert gen_gate.main(["--root", str(tmp_path), "--out", str(out)]) == 0
+    body = out.read_text(encoding="utf-8")
+    assert "--out " in body  # re-running the comment writes to the same place
+
+
 def test_typecheck_flag_ignored_without_checker(tmp_path, caplog) -> None:
     # Never fabricate: a --typecheck-path flag cannot conjure a typecheck step.
     (tmp_path / "pyproject.toml").write_text("[tool.ruff]\n", encoding="utf-8")

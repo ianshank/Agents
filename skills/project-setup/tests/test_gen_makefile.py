@@ -114,6 +114,31 @@ def test_workspace_check_iterates_all_artifacts(tmp_path) -> None:
     assert gen_makefile.main([*args, "--check"]) == 1  # one stale member is drift
 
 
+def test_uncheckable_member_gets_no_check_fanout(tmp_path) -> None:
+    # Never fabricate: a member with nothing gate-able has no `check` target in its own
+    # Makefile, so the root must not emit `$(MAKE) -C member check` for it.
+    _workspace(tmp_path)
+    bare = tmp_path / "bare-pkg"
+    bare.mkdir()
+    (bare / "pyproject.toml").write_text('[project]\nname="bare-pkg"\n', encoding="utf-8")
+    gen_makefile.main(["--root", str(tmp_path), "--workspace"])
+    root_body = (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert "check-bare-pkg" not in root_body
+    assert "check-pkg-a:" in root_body  # gate-able members keep their fan-out
+    assert "-e ./bare-pkg" in root_body  # install-all still covers everyone
+    assert "$(MAKE) -C bare-pkg clean" in root_body  # so does clean-all
+    member_body = (bare / "Makefile").read_text(encoding="utf-8")
+    assert "check:" not in member_body  # consistent with the omission above
+
+
+def test_symlinked_dir_is_not_a_member(tmp_path) -> None:
+    _workspace(tmp_path)
+    (tmp_path / "linked").symlink_to(tmp_path / "pkg-a", target_is_directory=True)
+    gen_makefile.main(["--root", str(tmp_path), "--workspace"])
+    root_body = (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert "check-linked" not in root_body and "-e ./linked" not in root_body
+
+
 def test_workspace_warns_when_no_members(tmp_path, capsys) -> None:
     _pip_src(tmp_path)
     assert gen_makefile.main(["--root", str(tmp_path), "--workspace"]) == 0

@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 from makegen import detect, detect_workspace, render_makefile
+from makegen.render import supports_check
 
 logger = logging.getLogger("makegen")
 
@@ -58,13 +59,18 @@ def _artifacts(root: Path, out_override: str | None, use_workspace: bool) -> lis
     facts = detect(root)
     logger.debug("detected facts for %s: %s", root.as_posix(), facts)
     root_out = Path(out_override) if out_override else root / "Makefile"
-    artifacts = [(root_out, render_makefile(facts, workspace=workspace))]
-    if workspace is not None:
-        for member in workspace.members:
-            member_root = root / member
-            member_facts = detect(member_root)
-            logger.debug("member %s facts: %s", member, member_facts)
-            artifacts.append((member_root / "Makefile", render_makefile(member_facts)))
+    member_facts = {m: detect(root / m) for m in (workspace.members if workspace else ())}
+    for member, mf in member_facts.items():
+        logger.debug("member %s facts: %s", member, mf)
+    # Never fabricate: only members whose OWN Makefile will carry a `check` target get a
+    # check-<member> delegation on the root (install/clean fan-out still covers everyone).
+    checkable = tuple(m for m, mf in member_facts.items() if supports_check(mf))
+    if workspace and len(checkable) != len(member_facts):
+        skipped = sorted(set(member_facts) - set(checkable))
+        logger.debug("members without a check target (no check fan-out): %s", skipped)
+    artifacts = [(root_out, render_makefile(facts, workspace=workspace, checkable_members=checkable))]
+    for member, mf in member_facts.items():
+        artifacts.append((root / member / "Makefile", render_makefile(mf)))
     return artifacts
 
 

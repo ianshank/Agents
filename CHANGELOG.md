@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Workspace-wide deterministic gates (P1+P2 of the determinism phase; quality-gate &
+  project-setup skills → 1.1.0):** the generators gained monorepo support and the repo now
+  dogfoods it end to end. `gen_gate.py` accepts repeatable `--lint-path`/`--typecheck-path`
+  flags (multiple mypy paths render one invocation each — per-path runs avoid module-name
+  collisions; pyright keeps a single invocation), keeps ALL `[tool.coverage.run] source`
+  entries as repeated `--cov=` flags (taking `source[0]` silently measured a subset), embeds
+  a shell-quoted `# regenerate:` provenance comment (omitted entirely if an arg carries a
+  control character — a newline inside a quoted arg would escape the comment into executable
+  text), and owns only the content above a **hand-extension marker**: below it survives
+  regeneration, is ignored by the advisory `--check` (prefix-compare), and a `do_extra()`
+  defined there runs automatically in `all`. `gen_makefile.py --workspace` detects members
+  (immediate-child `pyproject.toml`, sorted, symlinks and unsafe names excluded), emits
+  explicit `check-<member>` fan-out targets (`$(MAKE) -C`, only for members whose own
+  Makefile has a `check` target — never fabricated), `check-all`/`install-all`/`clean-all`
+  aggregates, and one plain Makefile per member. Dogfooded artifacts: root + 5 member
+  `scripts/quality-gate.sh` (floors 96/95/95/95/95/85; root carries the F-031 scripts gate
+  below its marker, claude-foundation carries `foundation_tools.validate`/`scan`) and root +
+  5 member Makefiles — all byte-stable across regeneration and all executed green locally
+  (`make check-all`). ruff/mypy dev-extra pins unified (`ruff==0.15.20`, `mypy==2.1.0`) in
+  agent-core, flow-protocol, flow-corpus and behavioral-regression, which previously
+  floated. `GateFacts` keeps 1.0.x compatibility (string fields coerce to tuples; new
+  fields appended, not inserted). AGENTS.md/README gate commands now point at the script
+  instead of restating the chain. CI rewiring is deliberately deferred to ADR 0021's
+  labeled batch.
 - **Deterministic generator skills — `project-setup`, `quality-gate`, `deploy` (ADR 0020):**
   three skills that emit committed, byte-stable build/CI artifacts for a Python project instead
   of re-inferring the steps at runtime. `project-setup` writes a self-documenting **Makefile**

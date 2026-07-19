@@ -77,12 +77,19 @@ def _write_preserving_tail(out: Path, content: str) -> bool:
 
 
 def _regen_args(args: argparse.Namespace) -> tuple[str, ...]:
-    """Canonical, reproducible CLI form of this invocation (embedded as provenance)."""
+    """Canonical, reproducible CLI form of this invocation (embedded as provenance).
+
+    Includes ``--out`` when explicitly given, so re-running the comment writes to the same
+    place. Prefer relative ``--root``/``--out`` for committed artifacts: the values are
+    embedded verbatim, and absolute paths would make the artifact host-specific.
+    """
     parts: list[str] = ["--root", args.root]
     for path in args.lint_path or []:
         parts += ["--lint-path", path]
     for path in args.typecheck_path or []:
         parts += ["--typecheck-path", path]
+    if args.out:
+        parts += ["--out", args.out]
     return tuple(parts)
 
 

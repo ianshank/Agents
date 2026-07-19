@@ -122,7 +122,13 @@ def _header(regen_args: tuple[str, ...]) -> list[str]:
         # can re-run it (and --check verifies against the same inputs). shlex.quote keeps
         # the line copy-paste reproducible even for paths with spaces/metachars, and is
         # deterministic so byte-stability holds.
-        lines.append("# regenerate: python scripts/gen_gate.py " + " ".join(shlex.quote(a) for a in regen_args))
+        joined = " ".join(shlex.quote(a) for a in regen_args)
+        # A control character inside a quoted arg would break out of this comment line into
+        # executable script text (shlex.quote preserves real newlines). Such an invocation
+        # cannot be represented on one comment line, so omit provenance rather than emit a
+        # corrupted (and injectable) header.
+        if "\n" not in joined and "\r" not in joined:
+            lines.append("# regenerate: python scripts/gen_gate.py " + joined)
     lines += [
         "#",
         "# Usage: ./scripts/quality-gate.sh [lint|typecheck|test|coverage|all]   (default: all)",

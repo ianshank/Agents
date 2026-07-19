@@ -7,11 +7,8 @@
 
 PYTHON ?= python3
 PIP ?= $(PYTHON) -m pip
-TYPECHECK_PATHS ?= src
-COVERAGE_SOURCE ?= eval_harness
-COV_FAIL_UNDER ?= 96
 
-.PHONY: help install format lint typecheck test coverage check build clean
+.PHONY: help install format lint typecheck test coverage check build clean check-agent-core check-behavioral-regression check-claude-foundation check-flow-corpus check-flow-protocol check-all install-all clean-all
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -22,19 +19,20 @@ install: ## Install the project and its dependencies
 format: ## Auto-format the code
 	$(PYTHON) -m ruff format .
 
-lint: ## Lint the code
-	$(PYTHON) -m ruff check .
+lint: ## Lint (via the quality-gate script)
+	./scripts/quality-gate.sh lint
 
-typecheck: ## Type-check the code
-	$(PYTHON) -m mypy $(TYPECHECK_PATHS)
+typecheck: ## Type-check (via the quality-gate script)
+	./scripts/quality-gate.sh typecheck
 
-test: ## Run the test suite
-	$(PYTHON) -m pytest
+test: ## Run tests (via the quality-gate script)
+	./scripts/quality-gate.sh test
 
-coverage: ## Run tests with a coverage threshold
-	$(PYTHON) -m pytest --cov=$(COVERAGE_SOURCE) --cov-branch --cov-report=term-missing --cov-fail-under=$(COV_FAIL_UNDER)
+coverage: ## Run tests with coverage (via the quality-gate script)
+	./scripts/quality-gate.sh coverage
 
-check: lint typecheck test ## Run all quality checks
+check: ## Run the full quality gate
+	./scripts/quality-gate.sh all
 
 build: ## Build distributables
 	$(PYTHON) -m build
@@ -43,3 +41,32 @@ clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov build dist
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
 	find . -type d -name '*.egg-info' -prune -exec rm -rf {} +
+
+# --- workspace (monorepo) fan-out: one target per member package ---
+
+check-agent-core: ## Run agent-core's quality checks
+	$(MAKE) -C agent-core check
+
+check-behavioral-regression: ## Run behavioral-regression's quality checks
+	$(MAKE) -C behavioral-regression check
+
+check-claude-foundation: ## Run claude-foundation's quality checks
+	$(MAKE) -C claude-foundation check
+
+check-flow-corpus: ## Run flow-corpus's quality checks
+	$(MAKE) -C flow-corpus check
+
+check-flow-protocol: ## Run flow-protocol's quality checks
+	$(MAKE) -C flow-protocol check
+
+check-all: check check-agent-core check-behavioral-regression check-claude-foundation check-flow-corpus check-flow-protocol ## Run root and every member's quality checks
+
+install-all: ## Editable-install every workspace member
+	$(PIP) install -e ./agent-core -e ./behavioral-regression -e ./claude-foundation -e ./flow-corpus -e ./flow-protocol
+
+clean-all: clean ## Clean the root and every member
+	$(MAKE) -C agent-core clean
+	$(MAKE) -C behavioral-regression clean
+	$(MAKE) -C claude-foundation clean
+	$(MAKE) -C flow-corpus clean
+	$(MAKE) -C flow-protocol clean

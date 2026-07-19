@@ -26,15 +26,17 @@ class GateFacts:
     keep working unchanged.
     """
 
+    # Field ORDER is part of the 1.0.x contract (positional constructors): new fields are
+    # appended at the end, never inserted mid-list.
     python: str = "python3"
     has_ruff: bool = False
-    lint_paths: tuple[str, ...] = ()  # () -> lint the whole tree (".")
     type_checker: str | None = None  # "mypy" | "pyright" | None
     typecheck_paths: tuple[str, ...] = (".",)
     has_pytest: bool = False
     has_pytest_cov: bool = False
     coverage_source: tuple[str, ...] = (".",)
     cov_fail_under: int = 0
+    lint_paths: tuple[str, ...] = ()  # () -> lint the whole tree (".")
 
     def __post_init__(self) -> None:
         # Backwards compatibility: 1.0.x typed these as single strings. Coerce str -> 1-tuple
@@ -45,6 +47,13 @@ class GateFacts:
                 object.__setattr__(self, name, (value,))
             else:
                 object.__setattr__(self, name, tuple(value))
+        # An EMPTY typecheck/coverage collection would render a step with no commands (a
+        # fabricated no-op that "passes"); normalize to the whole-tree default instead.
+        # lint_paths stays () — there it legitimately means "lint the whole tree".
+        if not self.typecheck_paths:
+            object.__setattr__(self, "typecheck_paths", (".",))
+        if not self.coverage_source:
+            object.__setattr__(self, "coverage_source", (".",))
 
     @property
     def has_any_step(self) -> bool:

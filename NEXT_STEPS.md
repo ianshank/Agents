@@ -2,6 +2,16 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Determinism phase P1+P2: workspace gates dogfooded (skills → 1.1.0)** — the
+  generators grew monorepo support (`--workspace` fan-out; repeatable `--lint-path`/
+  `--typecheck-path`; multi-source `--cov=`; provenance header; hand-extension marker with a
+  `do_extra()` hook) and the repo now runs on the results: `./scripts/quality-gate.sh all`
+  is the root gate (lint + 3 mypy runs + cov ≥96 + the F-031 scripts gate below the marker),
+  each sibling package has its own generated gate + Makefile, and `make check-all` runs all
+  six green locally. ruff/mypy pins unified across all four previously-floating package dev
+  extras. Remaining phase steps: P3 (ADR 0022 + inference-skill delegation wording), P4 (C4
+  semantics migration), P5 (labeled protected batch: rewire the 4 per-package workflows to
+  the gate scripts, ADR 0021, architecture.yaml hygiene).
 - [x] **Deterministic generator skills — `project-setup` / `quality-gate` / `deploy` (ADR 0020)** —
   three skills that emit committed, byte-stable artifacts (a Makefile; a `set -euo pipefail`
   quality-gate script that CI and `make check` share so local == CI; a safety-railed deploy

@@ -181,3 +181,28 @@ def test_provenance_args_are_shell_quoted() -> None:
     # A path with a space must stay copy-paste reproducible in the regenerate comment.
     out = render_gate(FULL, regen_args=("--root", ".", "--lint-path", "my dir"))
     assert "# regenerate: python scripts/gen_gate.py --root . --lint-path 'my dir'" in out
+
+
+def test_provenance_omitted_for_control_chars() -> None:
+    # A newline inside a quoted arg would escape the comment into executable script text;
+    # such an invocation is unrepresentable on one line, so no provenance is emitted.
+    out = render_gate(FULL, regen_args=("--root", ".", "--lint-path", "evil\ninjected"))
+    assert "# regenerate:" not in out
+    assert "injected" not in out
+
+
+def test_positional_construction_matches_1_0_field_order() -> None:
+    # 1.0.x positional callers: (python, has_ruff, type_checker, typecheck_paths,
+    # has_pytest, has_pytest_cov, coverage_source, cov_fail_under). New fields append.
+    facts = GateFacts("python3", True, "mypy", "src", True, True, "demo", 90)
+    assert facts.has_ruff is True and facts.type_checker == "mypy"
+    assert facts.typecheck_paths == ("src",) and facts.coverage_source == ("demo",)
+    assert facts.cov_fail_under == 90 and facts.lint_paths == ()
+
+
+def test_empty_tuples_normalize_to_whole_tree_defaults() -> None:
+    # An empty collection would render a step with no commands (a no-op that "passes").
+    facts = GateFacts(type_checker="mypy", typecheck_paths=(), has_pytest_cov=True, coverage_source=())
+    assert facts.typecheck_paths == (".",) and facts.coverage_source == (".",)
+    out = render_gate(facts)
+    assert '"$PYTHON" -m mypy "$TYPECHECK_PATHS"' in out  # real command, not an empty body

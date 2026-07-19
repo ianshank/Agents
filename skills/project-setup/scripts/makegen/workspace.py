@@ -45,7 +45,9 @@ def detect_workspace(root: Path | str) -> WorkspaceFacts:
     members: list[str] = []
     skipped: list[str] = []
     for child in sorted(root.iterdir()):
-        if not child.is_dir() or child.name.startswith("."):
+        # Symlinked directories are excluded: a link could point outside the tree (or back
+        # into it), and `$(MAKE) -C` into such a member would escape the workspace.
+        if not child.is_dir() or child.is_symlink() or child.name.startswith("."):
             continue
         if not (child / "pyproject.toml").is_file():
             continue
