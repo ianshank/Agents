@@ -13,6 +13,8 @@ present, so package-specific steps join the gate without the generator guessing 
 
 from __future__ import annotations
 
+import shlex
+
 from .model import GateFacts
 
 # Boundary between generator-owned content (above, prefix-compared by --check and rewritten
@@ -77,9 +79,13 @@ def _typecheck_commands(facts: GateFacts) -> list[str]:
     if len(facts.typecheck_paths) == 1:
         # Single path keeps the 1.0.x env-overridable form (a documented debug affordance).
         return [f'{tool} "$TYPECHECK_PATHS"']
-    # Multiple paths render one invocation per path: deliberate for mypy, whose per-path
-    # runs avoid module-name collisions (and the quoted env var can't hold a list).
-    return [f"{tool} {_quoted((path,))}" for path in facts.typecheck_paths]
+    if facts.type_checker == "mypy":
+        # One invocation per path is DELIBERATE for mypy: separate runs avoid
+        # module-name collisions between roots (and the quoted env var can't hold a list).
+        return [f"{tool} {_quoted((path,))}" for path in facts.typecheck_paths]
+    # pyright has no such constraint and accepts many paths; one invocation avoids
+    # paying its startup cost once per path.
+    return [f"{tool} {_quoted(facts.typecheck_paths)}"]
 
 
 def _coverage_command(facts: GateFacts) -> str:
@@ -113,8 +119,10 @@ def _header(regen_args: tuple[str, ...]) -> list[str]:
     ]
     if regen_args:
         # Provenance: the exact invocation that reproduces the generated prefix, so anyone
-        # can re-run it (and --check verifies against the same inputs). Deterministic.
-        lines.append("# regenerate: python scripts/gen_gate.py " + " ".join(regen_args))
+        # can re-run it (and --check verifies against the same inputs). shlex.quote keeps
+        # the line copy-paste reproducible even for paths with spaces/metachars, and is
+        # deterministic so byte-stability holds.
+        lines.append("# regenerate: python scripts/gen_gate.py " + " ".join(shlex.quote(a) for a in regen_args))
     lines += [
         "#",
         "# Usage: ./scripts/quality-gate.sh [lint|typecheck|test|coverage|all]   (default: all)",

@@ -167,3 +167,17 @@ def test_no_provenance_line_without_args() -> None:
 def test_split_at_marker_without_marker_is_all_prefix() -> None:
     prefix, tail = split_at_marker("no marker here\n")
     assert prefix == "no marker here\n" and tail == ""
+
+
+def test_multi_path_pyright_renders_single_invocation() -> None:
+    # Unlike mypy (deliberate per-path runs), pyright takes all paths at once so its
+    # startup cost is paid once, not once per path.
+    out = render_gate(GateFacts(type_checker="pyright", typecheck_paths=("src", "tests")))
+    assert 'pyright "src" "tests"' in out
+    assert out.count("pyright ") == 1
+
+
+def test_provenance_args_are_shell_quoted() -> None:
+    # A path with a space must stay copy-paste reproducible in the regenerate comment.
+    out = render_gate(FULL, regen_args=("--root", ".", "--lint-path", "my dir"))
+    assert "# regenerate: python scripts/gen_gate.py --root . --lint-path 'my dir'" in out
