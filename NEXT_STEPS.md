@@ -2,6 +2,15 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **CI gate delegation phase-2 POC (ADR 0021) — `eval-harness-ci` → `make check`** — a new
+  reusable composite action `.github/actions/run-quality-gate` (setup-python + install + run the gate)
+  now backs `eval-harness-ci.yml`, which delegates to the root `make check` instead of duplicating
+  ruff/format/mypy/pytest inline. CI == local `make check` for this workflow. First of ADR 0021's six
+  workflows; the rest (`agent-core`, `flow-corpus`, `behavioral-regression`, `claude-foundation`,
+  `skills-ci`) follow as separate label-gated PRs, then ADR 0021 flips Proposed→Accepted. Surfaced for
+  review: the root gate's `ruff check .` makes this job lint the whole repo (currently green); the
+  py3.12 `htmlcov/` artifact was dropped (not produced by the shared gate). Both files are under
+  protected `.github/**`, so the PR carries the `eval-change-approved` label gate.
 - [x] **E2E Windows cross-platform hardening (21/21 offline green)** — fixed
   three classes of failure on the Windows e2e path: (1) a pre-existing PS 5.1
   string-concatenation bug in the `--junitxml` argument that silently zeroed
