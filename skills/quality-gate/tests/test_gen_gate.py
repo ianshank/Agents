@@ -14,6 +14,37 @@ import pytest
 BASH = shutil.which("bash")
 
 
+def _bash_works() -> bool:
+    """Return True only when bash can execute a script at a native temp path.
+
+    WSL bash resolves on ``shutil.which`` but cannot handle Windows-style
+    paths (``C:\\Users\\…``), returning exit-code 127.  We probe with a real
+    temp-file to catch that.
+
+    Returns:
+        True if bash can execute a temp script, False otherwise.
+    """
+    if BASH is None:
+        return False
+    import tempfile
+
+    script: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".sh", delete=False, mode="w") as f:
+            f.write("#!/usr/bin/env bash\necho ok\n")
+            script = f.name
+        result = subprocess.run([BASH, script], capture_output=True, text=True, timeout=5)
+        return result.returncode == 0
+    except Exception:
+        return False
+    finally:
+        if script:
+            Path(script).unlink(missing_ok=True)
+
+
+BASH_OK = _bash_works()
+
+
 def _project(root: Path, *, broken: bool = False) -> None:
     """Write a minimal project the generated gate can actually run against."""
     (root / "src" / "demo").mkdir(parents=True)
@@ -172,7 +203,7 @@ def test_rewrite_over_premarker_artifact_warns(tmp_path, capsys) -> None:
     assert "do_security" not in out.read_text(encoding="utf-8")  # rewritten whole, as warned
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_do_extra_hook_runs_in_all(tmp_path) -> None:
     _project(tmp_path)
     gen_gate.main(["--root", str(tmp_path)])
@@ -194,7 +225,7 @@ def test_check_up_to_date_drift_and_missing(tmp_path) -> None:
     assert gen_gate.main(["--root", str(tmp_path), "--check"]) == 1  # drift
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_generated_script_passes_bash_syntax(tmp_path) -> None:
     _project(tmp_path)
     gen_gate.main(["--root", str(tmp_path)])
@@ -216,7 +247,7 @@ def _run_gate(root: Path, arg: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_clean_project_passes_the_gate(tmp_path) -> None:
     _project(tmp_path, broken=False)
     gen_gate.main(["--root", str(tmp_path)])
@@ -225,7 +256,7 @@ def test_clean_project_passes_the_gate(tmp_path) -> None:
     assert "PASS" in result.stdout
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_broken_project_fails_the_gate(tmp_path) -> None:
     _project(tmp_path, broken=True)
     gen_gate.main(["--root", str(tmp_path)])
@@ -233,7 +264,7 @@ def test_broken_project_fails_the_gate(tmp_path) -> None:
     assert result.returncode != 0
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_unknown_subcommand_is_usage_error(tmp_path) -> None:
     _project(tmp_path)
     gen_gate.main(["--root", str(tmp_path)])

@@ -318,12 +318,19 @@ Invoke-PytestStep 'C' 'e2e:skills+hooks' `
 # merely configured. Isolated/temporary experiment, not a package/skill.
 $bvDir = Join-Path $RepoRoot 'experiments/backend-validation'
 if (Test-Path (Join-Path $bvDir 'pyproject.toml')) {
-    $bvXml = Join-Path $Report 'backend-validation.xml'
-    Invoke-PytestStep 'C' 'e2e:backend-validation' `
-        @('-m', 'pytest', 'tests', '--cov=backend_validation', '--cov-branch',
-          '--cov-report=term-missing', '--cov-fail-under=95', '--junitxml=' + $bvXml,
-          '-p', 'no:cacheprovider') `
-        $bvDir $bvXml
+    $savedPath = $env:PYTHONPATH
+    try {
+        $env:PYTHONPATH = $bvDir + [System.IO.Path]::PathSeparator + $env:PYTHONPATH
+        $bvXml = Join-Path $Report 'backend-validation.xml'
+        Invoke-PytestStep 'C' 'e2e:backend-validation' `
+            @('-m', 'pytest', 'tests', '--cov=backend_validation', '--cov-branch',
+              '--cov-report=term-missing', '--cov-fail-under=95', "--junitxml=$bvXml",
+              '-p', 'no:cacheprovider') `
+            $bvDir $bvXml
+    }
+    finally {
+        $env:PYTHONPATH = $savedPath
+    }
 }
 
 # C2: eval-harness CLI journeys (offline)
