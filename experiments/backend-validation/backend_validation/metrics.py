@@ -32,7 +32,6 @@ class BackendMetrics:
     backend: str
     setup_wall_clock_seconds: float
     health_retries: int
-    failure_count: int
     container_count: int
     images: list[ComposeImage]
     idle_cpu_percent_median: float | None = None
@@ -46,7 +45,6 @@ class BackendMetrics:
             "backend": self.backend,
             "setup_wall_clock_seconds": round(self.setup_wall_clock_seconds, 3),
             "health_retries": self.health_retries,
-            "failure_count": self.failure_count,
             "container_count": self.container_count,
             "idle_cpu_percent_median": self.idle_cpu_percent_median,
             "idle_ram_mb_median": self.idle_ram_mb_median,
@@ -91,6 +89,17 @@ def _mem_to_mb(text: str) -> float:
     return 0.0
 
 
+def _project_container_ids(backend_id: str, runner: CommandRunner) -> list[str] | None:
+    """Container ids of THIS backend's compose project (None if docker ps failed)."""
+    result = runner.run(
+        ["docker", "ps", "--filter", f"label=com.docker.compose.project={project_name(backend_id)}", "-q"],
+        timeout=60,
+    )
+    if not result.ok:
+        return None
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
 def sample_idle_stats(
     backend_id: str,
     runner: CommandRunner,
@@ -99,16 +108,22 @@ def sample_idle_stats(
     interval_seconds: float,
     sleeper: Callable[[float], None],
 ) -> tuple[float | None, float | None]:
-    """Median idle CPU%/RAM across N one-shot stats sweeps of the project's containers."""
+    """Median idle CPU%/RAM across N sweeps of THIS backend's project containers only.
+
+    Scoping ``docker stats`` to the project's container ids is load-bearing: run_deploy
+    measures each backend without tearing down the previous one, so an unfiltered
+    host-wide sweep would fold co-resident stacks (other backends, the judge) into this
+    backend's ops-burden numbers.
+    """
+    ids = _project_container_ids(backend_id, runner)
+    if not ids:  # None (ps failed) or [] (nothing running for this project)
+        return None, None
     cpu_totals: list[float] = []
     mem_totals: list[float] = []
     for index in range(samples):
         if index:
             sleeper(interval_seconds)
-        result = runner.run(
-            ["docker", "stats", "--no-stream", "--format", "json"],
-            timeout=60,
-        )
+        result = runner.run(["docker", "stats", "--no-stream", "--format", "json", *ids], timeout=60)
         if not result.ok:
             logger.warning("docker stats failed (%s); idle metrics recorded as null", result.stderr.strip()[:120])
             return None, None
@@ -122,13 +137,8 @@ def sample_idle_stats(
 
 
 def container_count(backend_id: str, runner: CommandRunner) -> int:
-    result = runner.run(
-        ["docker", "ps", "--filter", f"label=com.docker.compose.project={project_name(backend_id)}", "-q"],
-        timeout=60,
-    )
-    if not result.ok:
-        return 0
-    return len([line for line in result.stdout.splitlines() if line.strip()])
+    ids = _project_container_ids(backend_id, runner)
+    return len(ids) if ids is not None else 0
 
 
 def image_disk_bytes(images: list[ComposeImage], runner: CommandRunner) -> int | None:
@@ -155,11 +165,26 @@ class EffortMetricsFile:
     def record(self, metrics: BackendMetrics) -> None:
         self.backends[metrics.backend] = metrics
 
+    def _load_existing(self) -> dict[str, dict[str, object]]:
+        """Existing per-backend entries keyed by backend, so a single-backend deploy merges
+        into (never clobbers) prior runs. A corrupt existing file fails loud rather than
+        silently discarding recorded ops-burden evidence."""
+        if not self.path.exists():
+            return {}
+        try:
+            existing = json.loads(self.path.read_text(encoding="utf-8"))
+            entries = existing["backends"]
+            return {str(entry["backend"]): dict(entry) for entry in entries}
+        except (json.JSONDecodeError, KeyError, TypeError, OSError) as exc:
+            raise MetricsError(
+                f"existing effort metrics at {self.path} are unreadable; refusing to overwrite: {exc}"
+            ) from exc
+
     def write(self) -> Path:
-        payload = {
-            "schema_version": 1,
-            "backends": [self.backends[key].to_dict() for key in sorted(self.backends)],
-        }
+        merged = self._load_existing()
+        for name, metrics in self.backends.items():
+            merged[name] = metrics.to_dict()  # this run's backends win for their own keys
+        payload = {"schema_version": 1, "backends": [merged[key] for key in sorted(merged)]}
         schema = json.loads(self.schema_path.read_text(encoding="utf-8"))
         try:
             jsonschema.validate(payload, schema)
@@ -186,7 +211,6 @@ def metrics_from_outcome(
         backend=outcome.backend,
         setup_wall_clock_seconds=outcome.setup_wall_clock_seconds,
         health_retries=outcome.health_retries,
-        failure_count=outcome.failure_count,
         container_count=container_count(outcome.backend, runner),
         images=list(outcome.images),
         idle_cpu_percent_median=cpu_median,

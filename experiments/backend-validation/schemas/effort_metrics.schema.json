@@ -34,7 +34,6 @@
         "backend": {"type": "string"},
         "setup_wall_clock_seconds": {"type": "number", "minimum": 0},
         "health_retries": {"type": "integer", "minimum": 0},
-        "failure_count": {"type": "integer", "minimum": 0},
         "container_count": {"type": "integer", "minimum": 0},
         "idle_cpu_percent_median": {"type": ["number", "null"], "minimum": 0},
         "idle_ram_mb_median": {"type": ["number", "null"], "minimum": 0},

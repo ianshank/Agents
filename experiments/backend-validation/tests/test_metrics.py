@@ -29,8 +29,11 @@ _PINNED = ComposeImage(service="web", ref="postgres:16@sha256:" + "a" * 64)
 class ScriptedRunner:
     def __init__(self, results: list[CompletedCommand]) -> None:
         self._results = list(results)
+        self.last_stats_argv: list[str] | None = None
 
     def run(self, argv: list[str], **_kwargs: object) -> CompletedCommand:
+        if "stats" in argv:
+            self.last_stats_argv = list(argv)
         return self._results.pop(0) if self._results else CompletedCommand(tuple(argv), 0)
 
 
@@ -52,9 +55,11 @@ def test_parse_stats_tolerates_noise() -> None:
     assert parsed == [(12.5, 256.0)]  # the noise line and the bad-cpu line are skipped
 
 
-def test_sample_idle_stats_medians() -> None:
+def test_sample_idle_stats_medians_are_project_scoped() -> None:
+    # First call is `docker ps` scoping to the project's containers (finding 2); then N sweeps.
     runner = ScriptedRunner(
         [
+            CompletedCommand(("docker",), 0, stdout="id1\nid2\n"),  # project container ids
             CompletedCommand(("docker",), 0, stdout=_stats_line("10%", "100MiB")),
             CompletedCommand(("docker",), 0, stdout=_stats_line("20%", "200MiB")),
             CompletedCommand(("docker",), 0, stdout=_stats_line("30%", "300MiB")),
@@ -62,10 +67,17 @@ def test_sample_idle_stats_medians() -> None:
     )
     cpu, ram = sample_idle_stats("langfuse", runner, samples=3, interval_seconds=0, sleeper=lambda _s: None)
     assert cpu == 20.0 and ram == 200.0
+    assert runner.last_stats_argv is not None
+    assert runner.last_stats_argv[-2:] == ["id1", "id2"]  # stats was scoped to the project ids
 
 
-def test_sample_idle_stats_failure_is_null() -> None:
+def test_sample_idle_stats_null_when_ps_fails() -> None:
     runner = ScriptedRunner([CompletedCommand(("docker",), 1, stderr="daemon down")])
+    assert sample_idle_stats("x", runner, samples=1, interval_seconds=0, sleeper=lambda _s: None) == (None, None)
+
+
+def test_sample_idle_stats_null_when_no_project_containers() -> None:
+    runner = ScriptedRunner([CompletedCommand(("docker",), 0, stdout="")])  # ps ok, zero ids
     assert sample_idle_stats("x", runner, samples=1, interval_seconds=0, sleeper=lambda _s: None) == (None, None)
 
 
@@ -83,7 +95,6 @@ def test_effort_metrics_file_writes_valid_schema(tmp_path: Path) -> None:
         backend="langfuse",
         setup_wall_clock_seconds=42.1234,
         health_retries=3,
-        failure_count=0,
         container_count=6,
         images=[_PINNED],
         idle_cpu_percent_median=15.0,
@@ -100,6 +111,7 @@ def test_effort_metrics_file_writes_valid_schema(tmp_path: Path) -> None:
     assert entry["setup_wall_clock_seconds"] == 42.123  # rounded to 3 dp
     assert entry["all_images_pinned"] is True
     assert entry["images"][0]["digest"] == "sha256:" + "a" * 64
+    assert "failure_count" not in entry  # removed: it was structurally pinned at 0
 
 
 def test_effort_metrics_rejects_invalid_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -107,7 +119,6 @@ def test_effort_metrics_rejects_invalid_payload(tmp_path: Path, monkeypatch: pyt
         backend="x",
         setup_wall_clock_seconds=-1.0,
         health_retries=0,
-        failure_count=0,
         container_count=0,
         images=[],
     )
@@ -118,13 +129,12 @@ def test_effort_metrics_rejects_invalid_payload(tmp_path: Path, monkeypatch: pyt
 
 
 def test_metrics_from_outcome_composes_all_sources() -> None:
-    outcome = DeployOutcome(
-        backend="opik", setup_wall_clock_seconds=30.0, health_retries=1, failure_count=0, images=(_PINNED,)
-    )
+    outcome = DeployOutcome(backend="opik", setup_wall_clock_seconds=30.0, health_retries=1, images=(_PINNED,))
     runner = ScriptedRunner(
         [
+            CompletedCommand(("docker",), 0, stdout="s1\ns2\n"),  # ps for sample_idle_stats
             CompletedCommand(("docker",), 0, stdout=_stats_line("5%", "50MiB")),  # stats sample 1
-            CompletedCommand(("docker",), 0, stdout="c1\nc2\n"),  # container_count
+            CompletedCommand(("docker",), 0, stdout="c1\nc2\n"),  # ps for container_count
             CompletedCommand(("docker",), 0, stdout="900\n"),  # image_disk_bytes
         ]
     )
@@ -138,3 +148,34 @@ def test_metrics_from_outcome_composes_all_sources() -> None:
     )
     assert metrics.container_count == 2 and metrics.disk_bytes == 900
     assert metrics.idle_cpu_percent_median == 5.0
+
+
+def test_write_merges_existing_backends(tmp_path: Path) -> None:
+    # Finding 5: a per-backend deploy must merge into (not clobber) prior runs.
+    def _m(name: str) -> BackendMetrics:
+        return BackendMetrics(
+            backend=name, setup_wall_clock_seconds=1.0, health_retries=0, container_count=1, images=[_PINNED]
+        )
+
+    path = tmp_path / "effort_metrics.json"
+    first = EffortMetricsFile(path=path, schema_path=SCHEMA)
+    first.record(_m("langfuse"))
+    first.write()
+    # A fresh process (new EffortMetricsFile) records only opik and writes.
+    second = EffortMetricsFile(path=path, schema_path=SCHEMA)
+    second.record(_m("opik"))
+    second.write()
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    backends = {entry["backend"] for entry in payload["backends"]}
+    assert backends == {"langfuse", "opik"}  # langfuse survived the second write
+
+
+def test_write_refuses_corrupt_existing_file(tmp_path: Path) -> None:
+    path = tmp_path / "effort_metrics.json"
+    path.write_text("{ not json", encoding="utf-8")
+    metrics_file = EffortMetricsFile(path=path, schema_path=SCHEMA)
+    metrics_file.record(
+        BackendMetrics(backend="x", setup_wall_clock_seconds=1.0, health_retries=0, container_count=1, images=[_PINNED])
+    )
+    with pytest.raises(MetricsError, match="unreadable; refusing to overwrite"):
+        metrics_file.write()

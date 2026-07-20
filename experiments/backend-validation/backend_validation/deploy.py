@@ -106,8 +106,7 @@ def bind_mounts_inside(compose_path: Path, subtree_root: Path) -> list[str]:
 class DeployOutcome:
     backend: str
     setup_wall_clock_seconds: float
-    health_retries: int
-    failure_count: int
+    health_retries: int  # app-level health polls before the stack answered (ops-burden)
     images: tuple[ComposeImage, ...]
 
 
@@ -139,7 +138,6 @@ def deploy_stack(
     if mount_violations:
         raise DeployError("; ".join(mount_violations))
     started = clock()
-    failures = 0
     up = runner.run(compose_argv(compose_path, spec.id, "up", "-d", "--wait"), env=dict(env), timeout=1800)
     if not up.ok:
         raise DeployError(
@@ -153,7 +151,10 @@ def deploy_stack(
         retries += 1
         healthy = health_check(spec.base_url)
     if not healthy:
-        failures += 1
+        # A never-healthy stack raises -> a BLOCKED report, not a recorded outcome. There is
+        # therefore no recoverable-failure path that yields an outcome, which is why a
+        # separate failure_count field would be structurally pinned at 0; health_retries is
+        # the honest ops-burden signal.
         raise DeployError(
             f"{spec.id} containers came up but the app at {spec.base_url} never answered "
             f"({retries} poll(s)); see `docker compose -p {project_name(spec.id)} logs`"
@@ -164,7 +165,6 @@ def deploy_stack(
         backend=spec.id,
         setup_wall_clock_seconds=elapsed,
         health_retries=retries,
-        failure_count=failures,
         images=tuple(images),
     )
 

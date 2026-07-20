@@ -106,8 +106,10 @@ def test_write_report_guards_and_persists(tmp_path: Path) -> None:
 
 
 def test_render_airgap_report_dual_scored() -> None:
-    leaking = EgressObservation("dns-witness", ("telemetry.example.com",), degraded=True)
-    clean = EgressObservation("dns-witness", (), degraded=True)
+    leaking = EgressObservation(
+        "dns-witness", ("telemetry.example.com",), degraded=True, egress_detected=True, usable=True
+    )
+    clean = EgressObservation("dns-witness", (), degraded=True, egress_detected=False, usable=True)
     verdict = AirgapVerdict(
         backend="langfuse",
         as_shipped=AirgapRun("langfuse", "as-shipped", {}, leaking),

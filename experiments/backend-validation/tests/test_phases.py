@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from backend_validation.clients import MissingCredentialsError, NullProbeClient, ProbeClient
@@ -145,3 +146,17 @@ def test_write_blocked_report_shape(tmp_path: Path) -> None:
     body = path.read_text(encoding="utf-8")
     assert body.startswith("# BLOCKED — deploy (P1)")
     assert "- stack unhealthy" in body and "Fix compose." in body and _NOW in body
+
+
+def test_l1_engine_error_becomes_blocked_not_crash(tmp_subtree: Path) -> None:
+    # Finding 6: an unexpected probe/client exception must fail-safe to a BLOCKED report
+    # (exit 3) with the traceback logged, never crash the CLI with exit 1.
+    class _Boom(NullProbeClient):
+        def execute(self, operation: str, payload: Mapping[str, object]) -> OpOutcome:
+            raise KeyError("malformed SDK response")
+
+    io = _io(client=_Boom(backend_id="langfuse"))
+    result = run_l1(tmp_subtree, _settings(tmp_subtree), io, run_id="run-boom")
+    assert result.status == STATUS_BLOCKED and result.exit_code == 3
+    assert "engine error" in result.reason and "KeyError" in result.reason
+    assert "engine error" in Path(result.artifacts[0]).read_text(encoding="utf-8")
