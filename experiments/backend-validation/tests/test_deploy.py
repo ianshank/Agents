@@ -111,6 +111,31 @@ def test_bind_mounts_inside_flags_escaping_host_mount(tmp_path: Path) -> None:
     assert violations and "escapes the subtree" in violations[0]
 
 
+def test_bind_mounts_inside_catches_dotdot_escape(tmp_path: Path) -> None:
+    # Regression (Gemini review): a `../` source is NOT a named volume — it must be checked
+    # for containment, not skipped. The compose file lives in tmp/sub so `../../etc` escapes.
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    for source in ("../../etc:/data", "..:/data", "../sibling:/data"):
+        compose = _compose(sub, f"services:\n  a:\n    image: {_PINNED}\n    volumes:\n      - {source}\n")
+        violations = bind_mounts_inside(compose, tmp_path / "sub")
+        assert violations and "escapes the subtree" in violations[0], f"{source} slipped through"
+    # A dotted path that stays inside is still allowed.
+    inside = _compose(sub, f"services:\n  a:\n    image: {_PINNED}\n    volumes:\n      - ./nested/data:/data\n")
+    assert bind_mounts_inside(inside, tmp_path / "sub") == []
+
+
+def test_bind_mounts_inside_flags_escaping_long_form_source(tmp_path: Path) -> None:
+    # Long-form volume ({type: bind, source: ...}) with an escaping source is flagged too.
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    compose = _compose(
+        sub,
+        f"services:\n  a:\n    image: {_PINNED}\n    volumes:\n      - {{type: bind, source: '../out', target: /x}}\n",
+    )
+    assert any("escapes the subtree" in v for v in bind_mounts_inside(compose, sub))
+
+
 # --------------------------------------------------------------------- argv
 def test_compose_argv_uses_project_name(tmp_path: Path) -> None:
     argv = compose_argv(tmp_path / "compose.yaml", "opik", "up", "-d")

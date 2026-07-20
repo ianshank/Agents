@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import types
 from pathlib import Path
+
+import pytest
 
 from backend_validation.deploy_phase import http_health_check, run_deploy, run_down
 from backend_validation.phases import STATUS_BLOCKED, STATUS_FAIL, STATUS_OK
@@ -132,3 +135,34 @@ def test_http_health_check_against_loopback_server() -> None:
         thread.join(timeout=5)
     # Nothing listening on port 1 -> unhealthy, no exception.
     assert http_health_check("http://127.0.0.1:1/") is False
+
+
+def test_http_health_check_uses_tls_for_https(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression (Gemini review): an https endpoint must use HTTPSConnection, not a plaintext
+    # HTTPConnection (which would always fail the check against a real TLS stack).
+    import http.client
+
+    import backend_validation.deploy_phase as dp
+
+    used: dict[str, object] = {}
+
+    class _FakeConn:
+        def __init__(self, host: str, port: int, timeout: float) -> None:
+            used["host"], used["port"] = host, port
+
+        def request(self, *_a: object) -> None:
+            return None
+
+        def getresponse(self) -> object:
+            return types.SimpleNamespace(status=200)
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(http.client, "HTTPSConnection", _FakeConn)
+    # If the code wrongly picked HTTPConnection, this sentinel would raise on use.
+    monkeypatch.setattr(
+        http.client, "HTTPConnection", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("http used"))
+    )
+    assert dp.http_health_check("https://stack.example:8443/health") is True
+    assert used == {"host": "stack.example", "port": 8443}

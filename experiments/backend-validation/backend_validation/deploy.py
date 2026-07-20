@@ -24,6 +24,9 @@ logger = get_logger(__name__)
 
 _DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
 _IMAGE_LINE = re.compile(r"^(?P<indent>\s+image:\s*)(?P<ref>\S+)\s*$")
+# A Docker named volume: a bare token with no path separators and no leading dot/slash.
+# Anything else in a `volumes:` source position is a host bind mount and must stay in-subtree.
+_NAMED_VOLUME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
 class DeployError(RuntimeError):
@@ -82,13 +85,19 @@ def bind_mounts_inside(compose_path: Path, subtree_root: Path) -> list[str]:
     subtree. Named volumes are fine (docker-managed). Returns violations."""
     data = yaml.safe_load(compose_path.read_text(encoding="utf-8")) or {}
     violations: list[str] = []
+    root = subtree_root.resolve()
     for name, service in sorted((data.get("services") or {}).items()):
         for volume in (service or {}).get("volumes", []) or []:
             source = volume.split(":", 1)[0] if isinstance(volume, str) else str((volume or {}).get("source", ""))
-            if not (source.startswith("./") or source.startswith("/")):
-                continue  # named volume
-            resolved = (compose_path.parent / source).resolve() if source.startswith("./") else Path(source)
-            if not resolved.is_relative_to(subtree_root.resolve()):
+            if _NAMED_VOLUME.fullmatch(source):
+                continue  # docker-managed named volume (no path separators, no leading dot/slash)
+            # Everything else is a bind mount whose containment must be checked. Classifying by
+            # what is NOT a named volume (rather than by a "./"/"/" prefix) closes the gap where
+            # `../escape` and bare `.` slipped through as if they were named volumes.
+            # Joining an absolute source onto compose_path.parent discards the parent, so one
+            # resolve() handles both absolute and relative sources.
+            resolved = (compose_path.parent / source).resolve()
+            if not resolved.is_relative_to(root):
                 violations.append(f"{compose_path.name}:{name}: bind mount {source} escapes the subtree")
     return violations
 

@@ -33,8 +33,11 @@ def http_health_check(base_url: str, *, timeout: float = 5.0) -> bool:
     parsed = urlparse(base_url)
     host = parsed.hostname or "127.0.0.1"
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    # Use a TLS connection for https endpoints; plaintext HTTPConnection to a TLS port
+    # would always fail the health check even against a healthy stack.
+    connection_class = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
     try:
-        connection = http.client.HTTPConnection(host, port, timeout=timeout)
+        connection = connection_class(host, port, timeout=timeout)
         connection.request("GET", parsed.path or "/")
         response = connection.getresponse()
         connection.close()
