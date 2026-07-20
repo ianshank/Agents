@@ -259,6 +259,13 @@ skills/
   quality-gate/             deterministic lint+type+test+coverage gate-script generator
   deploy/                   safety-railed deployment-script generator (dry-run/confirm/rollback)
 
+experiments/
+  backend-validation/ isolated, temporary experiment (eval-backend-validation_v1): validates
+                      Langfuse/Opik eval-backend capability claims against running deployments.
+                      Own gate (`make -C experiments/backend-validation check`); consumes the
+                      harness as a dependency only; ships unsigned (probes gated behind human
+                      sign-off). Not a package/skill; not in `make check-all`.
+
 docs/
   c4_architecture.md  hand-maintained C4 diagrams (runtime/call semantics; the import-edge view is generated at the repo root)
   e2e-runbook.md      how to run and read the one-command e2e harness

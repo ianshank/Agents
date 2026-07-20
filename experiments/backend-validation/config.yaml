@@ -1,0 +1,64 @@
+# Non-secret experiment settings. Everything here is overridable via environment
+# (${VAR:-default} interpolation) or dotted CLI overrides (key.path=value) — no value in
+# code, no secret in this file. Credentials are env-var NAMES resolved at the SDK boundary.
+backends:
+  - id: langfuse
+    display_name: "Langfuse (self-hosted v3)"
+    base_url: "http://127.0.0.1:${BV_LANGFUSE_PORT:-18321}"
+    compose_file: "deploy/langfuse/compose.yaml"
+    sdk_extra: "langfuse"
+    credential_env:
+      secret_key: "BV_LANGFUSE_SECRET_KEY"
+      public_key: "BV_LANGFUSE_PUBLIC_KEY"
+    airgap:
+      as_shipped_env:
+        TELEMETRY_ENABLED: "true"
+      opt_out_env:
+        # Documented Langfuse self-host telemetry opt-out (dual scoring, spec R8/P4).
+        TELEMETRY_ENABLED: "false"
+
+  - id: opik
+    display_name: "Opik (self-hosted)"
+    base_url: "http://127.0.0.1:${BV_OPIK_PORT:-18322}"
+    compose_file: "deploy/opik/compose.yaml"
+    sdk_extra: "opik"
+    credential_env:
+      api_key: "BV_OPIK_API_KEY"
+    airgap:
+      as_shipped_env:
+        OPIK_USAGE_REPORT_ENABLED: "true"
+      opt_out_env:
+        # Documented Opik usage-reporting opt-out (dual scoring, spec R8/P4).
+        OPIK_USAGE_REPORT_ENABLED: "false"
+
+judge:
+  # One pinned local judge for every judge-class probe, identical across backends —
+  # the probes test score PLUMBING, not judge accuracy (spec risk table).
+  base_url: "http://127.0.0.1:${BV_JUDGE_PORT:-18323}/v1"
+  model: "${BV_JUDGE_MODEL:-llama3.2:3b}"
+  api_key_env: "BV_JUDGE_API_KEY"
+
+timeouts:
+  op_seconds: ${BV_OP_TIMEOUT_SECONDS:-30}
+  probe_budget_seconds: ${BV_PROBE_BUDGET_SECONDS:-300}
+
+retries:
+  # Idempotent (read/health) operations only; writes are never retried.
+  max_attempts: ${BV_RETRY_MAX_ATTEMPTS:-3}
+  backoff_base_seconds: ${BV_RETRY_BACKOFF_SECONDS:-2}
+
+# Both directories MUST resolve inside the experiment subtree (zero-writes invariant, R7);
+# settings.resolve_dir enforces it.
+artifacts_dir: "artifacts"
+reports_dir: "reports"
+
+min_free_gb: ${BV_MIN_FREE_GB:-20}
+
+# Synthetic negative-control target: deliberately unroutable (spec R5). Port 1 on
+# loopback refuses/blackholes on any sane host.
+control_endpoint: "${BV_CONTROL_ENDPOINT:-http://127.0.0.1:1/}"
+
+required_ports:
+  - ${BV_LANGFUSE_PORT:-18321}
+  - ${BV_OPIK_PORT:-18322}
+  - ${BV_JUDGE_PORT:-18323}

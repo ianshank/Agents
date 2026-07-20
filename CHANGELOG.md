@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added
+- **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
+  self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
+  evidence for the eval-backend displacement decision by validating the claimed capabilities
+  of Langfuse and Opik against *running* deployments. Probes emit raw observables; a
+  **human-signed rubric** (`RUBRIC.md`) maps observables to marks; agents implement and
+  execute but never author acceptance criteria, break ties, or recommend a platform (the
+  final report has no recommendation section, enforced by a test). Three probe layers: **L1**
+  capability (each tool's own SDK/API, harness-independent — an AST test enforces that only
+  the L2 modules import `eval_harness`), **L2** integration through the harness's
+  vendor-neutral `ResultSink`/`RunResult` seam (an experiment-local `OpikSink` adapter is
+  itself the adapter-delta metric; below-sink scope is reported BLOCKED, never improvised),
+  and **L3** air-gap (egress-blocked re-run, dual-scored as-shipped vs documented telemetry
+  opt-out). Six phases (`preflight`/`deploy`/`l1`/`l2`/`airgap`/`report`) with a strict
+  fail-safe discipline: any missing precondition, sign-off, credential, or unhealthy stack
+  produces a BLOCKED report naming what a human must do; an unexpected negative-control pass
+  HALTs the run. Digest-pinned compose stacks (refused unless pinned), ops-burden metrics
+  (setup wall-clock, retries, idle RAM/CPU, image sizes), and reproducibility provenance.
+  Consumes the repo core as a dependency only — zero writes outside the subtree, enforced by
+  a settings validator, a compose bind-mount check, and a PR-scoped git-diff allowlist.
+  Ships **unsigned** (all probes gated behind human sign-off) with its own generated
+  quality-gate (196 tests, ≥95% branch coverage, mypy `--strict`).
+
 ### Fixed
 - **Bot-review round (CodeRabbit):** workspace detection now skips a member directory named
   `all` (reported via `WorkspaceFacts.skipped`, never emitted broken) — its `check-all`/

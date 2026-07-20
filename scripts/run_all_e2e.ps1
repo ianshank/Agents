@@ -312,6 +312,20 @@ Invoke-PytestStep 'C' 'e2e:skills+hooks' `
       '-o', 'addopts=', '--import-mode=importlib', '-p', 'no:cacheprovider', "--junitxml=$e2eXml") `
     $RepoRoot $e2eXml
 
+# C1b: backend-validation experiment offline suite. Runs from the subtree so its own
+# pyproject drives config (addopts auto-deselects live probes via `-m "not live"`). The
+# --cov flags are explicit so the 95% branch-coverage floor is actually enforced here, not
+# merely configured. Isolated/temporary experiment, not a package/skill.
+$bvDir = Join-Path $RepoRoot 'experiments/backend-validation'
+if (Test-Path (Join-Path $bvDir 'pyproject.toml')) {
+    $bvXml = Join-Path $Report 'backend-validation.xml'
+    Invoke-PytestStep 'C' 'e2e:backend-validation' `
+        @('-m', 'pytest', 'tests', '--cov=backend_validation', '--cov-branch',
+          '--cov-report=term-missing', '--cov-fail-under=95', '--junitxml=' + $bvXml,
+          '-p', 'no:cacheprovider') `
+        $bvDir $bvXml
+}
+
 # C2: eval-harness CLI journeys (offline)
 Invoke-CmdStep 'C' 'cli:eval-harness list-plugins' @('-m', 'eval_harness.cli', 'list-plugins')
 Invoke-CmdStep 'C' 'cli:eval-harness run' @('-m', 'eval_harness.cli', 'run', '--config', 'config/eval.example.yaml', '--offline')

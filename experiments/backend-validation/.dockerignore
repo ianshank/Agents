@@ -1,0 +1,12 @@
+# Prober image build context hygiene (deploy/prober/Dockerfile builds from this subtree).
+artifacts/
+reports/
+tests/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.egg-info/
+.env
+.env.*
+!.env.example

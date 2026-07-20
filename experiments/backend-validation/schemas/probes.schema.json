@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "backend-validation/probes.schema.json",
+  "title": "PROBES.yaml structural schema",
+  "description": "Structural contract for the signed probe matrix. The pydantic models in backend_validation.registry are the stricter runtime authority; this schema is the language-neutral gate used by `preflight --schema-only`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_matrix", "marks", "backends", "cells", "signoff"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "source_matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_ref", "transcribed_by", "transcription_source"],
+      "properties": {
+        "external_ref": {"type": "string", "minLength": 1},
+        "transcribed_by": {"const": "human"},
+        "transcription_source": {"type": "string", "minLength": 1}
+      }
+    },
+    "marks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["full", "partial", "absent"],
+      "properties": {
+        "full": {"const": "●"},
+        "partial": {"const": "◐"},
+        "absent": {"const": "—"}
+      }
+    },
+    "backends": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+      "uniqueItems": true
+    },
+    "cells": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/cell"}
+    },
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "synthetic": {"type": "array", "items": {"$ref": "#/$defs/syntheticControl"}}
+      }
+    },
+    "signoff": {"$ref": "#/$defs/signoff"}
+  },
+  "$defs": {
+    "mark": {"enum": ["●", "◐", "—", "CLAIM_TBD"]},
+    "predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "field", "equals"],
+      "properties": {
+        "operation": {"type": "string", "minLength": 1},
+        "field": {"type": "string", "minLength": 1},
+        "equals": {"type": ["boolean", "integer", "number", "string"]}
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["probe_id", "layer", "expectation", "expected_observables"],
+      "properties": {
+        "probe_id": {"type": "string", "pattern": "^(l1|l2|l3|control)\\.[a-z0-9_.]+$"},
+        "layer": {"enum": ["l1", "l2", "l3"]},
+        "expectation": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"enum": ["pass", "fail"]}
+        },
+        "judge_required": {"type": "boolean"},
+        "expected_observables": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/predicate"}
+        }
+      }
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "area", "classification", "repetition", "claimed", "probes"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_.]*$"},
+        "area": {"type": "string", "minLength": 1},
+        "classification": {"enum": ["api-probeable", "config-probeable", "human-only", "doc-only"]},
+        "repetition": {"enum": ["deterministic", "judge_k3"]},
+        "claimed": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"$ref": "#/$defs/mark"}
+        },
+        "human_followup": {"type": "boolean"},
+        "probes": {"type": "array", "items": {"$ref": "#/$defs/probe"}}
+      }
+    },
+    "syntheticControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["probe_id", "applies_to", "expectation", "expected_observables"],
+      "properties": {
+        "probe_id": {"type": "string", "pattern": "^control\\.[a-z0-9_.]+$"},
+        "applies_to": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "expectation": {"const": "fail"},
+        "expected_observables": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/predicate"}}
+      }
+    },
+    "signoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signed_off"],
+      "properties": {
+        "signed_off": {"type": "boolean"},
+        "signed_by": {"type": ["string", "null"]},
+        "signed_date": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

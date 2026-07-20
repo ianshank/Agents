@@ -2,6 +2,21 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Eval-backend validation experiment scaffolded (`experiments/backend-validation/`)** —
+  the full offline implementation of `eval-backend-validation_v1` (Langfuse vs Opik
+  capability validation for the eval-backend displacement decision) landed as an isolated,
+  dependency-only subtree: L1/L2/L3 probe layers, six phases with fail-safe BLOCKED/HALT
+  discipline, digest-pinned compose stacks, ops-burden metrics, a human-signed rubric (TCB),
+  and its own generated quality-gate (196 tests, ≥95% branch coverage, mypy strict). Ships
+  **unsigned** — no probe executes until a human corrects the transcribed matrix claims,
+  signs `PROBES.yaml` + `RUBRIC.md`, and writes the `SIGNOFF` hash file (agents never sign).
+  Remaining (human-driven, outside this repo's CI): resolve `CLAIM_TBD` marks from the
+  external matrix and sign the TCB; `make pin-digests` where the registries are reachable;
+  run P1–P5 against live stacks; commit the `reports/`. Deliberately NOT wired into the root
+  `Makefile` fan-out (the experiment is temporary, and the makegen Makefile has no
+  hand-extension seam so a delegation target would not survive regeneration) — use
+  `make -C experiments/backend-validation check`. Optionally, a path-filtered CI workflow can
+  ride the later protected batch (a new `.github/workflows/*.yml` is label-gated).
 - [x] **Determinism phase P1+P2: workspace gates dogfooded (skills → 1.1.0)** — the
   generators grew monorepo support (`--workspace` fan-out; repeatable `--lint-path`/
   `--typecheck-path`; multi-source `--cov=`; provenance header; hand-extension marker with a

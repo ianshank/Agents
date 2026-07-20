@@ -71,6 +71,7 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 | Live Phoenix e2e (mirrors `phoenix-live.yml`) | `docker run -p 6006:6006 arizephoenix/phoenix:17.18.0` then `pytest tests/test_phoenix_live.py -v -rs` with `PHOENIX_COLLECTOR_ENDPOINT` and `OPENAI_API_KEY` set |
 | Regression sibling package | `pytest behavioral-regression/tests --cov=behavioral_regression` |
 | Behavioural-regression detector CLI | `python -m behavioral_regression --config <cfg>` — see `behavioral-regression/README.md` |
+| Eval-backend validation experiment | `make -C experiments/backend-validation check` (own gate) — an **isolated, temporary** subtree (`eval-backend-validation_v1`; Langfuse/Opik capability validation). Consumes the harness as a dependency only; zero writes outside itself; ships unsigned (probes gated behind human sign-off of `PROBES.yaml`/`RUBRIC.md`). NOT a package/skill and NOT in `make check-all`; see `experiments/backend-validation/README.md`. |
 
 ## Seams that must stay narrow
 
