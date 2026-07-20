@@ -116,6 +116,7 @@ def run_l2(
     opik_calls = _opik_scorecalls(run)
     conformant = langfuse_calls == opik_calls
     ingestion_ok = _gate_ingestion_ok(run)
+    opik_loc = adapter_delta_loc()  # read the source once; reused below
 
     adapter_report = {
         "schema_version": 1,
@@ -131,7 +132,7 @@ def run_l2(
             {
                 "backend": "opik",
                 "adapter_files": 1,
-                "adapter_loc": adapter_delta_loc(),
+                "adapter_loc": opik_loc,
                 "conformance_passed": int(conformant),
                 "conformance_total": 1,
                 "mapping_gaps": [] if conformant else ["opik sink emits a different score set than the harness sink"],
@@ -142,6 +143,7 @@ def run_l2(
     out_path = reports_dir / "l2_adapter_delta.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(adapter_report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    logger.info("l2: conformant=%s ingestion_ok=%s opik_adapter_loc=%d", conformant, ingestion_ok, opik_loc)
 
     if not conformant:
         return PhaseResult(
@@ -154,6 +156,6 @@ def run_l2(
     return PhaseResult(
         "l2",
         STATUS_OK,
-        f"sink conformance OK; Opik adapter delta = 1 file / {adapter_delta_loc()} LOC; gate ingestion OK",
+        f"sink conformance OK; Opik adapter delta = 1 file / {opik_loc} LOC; gate ingestion OK",
         artifacts=(str(out_path),),
     )

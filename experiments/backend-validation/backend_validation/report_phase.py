@@ -62,6 +62,12 @@ def run_report(
     text = render_claimed_vs_observed(reports)
     out_path = write_report(reports_dir / "claimed_vs_observed.md", text)
     unresolved = [report for report in reports if report.observed in ("BLOCKED", "not-probed")]
+    logger.info(
+        "report: %d cell rows from %d observables (%d unprobed/blocked)",
+        len(reports),
+        len(observables),
+        len(unresolved),
+    )
     return PhaseResult(
         "report",
         STATUS_OK,
