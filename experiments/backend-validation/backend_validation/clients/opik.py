@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from backend_validation.clients import DEFAULT_OP_TIMEOUT_SECONDS
 from backend_validation.clients._dispatch import DispatchProbeClient, OpDraft, OpHandler
 from backend_validation.clients._rest import RestResult, RestTransport, UrllibRest
 from backend_validation.settings import BackendSpec, JudgeSpec
@@ -49,7 +50,7 @@ class OpikProbeClient(DispatchProbeClient):
         auth: dict[str, str],
         rest: RestTransport | None = None,
         judge: JudgeSpec | None = None,
-        timeout: float = 30.0,
+        timeout: float = DEFAULT_OP_TIMEOUT_SECONDS,
     ) -> None:
         self._handle = handle
         self._base_url = base_url.rstrip("/")
@@ -65,6 +66,7 @@ class OpikProbeClient(DispatchProbeClient):
         *,
         judge: JudgeSpec | None = None,
         env: Mapping[str, str] | None = None,
+        op_timeout: float | None = None,
     ) -> OpikProbeClient:
         import os
 
@@ -74,7 +76,8 @@ class OpikProbeClient(DispatchProbeClient):
 
         handle = opik.Opik(host=f"{spec.base_url}/api", api_key=api_key or None)
         auth = {"Authorization": api_key} if api_key else {}
-        return cls(handle, base_url=spec.base_url, auth=auth, judge=judge)
+        timeout = op_timeout if op_timeout is not None else DEFAULT_OP_TIMEOUT_SECONDS
+        return cls(handle, base_url=spec.base_url, auth=auth, judge=judge, timeout=timeout)
 
     def close(self) -> None:
         flush = getattr(self._handle, "flush", None)

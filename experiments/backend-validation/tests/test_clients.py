@@ -380,3 +380,19 @@ def test_from_spec_constructs_clients_from_stub_sdks(monkeypatch: pytest.MonkeyP
     assert isinstance(with_key, OpikProbeClient)
     without_key = build_client(_spec("opik", {"api_key": "BV_OPIK_KEY"}), env={})
     assert isinstance(without_key, OpikProbeClient)  # self-host default: no auth required
+
+
+def test_build_client_threads_op_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression (Copilot review): settings.timeouts.op_seconds must reach the client, not
+    # a hardcoded 30.0. build_client(op_timeout=...) sets the client's REST timeout.
+    lf_module = types.ModuleType("langfuse")
+    lf_module.Langfuse = lambda **_kw: _FakeLangfuseHandle()  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "langfuse", lf_module)
+    spec = _spec("langfuse", {"secret_key": "BV_LF_SK", "public_key": "BV_LF_PK"})
+    client = build_client(spec, env={"BV_LF_SK": "s", "BV_LF_PK": "p"}, op_timeout=7.5)
+    assert client._timeout == 7.5  # type: ignore[attr-defined]
+    # Default (no op_timeout) falls back to the shared constant, not a scattered literal.
+    from backend_validation.clients import DEFAULT_OP_TIMEOUT_SECONDS
+
+    default_client = build_client(spec, env={"BV_LF_SK": "s", "BV_LF_PK": "p"})
+    assert default_client._timeout == DEFAULT_OP_TIMEOUT_SECONDS  # type: ignore[attr-defined]

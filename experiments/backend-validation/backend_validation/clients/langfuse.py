@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from backend_validation.clients import MissingCredentialsError
+from backend_validation.clients import DEFAULT_OP_TIMEOUT_SECONDS, MissingCredentialsError
 from backend_validation.clients._dispatch import DispatchProbeClient, OpDraft, OpHandler
 from backend_validation.clients._rest import RestResult, RestTransport, UrllibRest, basic_auth_header
 from backend_validation.settings import BackendSpec, JudgeSpec
@@ -50,7 +50,7 @@ class LangfuseProbeClient(DispatchProbeClient):
         auth: dict[str, str],
         rest: RestTransport | None = None,
         judge: JudgeSpec | None = None,
-        timeout: float = 30.0,
+        timeout: float = DEFAULT_OP_TIMEOUT_SECONDS,
     ) -> None:
         self._handle = handle
         self._base_url = base_url.rstrip("/")
@@ -66,6 +66,7 @@ class LangfuseProbeClient(DispatchProbeClient):
         *,
         judge: JudgeSpec | None = None,
         env: Mapping[str, str] | None = None,
+        op_timeout: float | None = None,
     ) -> LangfuseProbeClient:
         import os
 
@@ -78,7 +79,8 @@ class LangfuseProbeClient(DispatchProbeClient):
         import langfuse
 
         handle = langfuse.Langfuse(secret_key=secret, public_key=public, host=spec.base_url)
-        return cls(handle, base_url=spec.base_url, auth=basic_auth_header(public, secret), judge=judge)
+        timeout = op_timeout if op_timeout is not None else DEFAULT_OP_TIMEOUT_SECONDS
+        return cls(handle, base_url=spec.base_url, auth=basic_auth_header(public, secret), judge=judge, timeout=timeout)
 
     def close(self) -> None:
         flush = getattr(self._handle, "flush", None)

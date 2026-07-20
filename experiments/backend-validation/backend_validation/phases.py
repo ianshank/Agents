@@ -318,7 +318,7 @@ def _run_backend_l1(
     run_id: str,
 ) -> int:
     backend_spec = settings.backend(backend_id)
-    client = io.client_factory(backend_spec, judge=settings.judge)
+    client = io.client_factory(backend_spec, judge=settings.judge, op_timeout=settings.timeouts.op_seconds)
     count = 0
     try:
         # Controls FIRST (spec P2 gate): a broken probe layer must halt before any

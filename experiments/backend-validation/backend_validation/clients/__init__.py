@@ -27,6 +27,10 @@ INSTALL_HINTS = {
     "opik": "pip install -e '.[opik]'  (from experiments/backend-validation)",
 }
 
+# Fallback per-operation timeout when no config value is threaded in (settings normally
+# supplies settings.timeouts.op_seconds). Single source of truth for the two clients.
+DEFAULT_OP_TIMEOUT_SECONDS = 30.0
+
 
 class MissingCredentialsError(RuntimeError):
     """Required credential env vars are unset. NOT swallowed by ``build_client``: a live
@@ -92,12 +96,15 @@ def build_client(
     judge: JudgeSpec | None = None,
     enabled: bool = True,
     env: Mapping[str, str] | None = None,
+    op_timeout: float | None = None,
 ) -> ProbeClient:
     """Fail-safe factory: real SDK client when possible, Null double otherwise.
 
     Mirrors ``eval_harness.braintrust_client.build_client``: disabled or SDK-missing means
     a Null client plus a loud log line — probes then record honest ``unsupported``/``error``
-    observables instead of crashing the run.
+    observables instead of crashing the run. ``op_timeout`` (from
+    ``settings.timeouts.op_seconds``) is threaded into the client so the configured
+    per-operation timeout actually governs REST/SDK calls instead of a hardcoded default.
     """
     if not enabled:
         logger.info("client for %s disabled; using NullProbeClient", spec.id)
@@ -106,11 +113,11 @@ def build_client(
         if spec.id == "langfuse":
             from backend_validation.clients.langfuse import LangfuseProbeClient
 
-            return LangfuseProbeClient.from_spec(spec, judge=judge, env=env)
+            return LangfuseProbeClient.from_spec(spec, judge=judge, env=env, op_timeout=op_timeout)
         if spec.id == "opik":
             from backend_validation.clients.opik import OpikProbeClient
 
-            return OpikProbeClient.from_spec(spec, judge=judge, env=env)
+            return OpikProbeClient.from_spec(spec, judge=judge, env=env, op_timeout=op_timeout)
     except ImportError as exc:
         hint = INSTALL_HINTS.get(spec.id, "install the backend SDK extra")
         logger.warning("SDK for %s not importable (%s); using NullProbeClient. Hint: %s", spec.id, exc, hint)

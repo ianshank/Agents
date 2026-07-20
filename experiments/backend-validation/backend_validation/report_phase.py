@@ -1,9 +1,14 @@
-"""P5 report phase and the `all` chain (stop-on-BLOCKED/HALT).
+"""P5 report phase and the `all` chain.
 
 ``report`` renders claimed-vs-observed from the recorded observables + the signed rubric;
 it refuses to run unsigned (marks come only from a signed rubric) and never emits a
-recommendation. ``run_all`` chains P0->P2->P3->P5, stopping at the first non-OK phase so a
-BLOCKED/HALT is never papered over by a later green phase.
+recommendation. ``run_all`` chains P0->P2->P3->P5 and stops at the first FAIL/HALT/BLOCKED
+in preflight or L1 — the phases that gate whether meaningful evidence exists. The ONE
+deliberate exception is a BLOCKED L2 (the eval harness is not installed): L2 measures
+adapter delta, not L1 evidence, so the chain records the BLOCKED phase, surfaces its
+non-zero exit (the CLI returns the max exit code across phases), and still renders the
+report from the L1 observables. A hard L2 FAIL stops the chain. No OK verdict ever papers
+over a real failure.
 """
 
 from __future__ import annotations
