@@ -18,6 +18,7 @@ from pathlib import Path
 from backend_validation.deploy import DeployError, pin_compose_file
 from backend_validation.deploy_phase import run_deploy, run_down
 from backend_validation.isolation import IsolationError, check_isolation
+from backend_validation.l2_phase import run_l2
 from backend_validation.logging_util import configure_logging, get_logger
 from backend_validation.phases import PhaseResult, default_phase_io, run_l1, run_preflight
 from backend_validation.procrun import SubprocessRunner
@@ -88,6 +89,9 @@ def build_parser() -> argparse.ArgumentParser:
     l1 = sub.add_parser("l1", parents=[common], help="P2: L1 capability probes + negative controls")
     l1.add_argument("--backend", help="Probe a single configured backend")
     l1.add_argument("--run-id", default=None, help="Evidence directory name (default: UTC timestamp)")
+
+    l2 = sub.add_parser("l2", parents=[common], help="P3: integration probes through the harness sink seam")
+    l2.add_argument("--run-id", default=None, help="Evidence directory name (default: UTC timestamp)")
 
     isolation = sub.add_parser("isolation", parents=[common], help="PR-scoped zero-writes check against a base ref")
     isolation.add_argument("--base-ref", default="origin/main", help="Base ref to diff against")
@@ -173,6 +177,14 @@ def _cmd_pin_digests(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_l2(args: argparse.Namespace) -> int:
+    settings = _load_settings_or_none(args)
+    if settings is None:
+        return EXIT_USAGE_ERROR
+    run_id = args.run_id or _default_run_id()
+    return _verdict(run_l2(SUBTREE_ROOT, settings, run_id=run_id, now_fn=_utc_now))
+
+
 def _cmd_isolation(args: argparse.Namespace) -> int:
     runner = SubprocessRunner()
     toplevel = runner.run(["git", "rev-parse", "--show-toplevel"], cwd=SUBTREE_ROOT)
@@ -204,6 +216,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "down": _cmd_down,
         "pin-digests": _cmd_pin_digests,
         "l1": _cmd_l1,
+        "l2": _cmd_l2,
         "isolation": _cmd_isolation,
     }
     return handlers[args.command](args)
