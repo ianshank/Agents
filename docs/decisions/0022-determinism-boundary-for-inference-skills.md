@@ -3,7 +3,7 @@
 - Status: **Accepted.**
 - Date: 2026-07-19
 - Related: ADR 0017 (claude-foundation reconciliation), ADR 0019 (size-budget gate),
-  ADR 0020 (deterministic generator skills), `skills/quality-gate/` (emits
+  ADR 0020 (deterministic generator skills), ADR 0021 (CI gate delegation), `skills/quality-gate/` (emits
   `scripts/quality-gate.sh`), `skills/project-setup/` (emits the delegating `Makefile`),
   `skills/architecture-drift-guard/scripts/mermaid_gen.py`,
   `.github/workflows/architecture-drift.yml`,

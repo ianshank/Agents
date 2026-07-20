@@ -8,6 +8,7 @@
 
 /features.yaml                  @ianshank
 /features.schema.json           @ianshank
+/architecture.yaml              @ianshank
 /scripts/validations/           @ianshank
 /config/                        @ianshank
 /src/eval_harness/gating/       @ianshank
