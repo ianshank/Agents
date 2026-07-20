@@ -23,3 +23,4 @@
 {"agent_version": null, "change_id": "db555ad97ab8a964f16ecae088df420a807ead68", "domain": "human/skills", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-20T08:09:34-04:00", "raw_confidence": 0.0}
 {"agent_version": null, "change_id": "6495539acfc01345698bad54f24e7a28ec57396f", "domain": "human/ci-config", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-20T13:20:24-04:00", "raw_confidence": 0.0}
 {"agent_version": null, "change_id": "bc5a2eb9e54dc05e69a1cc93127cb4a9ec84ee91", "domain": "human/repo-misc", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-20T18:14:27-04:00", "raw_confidence": 0.0}
+{"agent_version": null, "change_id": "a7c2e6af852a2cd90ba5a425c2507b0812f4d1c0", "domain": "human/ci-config", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-20T19:18:13-04:00", "raw_confidence": 0.0}
