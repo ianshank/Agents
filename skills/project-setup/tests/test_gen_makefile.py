@@ -145,7 +145,15 @@ def test_uncheckable_member_gets_no_check_fanout(tmp_path) -> None:
 
 
 def _can_symlink() -> bool:
-    """Return True if the OS allows creating directory symlinks."""
+    """Return True if the OS allows creating directory symlinks.
+
+    On non-elevated Windows, ``Path.symlink_to()`` raises ``OSError`` /
+    ``WinError 1314`` because ``SeCreateSymbolicLinkPrivilege`` is not granted.
+    This probe attempts a real symlink in a temp directory.
+
+    Returns:
+        True if directory symlinks can be created, False otherwise.
+    """
     import tempfile
 
     try:

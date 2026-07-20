@@ -30,7 +30,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _SCRIPTS = os.path.dirname(_HERE)
 _ROOT = os.path.dirname(_SCRIPTS)
 _SRC = os.path.join(_ROOT, "src")
-for _p in (_SRC, _HERE, _SCRIPTS):
+for _p in reversed((_SRC, _HERE, _SCRIPTS)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 

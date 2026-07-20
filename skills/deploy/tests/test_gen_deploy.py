@@ -20,20 +20,26 @@ def _bash_works() -> bool:
     WSL bash resolves on ``shutil.which`` but cannot handle Windows-style
     paths (``C:\\Users\\…``), returning exit-code 127.  We probe with a real
     temp-file to catch that.
+
+    Returns:
+        True if bash can execute a temp script, False otherwise.
     """
     if BASH is None:
         return False
     import tempfile
 
+    script: str | None = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".sh", delete=False, mode="w") as f:
             f.write("#!/usr/bin/env bash\necho ok\n")
             script = f.name
         result = subprocess.run([BASH, script], capture_output=True, text=True, timeout=5)
-        Path(script).unlink(missing_ok=True)
         return result.returncode == 0
     except Exception:
         return False
+    finally:
+        if script:
+            Path(script).unlink(missing_ok=True)
 
 
 BASH_OK = _bash_works()
