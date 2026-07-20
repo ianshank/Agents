@@ -148,3 +148,17 @@ def test_run_l2_blocks_on_harness_surface_mismatch(tmp_subtree: Path, monkeypatc
     assert result.status == STATUS_BLOCKED and result.exit_code == 3
     assert "harness surface mismatch" in result.reason
     assert "moved or been renamed" in Path(result.artifacts[0]).read_text(encoding="utf-8")
+
+
+def test_run_l2_blocks_on_harness_signature_drift(tmp_subtree: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Gemini review (medium): API drift can raise TypeError/ValueError/KeyError, not only
+    # ImportError/AttributeError. Any such raise must still fail-safe to a BLOCKED report,
+    # never crash the CLI — while a genuine non-conformance (a False boolean) stays a FAIL.
+    def _boom(_now_fn: object) -> object:
+        raise TypeError("evaluate_gate() got an unexpected keyword argument 'rules'")
+
+    monkeypatch.setattr("backend_validation.l2_phase._canonical_run", _boom)
+    result = run_l2(tmp_subtree, _settings(tmp_subtree), run_id="l2-drift", now_fn=lambda: _NOW)
+    assert result.status == STATUS_BLOCKED and result.exit_code == 3
+    assert "harness surface mismatch" in result.reason  # message on the verdict line
+    assert "TypeError" in Path(result.artifacts[0]).read_text(encoding="utf-8")  # type in the report body

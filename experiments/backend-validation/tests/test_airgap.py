@@ -66,6 +66,17 @@ def test_iptables_zero_hits_is_a_trustworthy_zero() -> None:
     assert observation.egress_detected is False and observation.usable is True
 
 
+def test_iptables_available_but_hits_unknown_falls_back_to_witness() -> None:
+    # Gemini review (high): iptables_available=True with an unknown (None) hit count is NOT an
+    # authoritative trustworthy-zero — it must fall back to the DNS witness. A dead witness
+    # there is unusable (fail-safe: never a false air-gap confirm); a live one still supports it.
+    dead = observe_egress("", iptables_available=True, iptables_hits=None)
+    assert dead.usable is False and dead.degraded is True and dead.mechanism == "dns-witness"
+    assert dead.egress_detected is False
+    live = observe_egress(_WITNESS_LIVE_CLEAN, iptables_available=True, iptables_hits=None)
+    assert live.usable is True and live.egress_detected is False
+
+
 def test_empty_witness_without_iptables_is_unusable() -> None:
     # Finding 4: a dead/empty witness with no iptables backstop cannot confirm zero egress.
     observation = observe_egress("", iptables_available=False)

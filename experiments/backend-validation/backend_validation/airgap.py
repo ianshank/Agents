@@ -84,21 +84,27 @@ def observe_egress(
     domains = classify_dns_queries(witness_log)
     log_domains = _domains_from_container_logs(container_logs)
     all_domains = tuple(sorted(set(domains) | set(log_domains)))
-    iptables_egress = bool(iptables_available and (iptables_hits or 0) > 0)
+    # iptables is only authoritative when it actually returned a count. "available but hit
+    # count unknown (None)" must NOT be treated as a trustworthy zero (Gemini review, high):
+    # it would confirm an air-gap without ever having read the packet counter. Fall back to
+    # the DNS witness in that case, exactly as when iptables is absent.
+    iptables_known = iptables_available and iptables_hits is not None
+    iptables_egress = iptables_known and (iptables_hits or 0) > 0
     egress_detected = bool(all_domains) or iptables_egress
-    if iptables_available:
-        # iptables is authoritative: it counts every packet, so even a zero here is a
-        # trustworthy zero regardless of the DNS witness.
+    if iptables_known:
+        # iptables counts every packet, so even a zero here is a trustworthy zero
+        # regardless of the DNS witness.
         mechanism = "dns-witness+iptables"
         degraded = False
         usable = True
-        notes = f"iptables egress hits: {iptables_hits if iptables_hits is not None else 'unknown'}"
+        notes = f"iptables egress hits: {iptables_hits}"
     else:
         mechanism = "dns-witness"
         degraded = True
         usable = _witness_is_live(witness_log) or bool(log_domains)
         witness_note = "" if usable else " — WITNESS SAW NO QUERIES (cannot confirm air-gap)"
-        notes = "iptables unavailable; egress inferred from DNS witness + container logs" + witness_note
+        preamble = "iptables available but hit count unknown; " if iptables_available else "iptables unavailable; "
+        notes = preamble + "egress inferred from DNS witness + container logs" + witness_note
     return EgressObservation(
         mechanism=mechanism,
         attempted_domains=all_domains,
