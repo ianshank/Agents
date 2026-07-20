@@ -1,0 +1,232 @@
+# PROBES.yaml — TCB artifact (human-reviewed; agents implement, never amend acceptance criteria).
+#
+# Maps each grid cell from the external matrix (Eval_Harness_Test_Matrix_v2.xlsx, "Grid — App
+# Eval", Langfuse + Opik rows) to probes, expected observables, and repetition classes.
+# `claimed` marks were transcribed from the eval-backend-validation_v1 spec §2 where stated;
+# every other cell is CLAIM_TBD and MUST be corrected from the matrix during P0 sign-off.
+# No probe executes until `signoff.signed_off` is true AND the SIGNOFF file hashes match.
+schema_version: 1
+source_matrix:
+  external_ref: "Eval_Harness_Test_Matrix_v2.xlsx / Grid - App Eval (external to repo)"
+  transcribed_by: human
+  transcription_source: "eval-backend-validation_v1 spec, section 2 (2026-07-20)"
+marks:
+  full: "●"
+  partial: "◐"
+  absent: "—"
+backends: [langfuse, opik]
+
+cells:
+  - id: tracing.observability
+    area: "Tracing / Observability"
+    classification: api-probeable
+    repetition: deterministic
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    probes:
+      - probe_id: l1.tracing.roundtrip
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        expected_observables:
+          - {operation: create_trace, field: status, equals: ok}
+          - {operation: fetch_trace, field: status, equals: ok}
+          - {operation: fetch_trace, field: trace_visible, equals: true}
+
+  - id: otel.native
+    area: "OTel-Native"
+    classification: api-probeable
+    repetition: deterministic
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    probes:
+      - probe_id: l1.otel.raw_otlp_ingest
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        expected_observables:
+          - {operation: otlp_export, field: status, equals: ok}
+          - {operation: fetch_otel_trace, field: status, equals: ok}
+
+  - id: prompt.management
+    area: "Prompt Management"
+    classification: api-probeable
+    repetition: deterministic
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    probes:
+      - probe_id: l1.prompts.version_cycle
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        expected_observables:
+          - {operation: create_prompt, field: status, equals: ok}
+          - {operation: create_prompt_version, field: status, equals: ok}
+          - {operation: fetch_prompt, field: status, equals: ok}
+          - {operation: fetch_prompt, field: fetched_latest_matches, equals: true}
+          - {operation: rollback_prompt, field: status, equals: ok}
+
+  - id: dataset.management
+    area: "Dataset Management"
+    classification: api-probeable
+    repetition: deterministic
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    probes:
+      - probe_id: l1.datasets.crud_link
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        expected_observables:
+          - {operation: create_dataset, field: status, equals: ok}
+          - {operation: insert_dataset_items, field: status, equals: ok}
+          - {operation: fetch_dataset, field: status, equals: ok}
+          - {operation: fetch_dataset, field: item_count_matches, equals: true}
+          - {operation: link_dataset_run, field: status, equals: ok}
+
+  - id: llm.judge.evals
+    area: "LLM-as-Judge Evals"
+    classification: api-probeable
+    repetition: judge_k3
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    probes:
+      - probe_id: l1.judge.eval_scores
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        judge_required: true
+        expected_observables:
+          - {operation: configure_judge, field: status, equals: ok}
+          - {operation: configure_judge, field: judge_configurable_to_local, equals: true}
+          - {operation: run_judge_eval, field: status, equals: ok}
+          - {operation: fetch_judge_scores, field: status, equals: ok}
+          - {operation: fetch_judge_scores, field: score_persisted, equals: true}
+
+  - id: rag.metrics
+    area: "RAG Metrics (built-in faithfulness/relevancy)"
+    classification: api-probeable
+    repetition: judge_k3
+    # Langfuse claimed ◐ is stated in the spec's classification table; Opik is TBD.
+    claimed: {langfuse: "◐", opik: CLAIM_TBD}
+    probes:
+      - probe_id: l1.rag.builtin_metric
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        judge_required: true
+        expected_observables:
+          - {operation: run_rag_metric, field: status, equals: ok}
+          - {operation: run_rag_metric, field: score_in_range, equals: true}
+
+  - id: agent.evals
+    area: "Agent Evals (multi-step, tool spans)"
+    classification: api-probeable
+    repetition: judge_k3
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    probes:
+      - probe_id: l1.agent.multistep_scored
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        judge_required: true
+        expected_observables:
+          - {operation: create_agent_trace, field: status, equals: ok}
+          - {operation: create_agent_trace, field: tool_spans_recorded, equals: true}
+          - {operation: score_agent_trace, field: status, equals: ok}
+          - {operation: fetch_agent_scores, field: status, equals: ok}
+
+  - id: ci.regression
+    area: "CI / Regression"
+    classification: api-probeable
+    repetition: deterministic
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    probes:
+      - probe_id: l1.ci.two_run_compare
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        expected_observables:
+          - {operation: create_experiment_run, field: status, equals: ok}
+          - {operation: compare_runs, field: status, equals: ok}
+          - {operation: compare_runs, field: machine_readable, equals: true}
+          - {operation: compare_runs, field: nonzero_exit_available, equals: true}
+
+  - id: experiment.comparison
+    area: "Experiment Comparison"
+    classification: api-probeable
+    repetition: deterministic
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    probes:
+      - probe_id: l1.compare.diff_runs
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        expected_observables:
+          - {operation: diff_runs, field: status, equals: ok}
+          - {operation: diff_runs, field: diff_machine_readable, equals: true}
+
+  - id: guardrails
+    area: "Guardrails"
+    classification: api-probeable
+    repetition: deterministic
+    # Spec §2: Opik claims ● ; the Langfuse cell is "—" and is probed as an
+    # expected-fail negative control (spec R5).
+    claimed: {langfuse: "—", opik: "●"}
+    probes:
+      - probe_id: l1.guardrails.invoke
+        layer: l1
+        expectation: {langfuse: fail, opik: pass}
+        expected_observables:
+          - {operation: invoke_guardrail, field: status, equals: ok}
+          - {operation: invoke_guardrail, field: guardrail_verdict_returned, equals: true}
+
+  - id: alerting
+    area: "Alerting"
+    classification: config-probeable
+    repetition: deterministic
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    human_followup: true  # fire-path verification is human-only unless API-exposed
+    probes:
+      - probe_id: l1.alerting.rule_via_api
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        expected_observables:
+          - {operation: create_alert_rule, field: status, equals: ok}
+          - {operation: verify_alert_rule, field: status, equals: ok}
+
+  - id: human.annotation
+    area: "Human Annotation"
+    classification: api-probeable
+    repetition: deterministic
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    human_followup: true  # UI annotation workflow routes to the human queue
+    probes:
+      - probe_id: l1.annotation.queue_api
+        layer: l1
+        expectation: {langfuse: pass, opik: pass}
+        expected_observables:
+          - {operation: create_annotation_queue, field: status, equals: ok}
+          - {operation: submit_annotation_score, field: status, equals: ok}
+          - {operation: fetch_annotations, field: status, equals: ok}
+
+  - id: playground
+    area: "Playground"
+    classification: human-only  # excluded from agent scoring (spec R2)
+    repetition: deterministic
+    claimed: {langfuse: CLAIM_TBD, opik: CLAIM_TBD}
+    probes: []
+
+  - id: red.teaming
+    area: "Red-teaming"
+    classification: api-probeable
+    repetition: deterministic
+    # "—" for BOTH tools per spec R5: probed as expected-fail negative controls.
+    claimed: {langfuse: "—", opik: "—"}
+    probes:
+      - probe_id: l1.redteam.invoke
+        layer: l1
+        expectation: {langfuse: fail, opik: fail}
+        expected_observables:
+          - {operation: invoke_redteam, field: status, equals: ok}
+
+controls:
+  synthetic:
+    # One per tool (spec R5): a probe against a deliberately unroutable endpoint.
+    # If this PASSES, the probe layer itself is broken -> HALT for human review.
+    - probe_id: control.synthetic.unreachable
+      applies_to: [langfuse, opik]
+      expectation: fail
+      expected_observables:
+        - {operation: probe_endpoint, field: status, equals: ok}
+
+signoff:
+  signed_off: false
+  signed_by: null
+  signed_date: null
