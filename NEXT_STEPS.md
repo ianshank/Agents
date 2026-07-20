@@ -2,6 +2,12 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **E2E Windows cross-platform hardening (21/21 offline green)** — fixed
+  three classes of failure on the Windows e2e path: (1) a pre-existing PS 5.1
+  string-concatenation bug in the `--junitxml` argument that silently zeroed
+  test collection, (2) WSL bash path-mangling (exit 127) and symlink-privilege
+  denial (WinError 1314), (3) F-038 sys.path gap when running standalone
+  validation scripts with a stale editable install.
 - [x] **Eval-backend validation experiment scaffolded (`experiments/backend-validation/`)** —
   the full offline implementation of `eval-backend-validation_v1` (Langfuse vs Opik
   capability validation for the eval-backend displacement decision) landed as an isolated,

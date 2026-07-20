@@ -72,6 +72,19 @@ pwsh scripts/run_all_e2e.ps1 -Tiers offline -FailFast           # stop at first 
 - **Tier E — Enterprise live suite (opt-in).** The `pytest.mark.integration` suite under
   `../Enterprise/files/langfuse-eval-harness/langfuse-eval-harness/tests/integration/`.
 
+### Windows-specific caveats
+
+- **WSL bash skip guards.** Skill tests that shell out to bash skip on Windows
+  when `shutil.which("bash")` finds the WSL shim (which cannot handle
+  Windows-native temp paths).  The `_bash_works()` probe creates a real temp
+  script and verifies execution; tests skip if it fails.
+- **Symlink privilege.** `test_symlinked_dir_is_not_a_member` skips on
+  non-elevated Windows where `Path.symlink_to()` raises `WinError 1314`.
+- **`--junitxml` string interpolation.** The `e2e:backend-validation` step's
+  `--junitxml` flag must use PowerShell string interpolation
+  (`"--junitxml=$var"`) not concatenation (`'--junitxml=' + $var`) — the
+  latter silently splits into two array elements in `@()` context.
+
 ## Credentials that gate live steps (`.env`)
 
 The runner loads `.env` from the repo root (BOM-safe). Each live step runs only when its vars are set:
@@ -106,7 +119,7 @@ docker run -p 6006:6006 arizephoenix/phoenix
 
 ## Test status on this checkout
 
-A clean `-Tiers offline` run reports **20 PASS / 0 FAIL**. Six cross-platform root causes were
+A clean `-Tiers offline` run reports **21 PASS / 0 FAIL**. Nine cross-platform root causes were
 found and fixed:
 
 | Area | Root cause | Fix |

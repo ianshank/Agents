@@ -58,6 +58,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `lint_paths` is appended at the end of the dataclass preserving 1.0.x positional
   construction. Deferred with rationale (NEXT_STEPS): single-instrumented-run coverage for
   the root gate's two suite passes; individually dispatchable named hand-steps.
+- **E2E runner Windows cross-platform hardening (21/21 green):** the
+  `e2e:backend-validation` step's `--junitxml` flag used string concatenation
+  (`'--junitxml=' + $bvXml`) inside a PowerShell `@()` array literal, which
+  silently split into two array elements — pytest received the XML path as a
+  test directory and collected zero tests.  Fixed to use string interpolation
+  (`"--junitxml=$bvXml"`) matching all other suites.  The step's PYTHONPATH
+  now also saves/restores around the block so `--cov=backend_validation` can
+  locate the package when the editable install is stale.  F-038 validation
+  gate prepends `src/` to `sys.path` (standalone scripts don't inherit the
+  conftest shim).  Three skill test files gained platform-aware skip guards:
+  `_bash_works()` (WSL bash accepts `shutil.which` but cannot execute scripts
+  at Windows temp paths — exit 127) and `_can_symlink()` (non-elevated
+  Windows users lack `SeCreateSymbolicLinkPrivilege`).
 
 ### Added
 - **Workspace-wide deterministic gates (P1+P2 of the determinism phase; quality-gate &

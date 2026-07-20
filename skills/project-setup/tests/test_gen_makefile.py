@@ -144,6 +144,22 @@ def test_uncheckable_member_gets_no_check_fanout(tmp_path) -> None:
     assert "check:" not in member_body  # consistent with the omission above
 
 
+def _can_symlink() -> bool:
+    """Return True if the OS allows creating directory symlinks."""
+    import tempfile
+
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "target"
+            target.mkdir()
+            link = Path(td) / "link"
+            link.symlink_to(target, target_is_directory=True)
+            return link.is_symlink()
+    except OSError:
+        return False
+
+
+@pytest.mark.skipif(not _can_symlink(), reason="symlink privilege denied")
 def test_symlinked_dir_is_not_a_member(tmp_path) -> None:
     _workspace(tmp_path)
     (tmp_path / "linked").symlink_to(tmp_path / "pkg-a", target_is_directory=True)

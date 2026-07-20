@@ -1,6 +1,34 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 012 — 2026-07-20
+
+### E2E Windows Cross-Platform Hardening
+- Cloned `main` (commit 2537012), provisioned venv + WMI shim, ran full offline
+  e2e suite: 18 PASS / 3 FAIL
+- Triaged and fixed 3 bugs:
+  - `e2e:backend-validation` — `--junitxml` PS 5.1 string concatenation split in
+    `@()` context; fixed to string interpolation (SRC-BUG)
+  - `e2e:skills+hooks` — WSL bash path mangling (exit 127) + symlink privilege
+    denied (WinError 1314); added `_bash_works()` and `_can_symlink()` guards (ENV)
+  - `features:validate.py` — F-038 `ModuleNotFoundError` for `braintrust_client`;
+    prepended `src/` to `sys.path` in standalone script (ENV)
+- Final result: **21 PASS / 0 FAIL / 0 SKIP**
+
+### Changes
+- `scripts/run_all_e2e.ps1`: `"--junitxml=$bvXml"` (was `'--junitxml=' + $bvXml`);
+  PYTHONPATH save/restore around backend-validation step
+- `scripts/validations/F_038.py`: added `src/` to sys.path bootstrap
+- `skills/deploy/tests/test_gen_deploy.py`: `_bash_works()` + `BASH_OK` guard
+- `skills/quality-gate/tests/test_gen_gate.py`: `_bash_works()` + `BASH_OK` guard
+- `skills/project-setup/tests/test_gen_makefile.py`: `_can_symlink()` guard
+
+### Validation evidence
+- `run_all_e2e.ps1 -Tiers offline` → 21/0/0 (3 consecutive runs)
+- ruff check + format: clean
+- All suite coverage floors met
+
+---
 ## Session 011 — 2026-06-30
 
 ### Features

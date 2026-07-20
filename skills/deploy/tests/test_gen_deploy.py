@@ -14,6 +14,31 @@ import pytest
 BASH = shutil.which("bash")
 
 
+def _bash_works() -> bool:
+    """Return True only when bash can execute a script at a native temp path.
+
+    WSL bash resolves on ``shutil.which`` but cannot handle Windows-style
+    paths (``C:\\Users\\…``), returning exit-code 127.  We probe with a real
+    temp-file to catch that.
+    """
+    if BASH is None:
+        return False
+    import tempfile
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".sh", delete=False, mode="w") as f:
+            f.write("#!/usr/bin/env bash\necho ok\n")
+            script = f.name
+        result = subprocess.run([BASH, script], capture_output=True, text=True, timeout=5)
+        Path(script).unlink(missing_ok=True)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+BASH_OK = _bash_works()
+
+
 def _gen(root: Path, **extra: str) -> Path:
     argv = ["--root", str(root), "--app", "mysvc", "--artifact", "reg/mysvc:1", "--health-url", "https://h/z"]
     for key, val in extra.items():
@@ -49,7 +74,7 @@ def test_check_missing_fresh_and_drift(tmp_path) -> None:
     assert gen_deploy.main([*args, "--check"]) == 1  # drift
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_generated_script_bash_syntax_and_shellcheck(tmp_path) -> None:
     out = _gen(tmp_path)
     assert subprocess.run([BASH, "-n", str(out)]).returncode == 0
@@ -67,7 +92,7 @@ def _run(out: Path, *args: str, stdin: str = "") -> subprocess.CompletedProcess[
     )
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_dry_run_makes_no_changes_and_exits_zero(tmp_path) -> None:
     out = _gen(tmp_path)
     for cmd in ("build", "release", "rollback", "health-check"):
@@ -76,7 +101,7 @@ def test_dry_run_makes_no_changes_and_exits_zero(tmp_path) -> None:
         assert "DRY-RUN" in result.stdout
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_unconfigured_artifact_fails_fast(tmp_path) -> None:
     # Regenerate leaving the artifact as the default placeholder.
     gen_deploy.main(["--root", str(tmp_path), "--app", "mysvc"])
@@ -84,28 +109,28 @@ def test_unconfigured_artifact_fails_fast(tmp_path) -> None:
     assert _run(out, "--yes", "release").returncode != 0
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_confirmation_gate_aborts_without_yes(tmp_path) -> None:
     out = _gen(tmp_path)
     # Empty stdin -> no confirmation -> abort non-zero (no --yes, no --dry-run).
     assert _run(out, "release", stdin="").returncode != 0
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_confirmation_gate_proceeds_on_yes_reply(tmp_path) -> None:
     out = _gen(tmp_path)
     # Typing "y" passes the gate; the placeholder `true` commands then succeed.
     assert _run(out, "rollback", stdin="y\n").returncode == 0
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_unknown_subcommand_is_usage_error(tmp_path) -> None:
     out = _gen(tmp_path)
     assert _run(out, "bogus").returncode == 2
     assert _run(out).returncode == 2  # no subcommand
 
 
-@pytest.mark.skipif(BASH is None, reason="bash not available")
+@pytest.mark.skipif(not BASH_OK, reason="bash not functional on this platform")
 def test_shell_metacharacters_produce_valid_and_safe_script(tmp_path) -> None:
     # A value with $()/backticks must not break syntax or execute when ARTIFACT is unset.
     gen_deploy.main(

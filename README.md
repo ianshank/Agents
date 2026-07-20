@@ -133,7 +133,10 @@ pwsh scripts/run_all_e2e.ps1 -Tiers all       # + live tiers when creds are pres
 
 The sibling packages are made importable via `PYTHONPATH` (no install needed), and on this
 Windows host a `scripts/e2e_shims/sitecustomize.py` neutralizes a hanging `platform` WMI call
-that would otherwise wedge every pytest run. See [docs/e2e-runbook.md](docs/e2e-runbook.md)
+that would otherwise wedge every pytest run. Skill tests that shell out to bash include a
+`_bash_works()` probe that skips when the WSL shim cannot handle Windows-native temp paths,
+and `test_symlinked_dir_is_not_a_member` skips on non-elevated Windows where symlink creation
+raises `WinError 1314`. See [docs/e2e-runbook.md](docs/e2e-runbook.md)
 for tiers, flags, credentials, and how to read the report.
 
 Every package and skill enforces a **≥95% branch-coverage floor** (the root harness gate is
