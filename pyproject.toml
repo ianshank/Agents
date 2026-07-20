@@ -83,6 +83,8 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 # C901 enforces the project's cyclomatic-complexity budget (< 15) via mccabe below.
+# Note: "D" (pydocstyle) rules are intentionally excluded; docstring-convention
+# enforcement was deliberately not adopted per F-037 conventions.
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "C901"]
 ignore = ["E501"]  # line length handled by formatter
 
