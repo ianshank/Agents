@@ -301,6 +301,27 @@ def run_l1(
             now_fn=io.now_fn,
         )
         return PhaseResult("l1", STATUS_HALT, str(exc), artifacts=(str(report), str(log.path)))
+    except Exception as exc:
+        # An unexpected probe/client/engine exception must NOT crash the CLI with a raw
+        # traceback (exit 1) — the fail-safe-to-escalate law requires a BLOCKED report so a
+        # human investigates rather than the failure masquerading as a plain test error.
+        logger.exception("l1 engine error during run %s", run_id)
+        report = write_blocked_report(
+            artifacts_dir,
+            run_id,
+            "l1 (P2) — engine error",
+            [f"{type(exc).__name__}: {exc}"],
+            "An unexpected error occurred inside a probe/client (not a credential or control "
+            "issue). Inspect the observables JSONL beside this report and the logged traceback, "
+            "fix the probe/client or environment, and re-run.",
+            now_fn=io.now_fn,
+        )
+        return PhaseResult(
+            "l1",
+            STATUS_BLOCKED,
+            f"engine error: {type(exc).__name__}: {exc}",
+            artifacts=(str(report), str(log.path)),
+        )
     return PhaseResult(
         "l1",
         STATUS_OK,

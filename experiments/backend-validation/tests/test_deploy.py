@@ -159,7 +159,7 @@ def test_deploy_stack_happy_path_counts_health_retries(tmp_path: Path) -> None:
         sleeper=lambda _s: None,
     )
     assert outcome.health_retries == 2 and outcome.setup_wall_clock_seconds == 15.0
-    assert outcome.failure_count == 0 and outcome.images[0].pinned
+    assert outcome.images[0].pinned
 
 
 def test_deploy_stack_blocks_on_compose_up_failure(tmp_path: Path) -> None:

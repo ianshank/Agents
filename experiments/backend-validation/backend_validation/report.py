@@ -113,10 +113,11 @@ def render_airgap_report(verdicts: Sequence[AirgapVerdict]) -> str:
         "# Air-Gap Report",
         "",
         "Dual-scored: **as-shipped** (default telemetry) vs **after documented opt-out**. "
-        "The matrix `Air-Gapped: Yes` claim is confirmed only when the opt-out run shows zero "
-        "egress attempts.",
+        "The matrix `Air-Gapped: Yes` claim is confirmed only when the opt-out run POSITIVELY "
+        "shows zero egress from a usable observation; a dead/degraded observation reads as "
+        "`unconfirmed` (a human must resolve it), never as confirmed.",
         "",
-        "| Backend | as-shipped egress | opt-out egress | air-gapped confirmed | mechanism | degraded |",
+        "| Backend | as-shipped egress | opt-out egress | air-gapped | mechanism | degraded |",
         "|---|---|---|---|---|---|",
     ]
     for verdict in verdicts:
@@ -124,9 +125,15 @@ def render_airgap_report(verdicts: Sequence[AirgapVerdict]) -> str:
         opt_dom = ", ".join(verdict.opt_out.observation.attempted_domains) if verdict.opt_out.observation else "?"
         mechanism = verdict.opt_out.observation.mechanism if verdict.opt_out.observation else "none"
         degraded = "yes" if (verdict.opt_out.observation and verdict.opt_out.observation.degraded) else ""
+        if verdict.unconfirmed:
+            air_gapped = "unconfirmed"
+        elif verdict.air_gapped_confirmed:
+            air_gapped = "yes"
+        else:
+            air_gapped = "no (egress detected)"
         lines.append(
             f"| {verdict.backend} | {as_dom or 'none'} | {opt_dom or 'none'} | "
-            f"{'yes' if verdict.air_gapped_confirmed else 'no'} | {mechanism} | {degraded} |"
+            f"{air_gapped} | {mechanism} | {degraded} |"
         )
     lines.append("")
     return "\n".join(lines)

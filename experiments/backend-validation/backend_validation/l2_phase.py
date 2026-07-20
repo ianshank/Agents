@@ -111,11 +111,30 @@ def run_l2(
         )
         return PhaseResult("l2", STATUS_BLOCKED, precondition.detail, artifacts=(str(report),))
 
-    run = _canonical_run(now_fn)
-    langfuse_calls = _langfuse_scorecalls(run)
-    opik_calls = _opik_scorecalls(run)
-    conformant = langfuse_calls == opik_calls
-    ingestion_ok = _gate_ingestion_ok(run)
+    # check_precondition only verifies the ResultSink/RunResult/evaluate_gate seam; the
+    # conformance and gate-ingestion probes import more of the harness surface (LangfuseSink,
+    # GateRule, the RunResult building blocks). A harness that renamed/moved any of those
+    # would otherwise raise an uncaught ImportError/AttributeError here — fail-safe to a
+    # BLOCKED report instead of crashing the CLI.
+    try:
+        run = _canonical_run(now_fn)
+        langfuse_calls = _langfuse_scorecalls(run)
+        opik_calls = _opik_scorecalls(run)
+        conformant = langfuse_calls == opik_calls
+        ingestion_ok = _gate_ingestion_ok(run)
+    except (ImportError, AttributeError) as exc:
+        logger.warning("l2 harness surface mismatch: %s", exc)
+        report = write_blocked_report(
+            artifacts_dir,
+            run_id,
+            "l2 (P3) — harness surface",
+            [f"{type(exc).__name__}: {exc}"],
+            "The harness exposes the ResultSink/RunResult seam but a symbol the conformance or "
+            "gate-ingestion probe needs (LangfuseSink, GateRule, or a RunResult building block) "
+            "has moved or been renamed. Pin/patch the L2 probe to the installed harness version.",
+            now_fn=now_fn,
+        )
+        return PhaseResult("l2", STATUS_BLOCKED, f"harness surface mismatch: {exc}", artifacts=(str(report),))
     opik_loc = adapter_delta_loc()  # read the source once; reused below
 
     adapter_report = {

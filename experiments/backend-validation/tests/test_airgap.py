@@ -17,10 +17,25 @@ _WITNESS = """
 15:00:05.401 query: minio.internal IN A + (172.18.0.2)
 """
 
+# A witness that saw ONLY in-network baseline queries — proof it was live, so an absence
+# of external domains is meaningful (usable), not a dead sidecar.
+_WITNESS_LIVE_CLEAN = "15:00:01 query: postgres IN A + (172.18.0.2)\n15:00:02 query: clickhouse IN A + (172.18.0.2)\n"
+
+
+def _obs(
+    *, domains: tuple[str, ...] = (), egress_detected: bool = False, usable: bool = True, degraded: bool = False
+) -> EgressObservation:
+    return EgressObservation(
+        mechanism="dns-witness",
+        attempted_domains=domains,
+        degraded=degraded,
+        egress_detected=egress_detected or bool(domains),
+        usable=usable,
+    )
+
 
 def test_classify_dns_queries_keeps_only_external_domains() -> None:
     domains = classify_dns_queries(_WITNESS)
-    # single-label service names (postgres, clickhouse) and *.internal are stack-local.
     assert domains == ("telemetry.langfuse.com", "us.i.posthog.com")
 
 
@@ -28,40 +43,70 @@ def test_classify_empty_log_is_zero_egress() -> None:
     assert classify_dns_queries("") == ()
 
 
-def test_observe_egress_with_iptables_is_not_degraded() -> None:
+def test_observe_egress_with_iptables_is_authoritative_and_usable() -> None:
     observation = observe_egress(_WITNESS, iptables_available=True, iptables_hits=2)
     assert observation.mechanism == "dns-witness+iptables"
-    assert not observation.degraded
+    assert not observation.degraded and observation.usable
+    assert observation.egress_detected  # domains present
     assert "telemetry.langfuse.com" in observation.attempted_domains
     assert "iptables egress hits: 2" in observation.notes
 
 
-def test_observe_egress_without_iptables_records_degradation() -> None:
+def test_iptables_hits_alone_count_as_egress() -> None:
+    # Finding 1: a stack that egresses to a hardcoded IP makes no DNS query — iptables hits
+    # must still register as egress even with an empty witness log.
+    observation = observe_egress("", iptables_available=True, iptables_hits=5)
+    assert observation.attempted_domains == ()  # no domains seen
+    assert observation.egress_detected is True  # ...but iptables caught 5 packets
+    assert observation.usable is True
+
+
+def test_iptables_zero_hits_is_a_trustworthy_zero() -> None:
+    observation = observe_egress(_WITNESS_LIVE_CLEAN, iptables_available=True, iptables_hits=0)
+    assert observation.egress_detected is False and observation.usable is True
+
+
+def test_empty_witness_without_iptables_is_unusable() -> None:
+    # Finding 4: a dead/empty witness with no iptables backstop cannot confirm zero egress.
     observation = observe_egress("", iptables_available=False)
     assert observation.mechanism == "dns-witness" and observation.degraded
-    assert "iptables not available" in observation.notes
+    assert observation.usable is False  # cannot support an air-gap claim
+    assert "WITNESS SAW NO QUERIES" in observation.notes
 
 
-def test_observe_egress_merges_container_log_hosts() -> None:
+def test_live_witness_without_iptables_is_usable() -> None:
+    observation = observe_egress(_WITNESS_LIVE_CLEAN, iptables_available=False)
+    assert observation.degraded and observation.usable is True  # witness proved it was live
+    assert observation.egress_detected is False
+
+
+def test_observe_egress_merges_container_log_hosts_and_is_usable() -> None:
     logs = "ERROR failed to connect to segment.io within timeout"
     observation = observe_egress("", iptables_available=False, container_logs=logs)
     assert "segment.io" in observation.attempted_domains
+    assert observation.egress_detected is True and observation.usable is True
 
 
-def test_dual_score_confirms_airgap_only_when_optout_is_clean() -> None:
+def test_dual_score_confirms_airgap_only_when_optout_is_usable_and_clean() -> None:
     def observe(label: str, _env: dict[str, str]) -> EgressObservation:
-        domains = ("telemetry.example.com",) if label == "as-shipped" else ()
-        return EgressObservation(mechanism="dns-witness", attempted_domains=domains, degraded=True)
+        if label == "as-shipped":
+            return _obs(domains=("telemetry.example.com",))
+        return _obs(usable=True, degraded=True)  # opt-out: usable + no egress
 
     verdict = dual_score("langfuse", {"TELEMETRY_ENABLED": "true"}, {"TELEMETRY_ENABLED": "false"}, observe)
     assert verdict.leaks_as_shipped is True
-    assert verdict.air_gapped_confirmed is True  # opt-out run was clean
+    assert verdict.air_gapped_confirmed is True and verdict.unconfirmed is False
     assert len(verdict.runs) == 2
 
 
 def test_dual_score_denies_airgap_when_optout_still_leaks() -> None:
-    def observe(_label: str, _env: dict[str, str]) -> EgressObservation:
-        return EgressObservation(mechanism="dns-witness", attempted_domains=("still.leaking.com",), degraded=False)
-
-    verdict = dual_score("opik", {}, {}, observe)
+    verdict = dual_score("opik", {}, {}, lambda _label, _env: _obs(domains=("still.leaking.com",)))
     assert verdict.air_gapped_confirmed is False and verdict.leaks_as_shipped is True
+    assert verdict.unconfirmed is False  # a positive leak is a definite 'no', not unconfirmed
+
+
+def test_dual_score_unconfirmed_when_optout_observation_unusable() -> None:
+    # Finding 4 end-to-end: a dead-witness opt-out run must be unconfirmed, never confirmed.
+    verdict = dual_score("opik", {}, {}, lambda _label, _env: _obs(usable=False, degraded=True))
+    assert verdict.air_gapped_confirmed is False
+    assert verdict.unconfirmed is True  # cannot make the call -> routes to a human
