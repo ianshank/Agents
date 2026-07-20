@@ -29,6 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Ships **unsigned** (all probes gated behind human sign-off) with its own generated
   quality-gate (196 tests, ≥95% branch coverage, mypy `--strict`).
 
+### Changed
+- **CI gate delegation — phase-2 POC (ADR 0021):** `eval-harness-ci.yml` no longer duplicates the
+  ruff/format/mypy/pytest steps inline — it delegates to the generated root gate through a new reusable
+  composite action `.github/actions/run-quality-gate` (sets up Python, installs the package, runs
+  `make check` → `./scripts/quality-gate.sh all`). CI now runs the byte-for-byte same checks as local
+  `make check`, per ADR 0020's "local == CI by construction" law. This is the first, pattern-setting
+  workflow of ADR 0021's phased rollout; the other five (`agent-core`, `flow-corpus`,
+  `behavioral-regression`, `claude-foundation`, `skills-ci`) follow in separate label-gated PRs, and
+  ADR 0021 stays **Proposed** until the rollout completes. Consequences surfaced for review: the root
+  gate's `ruff check .` spans the whole repo, so this job now also lints the sibling packages (verified
+  green); the py3.12 browsable `htmlcov/` artifact is dropped — the shared gate does not produce it (the
+  scripts-coverage pass overwrites `.coverage`) and it is a CI-only convenience, not a gate.
+
 ### Fixed
 - **Bot-review round (CodeRabbit):** workspace detection now skips a member directory named
   `all` (reported via `WorkspaceFacts.skipped`, never emitted broken) — its `check-all`/

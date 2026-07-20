@@ -1,0 +1,37 @@
+name: Run quality gate
+description: >-
+  Set up Python and run a package's generated quality gate so CI executes the exact
+  same checks as local `make check` (ADR 0020 design law / ADR 0021 delegation).
+inputs:
+  python-version:
+    description: Python version to set up.
+    required: true
+  install:
+    description: Shell command that installs the package and its dependencies.
+    required: true
+  check:
+    description: Quality-gate command to run.
+    required: false
+    default: make check
+  working-directory:
+    description: Directory to run the install and check commands in.
+    required: false
+    default: "."
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+      with:
+        python-version: ${{ inputs.python-version }}
+    - run: python -m pip install --upgrade pip "setuptools>=68"
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+    # `install` and `check` are static, workflow-authored strings (never external input); the
+    # `install` string carries `&&`, which only works as a shell operator when interpolated
+    # before bash parses the line — an `env:` + `$VAR` form would treat `&&` as a literal arg.
+    - run: ${{ inputs.install }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+    - run: ${{ inputs.check }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
