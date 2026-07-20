@@ -22,6 +22,7 @@ from backend_validation.l2_phase import run_l2
 from backend_validation.logging_util import configure_logging, get_logger
 from backend_validation.phases import PhaseResult, default_phase_io, run_l1, run_preflight
 from backend_validation.procrun import SubprocessRunner
+from backend_validation.report_phase import run_all, run_report
 from backend_validation.settings import Settings, SettingsError, load_settings
 
 logger = get_logger(__name__)
@@ -92,6 +93,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     l2 = sub.add_parser("l2", parents=[common], help="P3: integration probes through the harness sink seam")
     l2.add_argument("--run-id", default=None, help="Evidence directory name (default: UTC timestamp)")
+
+    report = sub.add_parser("report", parents=[common], help="P5: render claimed-vs-observed from recorded evidence")
+    report.add_argument("--run-id", required=True, help="The run whose observables to render")
+
+    all_cmd = sub.add_parser("all", parents=[common], help="Chain P0->P2->P3->P5 (stops on BLOCKED/HALT)")
+    all_cmd.add_argument("--run-id", default=None, help="Evidence directory name (default: UTC timestamp)")
 
     isolation = sub.add_parser("isolation", parents=[common], help="PR-scoped zero-writes check against a base ref")
     isolation.add_argument("--base-ref", default="origin/main", help="Base ref to diff against")
@@ -185,6 +192,25 @@ def _cmd_l2(args: argparse.Namespace) -> int:
     return _verdict(run_l2(SUBTREE_ROOT, settings, run_id=run_id, now_fn=_utc_now))
 
 
+def _cmd_report(args: argparse.Namespace) -> int:
+    settings = _load_settings_or_none(args)
+    if settings is None:
+        return EXIT_USAGE_ERROR
+    return _verdict(run_report(SUBTREE_ROOT, settings, run_id=args.run_id, now_fn=_utc_now))
+
+
+def _cmd_all(args: argparse.Namespace) -> int:
+    settings = _load_settings_or_none(args)
+    if settings is None:
+        return EXIT_USAGE_ERROR
+    run_id = args.run_id or _default_run_id()
+    results = run_all(SUBTREE_ROOT, settings, run_id=run_id, now_fn=_utc_now, l2_runner=run_l2)
+    exit_code = 0
+    for result in results:
+        exit_code = _verdict(result) or exit_code
+    return exit_code
+
+
 def _cmd_isolation(args: argparse.Namespace) -> int:
     runner = SubprocessRunner()
     toplevel = runner.run(["git", "rev-parse", "--show-toplevel"], cwd=SUBTREE_ROOT)
@@ -217,6 +243,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "pin-digests": _cmd_pin_digests,
         "l1": _cmd_l1,
         "l2": _cmd_l2,
+        "report": _cmd_report,
+        "all": _cmd_all,
         "isolation": _cmd_isolation,
     }
     return handlers[args.command](args)
