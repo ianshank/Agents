@@ -44,4 +44,5 @@ def tmp_subtree(tmp_path: Path) -> Path:
     for name in ("PROBES.yaml", "RUBRIC.md", "config.yaml"):
         shutil.copy(source / name, root / name)
     shutil.copytree(source / "schemas", root / "schemas")
+    shutil.copytree(source / "deploy", root / "deploy")  # committed TODO-pinned compose files
     return root

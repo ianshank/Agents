@@ -1,0 +1,119 @@
+# Langfuse v3 self-hosted stack (probe target). Hand-maintained config, reviewed at P0
+# sign-off alongside the TCB files; tune against the official self-hosting compose for the
+# pinned version if the images evolve.
+#
+# Reproducibility (spec R11): deploy.py REFUSES any image not pinned by @sha256 digest.
+# `make pin-digests` resolves the TODO_PIN markers where the registry is reachable and
+# rewrites these lines in place. Secrets use ${VAR:?} so a missing value fails LOUD at
+# compose time instead of baking a default (leaked-key history: never commit values).
+# Ports bind to 127.0.0.1 only. Named volumes only (zero-writes: no host bind mounts).
+name: bv-langfuse
+
+services:
+  postgres:
+    image: postgres:16-alpine@TODO_PIN
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${BV_LANGFUSE_PG_PASSWORD:?set in .env.local}
+      POSTGRES_DB: langfuse
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine@TODO_PIN
+    command: ["redis-server", "--requirepass", "${BV_LANGFUSE_REDIS_PASSWORD:?set in .env.local}"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG || redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine@TODO_PIN
+    environment:
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${BV_LANGFUSE_CH_PASSWORD:?set in .env.local}
+      CLICKHOUSE_DB: default
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user clickhouse --password $$CLICKHOUSE_PASSWORD --query 'SELECT 1' || clickhouse-client --query 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - ch-data:/var/lib/clickhouse
+
+  minio:
+    image: minio/minio:RELEASE.2024-09-13T20-26-02Z@TODO_PIN
+    command: ["server", "/data", "--address", ":9000"]
+    environment:
+      MINIO_ROOT_USER: langfuse
+      MINIO_ROOT_PASSWORD: ${BV_LANGFUSE_MINIO_PASSWORD:?set in .env.local}
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || curl -sf http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - minio-data:/data
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3@TODO_PIN
+    depends_on:
+      postgres: {condition: service_healthy}
+      clickhouse: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    environment: &langfuse-env
+      DATABASE_URL: postgresql://langfuse:${BV_LANGFUSE_PG_PASSWORD:?}@postgres:5432/langfuse
+      SALT: ${BV_LANGFUSE_SALT:?set in .env.local}
+      ENCRYPTION_KEY: ${BV_LANGFUSE_ENCRYPTION_KEY:?64 hex chars; set in .env.local}
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${BV_LANGFUSE_CH_PASSWORD:?}
+      REDIS_CONNECTION_STRING: redis://:${BV_LANGFUSE_REDIS_PASSWORD:?}@redis:6379
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${BV_LANGFUSE_MINIO_PASSWORD:?}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      TELEMETRY_ENABLED: ${BV_LANGFUSE_TELEMETRY:-true}  # airgap dual-scoring lever (spec R8)
+
+  langfuse-web:
+    image: langfuse/langfuse:3@TODO_PIN
+    depends_on:
+      postgres: {condition: service_healthy}
+      clickhouse: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_SECRET: ${BV_LANGFUSE_NEXTAUTH_SECRET:?set in .env.local}
+      NEXTAUTH_URL: http://127.0.0.1:${BV_LANGFUSE_PORT:-18321}
+      # Headless bootstrap: the org/project/user and the probe API keys are created on
+      # first boot from env — the same env-var NAMES the probe client resolves.
+      LANGFUSE_INIT_ORG_ID: bv-org
+      LANGFUSE_INIT_PROJECT_ID: bv-project
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${BV_LANGFUSE_PUBLIC_KEY:?set in .env.local}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${BV_LANGFUSE_SECRET_KEY:?set in .env.local}
+      LANGFUSE_INIT_USER_EMAIL: ${BV_LANGFUSE_INIT_EMAIL:?set in .env.local}
+      LANGFUSE_INIT_USER_NAME: bv-probe
+      LANGFUSE_INIT_USER_PASSWORD: ${BV_LANGFUSE_INIT_PASSWORD:?set in .env.local}
+    ports:
+      - "127.0.0.1:${BV_LANGFUSE_PORT:-18321}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/public/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  pg-data:
+  ch-data:
+  minio-data:

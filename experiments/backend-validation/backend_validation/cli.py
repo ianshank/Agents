@@ -9,11 +9,14 @@ verdict line: ``backend-validation[<phase>]: STATUS — reason``.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
+from backend_validation.deploy import DeployError, pin_compose_file
+from backend_validation.deploy_phase import run_deploy, run_down
 from backend_validation.isolation import IsolationError, check_isolation
 from backend_validation.logging_util import configure_logging, get_logger
 from backend_validation.phases import PhaseResult, default_phase_io, run_l1, run_preflight
@@ -43,6 +46,10 @@ def _default_run_id() -> str:
     return datetime.now(timezone.utc).strftime("run-%Y%m%dT%H%M%SZ")
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def build_parser() -> argparse.ArgumentParser:
     # Common flags live on a parent parser attached to every subcommand, so
     # `backend-validation preflight --config X` parses (flags AFTER the subcommand —
@@ -68,6 +75,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Structural validation only (quality-gate mode; ignores sign-off and environment)",
     )
+
+    deploy = sub.add_parser("deploy", parents=[common], help="P1: stand up stacks; record ops-burden metrics")
+    deploy.add_argument("--backend", help="Deploy a single configured backend")
+    deploy.add_argument("--run-id", default=None, help="Evidence directory name (default: UTC timestamp)")
+
+    down = sub.add_parser("down", parents=[common], help="Tear down experiment stacks")
+    down.add_argument("--backend", help="Tear down a single configured backend")
+
+    sub.add_parser("pin-digests", parents=[common], help="Resolve compose image tags to sha256 digests")
 
     l1 = sub.add_parser("l1", parents=[common], help="P2: L1 capability probes + negative controls")
     l1.add_argument("--backend", help="Probe a single configured backend")
@@ -113,6 +129,50 @@ def _cmd_l1(args: argparse.Namespace) -> int:
     return _verdict(result)
 
 
+def _cmd_deploy(args: argparse.Namespace) -> int:
+    settings = _load_settings_or_none(args)
+    if settings is None:
+        return EXIT_USAGE_ERROR
+    run_id = args.run_id or _default_run_id()
+    result = run_deploy(
+        SUBTREE_ROOT,
+        settings,
+        env=dict(os.environ),
+        run_id=run_id,
+        only_backend=args.backend,
+        now_fn=_utc_now,
+    )
+    return _verdict(result)
+
+
+def _cmd_down(args: argparse.Namespace) -> int:
+    settings = _load_settings_or_none(args)
+    if settings is None:
+        return EXIT_USAGE_ERROR
+    return _verdict(run_down(SUBTREE_ROOT, settings, only_backend=args.backend))
+
+
+def _cmd_pin_digests(args: argparse.Namespace) -> int:
+    settings = _load_settings_or_none(args)
+    if settings is None:
+        return EXIT_USAGE_ERROR
+    runner = SubprocessRunner()
+    compose_paths = [SUBTREE_ROOT / spec.compose_file for spec in settings.backends]
+    compose_paths.append(SUBTREE_ROOT / "deploy" / "judge" / "compose.yaml")
+    total = 0
+    for compose_path in compose_paths:
+        try:
+            pinned = pin_compose_file(compose_path, runner)
+        except DeployError as exc:
+            print(f"backend-validation[pin-digests]: FAIL — {exc}")
+            return 1
+        for base, digest in pinned:
+            print(f"  pinned {base} -> {digest}")
+        total += len(pinned)
+    print(f"backend-validation[pin-digests]: OK — pinned {total} image(s); update deploy/DIGESTS.md and commit")
+    return 0
+
+
 def _cmd_isolation(args: argparse.Namespace) -> int:
     runner = SubprocessRunner()
     toplevel = runner.run(["git", "rev-parse", "--show-toplevel"], cwd=SUBTREE_ROOT)
@@ -140,6 +200,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     configure_logging(args.verbose)
     handlers = {
         "preflight": _cmd_preflight,
+        "deploy": _cmd_deploy,
+        "down": _cmd_down,
+        "pin-digests": _cmd_pin_digests,
         "l1": _cmd_l1,
         "isolation": _cmd_isolation,
     }

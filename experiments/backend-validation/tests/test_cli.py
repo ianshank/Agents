@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from backend_validation import cli
-from backend_validation.procrun import SubprocessRunner
+from backend_validation.procrun import CompletedCommand, SubprocessRunner
 
 
 @pytest.fixture()
@@ -60,9 +60,7 @@ def test_isolation_outside_git_repo_is_usage_error(
     cli_subtree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     class NoGit(SubprocessRunner):
-        def run(self, argv: list[str], **kwargs: object) -> object:  # type: ignore[override]
-            from backend_validation.procrun import CompletedCommand
-
+        def run(self, argv: list[str], **kwargs: object) -> CompletedCommand:
             return CompletedCommand(tuple(argv), returncode=128, stderr="fatal: not a git repo")
 
     monkeypatch.setattr(cli, "SubprocessRunner", NoGit)
@@ -78,3 +76,29 @@ def test_isolation_runs_clean_in_the_real_repo(capsys: pytest.CaptureFixture[str
     out = capsys.readouterr().out
     assert code in (0, 1)
     assert "backend-validation[isolation]:" in out
+
+
+def test_pin_digests_reports_when_registry_unreachable(
+    cli_subtree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The committed compose files carry TODO_PIN; a failing manifest inspect -> FAIL exit 1.
+    class NoRegistry(SubprocessRunner):
+        def run(self, argv: list[str], **kwargs: object) -> CompletedCommand:
+            return CompletedCommand(tuple(argv), returncode=1, stderr="no route to registry")
+
+    monkeypatch.setattr(cli, "SubprocessRunner", NoRegistry)
+    code = cli.main(["pin-digests", "--config", str(cli_subtree / "config.yaml")])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "backend-validation[pin-digests]: FAIL" in out
+
+
+def test_down_via_cli(cli_subtree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    class OkRunner(SubprocessRunner):
+        def run(self, argv: list[str], **kwargs: object) -> CompletedCommand:
+            return CompletedCommand(tuple(argv), returncode=0)
+
+    monkeypatch.setattr("backend_validation.deploy_phase.SubprocessRunner", OkRunner)
+    code = cli.main(["down", "--config", str(cli_subtree / "config.yaml")])
+    assert code == 0
+    assert "backend-validation[down]: OK" in capsys.readouterr().out
