@@ -117,8 +117,10 @@ def run_l2(
     # or changed the signature/behaviour of any of those raises here — not only ImportError/
     # AttributeError but also TypeError/ValueError/KeyError from API drift. Catch every such
     # exception and fail-safe to a BLOCKED report instead of crashing the CLI (Gemini review,
-    # medium). Genuine non-conformance is a False boolean below, never a raise, so this cannot
-    # mask a real L2 FAIL.
+    # medium), exactly as run_l1 does for engine errors. Genuine non-conformance is a False
+    # boolean below, never a raise, so this cannot mask a real L2 FAIL. logger.exception keeps
+    # the full traceback so an operator can tell true harness drift from a probe bug (Copilot
+    # review) instead of being misdirected by the one-line summary.
     try:
         run = _canonical_run(now_fn)
         langfuse_calls = _langfuse_scorecalls(run)
@@ -126,16 +128,17 @@ def run_l2(
         conformant = langfuse_calls == opik_calls
         ingestion_ok = _gate_ingestion_ok(run)
     except Exception as exc:
-        logger.warning("l2 harness surface mismatch: %s", exc)
+        logger.exception("l2 engine error during run %s (harness surface or probe bug)", run_id)
         report = write_blocked_report(
             artifacts_dir,
             run_id,
             "l2 (P3) — harness surface",
             [f"{type(exc).__name__}: {exc}"],
-            "The harness exposes the ResultSink/RunResult seam but a symbol the conformance or "
-            "gate-ingestion probe needs (LangfuseSink, GateRule, or a RunResult building block) "
-            "has moved or been renamed (or changed its call signature). Pin/patch the L2 probe "
-            "to the installed harness version.",
+            "An unexpected error was raised while exercising the harness sink seam. Most often a "
+            "symbol the conformance or gate-ingestion probe needs (LangfuseSink, GateRule, or a "
+            "RunResult building block) has moved or been renamed (or changed its call signature); "
+            "it can also be a bug in the L2 probe itself. Inspect the logged traceback, then "
+            "pin/patch the L2 probe to the installed harness version or fix the probe.",
             now_fn=now_fn,
         )
         return PhaseResult("l2", STATUS_BLOCKED, f"harness surface mismatch: {exc}", artifacts=(str(report),))
