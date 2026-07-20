@@ -62,4 +62,11 @@ main() {
 # --- hand-maintained extensions below; the generator manages everything above this line ---
 # Define extra gate steps here as do_extra() { ... }; `all` runs them automatically.
 
+do_extra() {
+  log "tcb-structural"
+  # The TCB artifacts must always parse and cross-validate (sign-off itself is a
+  # runtime gate, not a CI gate -- the scaffold ships unsigned by design).
+  "$PYTHON" -m backend_validation.cli preflight --schema-only
+}
+
 main "$@"
