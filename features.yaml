@@ -718,6 +718,6 @@ features:
       - "eval_protected_paths.PROTECTED_PATTERNS includes 'claude-foundation/tests/**' and is_protected() resolves True for claude-foundation/tests/test_eval_gate.py and other paths under it (F_041.py)"
       - ".github/CODEOWNERS mirrors the same entry (F_041.py; locking example added to tests/test_protected_paths.py)"
     validation_command: "python scripts/validations/F_041.py"
-    implemented_in: "PENDING_COMMIT_HASH"
+    implemented_in: "afab9c0de7ee35a256fe42d5bf7b20f3698b220f"
     depends_on: ["F-039"]
     notes: "Found by an independent worktree-isolated audit re-verifying F-039 from first principles after it merged, not by the author's own review. numpy: not used anywhere in this change."
