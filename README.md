@@ -179,6 +179,12 @@ python scripts/check_protected_changes.py --base-ref origin/main
   skill stays self-contained). Run `python scripts/check_skill_script_drift.py`. The
   rationale for the kept compatibility shims and the uniform 95% coverage floor is recorded
   in [`docs/decisions/0009-tech-debt-audit-and-compat-surface.md`](docs/decisions/0009-tech-debt-audit-and-compat-surface.md).
+- **Public-surface backwards-compat guard** (`F-039`) freezes every package's public
+  `__all__` exports — `tests/test_public_surface.py` + a committed
+  `public_surface_baseline.json`, exact-equality checked — so a removed or renamed export
+  fails CI instead of silently breaking every config/import that used it. Duplicated
+  byte-identically (drift-guarded) into each of the 5 packages' own `tests/` dirs, since
+  each runs its own isolated suite. `scripts/validations/F_039.py` guards the wiring.
 - **Structural size budget** (ADR 0019) enforces two of the project's structural limits:
   cyclomatic complexity `< 15` repo-wide via ruff `C901` (`max-complexity = 14`), and source
   file length `≤ 500` lines via `python scripts/check_size_budget.py` (wired into

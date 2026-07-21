@@ -2,6 +2,17 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Public-surface backwards-compat guard (F-039)** — `tests/test_public_surface.py`
+  freezes every package's public `__all__` exports (exact-equality vs a committed
+  baseline), so a removed/renamed export now fails CI instead of silently breaking every
+  config/import that used it. Duplicated byte-identically into all 5 packages'
+  `tests/` dirs, drift-guarded against the root canonical. Surfaced and closed a
+  pre-existing, independent gap while landing: `scripts/eval_protected_paths.py`'s
+  `"tests/**"` pattern only anchored the root suite, leaving all 4 sibling packages'
+  entire test suites without protected-path/CODEOWNERS coverage — both now fixed.
+  A companion **plugin-registry surface guard** (freezing the config-selectable
+  datasets/judges/scorers/sinks/targets keys + aliases — the compat surface `__all__`
+  can't see) is in a separate PR.
 - [x] **CI gate delegation phase-2 POC (ADR 0021) — `eval-harness-ci` → `make check`** — a new
   reusable composite action `.github/actions/run-quality-gate` (setup-python + install + run the gate)
   now backs `eval-harness-ci.yml`, which delegates to the root `make check` instead of duplicating
