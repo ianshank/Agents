@@ -10,7 +10,13 @@ on:
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
-      - ".github/workflows/quality-gates.yml"
+      # `.github/**` is a PROTECTED_PATTERN (scripts/eval_protected_paths.py), but this
+      # filter used to match only this file — so a workflow- or action-only PR skipped the
+      # protected-path guard AND the feature validators entirely. PR #64 merged through that
+      # gap and left F-031/F-037 red on main, undetected. CI workflows are exactly where a
+      # gate threshold gets weakened, so they must run the guard like any other eval surface.
+      - ".github/workflows/**"
+      - ".github/actions/**"
   pull_request:
     # 'labeled'/'unlabeled' so adding the eval-change-approved label re-runs the
     # protected-path guard and clears the check (default types don't fire on labels).
@@ -22,7 +28,10 @@ on:
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
-      - ".github/workflows/quality-gates.yml"
+      # See the push filter above: `.github/**` is protected, so workflow/action edits must
+      # run the guard and the validators rather than bypassing both.
+      - ".github/workflows/**"
+      - ".github/actions/**"
   workflow_dispatch:
 
 permissions:
