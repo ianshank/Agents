@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed
+- **`claude-foundation/tests/` protected-path gap (F-041):** an independent audit of the
+  merged F-039 work found that `claude-foundation/` — structurally identical to the four
+  packages F-039 protects — was missed by that sweep. Its `tests/test_eval_gate.py`
+  directly exercises an eval-integrity gate (`foundation_tools.eval_gate`) and was
+  modifiable in an unrelated PR with no `eval-change-approved` label or CODEOWNERS review
+  required. `claude-foundation/tests/**` is now in `PROTECTED_PATTERNS` and
+  `.github/CODEOWNERS`.
+
 ### Added
 - **Plugin-registry surface guard:** `tests/test_plugin_registry_surface.py` freezes the
   `eval_harness` plugin registry's config-selectable keys — the `dataset`/`judge`/

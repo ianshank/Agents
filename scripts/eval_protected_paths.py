@@ -34,6 +34,11 @@ PROTECTED_PATTERNS: tuple[str, ...] = (
     "behavioral-regression/tests/**",
     "flow-corpus/tests/**",
     "flow-protocol/tests/**",
+    # claude-foundation/ is structurally identical to the four packages above (own
+    # pyproject.toml, Makefile, isolated CI, own tests/) and was missed by the sweep that
+    # added them -- its tests/test_eval_gate.py directly exercises an eval-integrity gate
+    # (foundation_tools.eval_gate) and was unprotected until this entry.
+    "claude-foundation/tests/**",
     ".github/**",
     # The architecture manifest is the airgap's enforcement surface: editing its
     # declared component edges could quietly let the corpus and harness import each
