@@ -4,7 +4,8 @@
 - Date: 2026-07-03
 - Related: `docs/plans/claude-foundation/PLAN.md` in `ianshank/Agents` (§1.3, §2.1, Usage Note 2);
   Agents ADR 0017 (claude-foundation reconciliation: plugin supplies the generic layer,
-  consumer's custom machinery stays).
+  consumer's custom machinery stays); ADR 0004 (implements decision point 4's manifest
+  diff as `foundation_tools.backwards_compat`).
 
 ## Context
 
