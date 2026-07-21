@@ -29,10 +29,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 logger = logging.getLogger(__name__)
 
 _BASELINE_PATH = Path(__file__).parent / "plugin_registry_baseline.json"
-_UPDATE_HINT = "a drop is breaking; rerun with --update to refreeze intended additions"
+_UPDATE_HINT = (
+    "--update freezes intentional ADDITIONS only; it does not undo a drop. "
+    "A dropped or renamed key must be restored (or kept resolvable via an alias) -- "
+    "never rebaseline over a break just to make the guard pass."
+)
 
 # Runs in a clean subprocess (see the module docstring). ``_aliases`` is read directly because
 # there is no public accessor for the backwards-compat alias keys, which are part of the surface.
@@ -54,6 +60,27 @@ print(json.dumps(surface))
 """
 
 
+def _parse_surface(raw: object, *, source: str) -> dict[str, list[str]]:
+    """Shape-validate a ``{kind: [key, ...]}`` payload; reject duplicates within a kind.
+
+    Shared by :func:`_current_surface` (subprocess JSON) and :func:`_load_baseline` (the
+    committed file), so both a malformed probe output and a hand-edited baseline fail with
+    the same clear, source-tagged error instead of a bare ``KeyError``/``AttributeError``.
+    """
+    if not isinstance(raw, dict):
+        raise TypeError(f"{source}: top level must be a JSON object")
+    shaped: dict[str, list[str]] = {}
+    for kind, keys in raw.items():
+        if not isinstance(keys, list):
+            raise TypeError(f"{source}: {kind!r} must be a list, got {type(keys).__name__}")
+        names = [str(key) for key in keys]
+        duplicates = sorted({n for n in names if names.count(n) > 1})
+        if duplicates:
+            raise ValueError(f"{source}: {kind!r} has duplicate key(s): {duplicates}")
+        shaped[str(kind)] = names
+    return shaped
+
+
 def _current_surface() -> dict[str, list[str]]:
     """Return ``{kind: sorted(names + aliases)}`` for the built-in registries only."""
     completed = subprocess.run(
@@ -68,23 +95,16 @@ def _current_surface() -> dict[str, list[str]]:
             f"registry-surface probe failed (exit {completed.returncode})\n"
             f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
         )
-    data = json.loads(completed.stdout)
-    logger.debug("registry surface: %s", {kind: len(keys) for kind, keys in data.items()})
-    return {str(kind): [str(key) for key in keys] for kind, keys in data.items()}
+    surface = _parse_surface(json.loads(completed.stdout), source="registry-surface probe output")
+    logger.debug("registry surface: %s", {kind: len(keys) for kind, keys in surface.items()})
+    return surface
 
 
 def _load_baseline() -> dict[str, list[str]]:
     """Load and shape-validate the frozen registry surface."""
     with _BASELINE_PATH.open(encoding="utf-8") as fh:
         data = json.load(fh)
-    if not isinstance(data, dict):
-        raise TypeError(f"{_BASELINE_PATH.name}: top level must be a JSON object")
-    shaped: dict[str, list[str]] = {}
-    for kind, keys in data.items():
-        if not isinstance(keys, list):
-            raise TypeError(f"{_BASELINE_PATH.name}: {kind!r} must be a list")
-        shaped[str(kind)] = [str(key) for key in keys]
-    return shaped
+    return _parse_surface(data, source=_BASELINE_PATH.name)
 
 
 def _diff(frozen: list[str], current: list[str]) -> tuple[list[str], list[str]]:
@@ -129,6 +149,25 @@ def test_diff_detects_drop_and_unfrozen_add() -> None:
     assert _diff(["a", "b"], ["a"]) == (["b"], [])
     assert _diff(["a"], ["a", "b"]) == ([], ["b"])
     assert _diff(["a", "b"], ["b", "c"]) == (["a"], ["c"])
+
+
+def test_parse_surface_accepts_a_well_shaped_payload() -> None:
+    assert _parse_surface({"datasets": ["csv", "jsonl"]}, source="test") == {"datasets": ["csv", "jsonl"]}
+
+
+def test_parse_surface_rejects_non_dict_top_level() -> None:
+    with pytest.raises(TypeError, match="top level must be a JSON object"):
+        _parse_surface(["not", "a", "dict"], source="test")
+
+
+def test_parse_surface_rejects_non_list_value() -> None:
+    with pytest.raises(TypeError, match="must be a list"):
+        _parse_surface({"datasets": "csv"}, source="test")
+
+
+def test_parse_surface_rejects_duplicate_keys_within_a_kind() -> None:
+    with pytest.raises(ValueError, match="duplicate key"):
+        _parse_surface({"datasets": ["csv", "jsonl", "csv"]}, source="test")
 
 
 def _update_baseline() -> None:
