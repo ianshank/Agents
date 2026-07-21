@@ -1,5 +1,5 @@
 {
-  "datasets": [
+  "dataset": [
     "braintrust",
     "csv",
     "csv_file",
@@ -9,7 +9,7 @@
     "parquet",
     "parquet_file"
   ],
-  "judges": [
+  "judge": [
     "anthropic",
     "bedrock",
     "claude",
@@ -19,7 +19,7 @@
     "phoenix-evals",
     "phoenix_evals"
   ],
-  "scorers": [
+  "scorer": [
     "autoevals",
     "composite",
     "contains",
@@ -35,7 +35,7 @@
     "schema_keys",
     "weighted"
   ],
-  "sinks": [
+  "sink": [
     "braintrust",
     "console",
     "html",
@@ -45,7 +45,7 @@
     "langfuse",
     "phoenix"
   ],
-  "targets": [
+  "target": [
     "callable",
     "echo",
     "llm",

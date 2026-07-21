@@ -49,9 +49,12 @@ _UPDATE_HINT = (
 # Runs in a clean subprocess (see the module docstring). Registries are discovered
 # dynamically (isinstance(obj, Registry) over eval_harness.plugins' module namespace) rather
 # than naming them, so a future 6th registry is picked up automatically -- adding one only
-# needs a baseline entry, never a code change here. ``_aliases`` is read directly because
-# there is no public accessor for the backwards-compat alias keys, which are part of the
-# surface.
+# needs a baseline entry, never a code change here. The JSON key is each registry's own
+# ``.kind`` field (e.g. "scorer"), NOT the module-level variable name lowercased: keying off
+# the variable name would make the guard fragile to a purely internal rename (SCORERS ->
+# SCORER_REGISTRY) even though the public config-selectable surface never changed.
+# ``_aliases`` is read directly because there is no public accessor for the backwards-compat
+# alias keys, which are part of the surface.
 _PROBE = """\
 import json
 
@@ -59,7 +62,7 @@ from eval_harness import plugins
 from eval_harness.core.registry import Registry
 
 plugins.load_builtin_plugins()
-registries = {name.lower(): obj for name, obj in vars(plugins).items() if isinstance(obj, Registry)}
+registries = {obj.kind: obj for obj in vars(plugins).values() if isinstance(obj, Registry)}
 surface = {kind: sorted(set(reg.names()) | set(reg._aliases)) for kind, reg in registries.items()}
 print(json.dumps(surface))
 """
