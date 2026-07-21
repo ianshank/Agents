@@ -77,31 +77,58 @@ def test_added_component_is_not_a_failure(plugin_tree: Path, tmp_path: Path) -> 
     assert bc.check_backwards_compat(plugin_tree, baseline_path=baseline) == []
 
 
-def test_main_exit_codes(plugin_tree: Path, tmp_path: Path, capsys, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_main_exit_codes(plugin_tree: Path, tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
     baseline = tmp_path / "baseline.json"
     _write_baseline(baseline, major=1, components=_live_surface(plugin_tree))
-    monkeypatch.setattr(bc, "_BASELINE_PATH", baseline)
 
-    assert bc.main(["--root", str(plugin_tree)]) == 0
+    assert bc.main(["--root", str(plugin_tree), "--baseline-path", str(baseline)]) == 0
     assert "OK" in capsys.readouterr().out
 
     components = _live_surface(plugin_tree)
     components["skills"].append("legacy")
     _write_baseline(baseline, major=1, components=components)
-    assert bc.main(["--root", str(plugin_tree)]) == 1
+    assert bc.main(["--root", str(plugin_tree), "--baseline-path", str(baseline)]) == 1
     assert "BACKWARDS-COMPAT GATE FAILED" in capsys.readouterr().out
 
     assert bc.main(["--root", str(plugin_tree / "does-not-exist")]) == 2
 
 
-def test_update_flow_regenerates_baseline(plugin_tree: Path, tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_update_flow_regenerates_baseline(plugin_tree: Path, tmp_path: Path) -> None:
     baseline = tmp_path / "baseline.json"
-    monkeypatch.setattr(bc, "_BASELINE_PATH", baseline)
-    assert bc.main(["--root", str(plugin_tree), "--update"]) == 0
+    assert bc.main(["--root", str(plugin_tree), "--baseline-path", str(baseline), "--update"]) == 0
 
     data = json.loads(baseline.read_text())
     assert data["components"] == _live_surface(plugin_tree)
     assert data["recorded_major_version"] == 1
+
+
+def test_default_baseline_path_is_derived_from_root(plugin_tree: Path) -> None:
+    """The default baseline location tracks --root, not this module's own file location.
+
+    A module-anchored default would silently check a *different* plugin's live tree
+    against *this* repo's baseline if --root ever pointed elsewhere; deriving it from
+    root instead means the same command is correct for any plugin checkout.
+    """
+    assert (
+        bc.default_baseline_path(plugin_tree)
+        == plugin_tree / "tests" / "backwards_compat_baseline.json"
+    )
+
+    (plugin_tree / "tests").mkdir()
+    _write_baseline(
+        plugin_tree / "tests" / "backwards_compat_baseline.json",
+        major=1,
+        components=_live_surface(plugin_tree),
+    )
+    # No --baseline-path: resolved from --root alone.
+    assert bc.main(["--root", str(plugin_tree)]) == 0
+
+
+def test_update_without_baseline_path_writes_to_default_location(plugin_tree: Path) -> None:
+    assert bc.main(["--root", str(plugin_tree), "--update"]) == 0
+    default_path = plugin_tree / "tests" / "backwards_compat_baseline.json"
+    assert default_path.exists()
+    assert json.loads(default_path.read_text())["components"] == _live_surface(plugin_tree)
 
 
 def test_malformed_plugin_json_is_a_finding_not_a_crash(plugin_tree: Path, tmp_path: Path) -> None:
@@ -208,6 +235,46 @@ def test_missing_hooks_json_yields_no_hooks(plugin_tree: Path) -> None:
     assert bc.extract_surface(plugin_tree)["hooks"] == []
 
 
+def test_hooks_map_not_a_dict_yields_no_hooks(plugin_tree: Path) -> None:
+    hooks_path = plugin_tree / "hooks" / "hooks.json"
+    hooks_path.write_text(json.dumps({"hooks": "not-a-dict"}), encoding="utf-8")
+    assert bc.extract_surface(plugin_tree)["hooks"] == []
+
+
+def test_hooks_event_value_not_a_list_is_skipped(plugin_tree: Path) -> None:
+    hooks_path = plugin_tree / "hooks" / "hooks.json"
+    hooks_path.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": "not-a-list",
+                    "PostToolUse": [
+                        {
+                            "matcher": "*",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": (
+                                        'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/session_logger.py"'
+                                    ),
+                                }
+                            ],
+                        }
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert bc.extract_surface(plugin_tree)["hooks"] == ["session_logger.py"]
+
+
+def test_skill_directory_without_skill_md_is_skipped(plugin_tree: Path) -> None:
+    empty_skill_dir = plugin_tree / "skills" / "no-skill-md"
+    empty_skill_dir.mkdir()
+    assert "no-skill-md" not in bc.extract_surface(plugin_tree)["skills"]
+
+
 def test_unreadable_baseline_is_a_finding_not_a_crash(plugin_tree: Path, tmp_path: Path) -> None:
     baseline = tmp_path / "baseline.json"
     baseline.write_text("{not json", encoding="utf-8")
@@ -216,10 +283,9 @@ def test_unreadable_baseline_is_a_finding_not_a_crash(plugin_tree: Path, tmp_pat
 
 
 def test_update_flow_reports_error_on_malformed_plugin_json(  # type: ignore[no-untyped-def]
-    plugin_tree: Path, tmp_path: Path, capsys, monkeypatch
+    plugin_tree: Path, tmp_path: Path, capsys
 ) -> None:
     baseline = tmp_path / "baseline.json"
-    monkeypatch.setattr(bc, "_BASELINE_PATH", baseline)
     (plugin_tree / ".claude-plugin" / "plugin.json").write_text("{not json", encoding="utf-8")
-    assert bc.main(["--root", str(plugin_tree), "--update"]) == 2
+    assert bc.main(["--root", str(plugin_tree), "--baseline-path", str(baseline), "--update"]) == 2
     assert "could not update baseline" in capsys.readouterr().err

@@ -8,7 +8,7 @@ was last frozen — renames/removals are only permitted alongside a major bump.
 Additions never produce a finding; they simply mean the baseline is due for a
 refresh before the next release (see ``--update``).
 
-Usage: ``python -m foundation_tools.backwards_compat [--root PATH] [--update]``
+Usage: ``python -m foundation_tools.backwards_compat [--root PATH] [--baseline-path PATH] [--update]``
 Exit codes: 0 gate passes; 1 findings; 2 usage/config error.
 """
 
@@ -30,10 +30,19 @@ from foundation_tools.schemas import AgentFrontmatter, PluginManifest, SkillFron
 
 logger = get_logger("foundation.backwards_compat")
 
-_BASELINE_PATH = (
-    Path(__file__).resolve().parent.parent.parent / "tests" / "backwards_compat_baseline.json"
-)
+# Relative to the plugin root being checked (the --root argument), never to this
+# module's own location — a module-anchored path would silently check a *different*
+# plugin's live tree against *this* repo's baseline if --root ever pointed elsewhere
+# (e.g. this package installed into, or reused against, a sibling plugin repo).
+_BASELINE_DIR_NAME = "tests"
+_BASELINE_FILENAME = "backwards_compat_baseline.json"
+_PLUGIN_MANIFEST_REL = Path(".claude-plugin") / "plugin.json"
 _HOOK_SCRIPT_RE = re.compile(r"([A-Za-z0-9_.-]+\.py)")
+
+
+def default_baseline_path(root: Path) -> Path:
+    """The baseline location for a given plugin root: ``<root>/tests/<filename>``."""
+    return root / _BASELINE_DIR_NAME / _BASELINE_FILENAME
 
 
 def _extract_skills(root: Path) -> list[str]:
@@ -145,16 +154,19 @@ def _load_baseline(baseline_path: Path) -> dict[str, Any] | None:
     return data
 
 
+def _read_manifest(root: Path) -> PluginManifest:
+    plugin_path = root / _PLUGIN_MANIFEST_REL
+    return PluginManifest.model_validate(json.loads(plugin_path.read_text("utf-8")))
+
+
 def _current_major(root: Path) -> int:
-    plugin_path = root / ".claude-plugin" / "plugin.json"
-    manifest = PluginManifest.model_validate(json.loads(plugin_path.read_text("utf-8")))
-    return int(manifest.version.split(".", 1)[0])
+    return int(_read_manifest(root).version.split(".", 1)[0])
 
 
 def check_backwards_compat(root: Path, *, baseline_path: Path | None = None) -> list[str]:
     """Return findings: components removed from the live tree without a major bump."""
     if baseline_path is None:
-        baseline_path = _BASELINE_PATH
+        baseline_path = default_baseline_path(root)
     try:
         baseline = _load_baseline(baseline_path)
     except (OSError, json.JSONDecodeError) as exc:
@@ -165,7 +177,7 @@ def check_backwards_compat(root: Path, *, baseline_path: Path | None = None) -> 
     try:
         current_major = _current_major(root)
     except (OSError, json.JSONDecodeError, ValidationError) as exc:
-        return [f".claude-plugin/plugin.json: {exc} (cannot verify major-version exception)"]
+        return [f"{_PLUGIN_MANIFEST_REL}: {exc} (cannot verify major-version exception)"]
 
     recorded_major = int(baseline.get("recorded_major_version", 0))
     major_bumped = current_major > recorded_major
@@ -207,9 +219,8 @@ def backwards_compat_tree(root: Path, *, baseline_path: Path | None = None) -> l
 
 def _update_baseline(root: Path, baseline_path: Path | None = None) -> None:
     if baseline_path is None:
-        baseline_path = _BASELINE_PATH
-    plugin_path = root / ".claude-plugin" / "plugin.json"
-    manifest = PluginManifest.model_validate(json.loads(plugin_path.read_text("utf-8")))
+        baseline_path = default_baseline_path(root)
+    manifest = _read_manifest(root)
     current_major = int(manifest.version.split(".", 1)[0])
     surface = extract_surface(root)
     payload = {
@@ -225,6 +236,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=".", help="plugin root (default: cwd)")
     parser.add_argument(
+        "--baseline-path",
+        default=None,
+        help=(
+            "override the baseline file location "
+            "(default: <root>/tests/backwards_compat_baseline.json)"
+        ),
+    )
+    parser.add_argument(
         "--update",
         action="store_true",
         help="regenerate the baseline from the live tree (run before tagging a release)",
@@ -234,17 +253,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not root.is_dir():
         print(f"not a directory: {root}", file=sys.stderr)
         return 2
+    baseline_path = Path(args.baseline_path).resolve() if args.baseline_path else None
 
     if args.update:
         try:
-            _update_baseline(root)
+            _update_baseline(root, baseline_path)
         except (OSError, json.JSONDecodeError, ValidationError) as exc:
             print(f"could not update baseline: {exc}", file=sys.stderr)
             return 2
         print("foundation-backwards-compat: baseline updated")
         return 0
 
-    findings = backwards_compat_tree(root)
+    findings = backwards_compat_tree(root, baseline_path=baseline_path)
     if findings:
         print("BACKWARDS-COMPAT GATE FAILED:")
         for finding in findings:
