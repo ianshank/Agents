@@ -2,7 +2,8 @@
 """Validation script for F-039 — public-surface backwards-compat guard + protected-path gap fix.
 
 Asserts two related invariants stay in place:
-    1. The append-only ``__all__`` guard (``tests/test_public_surface.py``) and its frozen
+    1. The exact-equality ``__all__`` guard (``tests/test_public_surface.py`` -- a drop or
+       rename fails as breaking, an addition must be explicitly frozen too) and its frozen
        baseline exist at the root and are byte-identically duplicated (drift-guarded) into
        each of the four sibling packages' own ``tests/`` directories, since each package runs
        its own isolated pytest suite and the guard must be self-contained there.

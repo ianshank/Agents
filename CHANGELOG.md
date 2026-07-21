@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every package's public `__all__` exports (exact-equality against a committed
   `public_surface_baseline.json`), so a removed or renamed export now fails CI instead of
   silently breaking every config/import that used it — the exact gap that let a breaking
-  change land undetected before. Append-only by design: additions must be explicitly frozen
-  (a reviewable diff), while a drop or rename fails loudly. Duplicated byte-identically into
+  change land undetected before. Exact-equality by design: a drop or rename fails loudly as
+  a breaking change, and an addition must be explicitly frozen too (a reviewable diff) — CI
+  fails either way until the baseline is updated to match. Duplicated byte-identically into
   `agent-core/`, `behavioral-regression/`, `flow-corpus/`, and `flow-protocol/`'s own
   `tests/` dirs (each package runs its own isolated suite, so the guard must be
   self-contained there) and drift-guarded against the root canonical via
