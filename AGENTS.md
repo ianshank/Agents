@@ -38,7 +38,7 @@ to read or update:
 | File | Answers | Currency |
 |---|---|---|
 | `README.md` | How do I install / run / test this? | Kept current with each release |
-| `AGENTS.md` (this file) | What must an agent read or avoid before editing? | Regenerable — see "Rebuilding this file" below |
+| `AGENTS.md` (this file) | What must an agent read or avoid before editing? | Manually maintained — see "Rebuilding this file" below |
 | `HARNESS_SPEC.md` | What is the canonical spec (features, gates, checkpoints)? | Canonical source of truth (see its own header) |
 | `NEXT_STEPS.md` | What shipped recently, what's next? | A rolling log of intent — an entry's `[x]` reflects the state *when written*, not necessarily now. Cross-check `features.yaml` / `scripts/validations/F_*.py` (run `python scripts/validate.py --tier fast`) for a feature's current enforced state rather than trusting the checkbox alone |
 | `CHANGELOG.md` | What changed, release by release? | Keep-a-changelog format; append to the `[Unreleased]`/dev section |
