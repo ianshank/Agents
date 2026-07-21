@@ -59,22 +59,29 @@ def main() -> int:
         label = pkg or "root"
         _check(os.path.exists(os.path.join(_ROOT, guard_rel)), f"{label}: {_GUARD_FILE} exists", errors)
         _check(os.path.exists(os.path.join(_ROOT, baseline_rel)), f"{label}: {_BASELINE_FILE} exists", errors)
-        if os.path.exists(os.path.join(_ROOT, baseline_rel)):
+        if not os.path.exists(os.path.join(_ROOT, baseline_rel)):
+            continue
+        try:
             with open(os.path.join(_ROOT, baseline_rel), encoding="utf-8") as fh:
                 data = json.load(fh)
-            _check(
-                isinstance(data, dict) and set(data) == {"packages", "surface"},
-                f"{label}: {_BASELINE_FILE} has the 'packages'/'surface' shape",
-                errors,
-            )
-            _check(bool(data.get("surface")), f"{label}: {_BASELINE_FILE} freezes a non-empty surface", errors)
+        except json.JSONDecodeError as exc:
+            _check(False, f"{label}: {_BASELINE_FILE} is valid JSON ({exc})", errors)
+            continue
+        _check(
+            isinstance(data, dict) and set(data) == {"packages", "surface"},
+            f"{label}: {_BASELINE_FILE} has the 'packages'/'surface' shape",
+            errors,
+        )
+        _check(bool(data.get("surface")), f"{label}: {_BASELINE_FILE} freezes a non-empty surface", errors)
 
-    # 2. The drift guard tracks the 4 sibling copies against the root canonical.
+    # 2. The drift guard tracks the 4 sibling copies against the root canonical. Compared as
+    # POSIX-style repo-relative strings (TRACKED_DUPLICATES' own key format) rather than
+    # os.path.join, which would emit backslashes on Windows and silently fail the lookup.
     import check_skill_script_drift as drift
 
-    canonical = os.path.join("tests", _GUARD_FILE)
+    canonical = f"tests/{_GUARD_FILE}"
     tracked = drift.TRACKED_DUPLICATES.get(canonical, ())
-    expected_copies = {os.path.join(pkg, "tests", _GUARD_FILE) for pkg in _PACKAGES}
+    expected_copies = {f"{pkg}/tests/{_GUARD_FILE}" for pkg in _PACKAGES}
     _check(
         set(tracked) == expected_copies,
         f"check_skill_script_drift tracks all 4 sibling {_GUARD_FILE} copies against the root canonical",
@@ -96,7 +103,7 @@ def main() -> int:
             pattern in epp.PROTECTED_PATTERNS, f"eval_protected_paths.PROTECTED_PATTERNS includes {pattern!r}", errors
         )
         _check(
-            epp.is_protected(os.path.join(pkg, "tests", "anything.py")),
+            epp.is_protected(f"{pkg}/tests/anything.py"),
             f"{pkg}/tests/ is_protected() (a representative path resolves True)",
             errors,
         )
