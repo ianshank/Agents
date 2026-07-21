@@ -43,6 +43,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scripts-coverage pass overwrites `.coverage`) and it is a CI-only convenience, not a gate.
 
 ### Fixed
+- **`main` was silently red on F-031 and F-037; validators decoupled from CI wiring.** PR #64
+  (ADR 0021 delegation POC) replaced `eval-harness-ci.yml`'s inline ruff/mypy/pytest steps with a
+  call to the generated root gate. Two validators asserted those exact command strings still
+  appeared in the workflow, so five assertions began failing the moment the delegation landed —
+  `F_031` (lints/format-checks/type-checks `scripts/`, runs the operational-scripts coverage gate)
+  and `F_037` (`eval-harness-ci.yml` type-checks `tests`). The failure went **undetected** because
+  `quality-gates.yml` — the only workflow that runs `validate.py` — is path-filtered and does not
+  fire on `.github/`-only PRs, so the guard ran neither on #64 nor on the merge to `main`.
+  Both validators now assert the *guarantee* (the step runs in that suite's CI) rather than one
+  wiring of it, via a new shared `_common.ci_enforces(workflow, gate, inline=…, in_gate=…)` helper
+  that accepts the inline spelling **or** the delegated form (workflow reaches the gate **and** the
+  gate runs the step) and still fails when neither holds. Because the delegated gate lints the whole
+  tree instead of naming `scripts`, F-031 additionally guards the one way delegation could weaken
+  it — a root ruff `exclude`. `F_031`/`F_037` are now also asserted by
+  `tests/test_validation_scripts.py`, which puts them in the **offline pytest suite** that
+  eval-harness CI *does* run on workflow edits — so this class of regression now fails at a second,
+  unfiltered layer. F-037's skills-ci checks stay inline-matched deliberately: no skill has a
+  generated gate yet, so there is no delegated form to assert against.
 - **Bot-review round (CodeRabbit):** workspace detection now skips a member directory named
   `all` (reported via `WorkspaceFacts.skipped`, never emitted broken) — its `check-all`/
   `install-all`/`clean-all` targets would collide with the generated aggregates, and GNU
