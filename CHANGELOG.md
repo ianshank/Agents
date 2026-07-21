@@ -30,6 +30,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quality-gate (196 tests, ≥95% branch coverage, mypy `--strict`).
 
 ### Changed
+- **CI gate delegation — packages 2-4 of 5 (ADR 0021):** `agent-core-ci.yml`,
+  `flow-corpus-ci.yml` (both its `flow-protocol` and `flow-corpus` jobs), and
+  `behavioral-regression-ci.yml`'s `behavioral-regression` job now delegate to
+  `.github/actions/run-quality-gate` (`check: make check`) instead of duplicating
+  ruff/format/mypy/pytest inline — continuing the fan-out `eval-harness-ci.yml` started
+  (below) and unblocked by the `F_037` fix (also below): its new `_common.ci_enforces()`
+  accepts either inline or delegated wiring, so this rewire no longer breaks the validator
+  the way the first one did. Incidentally fixes a real drift bug while delegating: the
+  `flow-corpus` and `behavioral-regression` jobs installed an **unpinned**
+  `pip install ruff mypy` instead of their own package's pinned `[dev]` extra
+  (`ruff==0.15.20`, `mypy==2.1.0` — the same pin the rest of the fleet uses), which
+  delegation naturally closes since the package's own `[dev]` extra is what the new install
+  command pulls in. `claude-foundation-ci.yml` is deliberately left inline (a separate PR
+  deletes it entirely as part of the claude-foundation extraction). Verified locally:
+  `make -C <pkg> check` run end-to-end for all 4 packages, matching the coverage numbers
+  their own CI reports (agent-core 98.67%, flow-protocol/flow-corpus/behavioral-regression
+  100%, all ≥ their 95% floors).
 - **CI gate delegation — phase-2 POC (ADR 0021):** `eval-harness-ci.yml` no longer duplicates the
   ruff/format/mypy/pytest steps inline — it delegates to the generated root gate through a new reusable
   composite action `.github/actions/run-quality-gate` (sets up Python, installs the package, runs
