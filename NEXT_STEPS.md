@@ -2,6 +2,13 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Merge-gate soak-stats (F-040)** — `agent_core.store_sync.soak_progress(records, target)`
+  makes progress toward the ADR 0005 enablement threshold observable: a pure, read-only summary
+  (total/pending/labeled, HUMAN_AUDIT count, per-domain cold-start keyed on
+  `AuditConfig.per_domain_floor`, n-vs-target, merge velocity/day, days-to-target) plus an opt-in
+  `store_sync stats --soak-target N` that adds a reserved `_soak` block (bare-stats output
+  byte-identical). No TCB edit, no store mutation (property-tested), no schema bump. Soak
+  enablement itself stays time-gated (N≥20 + ≥1 human verdict + weekly audits).
 - [x] **Public-surface backwards-compat guard (F-039)** — `tests/test_public_surface.py`
   freezes every package's public `__all__` exports (exact-equality vs a committed
   baseline), so a removed/renamed export now fails CI instead of silently breaking every

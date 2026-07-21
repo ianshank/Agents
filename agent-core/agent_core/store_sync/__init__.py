@@ -79,6 +79,7 @@ from .store import (
     UNPARSED_STATS_KEY,
     read_store,
     read_store_lines,
+    soak_progress,
     store_stats,
     write_store,
 )
@@ -104,6 +105,7 @@ __all__ = [
     "read_store",
     "read_store_lines",
     "serialize_store",
+    "soak_progress",
     "store_stats",
     "write_store",
 ]
@@ -128,6 +130,17 @@ def _config_from_args(args: argparse.Namespace) -> StoreSyncConfig:
     )
 
 
+def _emit_stats(store_path: str, soak_target: int | None) -> None:
+    """Print per-domain stats as JSON. ``--soak-target`` adds a reserved ``_soak``
+    block; absent, the output stays byte-identical to the historical stats contract."""
+    records, opaque = read_store_lines(store_path)
+    out: dict[str, object] = {}
+    out.update(store_stats(records, opaque))
+    if soak_target is not None:
+        out["_soak"] = soak_progress(records, soak_target)
+    print(json.dumps(out, sort_keys=True))
+
+
 def main(argv: list[str] | None = None) -> int:
     # Common options live on the SUBCOMMANDS (via a parent parser) so the
     # natural invocation order `store_sync push --store …` works — with
@@ -147,16 +160,21 @@ def main(argv: list[str] | None = None) -> int:
         "push", parents=[common], help="publish merged records to the data branch"
     )
     p_push.add_argument("--actor", help="attribution trailer for the data-branch commit")
-    sub.add_parser(
+    p_stats = sub.add_parser(
         "stats", parents=[common], help="per-domain / per-label-source record counts (JSON)"
+    )
+    p_stats.add_argument(
+        "--soak-target",
+        type=int,
+        default=None,
+        help="if set, add a reserved '_soak' progress block toward N target records",
     )
     args = ap.parse_args(argv)
 
     configure_logging(level="INFO")
     try:
         if args.cmd == "stats":
-            records, opaque = read_store_lines(args.store)
-            print(json.dumps(store_stats(records, opaque), sort_keys=True))
+            _emit_stats(args.store, args.soak_target)
             return EXIT_OK
         cfg = _config_from_args(args)
         # Resolve the runner at call time (module attribute) so the seam stays
