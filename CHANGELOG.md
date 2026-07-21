@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Plugin-registry surface guard:** `tests/test_plugin_registry_surface.py` freezes the
+  `eval_harness` plugin registry's config-selectable keys — the `datasets`/`judges`/
+  `scorers`/`sinks`/`targets` registries' primary names *and* their backwards-compat
+  aliases (`csv_file` → `csv`, `claude` → `anthropic`, …) — against a committed
+  `plugin_registry_baseline.json`, with exact equality: a dropped/renamed key fails CI as a
+  breaking change, a new key must be explicitly frozen. This is the compat surface the
+  `__all__` guard cannot see, since users select components by string in config rather than
+  importing them. The built-in surface is read in a fresh subprocess (the registries are
+  process-global and some tests register doubles into them, so an in-process read would be
+  order-dependent), keyed by each `Registry`'s own stable `.kind` field rather than its
+  Python variable name (immune to a purely internal rename). `--update` refuses to silently
+  rewrite the baseline if doing so would drop a key — `--allow-drops` is the explicit,
+  reviewed override for a deliberate breaking change.
 - **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
   self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
   evidence for the eval-backend displacement decision by validating the claimed capabilities
