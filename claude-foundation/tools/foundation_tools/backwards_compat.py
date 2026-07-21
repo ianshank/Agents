@@ -48,7 +48,7 @@ def _extract_skills(root: Path) -> list[str]:
         try:
             front, _ = load_frontmatter(skill_md)
             names.append(SkillFrontmatter.model_validate(front).name)
-        except (FrontmatterError, ValidationError):
+        except (FrontmatterError, ValidationError, OSError):
             names.append(skill_dir.name)
     return names
 
@@ -62,7 +62,7 @@ def _extract_agents(root: Path) -> list[str]:
         try:
             front, _ = load_frontmatter(agent_md)
             names.append(AgentFrontmatter.model_validate(front).name)
-        except (FrontmatterError, ValidationError):
+        except (FrontmatterError, ValidationError, OSError):
             names.append(agent_md.stem)
     return names
 
@@ -100,7 +100,7 @@ def _extract_hooks(root: Path) -> list[str]:
         return []
     try:
         config = json.loads(hooks_path.read_text("utf-8"))
-    except json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError):
         return []
     if not isinstance(config, dict):
         return []
@@ -145,7 +145,7 @@ def _load_baseline(baseline_path: Path) -> dict[str, Any] | None:
     return data
 
 
-def _current_major(root: Path) -> int | None:
+def _current_major(root: Path) -> int:
     plugin_path = root / ".claude-plugin" / "plugin.json"
     manifest = PluginManifest.model_validate(json.loads(plugin_path.read_text("utf-8")))
     return int(manifest.version.split(".", 1)[0])
@@ -168,7 +168,7 @@ def check_backwards_compat(root: Path, *, baseline_path: Path | None = None) -> 
         return [f".claude-plugin/plugin.json: {exc} (cannot verify major-version exception)"]
 
     recorded_major = int(baseline.get("recorded_major_version", 0))
-    major_bumped = current_major is not None and current_major > recorded_major
+    major_bumped = current_major > recorded_major
 
     current = extract_surface(root)
     removed, added = diff_surface(baseline.get("components", {}), current)
@@ -208,11 +208,12 @@ def backwards_compat_tree(root: Path, *, baseline_path: Path | None = None) -> l
 def _update_baseline(root: Path, baseline_path: Path | None = None) -> None:
     if baseline_path is None:
         baseline_path = _BASELINE_PATH
-    current_major = _current_major(root)
+    plugin_path = root / ".claude-plugin" / "plugin.json"
+    manifest = PluginManifest.model_validate(json.loads(plugin_path.read_text("utf-8")))
+    current_major = int(manifest.version.split(".", 1)[0])
     surface = extract_surface(root)
-    manifest = json.loads((root / ".claude-plugin" / "plugin.json").read_text("utf-8"))
     payload = {
-        "plugin_name": manifest["name"],
+        "plugin_name": manifest.name,
         "recorded_major_version": current_major,
         "components": {kind: sorted(names) for kind, names in surface.items()},
     }
@@ -237,7 +238,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.update:
         try:
             _update_baseline(root)
-        except (OSError, json.JSONDecodeError, ValidationError, KeyError) as exc:
+        except (OSError, json.JSONDecodeError, ValidationError) as exc:
             print(f"could not update baseline: {exc}", file=sys.stderr)
             return 2
         print("foundation-backwards-compat: baseline updated")
