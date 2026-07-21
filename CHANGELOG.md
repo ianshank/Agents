@@ -20,6 +20,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Python variable name (immune to a purely internal rename). `--update` refuses to silently
   rewrite the baseline if doing so would drop a key — `--allow-drops` is the explicit,
   reviewed override for a deliberate breaking change.
+- **Public-surface backwards-compat guard (F-039):** `tests/test_public_surface.py` freezes
+  every package's public `__all__` exports (exact-equality against a committed
+  `public_surface_baseline.json`), so a removed or renamed export now fails CI instead of
+  silently breaking every config/import that used it — the exact gap that let a breaking
+  change land undetected before. Exact-equality by design: a drop or rename fails loudly as
+  a breaking change, and an addition must be explicitly frozen too (a reviewable diff) — CI
+  fails either way until the baseline is updated to match. Duplicated byte-identically into
+  `agent-core/`, `behavioral-regression/`, `flow-corpus/`, and `flow-protocol/`'s own
+  `tests/` dirs (each package runs its own isolated suite, so the guard must be
+  self-contained there) and drift-guarded against the root canonical via
+  `check_skill_script_drift.py`'s `TRACKED_DUPLICATES`. Ledgered as **F-039**;
+  `scripts/validations/F_039.py` guards the wiring itself.
+
+### Fixed
+- **Sibling packages' `tests/` directories had no protected-path coverage.**
+  `scripts/eval_protected_paths.py`'s `"tests/**"` pattern compiles to `^tests/.*$`, which
+  only anchors the root suite — `agent-core/tests/`, `behavioral-regression/tests/`,
+  `flow-corpus/tests/`, and `flow-protocol/tests/` (every test in those four packages, not
+  just their public-surface-guard copies) had no `eval-change-approved` label requirement
+  and no `.github/CODEOWNERS` review gate. `PROTECTED_PATTERNS` and `CODEOWNERS` now include
+  explicit entries for all four; locked in by new parametrized cases in
+  `tests/test_protected_paths.py` and asserted by F-039's validator.
+
 - **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
   self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
   evidence for the eval-backend displacement decision by validating the claimed capabilities
@@ -43,6 +66,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quality-gate (196 tests, ≥95% branch coverage, mypy `--strict`).
 
 ### Changed
+- **CI gate delegation — packages 2-4 of 5 (ADR 0021):** `agent-core-ci.yml`,
+  `flow-corpus-ci.yml` (both its `flow-protocol` and `flow-corpus` jobs), and
+  `behavioral-regression-ci.yml`'s `behavioral-regression` job now delegate to
+  `.github/actions/run-quality-gate` (`check: make check`) instead of duplicating
+  ruff/format/mypy/pytest inline — continuing the fan-out `eval-harness-ci.yml` started
+  (below) and unblocked by the `F_037` fix (also below): its new `_common.ci_enforces()`
+  accepts either inline or delegated wiring, so this rewire no longer breaks the validator
+  the way the first one did. Incidentally fixes a real drift bug while delegating: the
+  `flow-corpus` and `behavioral-regression` jobs installed an **unpinned**
+  `pip install ruff mypy` instead of their own package's pinned `[dev]` extra
+  (`ruff==0.15.20`, `mypy==2.1.0` — the same pin the rest of the fleet uses), which
+  delegation naturally closes since the package's own `[dev]` extra is what the new install
+  command pulls in. `claude-foundation-ci.yml` is deliberately left inline (a separate PR
+  deletes it entirely as part of the claude-foundation extraction). Verified locally:
+  `make -C <pkg> check` run end-to-end for all 4 packages, matching the coverage numbers
+  their own CI reports (agent-core 98.67%, flow-protocol/flow-corpus/behavioral-regression
+  100%, all ≥ their 95% floors).
 - **CI gate delegation — phase-2 POC (ADR 0021):** `eval-harness-ci.yml` no longer duplicates the
   ruff/format/mypy/pytest steps inline — it delegates to the generated root gate through a new reusable
   composite action `.github/actions/run-quality-gate` (sets up Python, installs the package, runs

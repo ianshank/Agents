@@ -9,6 +9,7 @@ on:
       - "flow-protocol/**"
       - "flow-corpus/**"
       - ".github/workflows/behavioral-regression-ci.yml"
+      - ".github/actions/run-quality-gate/**"
   pull_request:
     paths:
       - "behavioral-regression/**"
@@ -16,6 +17,7 @@ on:
       - "flow-protocol/**"
       - "flow-corpus/**"
       - ".github/workflows/behavioral-regression-ci.yml"
+      - ".github/actions/run-quality-gate/**"
   workflow_dispatch:
 
 permissions:
@@ -39,22 +41,19 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+      # Delegate to the generated package gate so CI runs the exact same steps as local
+      # `make -C behavioral-regression check` -> behavioral-regression/scripts/quality-gate.sh
+      # all (ADR 0021). The install now uses behavioral-regression's own pinned [dev] extra
+      # (ruff==0.15.20, mypy==2.1.0) instead of a separate unpinned `pip install ruff mypy` --
+      # closing the version-drift gap the unpinned install had against the rest of the fleet.
+      # behavioral-regression depends on agent-core + flow-protocol + flow-corpus (installed
+      # editable from the repo); it never imports eval_harness.
+      - uses: ./.github/actions/run-quality-gate
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install --upgrade pip "setuptools>=68"
-      # behavioral-regression depends on agent-core + flow-protocol + flow-corpus
-      # (installed editable from the repo). It never imports eval_harness.
-      - run: pip install -e ./agent-core -e ./flow-protocol -e ./flow-corpus -e ./behavioral-regression
-      - run: pip install pytest pytest-cov hypothesis ruff mypy
-      - run: ruff check behavioral_regression tests
-        working-directory: behavioral-regression
-      - run: ruff format --check behavioral_regression tests
-        working-directory: behavioral-regression
-      - run: mypy behavioral_regression tests
-        working-directory: behavioral-regression
-      - run: python -m pytest --cov --cov-report=term-missing
-        working-directory: behavioral-regression
+          working-directory: behavioral-regression
+          install: pip install -e ../agent-core -e ../flow-protocol -e ../flow-corpus -e ".[dev]"
+          check: make check
 
   feature-validation:
     name: F-016 offline validation

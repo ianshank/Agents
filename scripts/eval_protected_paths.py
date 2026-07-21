@@ -27,6 +27,13 @@ PROTECTED_PATTERNS: tuple[str, ...] = (
     "src/eval_harness/scorers/**",
     "src/eval_harness/judges/**",
     "tests/**",
+    # "tests/**" only matches the root suite (^tests/.*$ once compiled) -- the sibling
+    # packages' own test suites, including their copies of the public-surface compat guard,
+    # live under these separate roots and need their own entries.
+    "agent-core/tests/**",
+    "behavioral-regression/tests/**",
+    "flow-corpus/tests/**",
+    "flow-protocol/tests/**",
     ".github/**",
     # The architecture manifest is the airgap's enforcement surface: editing its
     # declared component edges could quietly let the corpus and harness import each

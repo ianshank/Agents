@@ -30,6 +30,24 @@ Before writing code, read in order:
 4. `CHANGELOG.md` `[1.3.0-dev]` — the section to add entries to for any user-visible change. Follow the existing `Hardening` / `Added` / `Changed` / `Fixed` structure.
 5. `docs/phoenix-spike.md` — reversible-adoption pattern the Phoenix seam demonstrates. Reference model for any future "SDK-optional" integration.
 
+## Root documentation map
+
+Six root-level docs answer different questions; check this table before guessing which one
+to read or update:
+
+| File | Answers | Currency |
+|---|---|---|
+| `README.md` | How do I install / run / test this? | Kept current with each release |
+| `AGENTS.md` (this file) | What must an agent read or avoid before editing? | Manually maintained — see "Rebuilding this file" below |
+| `HARNESS_SPEC.md` | What is the canonical spec (features, gates, checkpoints)? | Canonical source of truth (see its own header) |
+| `NEXT_STEPS.md` | What shipped recently, what's next? | A rolling log of intent — an entry's `[x]` reflects the state *when written*, not necessarily now. Cross-check `features.yaml` / `scripts/validations/F_*.py` (run `python scripts/validate.py --tier fast`) for a feature's current enforced state rather than trusting the checkbox alone |
+| `CHANGELOG.md` | What changed, release by release? | Keep-a-changelog format; append to the `[Unreleased]`/dev section |
+| `progress.md` | What happened in each work session? | Rotates to `progress-archive/YYYY-MM.md` once large (see `HARNESS_SPEC.md`'s "progress-archive/" section) |
+
+`docs/decisions/` ADR numbers are **not** contiguous by design — `0007` is an intentional
+gap in the sequence (see `docs/plans/agents-critical-path/REVIEW.md`); do not backfill it
+or renumber later ADRs to close it.
+
 ## What is off-limits without a labeled approval
 
 The repo enforces protected paths via `scripts/check_protected_changes.py` and the `eval-change-approved` GitHub label. Do NOT modify these paths without asking:

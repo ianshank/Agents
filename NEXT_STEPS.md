@@ -2,6 +2,17 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Public-surface backwards-compat guard (F-039)** — `tests/test_public_surface.py`
+  freezes every package's public `__all__` exports (exact-equality vs a committed
+  baseline), so a removed/renamed export now fails CI instead of silently breaking every
+  config/import that used it. Duplicated byte-identically into all 5 packages'
+  `tests/` dirs, drift-guarded against the root canonical. Surfaced and closed a
+  pre-existing, independent gap while landing: `scripts/eval_protected_paths.py`'s
+  `"tests/**"` pattern only anchored the root suite, leaving all 4 sibling packages'
+  entire test suites without protected-path/CODEOWNERS coverage — both now fixed.
+  A companion **plugin-registry surface guard** (freezing the config-selectable
+  datasets/judges/scorers/sinks/targets keys + aliases — the compat surface `__all__`
+  can't see) is in a separate PR.
 - [x] **CI gate delegation phase-2 POC (ADR 0021) — `eval-harness-ci` → `make check`** — a new
   reusable composite action `.github/actions/run-quality-gate` (setup-python + install + run the gate)
   now backs `eval-harness-ci.yml`, which delegates to the root `make check` instead of duplicating
@@ -116,6 +127,13 @@
   with its own ≥85% coverage gate (`scripts/.coveragerc`); 46 new tests for `validate.py` /
   `select_next.py` / `init.py`; `resolve_repo` fixed to be immune to git `url.insteadOf`
   rewrites; `scripts/validations/F_031.py` guards the enforcement itself.
+  **2026-07-21 incident + fix:** ADR 0021's CI-delegation (PR #64) moved the enforced
+  commands from inline workflow YAML into `scripts/quality-gate.sh`, which broke `F_031`'s
+  (and `F_037`'s) inline-string assertions even though the underlying enforcement stayed
+  intact — undetected because `quality-gates.yml` didn't run on the `.github/`-only PR. PR
+  #65 repointed both validators at the delegated behavior (`_common.ci_enforces`) and
+  widened the trigger path filter so this class of regression can't hide again; both have
+  passed on `main` since PR #65 merged (2026-07-21).
 - [x] **`claude-foundation` plugin plan** — peer-reviewed, corrected execution plan for the
   reusable Claude Code plugin repository (`docs/plans/claude-foundation/`). Planning only;
   see follow-ups below.

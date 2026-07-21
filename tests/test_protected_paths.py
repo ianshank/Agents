@@ -23,6 +23,12 @@ PROTECTED_EXAMPLES = [
     "tests/test_engine.py",
     ".github/workflows/eval-harness-ci.yml",
     ".github/CODEOWNERS",
+    # "tests/**" only anchors the root suite; the sibling packages' own suites (where 4 of
+    # the 5 public-surface-guard copies live) need their own explicit entries.
+    "agent-core/tests/test_calibration.py",
+    "behavioral-regression/tests/test_gate.py",
+    "flow-corpus/tests/test_holdout.py",
+    "flow-protocol/tests/test_contract.py",
 ]
 
 ALLOWED_EXAMPLES = [
