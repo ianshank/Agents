@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Public-surface backwards-compat guard (F-039):** `tests/test_public_surface.py` freezes
+  every package's public `__all__` exports (exact-equality against a committed
+  `public_surface_baseline.json`), so a removed or renamed export now fails CI instead of
+  silently breaking every config/import that used it — the exact gap that let a breaking
+  change land undetected before. Exact-equality by design: a drop or rename fails loudly as
+  a breaking change, and an addition must be explicitly frozen too (a reviewable diff) — CI
+  fails either way until the baseline is updated to match. Duplicated byte-identically into
+  `agent-core/`, `behavioral-regression/`, `flow-corpus/`, and `flow-protocol/`'s own
+  `tests/` dirs (each package runs its own isolated suite, so the guard must be
+  self-contained there) and drift-guarded against the root canonical via
+  `check_skill_script_drift.py`'s `TRACKED_DUPLICATES`. Ledgered as **F-039**;
+  `scripts/validations/F_039.py` guards the wiring itself.
+
+### Fixed
+- **Sibling packages' `tests/` directories had no protected-path coverage.**
+  `scripts/eval_protected_paths.py`'s `"tests/**"` pattern compiles to `^tests/.*$`, which
+  only anchors the root suite — `agent-core/tests/`, `behavioral-regression/tests/`,
+  `flow-corpus/tests/`, and `flow-protocol/tests/` (every test in those four packages, not
+  just their public-surface-guard copies) had no `eval-change-approved` label requirement
+  and no `.github/CODEOWNERS` review gate. `PROTECTED_PATTERNS` and `CODEOWNERS` now include
+  explicit entries for all four; locked in by new parametrized cases in
+  `tests/test_protected_paths.py` and asserted by F-039's validator.
+
+### Added
 - **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
   self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
   evidence for the eval-backend displacement decision by validating the claimed capabilities
