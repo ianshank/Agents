@@ -1,0 +1,89 @@
+# Opik self-hosted stack (probe target). Hand-maintained config, reviewed at P0 sign-off;
+# tune against the official opik docker-compose for the pinned version if images evolve.
+# Same rules as the Langfuse stack: digest-pinned images only (TODO_PIN -> `make
+# pin-digests`), ${VAR:?} for secrets, loopback ports, named volumes only.
+name: bv-opik
+
+services:
+  mysql:
+    image: mysql:8.4@TODO_PIN
+    environment:
+      MYSQL_ROOT_PASSWORD: ${BV_OPIK_MYSQL_PASSWORD:?set in .env.local}
+      MYSQL_DATABASE: opik
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine@TODO_PIN
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine@TODO_PIN
+    environment:
+      CLICKHOUSE_USER: opik
+      CLICKHOUSE_PASSWORD: ${BV_OPIK_CH_PASSWORD:?set in .env.local}
+      CLICKHOUSE_DB: opik
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user opik --password $$CLICKHOUSE_PASSWORD --query 'SELECT 1' || clickhouse-client --query 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - opik-ch-data:/var/lib/clickhouse
+
+  opik-backend:
+    image: ghcr.io/comet-ml/opik/opik-backend:1.7.26@TODO_PIN
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      clickhouse: {condition: service_healthy}
+    environment:
+      STATE_DB_URL: "jdbc:mysql://mysql:3306/opik?rewriteBatchedStatements=true"
+      STATE_DB_DATABASE_NAME: opik
+      STATE_DB_USER: root
+      STATE_DB_PASS: ${BV_OPIK_MYSQL_PASSWORD:?}
+      ANALYTICS_DB_MIGRATIONS_URL: "jdbc:clickhouse://clickhouse:8123"
+      ANALYTICS_DB_HOST: clickhouse
+      ANALYTICS_DB_DATABASE_NAME: opik
+      ANALYTICS_DB_USERNAME: opik
+      ANALYTICS_DB_PASS: ${BV_OPIK_CH_PASSWORD:?}
+      REDIS_URL: redis://redis:6379/0
+      OPIK_USAGE_REPORT_ENABLED: ${BV_OPIK_USAGE_REPORT:-true}  # airgap dual-scoring lever (spec R8)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health-check || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  opik-python-backend:
+    image: ghcr.io/comet-ml/opik/opik-python-backend:1.7.26@TODO_PIN
+    depends_on:
+      opik-backend: {condition: service_healthy}
+    environment:
+      OPIK_REVERSE_PROXY_URL: http://opik-frontend:5173/api
+      OPIK_USAGE_REPORT_ENABLED: ${BV_OPIK_USAGE_REPORT:-true}
+
+  opik-frontend:
+    image: ghcr.io/comet-ml/opik/opik-frontend:1.7.26@TODO_PIN
+    depends_on:
+      opik-backend: {condition: service_healthy}
+    ports:
+      - "127.0.0.1:${BV_OPIK_PORT:-18322}:5173"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5173/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  mysql-data:
+  opik-ch-data:

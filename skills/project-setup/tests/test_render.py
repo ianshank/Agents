@@ -1,0 +1,193 @@
+"""Unit tests for deterministic Makefile rendering (``makegen.render``)."""
+
+from __future__ import annotations
+
+from makegen import ProjectFacts, WorkspaceFacts, render_makefile
+
+
+def _recipe_lines(text: str) -> list[str]:
+    return [ln for ln in text.splitlines() if ln[:1] == "\t"]
+
+
+FULL = ProjectFacts(
+    has_ruff=True,
+    type_checker="mypy",
+    typecheck_paths="src",
+    has_pytest=True,
+    has_pytest_cov=True,
+    coverage_source="demo",
+    cov_fail_under=90,
+    src_layout=True,
+    has_build_backend=True,
+)
+
+
+def test_full_project_emits_all_targets() -> None:
+    out = render_makefile(FULL)
+    for target in (
+        "help:",
+        "install:",
+        "format:",
+        "lint:",
+        "typecheck:",
+        "test:",
+        "coverage:",
+        "check:",
+        "build:",
+        "clean:",
+    ):
+        assert target in out
+    assert ".DEFAULT_GOAL := help" in out
+    assert ".DELETE_ON_ERROR:" in out
+    assert ".PHONY:" in out
+
+
+def test_every_recipe_line_is_tab_indented() -> None:
+    out = render_makefile(FULL)
+    recipes = _recipe_lines(out)
+    assert recipes, "expected recipe lines"
+    assert all(ln.startswith("\t") for ln in recipes)
+    # And no recipe was emitted with leading spaces (the classic Make footgun).
+    assert not any(ln.startswith("    ") and ("ruff" in ln or "pytest" in ln) for ln in out.splitlines())
+
+
+def test_output_ends_with_single_newline_and_is_deterministic() -> None:
+    out = render_makefile(FULL)
+    assert out.endswith("\n") and not out.endswith("\n\n")
+    assert render_makefile(FULL) == out  # byte-stable
+
+
+def test_check_lists_existing_prereqs() -> None:
+    out = render_makefile(FULL)
+    assert "check: lint typecheck test ## " in out
+
+
+def test_variables_emitted_only_when_used() -> None:
+    out = render_makefile(FULL)
+    assert "TYPECHECK_PATHS ?= src" in out
+    assert "COVERAGE_SOURCE ?= demo" in out
+    assert "COV_FAIL_UNDER ?= 90" in out
+
+
+def test_delegation_when_quality_gate_present() -> None:
+    facts = ProjectFacts(
+        has_ruff=True,
+        type_checker="mypy",
+        has_pytest=True,
+        has_pytest_cov=True,
+        has_quality_gate_script=True,
+    )
+    out = render_makefile(facts)
+    assert "./scripts/quality-gate.sh lint" in out
+    assert "./scripts/quality-gate.sh typecheck" in out
+    assert "./scripts/quality-gate.sh test" in out
+    assert "./scripts/quality-gate.sh coverage" in out
+    assert "check: ## Run the full quality gate" in out
+    assert "./scripts/quality-gate.sh all" in out
+    # Inline tool variables are not emitted in delegation mode.
+    assert "TYPECHECK_PATHS" not in out
+    assert "COVERAGE_SOURCE" not in out
+
+
+def test_minimal_project_omits_absent_targets() -> None:
+    out = render_makefile(ProjectFacts())
+    assert "help:" in out and "install:" in out and "clean:" in out
+    for absent in ("lint:", "typecheck:", "test:", "coverage:", "check:", "build:", "format:", "deploy:"):
+        assert absent not in out
+
+
+def test_pyright_target() -> None:
+    out = render_makefile(ProjectFacts(type_checker="pyright", typecheck_paths="."))
+    assert "pyright $(TYPECHECK_PATHS)" in out
+
+
+def test_deploy_target_when_script_present() -> None:
+    out = render_makefile(ProjectFacts(has_deploy_script=True))
+    assert "deploy: ## " in out
+    assert "./scripts/deploy.sh release" in out
+
+
+def test_check_with_single_prereq() -> None:
+    out = render_makefile(ProjectFacts(has_pytest=True))
+    assert "check: test ## " in out
+
+
+def test_no_check_when_nothing_to_gate() -> None:
+    out = render_makefile(ProjectFacts(has_build_backend=True))
+    assert "check:" not in out
+    assert "build:" in out
+
+
+def test_no_pip_variable_for_non_pip_install() -> None:
+    # A manager whose install command does not reference $(PIP) must not emit the PIP var.
+    out = render_makefile(ProjectFacts(package_manager="poetry", install_cmd="poetry install"))
+    assert "PIP ?=" not in out
+    assert "poetry install" in out
+
+
+# --------------------------------------------------------- 1.1.0: workspace mode
+def test_workspace_section_renders_fanout_targets() -> None:
+    ws = WorkspaceFacts(members=("agent-core", "flow-corpus"))
+    out = render_makefile(ProjectFacts(has_ruff=True, has_pytest=True), workspace=ws, checkable_members=ws.members)
+    assert "check-agent-core: ## " in out
+    assert "$(MAKE) -C agent-core check" in out
+    assert "check-all: check check-agent-core check-flow-corpus ## " in out  # root has a check
+    assert "install-all: install ## " in out  # root install joins the aggregate
+    # Each member installs via its OWN Makefile target, so its detected install command
+    # (dev extras, poetry, ...) is honoured — a bare `pip install -e ./m` skips toolchains.
+    assert "$(MAKE) -C agent-core install" in out and "$(MAKE) -C flow-corpus install" in out
+    assert "clean-all: clean ## " in out
+    assert "$(MAKE) -C flow-corpus clean" in out
+    for name in ("check-agent-core", "check-flow-corpus", "check-all", "install-all", "clean-all"):
+        assert name in out.split(".PHONY: ")[1].splitlines()[0]
+
+
+def test_workspace_check_all_omits_missing_root_check() -> None:
+    # Root with nothing gate-able has no `check`; the aggregate must not depend on it.
+    out = render_makefile(ProjectFacts(), workspace=WorkspaceFacts(members=("m1",)), checkable_members=("m1",))
+    assert "check-all: check-m1 ## " in out
+
+
+def test_omitted_checkable_members_means_no_check_fanout() -> None:
+    # Safe default: without the supports_check-filtered list, no check delegation is
+    # fabricated — install/clean fan-out still covers the members.
+    ws = WorkspaceFacts(members=("m1",))
+    out = render_makefile(ProjectFacts(has_ruff=True, has_pytest=True), workspace=ws)
+    assert "check-m1" not in out
+    assert "check-all: check ## " in out  # root's own check still aggregates
+    assert "$(MAKE) -C m1 install" in out and "$(MAKE) -C m1 clean" in out
+
+
+def test_check_all_omitted_when_nothing_to_check() -> None:
+    # A bare `check-all:` that exits 0 while checking nothing is a fabricated pass.
+    out = render_makefile(ProjectFacts(), workspace=WorkspaceFacts(members=("m1",)), checkable_members=())
+    assert "check-all" not in out
+    assert "install-all" in out  # non-check aggregates survive
+
+
+def test_workspace_regen_provenance_line() -> None:
+    out = render_makefile(
+        ProjectFacts(),
+        workspace=WorkspaceFacts(members=("m1",)),
+        regen_args=("--root", ".", "--workspace"),
+        regen_program="skills/project-setup/scripts/gen_makefile.py",
+    )
+    assert "# regenerate: python skills/project-setup/scripts/gen_makefile.py --root . --workspace" in out
+
+
+def test_no_workspace_is_byte_identical_to_default() -> None:
+    # Backwards compatibility: omitting workspace (or passing an empty one) changes nothing.
+    facts = FULL
+    assert render_makefile(facts) == render_makefile(facts, workspace=None)
+    assert render_makefile(facts) == render_makefile(facts, workspace=WorkspaceFacts())
+
+
+def test_delegation_omits_absent_tools() -> None:
+    # Never fabricate: with a gate script present but only ruff configured, only `lint`
+    # delegates; typecheck/test/coverage are omitted (the gate script would not implement them).
+    out = render_makefile(ProjectFacts(has_ruff=True, has_quality_gate_script=True))
+    assert "./scripts/quality-gate.sh lint" in out
+    assert "quality-gate.sh typecheck" not in out
+    assert "quality-gate.sh test" not in out
+    assert "quality-gate.sh coverage" not in out
+    assert "./scripts/quality-gate.sh all" in out  # check still delegates to the aggregate

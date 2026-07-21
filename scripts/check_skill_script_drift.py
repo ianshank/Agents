@@ -43,6 +43,19 @@ TRACKED_DUPLICATES: dict[str, tuple[str, ...]] = {
         "skills/architecture-drift-guard/scripts/validate_skill.py",
         "skills/eval-corpus-forge/scripts/validate_skill.py",
         "skills/model-bench/scripts/validate_skill.py",
+        "skills/project-setup/scripts/validate_skill.py",
+        "skills/quality-gate/scripts/validate_skill.py",
+        "skills/deploy/scripts/validate_skill.py",
+    ),
+    # The public-surface guard runs in every package's isolated pytest suite, so its logic
+    # is copied into each package's tests/ (only the co-located baseline JSON differs). The
+    # root copy is canonical; this entry pins the four package copies to it (the drift guard
+    # is deliberately generic — see the module docstring — so it covers non-skill copies too).
+    "tests/test_public_surface.py": (
+        "agent-core/tests/test_public_surface.py",
+        "behavioral-regression/tests/test_public_surface.py",
+        "flow-corpus/tests/test_public_surface.py",
+        "flow-protocol/tests/test_public_surface.py",
     ),
 }
 

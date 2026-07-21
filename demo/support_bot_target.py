@@ -24,12 +24,11 @@ _ROUTES: tuple[tuple[tuple[str, ...], str], ...] = (
     (
         ("reset", "password"),
         "To reset your password, go to Settings > Security and click "
-        "\"Reset password\". We'll email you a secure reset link.",
+        '"Reset password". We\'ll email you a secure reset link.',
     ),
     (
         ("password",),
-        "You can manage your password under Settings > Security. Use "
-        "\"Reset password\" if you've forgotten it.",
+        'You can manage your password under Settings > Security. Use "Reset password" if you\'ve forgotten it.',
     ),
     (
         ("cancel",),
@@ -39,12 +38,11 @@ _ROUTES: tuple[tuple[tuple[str, ...], str], ...] = (
     (
         ("refund",),
         "To request a refund, open Settings > Billing > Payment history, select "
-        "the charge, and click \"Request refund\". Refunds post within 5-10 days.",
+        'the charge, and click "Request refund". Refunds post within 5-10 days.',
     ),
     (
         ("invoice",),
-        "Your invoices live under Settings > Billing > Payment history, where you "
-        "can download any invoice as a PDF.",
+        "Your invoices live under Settings > Billing > Payment history, where you can download any invoice as a PDF.",
     ),
     (
         ("upgrade",),

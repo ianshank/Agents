@@ -1,0 +1,21 @@
+# Local judge for every judge-class probe (k=3): one pinned Ollama + one pinned model,
+# identical across backends — probes test score PLUMBING, never judge accuracy.
+# deploy.py pulls ${BV_JUDGE_MODEL} into the named volume after the container is healthy
+# (recorded in the setup wall-clock, spec R9). Digest rules identical to the other stacks.
+name: bv-judge
+
+services:
+  ollama:
+    image: ollama/ollama:0.9.6@TODO_PIN
+    ports:
+      - "127.0.0.1:${BV_JUDGE_PORT:-18323}:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  ollama-models:

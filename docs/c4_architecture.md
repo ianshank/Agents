@@ -1,5 +1,21 @@
 # C4 Architecture — langfuse-eval-harness
 
+> **Provenance & edge semantics.** The diagrams in this document are
+> hand-maintained and carry **runtime/call/protocol semantics**: the L1 context
+> and L2 container edges describe who calls whom at run time and over which
+> protocol, and the L3 sections document sub-component internals *below* the
+> granularity of the architecture manifest. The **import-edge component view**
+> is not maintained here — it is generated deterministically from
+> [`architecture.yaml`](../architecture.yaml) into
+> [`architecture.mmd`](../architecture.mmd) via
+> `python skills/architecture-drift-guard/scripts/mermaid_gen.py --manifest architecture.yaml -o architecture.mmd`
+> and is gated against the real import graph by
+> `skills/architecture-drift-guard/scripts/drift_check.py` (plus a
+> `mermaid_gen.py --check` freshness gate) in CI. **This document never
+> restates package-level import edges.** Where an edge here resembles one
+> there, the generated view is authoritative for imports and this document is
+> authoritative for runtime behaviour.
+
 ## Level 1 — System Context
 
 ```mermaid
@@ -23,6 +39,9 @@ C4Context
 
 ## Level 2 — Container Diagram
 
+*Edges below are runtime/call relations, not import edges — see the
+[generated import view](../architecture.mmd).*
+
 ```mermaid
 C4Container
     title Container Diagram: Langfuse Eval Harness
@@ -33,30 +52,42 @@ C4Container
         Container(cli, "CLI", "Python / argparse", "Entry point — parses args, loads config, runs engine")
         Container(engine, "EvalEngine", "Python", "Orchestrates: load → sample → run → score → aggregate → emit")
         Container(config, "Config Loader", "Python / Pydantic", "YAML → migrate → interpolate → validate → EvalConfig")
-        Container(registry, "Plugin Registry", "Python", "Generic Registry[T] — self-registration + entry-point discovery")
+        Container(core, "Core (core)", "Python", "Component contracts + generic Registry[T] with alias support (src/eval_harness/core/registry.py)")
+        Container(plugins, "Plugin Loader (plugins)", "Python", "Central registries (SCORERS, JUDGES, ...) — built-in self-registration + entry-point discovery via the eval_harness.plugins group (src/eval_harness/plugins.py)")
     }
 
     Container_Boundary(components, "Pluggable Components") {
-        Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, llm_judge")
-        Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible)")
-        Container(datasets, "Datasets", "Python", "inline, jsonl, langfuse")
+        Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, weighted, llm_judge, autoevals")
+        Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible), anthropic, phoenix_evals")
+        Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust")
         Container(targets, "Targets", "Python", "echo, callable (dynamic import)")
-        Container(sinks, "Sinks", "Python", "console, json_file, langfuse")
+        Container(sinks, "Sinks", "Python", "console, json_file, html_file, langfuse, phoenix, braintrust")
         Container(gating, "Quality Gate", "Python", "Config-driven pass/fail for CI")
     }
 
     Container_Boundary(integration, "Integrations") {
         Container(lf_client, "LangfuseClient", "Python", "Interface + NullClient + SDKClient adapter")
-        Container(skill_fw, "Skill Framework", "Python", "validate_skill.py — structural + behavioral validation")
+        Container(px_client, "PhoenixClient", "Python", "OTel span export (SDK-optional seam; mirrors LangfuseClient)")
+        Container(bt_client, "BrainTrustClient", "Python", "Experiment export + dataset read (SDK-optional seam)")
+        Container(skill_fw, "Skill Framework", "Python", "validate_skill.py validation + marketplace (eval + deterministic generator skills)")
+    }
+
+    Container_Boundary(siblings, "Sibling Packages (offline, deterministic)") {
+        Container(agent_core_pkg, "agent_core", "Python", "Deterministic control & calibration core — calibration metrics, merge-gate subsystem, store sync (zero runtime deps)")
+        Container(flow_corpus_pkg, "flow_corpus", "Python", "Flow-calibration corpus + oracles, airgapped from the harness behind flow-protocol")
+        Container(behavioral_regression_pkg, "behavioral_regression", "Python", "Behavioural-regression detector + ship/hold/escalate gate (bregress CLI); offline + byte-reproducible from (BRConfig, seed)")
     }
 
     System_Ext(langfuse, "Langfuse Cloud", "")
     System_Ext(llm_api, "LLM API", "")
 
     Rel(dev, cli, "eval-harness run", "CLI")
+    Rel(dev, behavioral_regression_pkg, "bregress run", "CLI")
     Rel(cli, config, "load_config()")
     Rel(cli, engine, "engine.run()")
-    Rel(engine, registry, "resolve components by name")
+    Rel(cli, plugins, "bootstrap(), list-plugins")
+    Rel(engine, plugins, "bootstrap() + registry lookups at run time")
+    Rel(plugins, core, "instantiates Registry[T] per component kind")
     Rel(engine, scorers, "score()")
     Rel(engine, judges, "evaluate()")
     Rel(engine, datasets, "load()")
@@ -65,10 +96,26 @@ C4Container
     Rel(engine, gating, "evaluate_gate()")
     Rel(engine, lf_client, "log_score(), link_dataset_item()")
     Rel(lf_client, langfuse, "HTTPS")
+    Rel(sinks, px_client, "log_score() as OTel spans")
+    Rel(sinks, bt_client, "log_item() per item")
+    Rel(datasets, bt_client, "fetch_dataset_items()")
     Rel(judges, llm_api, "chat.completions.create()")
+    Rel(behavioral_regression_pkg, agent_core_pkg, "wilson_interval(), brier_decomposition(), reliability_bins(), logging (runtime calls)")
+    Rel(behavioral_regression_pkg, flow_corpus_pkg, "validate_oracle() kappa-gate, power checks, bootstrap CIs (runtime calls)")
+    Rel(flow_corpus_pkg, agent_core_pkg, "metric primitives — Murphy decomposition, Cohen's kappa, Wilson (runtime calls)")
 ```
 
+All engine edges above (`engine → scorers/judges/datasets/targets/sinks/gating/...`)
+are **runtime-call semantics** — the engine resolves those components by name
+through the plugin registries and invokes them; the package-level import edges
+behind this wiring live only in the generated
+[import view](../architecture.mmd).
+
 ## Level 3 — Component: EvalEngine
+
+*Edges below are runtime/call relations, not import edges — see the
+[generated import view](../architecture.mmd). This diagram is sub-manifest
+granularity: it documents internals of the single `engine` component.*
 
 ```mermaid
 C4Component
@@ -221,6 +268,7 @@ flowchart TB
     PR --> REG[regression_gate.py]
     PR --> GUARD[check_protected_changes.py]
     PR --> DRIFT[check_skill_script_drift.py<br/>vendored skill copies == canonical]
+    PR --> CHARTER[check_charter_drift.py<br/>docs/CHARTER.md references resolve — via test suite]
     PR --> MG[calibrated-merge-gate.yml<br/>F-010 acting job — default-off]
     PR --> SHADOW[shadow job F-035<br/>log-only, never blocks]
 
@@ -275,6 +323,9 @@ aggregates one report under `artifacts/e2e-report/`. See [e2e-runbook.md](e2e-ru
 
 ## Data Flow
 
+*Edges below are runtime/call relations, not import edges — see the
+[generated import view](../architecture.mmd).*
+
 ```mermaid
 flowchart LR
     A[YAML Config] -->|load_config| B[EvalConfig]
@@ -290,5 +341,5 @@ flowchart LR
     J --> K[Quality Gate]
     K -->|Pass| L[Sink.emit]
     K -->|Fail| M[Exit code 1]
-    L --> N[Langfuse / JSON / Console]
+    L --> N[Langfuse / Phoenix / BrainTrust / JSON / Console]
 ```

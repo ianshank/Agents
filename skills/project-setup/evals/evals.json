@@ -1,0 +1,49 @@
+{
+  "skill": "project-setup",
+  "evals": [
+    {
+      "id": "generate-pip-src",
+      "prompt": "Generate a Makefile for a src-layout pip project with ruff, mypy, pytest and coverage configured.",
+      "run": "python scripts/gen_makefile.py --root evals/fixtures/pip-src --out .skill-validation/pip/Makefile",
+      "assertions": [
+        { "type": "exit_zero", "text": "generation succeeds" },
+        { "type": "file_contains", "path": ".skill-validation/pip/Makefile", "contains": ".PHONY:", "text": "declares phony targets" },
+        { "type": "file_contains", "path": ".skill-validation/pip/Makefile", "contains": ".DELETE_ON_ERROR:", "text": "fails a recipe atomically" },
+        { "type": "file_contains", "path": ".skill-validation/pip/Makefile", "contains": "--cov-fail-under=$(COV_FAIL_UNDER)", "text": "coverage target honours the threshold" },
+        { "type": "command_exit_zero", "cmd": "python -c \"import sys; c=open('.skill-validation/pip/Makefile',encoding='utf-8').read(); sys.exit(0 if ('check:' in c and any(l[:1]==chr(9) for l in c.splitlines())) else 1)\"", "text": "a check target exists and recipes are TAB-indented" }
+      ]
+    },
+    {
+      "id": "delegates-to-quality-gate",
+      "prompt": "When scripts/quality-gate.sh already exists, the Makefile targets should delegate to it instead of duplicating commands.",
+      "run": "python scripts/gen_makefile.py --root evals/fixtures/with-gate --out .skill-validation/gate/Makefile",
+      "assertions": [
+        { "type": "exit_zero", "text": "generation succeeds" },
+        { "type": "file_contains", "path": ".skill-validation/gate/Makefile", "contains": "./scripts/quality-gate.sh all", "text": "check delegates to the gate script" }
+      ]
+    },
+    {
+      "id": "stdout-mode",
+      "prompt": "Print the Makefile to stdout without writing a file.",
+      "run": "python scripts/gen_makefile.py --root evals/fixtures/pip-src --stdout",
+      "assertions": [
+        { "type": "exit_zero", "text": "stdout mode succeeds" },
+        { "type": "output_contains", "contains": ".DEFAULT_GOAL := help", "text": "prints the Makefile to stdout" }
+      ]
+    },
+    {
+      "id": "workspace-fanout",
+      "prompt": "Monorepo mode: emit a root Makefile with per-member fan-out targets plus one Makefile per member package.",
+      "setup": "python -c \"import shutil; shutil.copytree('evals/fixtures/workspace', '.skill-validation/ws', dirs_exist_ok=True)\"",
+      "run": "python scripts/gen_makefile.py --root .skill-validation/ws --workspace",
+      "assertions": [
+        { "type": "exit_zero", "text": "workspace generation succeeds" },
+        { "type": "file_contains", "path": ".skill-validation/ws/Makefile", "contains": "check-member-one:", "text": "root gains an explicit per-member target" },
+        { "type": "file_contains", "path": ".skill-validation/ws/Makefile", "contains": "$(MAKE) -C member-one check", "text": "fan-out delegates via make -C (member cwd)" },
+        { "type": "file_contains", "path": ".skill-validation/ws/Makefile", "contains": "install-all:", "text": "aggregate install target exists" },
+        { "type": "file_exists", "path": ".skill-validation/ws/member-one/Makefile", "text": "each member gets its own Makefile" },
+        { "type": "command_exit_zero", "cmd": "python scripts/gen_makefile.py --root .skill-validation/ws --workspace --check", "text": "multi-artifact --check reports all artifacts fresh" }
+      ]
+    }
+  ]
+}

@@ -304,9 +304,34 @@ Invoke-PytestStep 'C' 'e2e:skills+hooks' `
     @('-m', 'pytest',
       'skills/architecture-drift-guard/tests/test_end_to_end.py',
       'skills/eval-corpus-forge/tests/test_end_to_end.py',
+      'skills/project-setup/tests/test_gen_makefile.py',
+      'skills/project-setup/tests/test_workspace.py',
+      'skills/quality-gate/tests/test_gen_gate.py',
+      'skills/deploy/tests/test_gen_deploy.py',
       'claude-foundation/tests/test_hooks_e2e.py',
       '-o', 'addopts=', '--import-mode=importlib', '-p', 'no:cacheprovider', "--junitxml=$e2eXml") `
     $RepoRoot $e2eXml
+
+# C1b: backend-validation experiment offline suite. Runs from the subtree so its own
+# pyproject drives config (addopts auto-deselects live probes via `-m "not live"`). The
+# --cov flags are explicit so the 95% branch-coverage floor is actually enforced here, not
+# merely configured. Isolated/temporary experiment, not a package/skill.
+$bvDir = Join-Path $RepoRoot 'experiments/backend-validation'
+if (Test-Path (Join-Path $bvDir 'pyproject.toml')) {
+    $savedPath = $env:PYTHONPATH
+    try {
+        $env:PYTHONPATH = $bvDir + [System.IO.Path]::PathSeparator + $env:PYTHONPATH
+        $bvXml = Join-Path $Report 'backend-validation.xml'
+        Invoke-PytestStep 'C' 'e2e:backend-validation' `
+            @('-m', 'pytest', 'tests', '--cov=backend_validation', '--cov-branch',
+              '--cov-report=term-missing', '--cov-fail-under=95', "--junitxml=$bvXml",
+              '-p', 'no:cacheprovider') `
+            $bvDir $bvXml
+    }
+    finally {
+        $env:PYTHONPATH = $savedPath
+    }
+}
 
 # C2: eval-harness CLI journeys (offline)
 Invoke-CmdStep 'C' 'cli:eval-harness list-plugins' @('-m', 'eval_harness.cli', 'list-plugins')

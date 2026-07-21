@@ -13,6 +13,256 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `store_sync stats --soak-target N` that adds a reserved `_soak` block. Default `stats` output is
   byte-identical; no store mutation (property-tested), no TCB change, no schema bump. Soak
   enablement stays time-gated (ADR 0005); this only makes progress observable.
+- **Public-surface backwards-compat guard (F-039):** `tests/test_public_surface.py` freezes
+  every package's public `__all__` exports (exact-equality against a committed
+  `public_surface_baseline.json`), so a removed or renamed export now fails CI instead of
+  silently breaking every config/import that used it — the exact gap that let a breaking
+  change land undetected before. Exact-equality by design: a drop or rename fails loudly as
+  a breaking change, and an addition must be explicitly frozen too (a reviewable diff) — CI
+  fails either way until the baseline is updated to match. Duplicated byte-identically into
+  `agent-core/`, `behavioral-regression/`, `flow-corpus/`, and `flow-protocol/`'s own
+  `tests/` dirs (each package runs its own isolated suite, so the guard must be
+  self-contained there) and drift-guarded against the root canonical via
+  `check_skill_script_drift.py`'s `TRACKED_DUPLICATES`. Ledgered as **F-039**;
+  `scripts/validations/F_039.py` guards the wiring itself.
+
+### Fixed
+- **Sibling packages' `tests/` directories had no protected-path coverage.**
+  `scripts/eval_protected_paths.py`'s `"tests/**"` pattern compiles to `^tests/.*$`, which
+  only anchors the root suite — `agent-core/tests/`, `behavioral-regression/tests/`,
+  `flow-corpus/tests/`, and `flow-protocol/tests/` (every test in those four packages, not
+  just their public-surface-guard copies) had no `eval-change-approved` label requirement
+  and no `.github/CODEOWNERS` review gate. `PROTECTED_PATTERNS` and `CODEOWNERS` now include
+  explicit entries for all four; locked in by new parametrized cases in
+  `tests/test_protected_paths.py` and asserted by F-039's validator.
+
+### Added
+- **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
+  self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
+  evidence for the eval-backend displacement decision by validating the claimed capabilities
+  of Langfuse and Opik against *running* deployments. Probes emit raw observables; a
+  **human-signed rubric** (`RUBRIC.md`) maps observables to marks; agents implement and
+  execute but never author acceptance criteria, break ties, or recommend a platform (the
+  final report has no recommendation section, enforced by a test). Three probe layers: **L1**
+  capability (each tool's own SDK/API, harness-independent — an AST test enforces that only
+  the L2 modules import `eval_harness`), **L2** integration through the harness's
+  vendor-neutral `ResultSink`/`RunResult` seam (an experiment-local `OpikSink` adapter is
+  itself the adapter-delta metric; below-sink scope is reported BLOCKED, never improvised),
+  and **L3** air-gap (egress-blocked re-run, dual-scored as-shipped vs documented telemetry
+  opt-out). Six phases (`preflight`/`deploy`/`l1`/`l2`/`airgap`/`report`) with a strict
+  fail-safe discipline: any missing precondition, sign-off, credential, or unhealthy stack
+  produces a BLOCKED report naming what a human must do; an unexpected negative-control pass
+  HALTs the run. Digest-pinned compose stacks (refused unless pinned), ops-burden metrics
+  (setup wall-clock, retries, idle RAM/CPU, image sizes), and reproducibility provenance.
+  Consumes the repo core as a dependency only — zero writes outside the subtree, enforced by
+  a settings validator, a compose bind-mount check, and a PR-scoped git-diff allowlist.
+  Ships **unsigned** (all probes gated behind human sign-off) with its own generated
+  quality-gate (196 tests, ≥95% branch coverage, mypy `--strict`).
+
+### Changed
+- **CI gate delegation — packages 2-4 of 5 (ADR 0021):** `agent-core-ci.yml`,
+  `flow-corpus-ci.yml` (both its `flow-protocol` and `flow-corpus` jobs), and
+  `behavioral-regression-ci.yml`'s `behavioral-regression` job now delegate to
+  `.github/actions/run-quality-gate` (`check: make check`) instead of duplicating
+  ruff/format/mypy/pytest inline — continuing the fan-out `eval-harness-ci.yml` started
+  (below) and unblocked by the `F_037` fix (also below): its new `_common.ci_enforces()`
+  accepts either inline or delegated wiring, so this rewire no longer breaks the validator
+  the way the first one did. Incidentally fixes a real drift bug while delegating: the
+  `flow-corpus` and `behavioral-regression` jobs installed an **unpinned**
+  `pip install ruff mypy` instead of their own package's pinned `[dev]` extra
+  (`ruff==0.15.20`, `mypy==2.1.0` — the same pin the rest of the fleet uses), which
+  delegation naturally closes since the package's own `[dev]` extra is what the new install
+  command pulls in. `claude-foundation-ci.yml` is deliberately left inline (a separate PR
+  deletes it entirely as part of the claude-foundation extraction). Verified locally:
+  `make -C <pkg> check` run end-to-end for all 4 packages, matching the coverage numbers
+  their own CI reports (agent-core 98.67%, flow-protocol/flow-corpus/behavioral-regression
+  100%, all ≥ their 95% floors).
+- **CI gate delegation — phase-2 POC (ADR 0021):** `eval-harness-ci.yml` no longer duplicates the
+  ruff/format/mypy/pytest steps inline — it delegates to the generated root gate through a new reusable
+  composite action `.github/actions/run-quality-gate` (sets up Python, installs the package, runs
+  `make check` → `./scripts/quality-gate.sh all`). CI now runs the byte-for-byte same checks as local
+  `make check`, per ADR 0020's "local == CI by construction" law. This is the first, pattern-setting
+  workflow of ADR 0021's phased rollout; the other five (`agent-core`, `flow-corpus`,
+  `behavioral-regression`, `claude-foundation`, `skills-ci`) follow in separate label-gated PRs, and
+  ADR 0021 stays **Proposed** until the rollout completes. Consequences surfaced for review: the root
+  gate's `ruff check .` spans the whole repo, so this job now also lints the sibling packages (verified
+  green); the py3.12 browsable `htmlcov/` artifact is dropped — the shared gate does not produce it (the
+  scripts-coverage pass overwrites `.coverage`) and it is a CI-only convenience, not a gate.
+
+### Fixed
+- **`main` was silently red on F-031 and F-037; validators decoupled from CI wiring.** PR #64
+  (ADR 0021 delegation POC) replaced `eval-harness-ci.yml`'s inline ruff/mypy/pytest steps with a
+  call to the generated root gate. Two validators asserted those exact command strings still
+  appeared in the workflow, so five assertions began failing the moment the delegation landed —
+  `F_031` (lints/format-checks/type-checks `scripts/`, runs the operational-scripts coverage gate)
+  and `F_037` (`eval-harness-ci.yml` type-checks `tests`). The failure went **undetected** because
+  `quality-gates.yml` — the only workflow that runs `validate.py` — is path-filtered and does not
+  fire on `.github/`-only PRs, so the guard ran neither on #64 nor on the merge to `main`.
+  Both validators now assert the *guarantee* (the step runs in that suite's CI) rather than one
+  wiring of it, via a new shared `_common.ci_enforces(workflow, gate, inline=…, in_gate=…)` helper
+  that accepts the inline spelling **or** the delegated form (workflow reaches the gate **and** the
+  gate runs the step) and still fails when neither holds. Because the delegated gate lints the whole
+  tree instead of naming `scripts`, F-031 additionally guards the one way delegation could weaken
+  it — a root ruff `exclude`. `F_031`/`F_037` are now also asserted by
+  `tests/test_validation_scripts.py`, which puts them in the **offline pytest suite** that
+  eval-harness CI *does* run on workflow edits — so this class of regression now fails at a second,
+  unfiltered layer. F-037's skills-ci checks stay inline-matched deliberately: no skill has a
+  generated gate yet, so there is no delegated form to assert against.
+- **Bot-review round (CodeRabbit):** workspace detection now skips a member directory named
+  `all` (reported via `WorkspaceFacts.skipped`, never emitted broken) — its `check-all`/
+  `install-all`/`clean-all` targets would collide with the generated aggregates, and GNU
+  Make's last-recipe-wins rule would silently drop the member's own delegation. The
+  quality-gate SKILL.md now documents that `--lint-path` without a detected ruff
+  configuration is ignored with a warning (parity with `--typecheck-path`), a hand-extension
+  test writes its sentinel path in POSIX form so it stays valid inside the generated bash
+  gate on Windows, and the real-`make` workspace test carries the `slow` marker.
+- **Generator review round (8-angle code review; 10 findings fixed):** the `# regenerate:`
+  provenance now embeds the generator path AS INVOKED (`sys.argv[0]`, cwd-relative like
+  `--root`) — the previous hardcoded `scripts/gen_gate.py` made every committed artifact's
+  header unrunnable; the root Makefile (and each member Makefile) gained the same provenance
+  line, and a flag-less regeneration over a fan-out Makefile now warns before dropping
+  `check-all`. `gen_gate.py --check` verifies the tail's `main "$@"` dispatch invariant (a
+  gate truncated at the marker used to pass `--check` while executing nothing), and
+  rewriting a pre-marker 1.0.x artifact warns loudly instead of silently discarding hand
+  edits. `install-all` delegates to each member's own `install` target so detected install
+  commands (dev extras, poetry) are honoured; an empty `check-all` aggregate is omitted
+  rather than fabricating a passing no-op; `--lint-path` without detected ruff now warns and
+  stays out of provenance (parity with `--typecheck-path`); multi-path gates emit a stderr
+  notice when an exported `TYPECHECK_PATHS`/`COVERAGE_SOURCE` override is ignored. The root
+  gate lints the WHOLE tree again (`demo/`+`examples/` had silently left the gate; both
+  reformatted). Internals: the env-form predicates are single-sourced (a divergence would
+  have emitted scripts referencing undefined variables under `set -u`), `_quoted` is reused
+  for `--cov` flags, all three GateFacts tuple fields share the empty→`"."` rule, and
+  `lint_paths` is appended at the end of the dataclass preserving 1.0.x positional
+  construction. Deferred with rationale (NEXT_STEPS): single-instrumented-run coverage for
+  the root gate's two suite passes; individually dispatchable named hand-steps.
+- **E2E runner Windows cross-platform hardening (21/21 green):** the
+  `e2e:backend-validation` step's `--junitxml` flag used string concatenation
+  (`'--junitxml=' + $bvXml`) inside a PowerShell `@()` array literal, which
+  silently split into two array elements — pytest received the XML path as a
+  test directory and collected zero tests.  Fixed to use string interpolation
+  (`"--junitxml=$bvXml"`) matching all other suites.  The step's PYTHONPATH
+  now also saves/restores around the block so `--cov=backend_validation` can
+  locate the package when the editable install is stale.  F-038 validation
+  gate prepends `src/` to `sys.path` (standalone scripts don't inherit the
+  conftest shim).  Three skill test files gained platform-aware skip guards:
+  `_bash_works()` (WSL bash accepts `shutil.which` but cannot execute scripts
+  at Windows temp paths — exit 127) and `_can_symlink()` (non-elevated
+  Windows users lack `SeCreateSymbolicLinkPrivilege`).
+
+### Added
+- **Workspace-wide deterministic gates (P1+P2 of the determinism phase; quality-gate &
+  project-setup skills → 1.1.0):** the generators gained monorepo support and the repo now
+  dogfoods it end to end. `gen_gate.py` accepts repeatable `--lint-path`/`--typecheck-path`
+  flags (multiple mypy paths render one invocation each — per-path runs avoid module-name
+  collisions; pyright keeps a single invocation), keeps ALL `[tool.coverage.run] source`
+  entries as repeated `--cov=` flags (taking `source[0]` silently measured a subset), embeds
+  a shell-quoted `# regenerate:` provenance comment (omitted entirely if an arg carries a
+  control character — a newline inside a quoted arg would escape the comment into executable
+  text), and owns only the content above a **hand-extension marker**: below it survives
+  regeneration, is ignored by the advisory `--check` (prefix-compare), and a `do_extra()`
+  defined there runs automatically in `all`. `gen_makefile.py --workspace` detects members
+  (immediate-child `pyproject.toml`, sorted, symlinks and unsafe names excluded), emits
+  explicit `check-<member>` fan-out targets (`$(MAKE) -C`, only for members whose own
+  Makefile has a `check` target — never fabricated), `check-all`/`install-all`/`clean-all`
+  aggregates, and one plain Makefile per member. Dogfooded artifacts: root + 5 member
+  `scripts/quality-gate.sh` (floors 96/95/95/95/95/85; root carries the F-031 scripts gate
+  below its marker, claude-foundation carries `foundation_tools.validate`/`scan`) and root +
+  5 member Makefiles — all byte-stable across regeneration and all executed green locally
+  (`make check-all`). ruff/mypy dev-extra pins unified (`ruff==0.15.20`, `mypy==2.1.0`) in
+  agent-core, flow-protocol, flow-corpus and behavioral-regression, which previously
+  floated. `GateFacts` keeps 1.0.x compatibility (string fields coerce to tuples; new
+  fields appended, not inserted). AGENTS.md/README gate commands now point at the script
+  instead of restating the chain. CI rewiring is deliberately deferred to ADR 0021's
+  labeled batch.
+- **Determinism phase P3+P4 — ADR 0022 and C4 semantics ownership:** ADR 0022 records the
+  determinism boundary for inference skills (consume-don't-contain; the two `--check`
+  conventions — fully-derived artifacts gate, hand-extensible scaffolds advise; the
+  c4-docs delegation seam; considered-and-deferred: hook wiring → post-extraction M7,
+  manifest-derived L2). The `plan`/`test-first`/`code-review` foundation skills now
+  consume a committed quality-gate script when the target project has one (generic
+  wording, fallback preserved; code-review's no-Bash fork isolation untouched), each with
+  a new eval case. `docs/c4_architecture.md` gained a provenance preamble declaring its
+  edges **runtime/call semantics** vs the generated **import-edge view**
+  (`architecture.yaml` → `architecture.mmd`), the missing `behavioral_regression` (+
+  `agent_core`/`flow_corpus`) sibling containers with verified runtime edges, and a split
+  of the conflated Plugin Registry box into `core` (Registry[T]) vs `plugins`
+  (entry-point discovery); the unreferenced `docs/c4_architecture.svg` was deleted, and
+  README/AGENTS architecture pointers now name which artifact owns which semantics.
+- **Deterministic generator skills — `project-setup`, `quality-gate`, `deploy` (ADR 0020):**
+  three skills that emit committed, byte-stable build/CI artifacts for a Python project instead
+  of re-inferring the steps at runtime. `project-setup` writes a self-documenting **Makefile**
+  from the detected toolchain (ruff, mypy/pyright, pytest, coverage) and package manager;
+  `quality-gate` writes `scripts/quality-gate.sh` (`set -euo pipefail`; lint + type + test +
+  coverage-threshold) as the single source of truth CI and `make check` both call, so local == CI;
+  `deploy` writes a safety-railed `scripts/deploy.sh` (dry-run, confirmation gate, rollback,
+  health-check retry, no inlined secrets). Detection is a pure function of observable inputs;
+  targets/steps are omitted when a tool is absent (never fabricated), `pytest --cov` is only
+  emitted when pytest-cov is a declared dependency (incl. PEP 735 `[dependency-groups]`), and
+  user-supplied deploy values are shell-escaped against `$`/backtick/quote injection. Each skill
+  ships a pure generator library + thin runner (with `--verbose` debug logging), a vendored
+  byte-identical `validate_skill.py` (tracked by the skill-script drift guard), evals, and tests
+  at the ≥95% branch-coverage floor (generated shell/Make artifacts are validated by real
+  execution + ShellCheck, not just syntax). Registered in `skills/marketplace.yaml` with per-skill
+  CI jobs (`skills-ci.yml`, py3.10–3.12). A root `Makefile` was generated by `project-setup`
+  (dogfooding). Not converted: the inference-heavy `claude-foundation/skills/*`.
+- **BrainTrust integration — Phase 2 (dataset source):** a `braintrust` dataset source
+  (`@DATASETS.register("braintrust")`) that pulls a dataset via the SDK's `init_dataset` and maps
+  each `DatasetEvent` (`id`/`input`/`expected`/`metadata`) onto the harness record shape. It is
+  self-wiring (credentials from the environment) and **fail-fast** — it raises a clear install
+  error when the `braintrust` SDK is absent, because a dataset is essential input and must not
+  silently degrade to an empty eval (mirrors `ParquetDataset`). Verified against the installed
+  `braintrust` 0.27 SDK; offline-tested via fake-`sys.modules` injection, with a live path and an
+  LLM `autoevals` (`Factuality`) path in `tests/test_braintrust_live.py`. Adds the
+  `datasets → braintrust_client` architecture edge. Managed-prompt fetch remains deferred (see
+  `docs/braintrust-spike.md`): BrainTrust prompts are chat-message arrays, which don't map
+  cleanly onto the harness's single-string judge-prompt seam. Formalized as feature **F-038**
+  with an offline validation gate (`scripts/validations/F_038.py`).
+- **BrainTrust integration — peer-review hardening:** an objective review pass added logging on
+  the previously-silent paths (`autoevals` scorer failures now `logger.warning`; dataset fetch
+  and sink export log counts; `build_client`/`flush` log at debug), extended the `AutoevalsScorer`
+  fail-safe to cover result parsing, fixed a shared `_to_item` id-collision (a `None` id now falls
+  back to the positional index instead of the string `"None"` — also fixing the latent Langfuse
+  peer bug), aligned the dataset param to `project_name`, and consolidated the duplicated fake-SDK
+  test doubles into shared `conftest.py` fixtures (with added assertions for `init` plumbing,
+  the `min_value_to_log` boundary, scoreless items, and id-less records).
+- **BrainTrust integration (additive, SDK-optional; Phase 1):** a `braintrust` result sink
+  that exports each eval item to a BrainTrust *experiment* via the native `experiment.log`
+  write-path (`input`/`output`/`expected` + a `{name: value}` scores dict per row), and an
+  `autoevals` scorer that bridges BrainTrust's `autoevals` library into the `Scorer` contract
+  (`Score`→`ScoreResult`, with skip/`None` and fail-safe handling). Both follow the reversible
+  Phoenix-spike pattern: a new `braintrust_client/` seam (`NullBrainTrustClient` +
+  injected-handle `SDKBrainTrustClient` + `build_client(enabled=…)` factory) that is a no-op
+  when the SDK is absent or `enabled=False`, so existing runs and the offline suite are
+  unaffected and `SCHEMA_VERSION` is unchanged. Shipped as two optional extras (`braintrust`,
+  `autoevals`); `braintrust` stays out of the offline CI job while `autoevals` (lightweight,
+  offline-safe heuristics) is installed there for real coverage. Credentials are read from the
+  environment (`BRAINTRUST_API_KEY` / `BRAINTRUST_API_URL`), never hardcoded. Documented in
+  `docs/braintrust-spike.md`; `architecture.yaml`/`.mmd` gain the `braintrust_client` component
+  and the `sinks → braintrust_client` edge. (The dataset source and LLM-based autoevals scorers
+  landed in the Phase 2 entry above; managed-prompt fetch remains the one deferred item.)
+- **Project charter (`docs/CHARTER.md`) + drift guard:** a north-star governance document
+  modelled on the drone-comms charter structure (Status & Purpose / Vision / Mission /
+  Scope + non-goals + ratified amendments / Invariants / Roadmap / How-agents-use-it),
+  synthesized from `README.md`, `AGENTS.md`, and `docs/decisions/*`. It ratifies what is
+  already true and references drift-prone values (coverage floors, schema versions) at
+  their source rather than restating them. A new `scripts/check_charter_drift.py` guard
+  (stdlib-only, `_cli.configure_logging`, exit `0/1/2`) parses every markdown link target
+  in the charter and asserts each local file/ADR reference resolves, skipping externals,
+  anchors, and glob patterns to avoid false positives; covered by
+  `tests/test_check_charter_drift.py`. The guard runs as a first-class step in
+  `quality-gates.yml` (mirroring the sibling drift/size-budget guards) and is wired into that
+  workflow's ≥85% tooling-coverage gate. `AGENTS.md` now lists the charter as the tier-0 read,
+  and the C4 "Quality & Eval-Integrity Gates" diagram (`docs/c4_architecture.md`) lists the
+  new guard. The drift-detected path now emits a `logger.warning` (parity with the
+  usage-error/success paths) so CI surfaces it in structured logs. Hardening (review
+  feedback): the guard rejects targets that escape the repository root (e.g.
+  `../../etc/passwd`) as invalid even when the OS path exists — it validates *repo*
+  references, not arbitrary filesystem paths — and F-031 matches the exact quoted
+  `"scripts/validations"` TOML entry (tolerating single-line, multi-line, and string
+  `mypy_path` forms via a `re.DOTALL` capture; still dependency-free for the Python 3.10
+  gate) so a different path containing that substring cannot false-pass and a harmless
+  multi-line reformat cannot break the gate.
 
 ### Changed
 - **Gap-analysis remediation round** (`docs/gap-analysis-2026-07-remediation.md`): a targeted
@@ -35,6 +285,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `stdin=DEVNULL`) is now the single execution helper behind `validate_skill.check_behavioral`'s
   decomposed `_run_one_eval`. `_commit_store` is re-exported from the `store_sync` package for
   `main`'s round-trip tests. No behaviour lost from either side; all suites/gates green.
+
+### Fixed
+- **`py.typed` mypy fallout — `mypy src/eval_harness` + 32 latent errors** (see
+  [`docs/gap-analysis-2026-07-py-typed-mypy.md`](docs/gap-analysis-2026-07-py-typed-mypy.md)):
+  shipping `py.typed` made mypy follow the editable-installed `eval_harness`, so
+  `mypy src/eval_harness` failed with *"Source file found twice"* (`src.eval_harness.*` vs
+  `eval_harness.*`) — a red already on `main@1fb53b9`. Fixed config-only by adding `src` to
+  `[tool.mypy].mypy_path` (with the existing `explicit_package_bases`). Unblocking that CI step
+  exposed 32 real type errors in `scripts/validations/F_018,F_021,F_024,F_025,F_026,F_027,F_030`
+  and `tests/test_phoenix_{sink,cli}.py` that `py.typed` had surfaced (typed `eval_harness`
+  reaching callers that passed loosely-typed dicts). Fixed with the repo's own idioms —
+  `EvalConfig.model_validate({...})` for config construction, `assert isinstance(...)` /
+  `is not None` narrowing, and reusable `_phoenix_sink`/`_null_client` test helpers — all
+  behaviour-preserving (gates still exit 0). `mypy` (src/scripts/tests), `ruff`, and every
+  package coverage floor are green.
+- **`py.typed` now ships in the root wheel (PEP 561)**: `src/eval_harness/py.typed` was
+  missing and there was no `[tool.setuptools.package-data]` stanza, so the root `eval_harness`
+  package was not advertised as typed to downstream consumers (the sub-packages already shipped
+  theirs). Added both; verified the built wheel contains `eval_harness/py.typed`.
 
 ### Tooling — one-command E2E / user-journey harness
 - **`scripts/run_all_e2e.ps1` + `docs/e2e-runbook.md`:** a single orchestrator that runs

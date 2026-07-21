@@ -102,7 +102,12 @@ def validate_f030() -> int:
     _check(cap_tripped, "cumulative cap still trips independently of the window", errors)
 
     # Feature off when window absent → byte-identical (no limiter).
+    from eval_harness.agent_core_adapter import BudgetedJudge
+
     j4 = build_budgeted_judge(MockJudge(), JudgeBudgetConfig(enabled=True, cap=5.0))
+    # build_budgeted_judge is typed to return the Judge protocol; narrow to the concrete
+    # BudgetedJudge (runtime-checked) so the private-limiter assertion type-checks.
+    assert isinstance(j4, BudgetedJudge)
     _check(j4._limiter is None, "no limiter attached when window fields omitted", errors)
 
     return report(logger, "F-030", errors)

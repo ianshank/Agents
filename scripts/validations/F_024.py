@@ -34,19 +34,21 @@ _ITEMS = [{"id": "1", "inputs": {"a": "x", "b": "y"}, "expected": "x"}]
 
 
 def _config() -> EvalConfig:
-    return EvalConfig(
-        schema_version=SCHEMA_VERSION,
-        run={"name": "cmp"},
-        dataset={"type": "inline", "params": {"items": _ITEMS}},
-        target={"type": "echo", "params": {}},
-        scorers=[{"type": "exact_match", "params": {}}],
-        comparison={
-            "baseline": "good",
-            "models": [
-                {"name": "good", "target": {"type": "echo", "params": {"output_key": "a"}}},
-                {"name": "bad", "target": {"type": "echo", "params": {"output_key": "b"}}},
-            ],
-        },
+    return EvalConfig.model_validate(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "run": {"name": "cmp"},
+            "dataset": {"type": "inline", "params": {"items": _ITEMS}},
+            "target": {"type": "echo", "params": {}},
+            "scorers": [{"type": "exact_match", "params": {}}],
+            "comparison": {
+                "baseline": "good",
+                "models": [
+                    {"name": "good", "target": {"type": "echo", "params": {"output_key": "a"}}},
+                    {"name": "bad", "target": {"type": "echo", "params": {"output_key": "b"}}},
+                ],
+            },
+        }
     )
 
 

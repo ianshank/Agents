@@ -8,10 +8,15 @@
 
 /features.yaml                  @ianshank
 /features.schema.json           @ianshank
+/architecture.yaml              @ianshank
 /scripts/validations/           @ianshank
 /config/                        @ianshank
 /src/eval_harness/gating/       @ianshank
 /src/eval_harness/scorers/      @ianshank
 /src/eval_harness/judges/       @ianshank
 /tests/                         @ianshank
+/agent-core/tests/              @ianshank
+/behavioral-regression/tests/   @ianshank
+/flow-corpus/tests/             @ianshank
+/flow-protocol/tests/           @ianshank
 /.github/                       @ianshank

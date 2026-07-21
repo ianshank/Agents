@@ -670,6 +670,42 @@ features:
     depends_on: ["F-031"]
     notes: "Sweep scope and evidence: three read-only assessment passes over the branch (static tooling, suite baselines, debt scan) — findings and dispositions recorded in the PR. numpy tooling was requested but numpy is not a dependency anywhere; docstring-convention enforcement deliberately not adopted. vulture not adopted: ruff F401/F841 already active in root+agent-core. types-PyYAML deliberately not added: mypy 2.1.0 under the root config passes without it (verified by uninstall)."
 
+  - id: "F-038"
+    epic: "Tracing"
+    name: "BrainTrust experiment export, dataset source, and autoevals scorer"
+    description: "SDK-optional BrainTrust integration mirroring the reversible phoenix-spike pattern: a `braintrust` result sink (per-item experiment.log), a `braintrust` dataset source (init_dataset), and an `autoevals` scorer bridge (Score->ScoreResult). Additive — SCHEMA_VERSION unchanged, offline suite unaffected, no-op when the SDK is absent or disabled. Managed prompts deferred (BrainTrust chat-prompts do not map onto the single-string judge-prompt seam)."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "braintrust sink registered; build_client(enabled=False) and absent-SDK both return NullBrainTrustClient (no-op); per-item experiment.log carries input/output/expected + a {name:value} scores dict"
+      - "autoevals scorer registered; bridges an autoevals Score to ScoreResult with None-skip and fail-safe handling; heuristic scorers are offline-safe"
+      - "braintrust dataset source registered; fetch_dataset_items maps DatasetEvent {id,input,expected,metadata}; fail-fast (RuntimeError) when the SDK is absent"
+      - "credentials read from BRAINTRUST_API_KEY / BRAINTRUST_API_URL env only, never hardcoded; SCHEMA_VERSION unchanged; braintrust kept out of the offline CI install line"
+    validation_command: "python scripts/validations/F_038.py"
+    implemented_in: "eda5d49cd7b2d44c4c043e38885ef11714f352c5"
+    depends_on: ["F-001"]
+    notes: "Mirrors docs/braintrust-spike.md. autoevals installed in the offline CI job (lightweight, offline-safe heuristics); braintrust SDK is not (no-op precedent from Phoenix). Neither extra pulls numpy/pandas, so no mypy stub quarantine is needed. Managed-prompt fetch tracked as a follow-up."
+
+  - id: "F-039"
+    epic: "Quality Gate"
+    name: "Public-surface backwards-compat guard + sibling-package protected-path coverage"
+    description: "Freezes each package's public __all__ exports (exact-equality vs a committed baseline in tests/public_surface_baseline.json -- a drop/rename is breaking, and an addition must be explicitly frozen too) so a removed or renamed export fails CI instead of silently breaking every config/import that used it -- closing the gap where nothing previously failed when a public name disappeared. tests/test_public_surface.py is duplicated byte-identically (drift-guarded via check_skill_script_drift.py's TRACKED_DUPLICATES) into agent-core/, behavioral-regression/, flow-corpus/, and flow-protocol's own tests/ dirs, since each package runs its own isolated pytest suite and the guard must be self-contained there. That duplication surfaced a pre-existing, independent gap: scripts/eval_protected_paths.py's \"tests/**\" pattern compiles to ^tests/.*$, which only anchors the root suite -- the four sibling packages' entire test suites (not just their guard copies) had no protected-path/CODEOWNERS coverage at all. Both PROTECTED_PATTERNS and .github/CODEOWNERS now include explicit agent-core/tests/**, behavioral-regression/tests/**, flow-corpus/tests/**, and flow-protocol/tests/** entries."
+    category: "non-functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "test_public_surface.py + public_surface_baseline.json exist at the root and in all 4 sibling packages, each baseline non-empty with the packages/surface shape (F_039.py)"
+      - "check_skill_script_drift.TRACKED_DUPLICATES tracks all 4 sibling copies against the root canonical, and check_drift() reports zero drift (F_039.py)"
+      - "eval_protected_paths.PROTECTED_PATTERNS and is_protected() cover all 4 sibling tests/ directories; .github/CODEOWNERS mirrors the same 4 entries (F_039.py; locking examples added to tests/test_protected_paths.py)"
+      - "The exact-equality contract itself: a dropped/renamed __all__ name fails CI as breaking, a new name must be explicitly frozen too, duplicates and unresolvable names are rejected (tests/test_public_surface.py, exercised directly by the offline suite in every package's own CI)"
+    validation_command: "python scripts/validations/F_039.py"
+    implemented_in: "85fd14eb386bc462e25524489401c4e6a7ee1c58"
+    depends_on: []
+    notes: "The companion plugin-registry-surface guard (config-selectable datasets/judges/scorers/sinks/targets + aliases -- the same compat-guard family, covering the surface __all__ cannot see) ships in a separate PR and is intentionally not folded into this entry to avoid a cross-PR dependency; it may become its own feature once merged. numpy: not used anywhere in this change, consistent with the rest of the repo."
+
   - id: "F-040"
     epic: "Quality Gate"
     name: "Merge-gate soak-stats (store_sync.soak_progress + stats --soak-target)"

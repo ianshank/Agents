@@ -1,0 +1,93 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "backend-validation"
+version = "0.1.0"
+description = "eval-backend-validation_v1: empirical claimed-vs-observed evidence for the D-0 eval-backend decision (Langfuse, Opik)"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2",
+    "PyYAML>=6",
+    "jsonschema>=4.0",
+]
+
+[project.optional-dependencies]
+# Backend SDKs are OPTIONAL by design: the offline unit suite runs without them
+# (clients degrade to Null doubles, mirroring src/eval_harness/braintrust_client).
+langfuse = ["langfuse>=2"]
+# Opik is evolving quickly; pin the tested minor so probe evidence stays reproducible.
+opik = ["opik>=1.7,<2"]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    # Same exact pins as the repo root: CI/local runs must agree byte-for-byte.
+    "mypy==2.1.0",
+    "ruff==0.15.20",
+    "types-PyYAML>=6",
+    "types-jsonschema>=4",
+]
+
+[tool.setuptools.packages.find]
+include = ["backend_validation*"]
+
+[tool.setuptools.package-data]
+backend_validation = ["py.typed"]
+
+[tool.pytest.ini_options]
+# Offline-by-default: live probes (deployed stacks required) are opt-in via -m.
+addopts = "-q --strict-markers --strict-config -m 'not live'"
+testpaths = ["tests"]
+markers = [
+    "live: requires deployed backend stacks (never part of the quality gate)",
+    "l1: capability probes via each tool's own SDK/API",
+    "l2: integration probes through the harness's vendor-neutral sink seam",
+    "l3: air-gapped re-run probes",
+    "controls: negative-control probes (expected-fail)",
+    "langfuse: probes targeting the Langfuse backend",
+    "opik: probes targeting the Opik backend",
+    "integration: live API tests (repo-wide convention)",
+    "slow: tests taking >5s",
+]
+
+# Mirror of the repo-root ruff table (pyproject.toml [tool.ruff*]): ruff resolves the
+# NEAREST config, so without this mirror a root-level `ruff check .` would lint these
+# files under different rules than the subtree gate does.
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "C901"]
+ignore = ["E501"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 14
+
+[tool.ruff.lint.isort]
+known-first-party = ["backend_validation"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+# Backend SDKs are lazily imported at the client boundary and ship without stubs.
+module = ["langfuse", "langfuse.*", "opik", "opik.*"]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["backend_validation"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]

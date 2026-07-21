@@ -18,25 +18,35 @@ Write the tests before the implementation, and let the failing tests specify the
 2. **Write failing tests.** Using the repo's existing test framework and conventions,
    write unit tests covering the listed behaviors, including at least one edge case
    and at least one negative case (invalid input, error path, or forbidden state).
-   Do not touch implementation code yet.
+   If the target project has a committed `scripts/quality-gate.sh`, its test step
+   already names the test framework and invocation — take the framework from the
+   script instead of re-detecting it. Do not touch implementation code yet.
 
 3. **Confirm red for the right reason.** Run the new tests and verify each fails with
    the expected failure mode — an assertion failure or missing-symbol error that
    points at the unimplemented behavior. A test failing due to a typo, bad import, or
    fixture error is not a valid red; fix the test and re-run. Record the failure
-   output.
+   output. Run this phase test-scoped (e.g. `pytest path/to/test.py::test_x`), never
+   through a quality-gate script — the gate is deliberately suite-wide, and the red
+   phase needs only your new tests.
 
 4. **Implement minimally.** Write the smallest implementation that makes the new
    tests pass. Resist adding behavior no test demands. Run the new tests plus the
-   surrounding suite; all must pass.
+   surrounding suite; all must pass. When the target project has a
+   `scripts/quality-gate.sh`, run the suite-wide check as
+   `./scripts/quality-gate.sh test` (or `coverage` where a coverage floor applies);
+   otherwise run the suite as the repo defines it.
 
 5. **Refactor green.** With tests passing, clean up duplication and naming in both
-   implementation and tests. Re-run the suite after each refactor step; never leave
+   implementation and tests. Re-run the suite after each refactor step — via
+   `./scripts/quality-gate.sh test` when the project has that gate — and never leave
    the suite red between steps.
 
 6. **Report red → green evidence.** Summarize: the behaviors covered, the initial
    failing output (step 3), and the final passing run (steps 4–5), with the exact
-   commands used.
+   commands used. When a gate script exists, report the suite-wide runs as the
+   stable gate invocations (`./scripts/quality-gate.sh test` / `coverage`) alongside
+   the test-scoped red-phase command.
 
 ## Rules
 

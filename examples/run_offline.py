@@ -1,4 +1,5 @@
 """Run the harness programmatically, fully offline (no network, no SDK)."""
+
 from __future__ import annotations
 
 from pathlib import Path

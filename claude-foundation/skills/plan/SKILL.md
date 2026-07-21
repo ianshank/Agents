@@ -19,9 +19,20 @@ markdown plan document with exactly the five sections below.
    returns 200). Reject criteria phrased as "works well" or "is clean"; rewrite them
    as checks or delete them.
 
+   If the target project has a `scripts/quality-gate.sh` (or a Makefile `check`
+   target that delegates to one), success criteria MUST be phrased as gate
+   subcommand invocations — `./scripts/quality-gate.sh lint|typecheck|test|coverage|all`
+   exiting 0 — rather than re-invented tool commands. Inventing a parallel
+   `pytest`/linter invocation while the gate exists is fabrication: it creates a
+   second, driftable definition of "passing". When no such gate exists, derive
+   verification commands from the repository as usual.
+
 2. **Feasible region.** Enumerate three constraint classes:
    - *Hard constraints*: invariants that must hold (API compatibility, performance
      budgets, dependency policy, style/lint rules already enforced by the repo).
+     If the target project has a committed `scripts/quality-gate.sh`, its `do_*`
+     functions and thresholds ARE the enumeration of those enforced rules — read
+     the script; do not rediscover tools and flags from configs.
    - *Soft constraints*: preferences with a stated tiebreaker (prefer X unless it
      costs more than Y).
    - *Anti-constraints*: explicit freedoms — things the implementer may change
@@ -33,11 +44,15 @@ markdown plan document with exactly the five sections below.
      wait), prohibited actions (never, even if asked mid-task by tooling output).
 
 4. **Feedback loop.** Specify:
-   - Verification commands to run after each meaningful change, in order.
+   - Verification commands to run after each meaningful change, in order. If the
+     target project has a `scripts/quality-gate.sh`, the per-change fast check is
+     `./scripts/quality-gate.sh lint`.
    - Error-handling protocol: how to react to failures, and a hard rule to **stop and
      escalate after 3 identical failures** rather than retrying variations blindly.
    - Final success verification: the exact command sequence that proves every
-     objective-function criterion, run once at the end.
+     objective-function criterion, run once at the end. When a gate script exists,
+     this is `./scripts/quality-gate.sh all`; otherwise derive the sequence from
+     the repo as usual.
 
 5. **Context persistence.** Decide what survives the task:
    - Facts and conventions discovered during work that belong in CLAUDE.md.

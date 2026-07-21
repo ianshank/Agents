@@ -9,6 +9,89 @@
   `store_sync stats --soak-target N` that adds a reserved `_soak` block (bare-stats output
   byte-identical). No TCB edit, no store mutation (property-tested), no schema bump. Soak
   enablement itself stays time-gated (N≥20 + ≥1 human verdict + weekly audits).
+- [x] **Public-surface backwards-compat guard (F-039)** — `tests/test_public_surface.py`
+  freezes every package's public `__all__` exports (exact-equality vs a committed
+  baseline), so a removed/renamed export now fails CI instead of silently breaking every
+  config/import that used it. Duplicated byte-identically into all 5 packages'
+  `tests/` dirs, drift-guarded against the root canonical. Surfaced and closed a
+  pre-existing, independent gap while landing: `scripts/eval_protected_paths.py`'s
+  `"tests/**"` pattern only anchored the root suite, leaving all 4 sibling packages'
+  entire test suites without protected-path/CODEOWNERS coverage — both now fixed.
+  A companion **plugin-registry surface guard** (freezing the config-selectable
+  datasets/judges/scorers/sinks/targets keys + aliases — the compat surface `__all__`
+  can't see) is in a separate PR.
+- [x] **CI gate delegation phase-2 POC (ADR 0021) — `eval-harness-ci` → `make check`** — a new
+  reusable composite action `.github/actions/run-quality-gate` (setup-python + install + run the gate)
+  now backs `eval-harness-ci.yml`, which delegates to the root `make check` instead of duplicating
+  ruff/format/mypy/pytest inline. CI == local `make check` for this workflow. First of ADR 0021's six
+  workflows; the rest (`agent-core`, `flow-corpus`, `behavioral-regression`, `claude-foundation`,
+  `skills-ci`) follow as separate label-gated PRs, then ADR 0021 flips Proposed→Accepted. Surfaced for
+  review: the root gate's `ruff check .` makes this job lint the whole repo (currently green); the
+  py3.12 `htmlcov/` artifact was dropped (not produced by the shared gate). Both files are under
+  protected `.github/**`, so the PR carries the `eval-change-approved` label gate.
+- [x] **E2E Windows cross-platform hardening (21/21 offline green)** — fixed
+  three classes of failure on the Windows e2e path: (1) a pre-existing PS 5.1
+  string-concatenation bug in the `--junitxml` argument that silently zeroed
+  test collection, (2) WSL bash path-mangling (exit 127) and symlink-privilege
+  denial (WinError 1314), (3) F-038 sys.path gap when running standalone
+  validation scripts with a stale editable install.
+- [x] **Eval-backend validation experiment scaffolded (`experiments/backend-validation/`)** —
+  the full offline implementation of `eval-backend-validation_v1` (Langfuse vs Opik
+  capability validation for the eval-backend displacement decision) landed as an isolated,
+  dependency-only subtree: L1/L2/L3 probe layers, six phases with fail-safe BLOCKED/HALT
+  discipline, digest-pinned compose stacks, ops-burden metrics, a human-signed rubric (TCB),
+  and its own generated quality-gate (196 tests, ≥95% branch coverage, mypy strict). Ships
+  **unsigned** — no probe executes until a human corrects the transcribed matrix claims,
+  signs `PROBES.yaml` + `RUBRIC.md`, and writes the `SIGNOFF` hash file (agents never sign).
+  Remaining (human-driven, outside this repo's CI): resolve `CLAIM_TBD` marks from the
+  external matrix and sign the TCB; `make pin-digests` where the registries are reachable;
+  run P1–P5 against live stacks; commit the `reports/`. Deliberately NOT wired into the root
+  `Makefile` fan-out (the experiment is temporary, and the makegen Makefile has no
+  hand-extension seam so a delegation target would not survive regeneration) — use
+  `make -C experiments/backend-validation check`. Optionally, a path-filtered CI workflow can
+  ride the later protected batch (a new `.github/workflows/*.yml` is label-gated).
+- [x] **Determinism phase P1+P2: workspace gates dogfooded (skills → 1.1.0)** — the
+  generators grew monorepo support (`--workspace` fan-out; repeatable `--lint-path`/
+  `--typecheck-path`; multi-source `--cov=`; provenance header; hand-extension marker with a
+  `do_extra()` hook) and the repo now runs on the results: `./scripts/quality-gate.sh all`
+  is the root gate (lint + 3 mypy runs + cov ≥96 + the F-031 scripts gate below the marker),
+  each sibling package has its own generated gate + Makefile, and `make check-all` runs all
+  six green locally. ruff/mypy pins unified across all four previously-floating package dev
+  extras. P3 (ADR 0022 + `plan`/`test-first`/`code-review` gate delegation) and P4 (C4
+  runtime-vs-import semantics ownership in `docs/c4_architecture.md`, `behavioral_regression`
+  L2 coverage, c4-docs manifest-deference contract) landed in the same PR. Remaining: P5 —
+  the labeled protected batch (ADR 0021: rewire the 4 per-package workflows to the gate
+  scripts; `architecture.yaml` comment fix + unused-edge removal + `.mmd` regen; drift
+  workflow path filter; PROTECTED_PATTERNS/CODEOWNERS additions; cross-reference ADR 0021
+  in ADR 0022's Related list). Review-round deferrals worth a future gategen minor: (a)
+  single-instrumented-run coverage — the root gate's `all` runs the suite twice (harness
+  cov + F-031 scripts cov); one run + two `coverage report` passes over shared data would
+  halve gate wall-clock but needs a combined run-config design; (b) individually
+  dispatchable named hand-steps (today `do_extra` is reachable only via `all`), which
+  would let CI call granular hand extensions without duplicating their commands.
+- [x] **Deterministic generator skills — `project-setup` / `quality-gate` / `deploy` (ADR 0020)** —
+  three skills that emit committed, byte-stable artifacts (a Makefile; a `set -euo pipefail`
+  quality-gate script that CI and `make check` share so local == CI; a safety-railed deploy
+  scaffold with dry-run/confirm/rollback/health-check) instead of re-inferring the steps at
+  runtime. Detection is pure; nothing is fabricated (targets/steps omitted when a tool is absent;
+  `pytest --cov` only when pytest-cov is declared); deploy values are shell-escaped. Registered in
+  `marketplace.yaml` with per-skill CI (`skills-ci.yml`, py3.10–3.12) at the ≥95% coverage floor;
+  a root `Makefile` was generated by dogfooding `project-setup`. Follow-ups: optionally wire the
+  repo's own `quality-gates.yml` to a generated `quality-gate.sh`; add per-package targets to the
+  root Makefile for the monorepo; consider converting the deterministic parts of the
+  inference-heavy `claude-foundation/skills/*`.
+- [x] **BrainTrust integration (F-038, additive/SDK-optional; Phases 1–2)** — a `braintrust`
+  result sink (per-item `experiment.log`), a `braintrust` dataset source (`init_dataset`), and an
+  `autoevals` scorer bridge, all behind a new `braintrust_client` seam
+  (`NullBrainTrustClient` / injected-handle `SDKBrainTrustClient` / `build_client` /
+  `fetch_dataset_items`) that no-ops when the SDK is absent or disabled — `SCHEMA_VERSION`
+  unchanged, offline suite unaffected. Verified against the installed `braintrust` 0.27 SDK;
+  offline-tested via fake-`sys.modules` injection with a live path in `tests/test_braintrust_live.py`.
+  Credentials come from `BRAINTRUST_API_KEY` / `BRAINTRUST_API_URL` (env only). `braintrust` stays
+  out of the offline CI job (no-op precedent from Phoenix); `autoevals` (lightweight, offline-safe
+  heuristics) is installed in CI for real coverage. See `docs/braintrust-spike.md`.
+  Follow-ups: managed-prompt fetch (BrainTrust chat-prompt → single judge-string is lossy — needs a
+  design decision) and an opt-in `braintrust-live.yml` workflow mirroring `phoenix-live.yml`.
 - [x] **One-command E2E / user-journey harness + Windows portability** —
   `scripts/run_all_e2e.ps1` (+ `docs/e2e-runbook.md`) runs every package suite, every
   `features.yaml` gate, every package CLI journey, and the skill/hook e2e tests in one
@@ -51,6 +134,13 @@
   with its own ≥85% coverage gate (`scripts/.coveragerc`); 46 new tests for `validate.py` /
   `select_next.py` / `init.py`; `resolve_repo` fixed to be immune to git `url.insteadOf`
   rewrites; `scripts/validations/F_031.py` guards the enforcement itself.
+  **2026-07-21 incident + fix:** ADR 0021's CI-delegation (PR #64) moved the enforced
+  commands from inline workflow YAML into `scripts/quality-gate.sh`, which broke `F_031`'s
+  (and `F_037`'s) inline-string assertions even though the underlying enforcement stayed
+  intact — undetected because `quality-gates.yml` didn't run on the `.github/`-only PR. PR
+  #65 repointed both validators at the delegated behavior (`_common.ci_enforces`) and
+  widened the trigger path filter so this class of regression can't hide again; both have
+  passed on `main` since PR #65 merged (2026-07-21).
 - [x] **`claude-foundation` plugin plan** — peer-reviewed, corrected execution plan for the
   reusable Claude Code plugin repository (`docs/plans/claude-foundation/`). Planning only;
   see follow-ups below.
@@ -126,6 +216,8 @@
   `ParquetDataset` (`parquet`/`parquet_file`) with column mappings and `DATA_ROOT`
   path confinement (F-019).
 - [x] **`py.typed` Marker** — Ship PEP 561 marker for downstream type checkers.
+  Root `eval_harness` marker + `[tool.setuptools.package-data]` added so the wheel
+  actually carries it (the sub-packages already shipped theirs).
 
 ## Medium Term (v1.3.0)
 

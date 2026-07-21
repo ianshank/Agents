@@ -37,6 +37,16 @@ phoenix = [
 # offline spike). Split out because arize-phoenix-evals pulls pandas/numpy and its API
 # differs from older releases; resolve against `parquet`'s pyarrow pin on a networked env.
 phoenix-evals = ["arize-phoenix-evals>=0.29", "arize-phoenix-client>=2.11"]
+# BrainTrust experiment export (optional, additive). Kept OUT of `dev`/the offline test
+# job so it never needs the SDK — the `braintrust` sink degrades to a no-op when absent
+# (mirrors the phoenix seam). Pinned <1 because braintrust is pre-1.0 (breaking changes
+# permitted across minor bumps); bump deliberately after checking the changelog.
+braintrust = ["braintrust>=0.27,<1"]
+# autoevals scorer bridge. Lightweight (chevron/jsonschema/polyleven/pyyaml — no numpy/
+# pandas), and its Heuristic scorers are pure-Python & offline-safe, so — unlike braintrust
+# — this extra IS installed in the offline test job (see eval-harness-ci.yml) for real
+# coverage of the bridge's happy path. Pinned <1 (pre-1.0).
+autoevals = ["autoevals>=0.3,<1"]
 # ruff/mypy are pinned (not `>=`) so local and CI format/lint identically — unpinned
 # ruff drifted (0.8.0 local vs 0.15.20 CI) and broke `ruff format --check`. Same
 # reproducibility rationale as the grimp==3.14 pin above. Bump deliberately, in lockstep.
@@ -51,6 +61,12 @@ eval-harness = "eval_harness.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# PEP 561: ship the inline-type marker so downstream type checkers treat
+# eval_harness as typed. Without this stanza the marker file is not packaged
+# into the wheel (mirrors the sub-packages' package-data declarations).
+eval_harness = ["py.typed"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
@@ -67,6 +83,8 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 # C901 enforces the project's cyclomatic-complexity budget (< 15) via mccabe below.
+# Note: "D" (pydocstyle) rules are intentionally excluded; docstring-convention
+# enforcement was deliberately not adopted per F-037 conventions.
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "C901"]
 ignore = ["E501"]  # line length handled by formatter
 
@@ -85,9 +103,17 @@ max-complexity = 14
 
 [tool.mypy]
 python_version = "3.10"
-# Lets `mypy scripts` resolve the validation gates' runtime `from _common import ...`
-# bootstrap imports; explicit_package_bases keeps module naming stable for it.
-mypy_path = "scripts/validations"
+# Package bases for explicit_package_bases (below). mypy picks the longest matching base
+# per file.
+#   * "src" makes `mypy src/eval_harness` name the package `eval_harness.*` (stripping the
+#     `src/` prefix) instead of `src.eval_harness.*`. Without it the same file is reachable
+#     both as `src.eval_harness.*` (from the CLI path) and as `eval_harness.*` (via the
+#     editable install, which mypy follows now that the package ships `py.typed`), producing
+#     a "Source file found twice under different module names" error. This is the src-layout
+#     fix — no per-file `__init__.py` shim or CI-flag workaround needed.
+#   * "scripts/validations" lets `mypy scripts` resolve the validation gates' runtime
+#     `from _common import ...` bootstrap imports.
+mypy_path = ["src", "scripts/validations"]
 explicit_package_bases = true
 warn_return_any = true
 warn_unused_configs = true
