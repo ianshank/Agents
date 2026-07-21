@@ -60,8 +60,14 @@ def _current_surface() -> dict[str, list[str]]:
         [sys.executable, "-c", _PROBE],
         capture_output=True,
         text=True,
-        check=True,
     )
+    if completed.returncode != 0:
+        # Surface the child's traceback instead of an opaque CalledProcessError, so a probe
+        # failure in CI is debuggable (e.g. an import error in eval_harness).
+        raise RuntimeError(
+            f"registry-surface probe failed (exit {completed.returncode})\n"
+            f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+        )
     data = json.loads(completed.stdout)
     logger.debug("registry surface: %s", {kind: len(keys) for kind, keys in data.items()})
     return {str(kind): [str(key) for key in keys] for kind, keys in data.items()}
