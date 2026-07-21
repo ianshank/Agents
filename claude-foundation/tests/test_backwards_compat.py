@@ -212,6 +212,18 @@ def test_agent_frontmatter_parse_failure_falls_back_to_filename(plugin_tree: Pat
     assert "scout" in bc.extract_surface(plugin_tree)["agents"]
 
 
+def test_skill_invalid_utf8_falls_back_to_directory_name(plugin_tree: Path) -> None:
+    skill_md = plugin_tree / "skills" / "hello" / "SKILL.md"
+    skill_md.write_bytes(b"\xff\xfe not valid utf-8")
+    assert "hello" in bc.extract_surface(plugin_tree)["skills"]
+
+
+def test_agent_invalid_utf8_falls_back_to_filename(plugin_tree: Path) -> None:
+    agent_md = plugin_tree / "agents" / "scout.md"
+    agent_md.write_bytes(b"\xff\xfe not valid utf-8")
+    assert "scout" in bc.extract_surface(plugin_tree)["agents"]
+
+
 def test_hooks_json_malformed_shapes_do_not_crash(plugin_tree: Path) -> None:
     hooks_path = plugin_tree / "hooks" / "hooks.json"
 

@@ -57,7 +57,10 @@ def _extract_skills(root: Path) -> list[str]:
         try:
             front, _ = load_frontmatter(skill_md)
             names.append(SkillFrontmatter.model_validate(front).name)
-        except (FrontmatterError, ValidationError, OSError):
+        except (FrontmatterError, ValidationError, OSError, ValueError):
+            # ValueError covers UnicodeDecodeError from load_frontmatter's
+            # read_text(encoding="utf-8") on invalid UTF-8 bytes — not an
+            # OSError subclass, so it needs its own entry here.
             names.append(skill_dir.name)
     return names
 
@@ -71,7 +74,10 @@ def _extract_agents(root: Path) -> list[str]:
         try:
             front, _ = load_frontmatter(agent_md)
             names.append(AgentFrontmatter.model_validate(front).name)
-        except (FrontmatterError, ValidationError, OSError):
+        except (FrontmatterError, ValidationError, OSError, ValueError):
+            # ValueError covers UnicodeDecodeError from load_frontmatter's
+            # read_text(encoding="utf-8") on invalid UTF-8 bytes — not an
+            # OSError subclass, so it needs its own entry here.
             names.append(agent_md.stem)
     return names
 
@@ -109,7 +115,10 @@ def _extract_hooks(root: Path) -> list[str]:
         return []
     try:
         config = json.loads(hooks_path.read_text("utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
+        # ValueError covers json.JSONDecodeError (a subclass) and, more
+        # importantly, UnicodeDecodeError from invalid UTF-8 bytes on read —
+        # JSONDecodeError alone would miss the latter and crash.
         return []
     if not isinstance(config, dict):
         return []
@@ -194,21 +203,23 @@ def check_backwards_compat(root: Path, *, baseline_path: Path | None = None) -> 
         baseline_path = default_baseline_path(root)
     try:
         baseline = _load_baseline(baseline_path)
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
-        return [f"{baseline_path}: unreadable baseline ({exc})"]
+    except (OSError, ValueError) as exc:
+        # ValueError covers json.JSONDecodeError and UnicodeDecodeError; both
+        # are subclasses and _load_baseline's own non-dict check also raises it.
+        return [f"{baseline_path.as_posix()}: unreadable baseline ({exc})"]
     if baseline is None:
-        return [f"{baseline_path}: no baseline found; run --update to create one"]
+        return [f"{baseline_path.as_posix()}: no baseline found; run --update to create one"]
 
     try:
         recorded_major = _validated_recorded_major(baseline)
         baseline_components = _validated_components(baseline)
     except ValueError as exc:
-        return [f"{baseline_path}: malformed baseline ({exc})"]
+        return [f"{baseline_path.as_posix()}: malformed baseline ({exc})"]
 
     try:
         current_major = _current_major(root)
-    except (OSError, json.JSONDecodeError, ValidationError) as exc:
-        return [f"{_PLUGIN_MANIFEST_REL}: {exc} (cannot verify major-version exception)"]
+    except (OSError, ValueError, ValidationError) as exc:
+        return [f"{_PLUGIN_MANIFEST_REL.as_posix()}: {exc} (cannot verify major-version exception)"]
 
     major_bumped = current_major > recorded_major
 
@@ -281,14 +292,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     root = Path(args.root).resolve()
     if not root.is_dir():
-        print(f"not a directory: {root}", file=sys.stderr)
+        print(f"not a directory: {root.as_posix()}", file=sys.stderr)
         return 2
     baseline_path = Path(args.baseline_path).resolve() if args.baseline_path else None
 
     if args.update:
         try:
             _update_baseline(root, baseline_path)
-        except (OSError, json.JSONDecodeError, ValidationError) as exc:
+        except (OSError, ValueError, ValidationError) as exc:
             print(f"could not update baseline: {exc}", file=sys.stderr)
             return 2
         print("foundation-backwards-compat: baseline updated")
