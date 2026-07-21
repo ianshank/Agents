@@ -1,0 +1,11 @@
+{
+  "flow_corpus": [
+    "HARNESS_VERSION_PIN",
+    "PROTOCOL_VERSION_PIN",
+    "PinMismatchError",
+    "PinReport",
+    "__version__",
+    "check_pins",
+    "verify_pins"
+  ]
+}

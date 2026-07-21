@@ -1,0 +1,22 @@
+{
+  "behavioral_regression": [
+    "BRConfig",
+    "CanaryReport",
+    "ConfigError",
+    "JVerdict",
+    "JudgeProtocol",
+    "PairedResponse",
+    "PairedResponseGenerator",
+    "RegressionDetector",
+    "RegressionEstimate",
+    "RegressionReport",
+    "SCHEMA_VERSION",
+    "ShipDecision",
+    "SyntheticJudge",
+    "__version__",
+    "decide_ship",
+    "run_canary",
+    "run_pipeline",
+    "validate_judge"
+  ]
+}
