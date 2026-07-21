@@ -99,6 +99,7 @@
       "read_store",
       "read_store_lines",
       "serialize_store",
+      "soak_progress",
       "store_stats",
       "write_store"
     ]
