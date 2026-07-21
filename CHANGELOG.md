@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Plugin-registry surface guard:** `tests/test_plugin_registry_surface.py` freezes the
-  `eval_harness` plugin registry's config-selectable keys — the `datasets`/`judges`/
-  `scorers`/`sinks`/`targets` registries' primary names *and* their backwards-compat
+  `eval_harness` plugin registry's config-selectable keys — the `dataset`/`judge`/
+  `scorer`/`sink`/`target` registries' primary names *and* their backwards-compat
   aliases (`csv_file` → `csv`, `claude` → `anthropic`, …) — against a committed
   `plugin_registry_baseline.json`, with exact equality: a dropped/renamed key fails CI as a
   breaking change, a new key must be explicitly frozen. This is the compat surface the

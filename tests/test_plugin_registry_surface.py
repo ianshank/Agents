@@ -46,16 +46,31 @@ _UPDATE_HINT = (
     "never rebaseline over a break just to make the guard pass."
 )
 
-# Runs in a clean subprocess (see the module docstring). Registries are discovered
-# dynamically (isinstance(obj, Registry) over eval_harness.plugins' module namespace) rather
-# than naming them, so a future 6th registry is picked up automatically -- adding one only
-# needs a baseline entry, never a code change here. The JSON key is each registry's own
-# ``.kind`` field (e.g. "scorer"), NOT the module-level variable name lowercased: keying off
-# the variable name would make the guard fragile to a purely internal rename (SCORERS ->
+# Runs in a clean subprocess (see the module docstring). Mirrors tests/conftest.py's own
+# sys.path setup (insert(0) for repo root + src, highest precedence) because a bare
+# ``python -c`` child gets none of pytest's conftest.py handling: without this, the import
+# either fails outright on an uninstalled checkout, or -- worse -- silently resolves to
+# whatever ``eval_harness`` happens to already be on sys.path (e.g. a stray editable install
+# pointing at an unrelated checkout), which would make this guard measure the wrong code
+# without any error at all. ``cwd=_REPO_ROOT`` is set by the caller (_current_surface), so
+# Path.cwd() here is exactly the repo root. Registries are discovered dynamically
+# (isinstance(obj, Registry) over eval_harness.plugins' module namespace) rather than naming
+# them, so a future 6th registry is picked up automatically -- adding one only needs a
+# baseline entry, never a code change here. The JSON key is each registry's own ``.kind``
+# field (e.g. "scorer"), NOT the module-level variable name lowercased: keying off the
+# variable name would make the guard fragile to a purely internal rename (SCORERS ->
 # SCORER_REGISTRY) even though the public config-selectable surface never changed.
 # ``_aliases`` is read directly because there is no public accessor for the backwards-compat
 # alias keys, which are part of the surface.
 _PROBE = """\
+import sys
+from pathlib import Path
+
+_root = Path.cwd()
+for _p in (str(_root), str(_root / "src")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import json
 
 from eval_harness import plugins
