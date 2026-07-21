@@ -1,23 +1,36 @@
 {
-  "eval_harness": [
-    "SCHEMA_VERSION",
-    "__version__"
+  "packages": [
+    "eval_harness"
   ],
-  "eval_harness.core": [
-    "DatasetSource",
-    "EvalItem",
-    "ItemResult",
-    "Judge",
-    "JudgeVerdict",
-    "Registry",
-    "RegistryError",
-    "ResultSink",
-    "RunContext",
-    "RunResult",
-    "ScoreAggregate",
-    "ScoreResult",
-    "Scorer",
-    "TargetOutput",
-    "TargetRunner"
-  ]
+  "surface": {
+    "eval_harness": [
+      "SCHEMA_VERSION",
+      "__version__"
+    ],
+    "eval_harness.agent_core_adapter": [
+      "AdapterConfig",
+      "BudgetedJudge",
+      "FixedCostEstimator",
+      "HarnessJudgeRunner",
+      "ItemStore",
+      "build_budgeted_judge"
+    ],
+    "eval_harness.core": [
+      "DatasetSource",
+      "EvalItem",
+      "ItemResult",
+      "Judge",
+      "JudgeVerdict",
+      "Registry",
+      "RegistryError",
+      "ResultSink",
+      "RunContext",
+      "RunResult",
+      "ScoreAggregate",
+      "ScoreResult",
+      "Scorer",
+      "TargetOutput",
+      "TargetRunner"
+    ]
+  }
 }

@@ -1,11 +1,16 @@
 {
-  "flow_protocol": [
-    "ConfidenceChannel",
-    "FlowResult",
-    "OracleResult",
-    "OracleTier",
-    "PROTOCOL_VERSION",
-    "__version__",
-    "migrate_protocol"
-  ]
+  "packages": [
+    "flow_protocol"
+  ],
+  "surface": {
+    "flow_protocol": [
+      "ConfidenceChannel",
+      "FlowResult",
+      "OracleResult",
+      "OracleTier",
+      "PROTOCOL_VERSION",
+      "__version__",
+      "migrate_protocol"
+    ]
+  }
 }
