@@ -57,7 +57,10 @@ def _extract_skills(root: Path) -> list[str]:
         try:
             front, _ = load_frontmatter(skill_md)
             names.append(SkillFrontmatter.model_validate(front).name)
-        except (FrontmatterError, ValidationError, OSError):
+        except (FrontmatterError, ValidationError, OSError, ValueError):
+            # ValueError covers UnicodeDecodeError from load_frontmatter's
+            # read_text(encoding="utf-8") on invalid UTF-8 bytes — not an
+            # OSError subclass, so it needs its own entry here.
             names.append(skill_dir.name)
     return names
 
@@ -71,7 +74,10 @@ def _extract_agents(root: Path) -> list[str]:
         try:
             front, _ = load_frontmatter(agent_md)
             names.append(AgentFrontmatter.model_validate(front).name)
-        except (FrontmatterError, ValidationError, OSError):
+        except (FrontmatterError, ValidationError, OSError, ValueError):
+            # ValueError covers UnicodeDecodeError from load_frontmatter's
+            # read_text(encoding="utf-8") on invalid UTF-8 bytes — not an
+            # OSError subclass, so it needs its own entry here.
             names.append(agent_md.stem)
     return names
 
