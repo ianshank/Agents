@@ -27,3 +27,4 @@
 {"agent_version": null, "change_id": "20f5d8b566cd916efc27756516123bb6836b9bdf", "domain": "human/agent-core", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-21T06:45:13-04:00", "raw_confidence": 0.0}
 {"agent_version": null, "change_id": "06524f1ccddf54bec6f0503da965fec8323a39b0", "domain": "human/tooling", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-21T07:18:53-04:00", "raw_confidence": 0.0}
 {"agent_version": null, "change_id": "0fc8c2d48f1b9f55bb1893a6d43e1a46885ecf91", "domain": "human/tooling", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-21T08:23:13-04:00", "raw_confidence": 0.0}
+{"agent_version": null, "change_id": "1dc380980f8964b74664af6fa0ba83b91d65d4a6", "domain": "human/ci-config", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-21T08:23:57-04:00", "raw_confidence": 0.0}
