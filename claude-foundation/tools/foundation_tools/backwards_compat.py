@@ -120,12 +120,16 @@ def extract_surface(root: Path) -> dict[str, list[str]]:
     """Return the live plugin's public surface: ``{kind: sorted(component names)}``.
 
     General-purpose by design — a future component kind (MCP servers, LSP
-    configs) is a one-branch addition here, not a new module.
+    configs) is a one-branch addition here, not a new module. Sorted explicitly
+    here (not left to each ``_extract_*`` helper) since frontmatter ``name`` can
+    differ from filesystem traversal order — e.g. directory ``aaa`` declaring
+    ``name: zzz`` — so directory-sorted iteration alone wouldn't guarantee
+    name-sorted output.
     """
     return {
-        "skills": _extract_skills(root),
-        "agents": _extract_agents(root),
-        "hooks": _extract_hooks(root),
+        "skills": sorted(_extract_skills(root)),
+        "agents": sorted(_extract_agents(root)),
+        "hooks": _extract_hooks(root),  # already sorted: built from a set
     }
 
 
@@ -150,8 +154,29 @@ def diff_surface(
 def _load_baseline(baseline_path: Path) -> dict[str, Any] | None:
     if not baseline_path.exists():
         return None
-    data: dict[str, Any] = json.loads(baseline_path.read_text("utf-8"))
+    data = json.loads(baseline_path.read_text("utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("baseline must be a JSON object")
     return data
+
+
+def _validated_recorded_major(baseline: dict[str, Any]) -> int:
+    value = baseline.get("recorded_major_version", 0)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError("baseline 'recorded_major_version' must be an integer")
+    return value
+
+
+def _validated_components(baseline: dict[str, Any]) -> dict[str, list[str]]:
+    components = baseline.get("components", {})
+    if not isinstance(components, dict):
+        raise ValueError("baseline 'components' must be an object")
+    validated: dict[str, list[str]] = {}
+    for kind, names in components.items():
+        if not isinstance(names, list) or not all(isinstance(name, str) for name in names):
+            raise ValueError(f"baseline components[{kind!r}] must be a list of strings")
+        validated[kind] = names
+    return validated
 
 
 def _read_manifest(root: Path) -> PluginManifest:
@@ -169,21 +194,26 @@ def check_backwards_compat(root: Path, *, baseline_path: Path | None = None) -> 
         baseline_path = default_baseline_path(root)
     try:
         baseline = _load_baseline(baseline_path)
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
         return [f"{baseline_path}: unreadable baseline ({exc})"]
     if baseline is None:
         return [f"{baseline_path}: no baseline found; run --update to create one"]
+
+    try:
+        recorded_major = _validated_recorded_major(baseline)
+        baseline_components = _validated_components(baseline)
+    except ValueError as exc:
+        return [f"{baseline_path}: malformed baseline ({exc})"]
 
     try:
         current_major = _current_major(root)
     except (OSError, json.JSONDecodeError, ValidationError) as exc:
         return [f"{_PLUGIN_MANIFEST_REL}: {exc} (cannot verify major-version exception)"]
 
-    recorded_major = int(baseline.get("recorded_major_version", 0))
     major_bumped = current_major > recorded_major
 
     current = extract_surface(root)
-    removed, added = diff_surface(baseline.get("components", {}), current)
+    removed, added = diff_surface(baseline_components, current)
 
     findings: list[str] = []
     if removed and not major_bumped:

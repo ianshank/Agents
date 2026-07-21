@@ -282,6 +282,80 @@ def test_unreadable_baseline_is_a_finding_not_a_crash(plugin_tree: Path, tmp_pat
     assert any("unreadable baseline" in f for f in findings)
 
 
+def test_baseline_that_is_valid_json_but_not_an_object_is_a_finding(
+    plugin_tree: Path, tmp_path: Path
+) -> None:
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+    findings = bc.check_backwards_compat(plugin_tree, baseline_path=baseline)
+    assert any("unreadable baseline" in f and "JSON object" in f for f in findings)
+
+
+def test_baseline_with_non_integer_major_is_a_finding_not_a_crash(
+    plugin_tree: Path, tmp_path: Path
+) -> None:
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "plugin_name": "demo",
+                "recorded_major_version": "one",
+                "components": _live_surface(plugin_tree),
+            }
+        ),
+        encoding="utf-8",
+    )
+    findings = bc.check_backwards_compat(plugin_tree, baseline_path=baseline)
+    assert any("malformed baseline" in f and "recorded_major_version" in f for f in findings)
+
+
+def test_baseline_with_non_object_components_is_a_finding_not_a_crash(
+    plugin_tree: Path, tmp_path: Path
+) -> None:
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps({"plugin_name": "demo", "recorded_major_version": 1, "components": "nope"}),
+        encoding="utf-8",
+    )
+    findings = bc.check_backwards_compat(plugin_tree, baseline_path=baseline)
+    assert any("malformed baseline" in f and "components" in f for f in findings)
+
+
+def test_baseline_with_non_list_component_kind_is_a_finding_not_a_crash(
+    plugin_tree: Path, tmp_path: Path
+) -> None:
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "plugin_name": "demo",
+                "recorded_major_version": 1,
+                "components": {"skills": "hello", "agents": [], "hooks": []},
+            }
+        ),
+        encoding="utf-8",
+    )
+    findings = bc.check_backwards_compat(plugin_tree, baseline_path=baseline)
+    assert any("malformed baseline" in f and "skills" in f for f in findings)
+
+
+def test_extract_surface_returns_name_sorted_lists_even_when_frontmatter_reorders(
+    plugin_tree: Path,
+) -> None:
+    """A skill directory sorted first can still declare a frontmatter name sorted
+    last; extract_surface must sort by the returned name, not by directory order."""
+    reordering_skill = plugin_tree / "skills" / "aaa-reorders-last"
+    (reordering_skill / "evals").mkdir(parents=True)
+    reordering_skill_md = reordering_skill / "SKILL.md"
+    reordering_skill_md.write_text(
+        "---\nname: zzz-actually-last\ndescription: reorders.\n---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    surface = bc.extract_surface(plugin_tree)
+    assert surface["skills"] == sorted(surface["skills"])
+    assert "zzz-actually-last" in surface["skills"]
+
+
 def test_update_flow_reports_error_on_malformed_plugin_json(  # type: ignore[no-untyped-def]
     plugin_tree: Path, tmp_path: Path, capsys
 ) -> None:
