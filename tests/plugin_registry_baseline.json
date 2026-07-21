@@ -1,0 +1,55 @@
+{
+  "dataset": [
+    "braintrust",
+    "csv",
+    "csv_file",
+    "inline",
+    "jsonl",
+    "langfuse",
+    "parquet",
+    "parquet_file"
+  ],
+  "judge": [
+    "anthropic",
+    "bedrock",
+    "claude",
+    "deterministic",
+    "mock",
+    "openai",
+    "phoenix-evals",
+    "phoenix_evals"
+  ],
+  "scorer": [
+    "autoevals",
+    "composite",
+    "contains",
+    "ensemble",
+    "exact",
+    "exact_match",
+    "json_keys",
+    "judge",
+    "llm-judge",
+    "llm_judge",
+    "regex",
+    "regex_match",
+    "schema_keys",
+    "weighted"
+  ],
+  "sink": [
+    "braintrust",
+    "console",
+    "html",
+    "html_file",
+    "json",
+    "json_file",
+    "langfuse",
+    "phoenix"
+  ],
+  "target": [
+    "callable",
+    "echo",
+    "llm",
+    "model",
+    "python"
+  ]
+}

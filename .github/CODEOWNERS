@@ -19,4 +19,5 @@
 /behavioral-regression/tests/   @ianshank
 /flow-corpus/tests/             @ianshank
 /flow-protocol/tests/           @ianshank
+/claude-foundation/tests/       @ianshank
 /.github/                       @ianshank

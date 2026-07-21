@@ -6,7 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed
+- **`claude-foundation/tests/` protected-path gap (F-041):** an independent audit of the
+  merged F-039 work found that `claude-foundation/` — structurally identical to the four
+  packages F-039 protects — was missed by that sweep. Its `tests/test_eval_gate.py`
+  directly exercises an eval-integrity gate (`foundation_tools.eval_gate`) and was
+  modifiable in an unrelated PR with no `eval-change-approved` label or CODEOWNERS review
+  required. `claude-foundation/tests/**` is now in `PROTECTED_PATTERNS` and
+  `.github/CODEOWNERS`.
+
 ### Added
+- **Plugin-registry surface guard:** `tests/test_plugin_registry_surface.py` freezes the
+  `eval_harness` plugin registry's config-selectable keys — the `dataset`/`judge`/
+  `scorer`/`sink`/`target` registries' primary names *and* their backwards-compat
+  aliases (`csv_file` → `csv`, `claude` → `anthropic`, …) — against a committed
+  `plugin_registry_baseline.json`, with exact equality: a dropped/renamed key fails CI as a
+  breaking change, a new key must be explicitly frozen. This is the compat surface the
+  `__all__` guard cannot see, since users select components by string in config rather than
+  importing them. The built-in surface is read in a fresh subprocess (the registries are
+  process-global and some tests register doubles into them, so an in-process read would be
+  order-dependent), keyed by each `Registry`'s own stable `.kind` field rather than its
+  Python variable name (immune to a purely internal rename). `--update` refuses to silently
+  rewrite the baseline if doing so would drop a key — `--allow-drops` is the explicit,
+  reviewed override for a deliberate breaking change.
 - **Public-surface backwards-compat guard (F-039):** `tests/test_public_surface.py` freezes
   every package's public `__all__` exports (exact-equality against a committed
   `public_surface_baseline.json`), so a removed or renamed export now fails CI instead of
@@ -30,7 +52,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicit entries for all four; locked in by new parametrized cases in
   `tests/test_protected_paths.py` and asserted by F-039's validator.
 
-### Added
 - **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
   self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
   evidence for the eval-backend displacement decision by validating the claimed capabilities

@@ -29,6 +29,9 @@ PROTECTED_EXAMPLES = [
     "behavioral-regression/tests/test_gate.py",
     "flow-corpus/tests/test_holdout.py",
     "flow-protocol/tests/test_contract.py",
+    # claude-foundation/ is structurally identical to the four packages above but was missed
+    # by that sweep; test_eval_gate.py directly exercises an eval-integrity gate.
+    "claude-foundation/tests/test_eval_gate.py",
 ]
 
 ALLOWED_EXAMPLES = [

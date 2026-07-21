@@ -705,3 +705,19 @@ features:
     implemented_in: "85fd14eb386bc462e25524489401c4e6a7ee1c58"
     depends_on: []
     notes: "The companion plugin-registry-surface guard (config-selectable datasets/judges/scorers/sinks/targets + aliases -- the same compat-guard family, covering the surface __all__ cannot see) ships in a separate PR and is intentionally not folded into this entry to avoid a cross-PR dependency; it may become its own feature once merged. numpy: not used anywhere in this change, consistent with the rest of the repo."
+
+  - id: "F-041"
+    epic: "Quality Gate"
+    name: "claude-foundation/tests/ protected-path gap (F-039 follow-up)"
+    description: "An independent deep audit of the merged F-039 work found that claude-foundation/ -- structurally identical to the four packages F-039 protects (own pyproject.toml, Makefile, isolated CI, own tests/) -- was missed by that sweep. Its tests/test_eval_gate.py directly exercises an eval-integrity gate (foundation_tools.eval_gate), so it was previously modifiable in an unrelated PR with no eval-change-approved label or CODEOWNERS review required. Adds claude-foundation/tests/** to PROTECTED_PATTERNS and .github/CODEOWNERS. Deliberately narrower than F-039: does not require claude-foundation to carry a duplicated __all__ public-surface guard, since that guard protects the config-selectable/importable Python surface the eval_harness sibling packages expose to each other -- a different concern than claude-foundation (a standalone Claude Code plugin, not part of that import graph). If claude-foundation is later extracted to its own repository (tracked separately), this entry and its protected-path entries become moot and should be removed together."
+    category: "non-functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "eval_protected_paths.PROTECTED_PATTERNS includes 'claude-foundation/tests/**' and is_protected() resolves True for claude-foundation/tests/test_eval_gate.py and other paths under it (F_041.py)"
+      - ".github/CODEOWNERS mirrors the same entry (F_041.py; locking example added to tests/test_protected_paths.py)"
+    validation_command: "python scripts/validations/F_041.py"
+    implemented_in: "afab9c0de7ee35a256fe42d5bf7b20f3698b220f"
+    depends_on: ["F-039"]
+    notes: "Found by an independent worktree-isolated audit re-verifying F-039 from first principles after it merged, not by the author's own review. numpy: not used anywhere in this change."

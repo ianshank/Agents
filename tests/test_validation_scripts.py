@@ -29,12 +29,13 @@ import F_034  # noqa: E402
 import F_035  # noqa: E402
 import F_037  # noqa: E402
 import F_039  # noqa: E402
+import F_041  # noqa: E402
 
 
 @pytest.mark.parametrize(
     "module",
-    [F_020, F_021, F_022, F_023, F_031, F_032, F_033, F_034, F_035, F_037, F_039],
-    ids=["F_020", "F_021", "F_022", "F_023", "F_031", "F_032", "F_033", "F_034", "F_035", "F_037", "F_039"],
+    [F_020, F_021, F_022, F_023, F_031, F_032, F_033, F_034, F_035, F_037, F_039, F_041],
+    ids=["F_020", "F_021", "F_022", "F_023", "F_031", "F_032", "F_033", "F_034", "F_035", "F_037", "F_039", "F_041"],
 )
 def test_validator_main_passes(module):
     # Each validator returns 0 on success (F_022 returns 0 even if agent_core is
