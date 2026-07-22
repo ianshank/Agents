@@ -97,6 +97,9 @@ max-complexity = 14
 # Standalone validation gates bootstrap sys.path before imports (E402) and are
 # deliberately named after the feature IDs they gate, e.g. F_013.py (N999).
 "scripts/validations/*.py" = ["E402", "N999"]
+# One-shot migrations bootstrap sys.path before importing scripts/agent_core modules,
+# same as the validation gates above (E402).
+"scripts/migrations/*.py" = ["E402"]
 # Typographic characters (em-dashes, multiplication signs) in script docstring
 # prose; not identifiers, no correctness impact.
 "scripts/**" = ["RUF001", "RUF002", "RUF003"]
