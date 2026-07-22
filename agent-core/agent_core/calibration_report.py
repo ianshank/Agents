@@ -246,7 +246,6 @@ def build_report(
     ]
     primary = [r for r in labeled if r.label_source == LabelSource.HUMAN_AUDIT.value]
 
-    kwargs = {"n_bins": n_bins, "risk_target": risk_target, "z": z}
     views = [
         _build_view(
             "PRIMARY — HUMAN_AUDIT only (tau-relevant)",
@@ -254,7 +253,9 @@ def build_report(
             primary,
             av_index,
             domain_filter,
-            **kwargs,
+            n_bins=n_bins,
+            risk_target=risk_target,
+            z=z,
         ),
         _build_view(
             "DIAGNOSTIC — all labels incl. weak timeout_clean (NOT tau-eligible)",
@@ -262,7 +263,9 @@ def build_report(
             labeled,
             av_index,
             domain_filter,
-            **kwargs,
+            n_bins=n_bins,
+            risk_target=risk_target,
+            z=z,
         ),
     ]
     return ReportDoc(

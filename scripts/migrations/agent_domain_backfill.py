@@ -134,7 +134,7 @@ def compute_confidence_for(change_id: str, repo_dir: str, proxy: ac.ProxyConfig)
         for n in cols[:2]:
             if n.isdigit():
                 lines += int(n)
-    return ac.compute_confidence(files, lines, proxy)
+    return float(ac.compute_confidence(files, lines, proxy))
 
 
 def build_targets(shas: dict[str, str], repo_dir: str, proxy: ac.ProxyConfig) -> dict[str, BackfillTarget]:
