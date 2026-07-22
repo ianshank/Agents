@@ -53,7 +53,7 @@ def _write(tmp_path: Path, name: str, doc: object) -> str:
 
 def _proxy_cfg(tmp_path: Path, **overrides: object) -> ac.ProxyConfig:
     doc = copy.deepcopy(_PROXY)
-    doc["proxy"].update(overrides)  # type: ignore[union-attr]
+    doc["proxy"].update(overrides)  # type: ignore[attr-defined]
     return ac.ProxyConfig.load(_write(tmp_path, "proxy.yaml", doc))
 
 

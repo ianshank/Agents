@@ -71,8 +71,9 @@ def test_analyze_slice_non_degenerate():
     assert s.n_correct == 2
     assert s.degenerate is None
     assert s.auroc is not None and 0.0 <= s.auroc <= 1.0
-    assert s.base_rate_ci is not None and s.base_rate_ci[0] <= s.base_rate <= s.base_rate_ci[1]
-    assert 0.0 <= s.abstention_at_target <= 1.0
+    assert s.base_rate is not None and s.base_rate_ci is not None
+    assert s.base_rate_ci[0] <= s.base_rate <= s.base_rate_ci[1]
+    assert s.abstention_at_target is not None and 0.0 <= s.abstention_at_target <= 1.0
 
 
 def test_analyze_slice_constant_predictor_is_degenerate():
