@@ -1,8 +1,8 @@
 name: merge-gate seed
 
-# F-035 seed-on-merge (ADR 0018 §5): every change that lands on main writes ONE
-# pending OutcomeRecord to the persistent store so the labeller (F-033) and the
-# audit surface (F-034) have records to resolve.
+# F-035 seed-on-merge (ADR 0018 §5) + F-042 agent routing (ADR 0023): every change
+# that lands on main writes ONE pending OutcomeRecord to the persistent store so the
+# labeller (F-033) and the audit surface (F-034) have records to resolve.
 #
 # Trigger is `push: main`, deliberately NOT `pull_request: [closed]`:
 #   * fork-PR closed events carry a read-only token — their seeds would fail
@@ -10,24 +10,31 @@ name: merge-gate seed
 #   * F-032 AC-4: no pull_request-triggered job may push the store.
 # A push to main covers merge/squash/rebase results and direct pushes alike.
 #
-# All merges seed under the reserved human/<domain> namespace at confidence
-# 0.0: no agent-confidence artifact exists in this repo's PR flow yet, and a
-# guessed confidence pooled into an agent domain is the calibration-poisoning
-# path REVIEW.md §6 documents. merge_gate_context's --confidence flag is the
-# seam for a future artifact. Known limitation (ADR 0018): a rebase-merge of N
-# commits seeds only the head SHA — one record per integrated change-set.
+# Routing (F-042, ADR 0023): the change's PR head-branch prefix decides the lane.
+#   * AGENT lane (head ref matches config/agent-authors.yaml, e.g. claude/*): seed in
+#     the un-prefixed agent domain with a VARYING deterministic proxy confidence
+#     (scripts/agent_confidence.py) and the agent_version, via merge_gate_context's
+#     --confidence seam. This is what makes the agent-domain calibration non-degenerate.
+#   * HUMAN lane (everything else, no PR, or any lookup failure): the original path —
+#     reserved human/<domain> namespace at confidence 0.0. Fail-safe: a guessed
+#     confidence pooled into an agent domain is the poisoning path REVIEW.md §6 documents,
+#     so anything we cannot positively classify as an agent goes human. Every fallback is
+#     logged to the step summary so silent under-counting of agent rows is visible.
 #
-# No shared concurrency group: GitHub keeps one pending run per group and
-# REPLACES it, so a shared group would silently drop queued seeds under bursty
-# merges. store_sync's fetch->re-merge->push retry loop is the concurrency
-# mechanism (ADR 0018 §3).
+# No shared concurrency group: GitHub keeps one pending run per group and REPLACES it,
+# so a shared group would silently drop queued seeds under bursty merges. store_sync's
+# fetch->re-merge->push retry loop is the concurrency mechanism (ADR 0018 §3).
 
 on:
   push:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: write        # push the data branch
+  pull-requests: read    # LOAD-BEARING (F-042): commits/<sha>/pulls resolves the PR head
+                         # ref for agent routing. An explicit permissions block zeroes
+                         # every unlisted scope, so without this the lookup 403s and every
+                         # change silently falls back to the human/ lane (ADR 0023 §2).
 
 jobs:
   seed:
@@ -36,6 +43,7 @@ jobs:
     env:
       # Same repo-variable seam the acting gate job honors (I-4).
       STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
+      GH_TOKEN: ${{ github.token }}
     timeout-minutes: 10
     steps:
       # Credentials persisted deliberately: this job pushes the data branch.
@@ -49,7 +57,7 @@ jobs:
       - run: pip install -e "./agent-core" pyyaml
       - name: Sync store (pull — any failure aborts before seeding)
         run: python -m agent_core.store_sync pull --store "$STORE" --repo-dir .
-      - name: Compose seed context (human/<domain>, confidence 0.0)
+      - name: Compose seed context (agent lane -> proxy confidence, else human/ at 0.0)
         env:
           BEFORE: ${{ github.event.before }}
         run: |
@@ -63,16 +71,52 @@ jobs:
             BEFORE="$(git hash-object -t tree /dev/null)"
           fi
           git diff --name-only -z "$BEFORE" "$GITHUB_SHA" > changed_files.z
-          python scripts/merge_gate_context.py --files-from changed_files.z \
-            --human --output seed_context.json
+          LINES=$(git diff --numstat "$BEFORE" "$GITHUB_SHA" \
+            | awk '{ if ($1 ~ /^[0-9]+$/) a+=$1; if ($2 ~ /^[0-9]+$/) d+=$2 } END { print a+d+0 }')
+
+          # Resolve the merged change's PR head ref + author. Primary: the associated
+          # PR via the API (robust to squash/rebase merges). Fallback: parse the
+          # "Merge pull request #N from owner/<branch>" subject for merge-commit merges.
+          # Both empty (direct push) -> human lane.
+          HEAD_REF="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '.[0].head.ref // ""' 2>/dev/null || echo "")"
+          AUTHOR="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '.[0].user.login // ""' 2>/dev/null || echo "")"
+          if [ -z "$HEAD_REF" ]; then
+            HEAD_REF="$(git log -1 --format=%s "$GITHUB_SHA" \
+              | sed -n 's|^Merge pull request #[0-9]* from [^/]*/\(.*\)$|\1|p')"
+          fi
+
+          python scripts/agent_confidence.py --files-from changed_files.z \
+            --lines-changed "$LINES" --head-ref "$HEAD_REF" --author-login "$AUTHOR" \
+            --output agent.json
+          cat agent.json
+
+          if [ "$(jq -r .agent agent.json)" = "true" ]; then
+            CONF="$(jq -r .confidence agent.json)"
+            python scripts/merge_gate_context.py --files-from changed_files.z \
+              --confidence "$CONF" --output seed_context.json
+            echo "seed lane: **agent** (agent_version=$(jq -r .agent_version agent.json), \
+              head_ref=$HEAD_REF, confidence=$CONF)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            python scripts/merge_gate_context.py --files-from changed_files.z \
+              --human --output seed_context.json
+            echo "seed lane: **human** (head_ref=${HEAD_REF:-<none>}, confidence 0.0) — \
+              not classified as an agent change" >> "$GITHUB_STEP_SUMMARY"
+          fi
           cat seed_context.json
       - name: Seed pending record (idempotent by change_id)
         run: |
+          AGENT_ARGS=()
+          if [ "$(jq -r .agent agent.json)" = "true" ]; then
+            AGENT_ARGS=(--agent-version "$(jq -r .agent_version agent.json)")
+          fi
           python -m agent_core.merge_seed --store "$STORE" \
             --change-id "$GITHUB_SHA" \
             --domain "$(jq -r .domain seed_context.json)" \
             --raw-confidence "$(jq -r .raw_confidence seed_context.json)" \
-            --merged-at "$(git show -s --format=%cI "$GITHUB_SHA")"
+            --merged-at "$(git show -s --format=%cI "$GITHUB_SHA")" \
+            "${AGENT_ARGS[@]}"
       - name: Sync store (push — final step; earlier failure leaves remote untouched)
         run: |
           python -m agent_core.store_sync push --store "$STORE" \
