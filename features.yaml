@@ -721,3 +721,49 @@ features:
     implemented_in: "afab9c0de7ee35a256fe42d5bf7b20f3698b220f"
     depends_on: ["F-039"]
     notes: "Found by an independent worktree-isolated audit re-verifying F-039 from first principles after it merged, not by the author's own review. numpy: not used anywhere in this change."
+
+  - id: "F-042"
+    epic: "Quality Gate"
+    name: "Agent-authored merge-gate seeding (head-ref routing + deterministic confidence proxy)"
+    description: "Fills the agent-confidence seam ADR 0018 §5 deferred, so the agent-domain calibration corpus is no longer degenerate. merge-gate-seed.yml routes by PR head-branch prefix (config/agent-authors.yaml) -- NOT author login, which is `ianshank` for both agent and human PRs in this repo (ADR 0023 Context, measured 2026-07-22). An agent change is seeded in its un-prefixed agent domain with a VARYING deterministic proxy confidence (scripts/agent_confidence.py) and agent_version, via merge_gate_context's --confidence seam; everything else (or any lookup failure) falls back to the reserved human/ namespace at 0.0 and is logged to the step summary. The proxy is a pure function of diff size, files touched, test ratio, and touches_protected (mech_pass excluded -- it is ~constant among merged changes); weights/clamps and the identity allowlist live in committed schema-validated config. It is a transparent heuristic (calibrates the proxy, not agent belief), clamped strictly inside (0,1)."
+    category: "infrastructure"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "config/agent-authors.yaml + config/agent-confidence.yaml load under strict schemas; claude/ head-ref resolves to claude-code, human branches do not (F_042.py)"
+      - "the proxy is non-degenerate: distinct changes yield distinct confidences, all strictly inside (0,1) (F_042.py + tests/test_agent_confidence.py)"
+      - "merge-gate-seed.yml routes: invokes agent_confidence.py, agent lane uses --confidence + --agent-version, human fallback (--human) preserved, requests the load-bearing pull-requests: read scope, logs the lane to the step summary (F_042.py; F_035.py permission assertion updated)"
+    validation_command: "python scripts/validations/F_042.py"
+    depends_on: ["F-035"]
+    notes: "ADR 0023, which supersedes ADR 0018 §5's 'no author/branch heuristic' stance (its rationale -- no heuristic recovers a *real* confidence -- is honoured: we adopt an explicitly-labelled proxy, kept isolated in the agent domain so the BinningCalibrator poisoning path stays closed). agent_version has zero gate-decision effect (keying axis only). Only claude/ is evidenced here; other agents are config-only additions once observed."
+
+  - id: "F-043"
+    epic: "Quality Gate"
+    name: "Agent-records calibration report (ECE / Brier decomposition / AUROC / abstention with Wilson CIs)"
+    description: "Read-only agent_core.calibration_report over the outcome store, reusing agent_core.calibration unchanged (no new math). Two views kept strictly separate (invariant I-1): PRIMARY = HUMAN_AUDIT only (the only tau-relevant curve), DIAGNOSTIC = all labels incl. the weak optimistic timeout_clean (NOT tau-eligible). Per agent domain and per agent_version (recovered by joining a resolved record to its seed record by change_id, so no TCB change to audit_sampler). A degeneracy guard reports DEGENERATE (constant predictor or single class) instead of the by-construction AUROC 0.5. Surfaced read-only in outcome-labeller.yml's step summary (after the store push, so it cannot leave partial state)."
+    category: "infrastructure"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "report module reuses the calibration primitives (auroc/brier_decomposition/wilson_interval/selective_risk_coverage), separates the HUMAN_AUDIT view from the passive diagnostic view, and guards degeneracy (F_043.py + agent-core/tests/test_calibration_report.py at 100% module coverage)"
+      - "outcome-labeller.yml surfaces the agent-scoped report to the run step summary, read-only after the store push (F_043.py)"
+    validation_command: "python scripts/validations/F_043.py"
+    depends_on: ["F-042"]
+    notes: "ADR 0023. Honest by construction: calibrates the proxy not agent belief; leads with the HUMAN_AUDIT view; Wilson CIs are wide at low N. min_calibration_n=200 (merge_gate.py) means this produces the curve, not an active tau."
+
+  - id: "F-044"
+    epic: "Quality Gate"
+    name: "One-off agent-domain backfill migration (correct the human/* mislabel)"
+    description: "scripts/migrations/agent_domain_backfill.py re-domains the 18 hand-verified already-merged agent (claude/*) change_ids from human/<d> to <d>, recomputing the proxy confidence over each change's diff (the SAME function as live seeding) and stamping agent_version. Corrects a KNOWN MISLABEL (the pre-F-042 --human-only seeder filed agent changes as human/* at 0.0). A rewrite, not an append: the store is idempotent-by-change_id and store_sync push unions with the remote, so appending would leave the old rows in place. Safety: dry-run by default, --apply required and backs up to <store>.pre-backfill.bak first, NEVER rewrites a HUMAN_AUDIT record, idempotent, and does NOT auto-push (the remote force-update is a manual snapshot-guarded step)."
+    category: "infrastructure"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "committed hand-verified SHA list carries an explicit agent_version per line; migration is dry-run by default, backs up before writing, refuses HUMAN_AUDIT, does not auto-push (F_044.py)"
+      - "pure plan_backfill re-domains all records of a target, is idempotent, and refuses HUMAN_AUDIT (tests/test_agent_domain_backfill.py)"
+    validation_command: "python scripts/validations/F_044.py"
+    depends_on: ["F-042"]
+    notes: "ADR 0023 §4. The only operation that rewrites store history; execution is human-gated (review the dry-run diff, then the manual snapshot + force-push). Measured 2026-07-22: 18 agent change_ids, confidence now varies 0.02-0.78 (previously constant 0.0)."
