@@ -735,6 +735,7 @@ features:
       - "the proxy is non-degenerate: distinct changes yield distinct confidences, all strictly inside (0,1) (F_042.py + tests/test_agent_confidence.py)"
       - "merge-gate-seed.yml routes: invokes agent_confidence.py, agent lane uses --confidence + --agent-version, human fallback (--human) preserved, requests the load-bearing pull-requests: read scope, logs the lane to the step summary (F_042.py; F_035.py permission assertion updated)"
     validation_command: "python scripts/validations/F_042.py"
+    implemented_in: "af80d2da8184baffda8ed848355354c89cc9f97a"
     depends_on: ["F-035"]
     notes: "ADR 0023, which supersedes ADR 0018 §5's 'no author/branch heuristic' stance (its rationale -- no heuristic recovers a *real* confidence -- is honoured: we adopt an explicitly-labelled proxy, kept isolated in the agent domain so the BinningCalibrator poisoning path stays closed). agent_version has zero gate-decision effect (keying axis only). Only claude/ is evidenced here; other agents are config-only additions once observed."
 
@@ -750,6 +751,7 @@ features:
       - "report module reuses the calibration primitives (auroc/brier_decomposition/wilson_interval/selective_risk_coverage), separates the HUMAN_AUDIT view from the passive diagnostic view, and guards degeneracy (F_043.py + agent-core/tests/test_calibration_report.py at 100% module coverage)"
       - "outcome-labeller.yml surfaces the agent-scoped report to the run step summary, read-only after the store push (F_043.py)"
     validation_command: "python scripts/validations/F_043.py"
+    implemented_in: "512f00ec7585d806eab8460f98022037157a9aa7"
     depends_on: ["F-042"]
     notes: "ADR 0023. Honest by construction: calibrates the proxy not agent belief; leads with the HUMAN_AUDIT view; Wilson CIs are wide at low N. min_calibration_n=200 (merge_gate.py) means this produces the curve, not an active tau."
 
@@ -765,5 +767,6 @@ features:
       - "committed hand-verified SHA list carries an explicit agent_version per line; migration is dry-run by default, backs up before writing, refuses HUMAN_AUDIT, does not auto-push (F_044.py)"
       - "pure plan_backfill re-domains all records of a target, is idempotent, and refuses HUMAN_AUDIT (tests/test_agent_domain_backfill.py)"
     validation_command: "python scripts/validations/F_044.py"
+    implemented_in: "3232aaecd9e4b71241cb1e826fd63b0e23401832"
     depends_on: ["F-042"]
     notes: "ADR 0023 §4. The only operation that rewrites store history; execution is human-gated (review the dry-run diff, then the manual snapshot + force-push). Measured 2026-07-22: 18 agent change_ids, confidence now varies 0.02-0.78 (previously constant 0.0)."
