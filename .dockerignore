@@ -61,6 +61,10 @@ regression_report.json
 !README.html
 merge_outcomes.jsonl
 merge_decisions.jsonl
+agent.json
+seed_context.json
+changed_files.z
+*.pre-backfill.bak
 phoenix-server.log
 
 # Docs (not needed in container)

@@ -6,6 +6,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added
+- **Agent-record calibration: routing, proxy confidence & report (F-042/F-043/F-044, ADR 0023).**
+  Closes the agent-record calibration gap — the merge-gate outcome store had crossed its soak
+  target but every record was `agent_version:null` / `domain:human/*` / `raw_confidence:0.0`,
+  i.e. zero agent-authored signal, so the agent-domain predictor was degenerate by construction.
+  - **F-042 — seed routing + confidence proxy.** The seed-on-merge workflow now classifies each
+    merged change by its PR **head-ref prefix** (matched against `config/agent-authors.yaml`, e.g.
+    `claude/*`) rather than author login (uniform across this repo). An agent change is seeded in
+    the un-prefixed agent domain with the real `agent_version` and a **deterministic proxy
+    confidence** (`scripts/agent_confidence.py`) — a pure function of diff size, file count,
+    test-to-code ratio, and protected-path touches, mapped through a clamped sigmoid, no network
+    or model call. Human, PR-less, or any unclassifiable change keeps the reserved
+    `human/<domain>` namespace at confidence `0.0` (fail-safe: anything not positively classified
+    as an agent stays out of the agent pool, per REVIEW.md §6). This makes the agent-domain
+    calibration corpus non-degenerate for the first time.
+  - **F-043 — calibration report.** `agent_core.calibration_report`, a read-only CLI reporting
+    ECE / Brier (+ Murphy decomposition) / AUROC / selective-risk abstention with Wilson CIs over
+    the agent-domain slice, reusing the existing `agent_core.calibration` primitives (no new math).
+    The authoritative `HUMAN_AUDIT` view (the only one that may feed the auto-merge τ) is kept
+    separate from passive diagnostics, and a constant/single-class predictor is reported honestly
+    as `DEGENERATE` instead of the by-construction `0.5`. Emitted to the daily outcome-labeller run
+    summary (read-only, after the store push).
+  - **F-044 — one-off reversible backfill.** `scripts/migrations/agent_domain_backfill.py`
+    re-attributes historical agent SHAs from `human/*` to the agent domain with the same computed
+    proxy confidence, gated on an explicit committed `SHA→agent_version` list, writing a per-store
+    `*.pre-backfill.bak` safety copy so the migration is reversible.
+
+### Hardening
+- **Agent-seeding hardening & reuse (F-045, follow-up to F-042…F-044).** A review-driven pass
+  (self-audit + Copilot + CodeRabbit) resolving tech debt in the above without changing the trust
+  boundary:
+  - **Fail-safe seed routing** — a non-zero exit from the classifier now writes a human-lane
+    fallback `agent.json` and logs it to the run summary instead of aborting the whole seed job
+    under `set -e` (ADR 0023 §2); an undeterminable file set raises rather than scoring all-zero.
+  - **No hardcoded values** — the reserved namespace is single-sourced in
+    `agent_core.domains.HUMAN_NAMESPACE` (validated to equal `config/merge-gate-domains.yaml`),
+    and the report's `n_bins` / `risk_target` / `z` come from a validated `ReportConfig` dataclass.
+  - **Reuse / DRY** — new `scripts/_config.py` owns the shared changed-file / strict YAML-loader
+    idioms (previously duplicated across `agent_confidence.py` and `merge_gate_context.py`); the
+    backfill routes git through the sanctioned `agent_core.subprocess_util.run_failsafe`.
+  - **Robustness** — `read_nul_delimited` reads bytes + `surrogateescape` (non-UTF-8 `git -z`
+    output no longer crashes), the sigmoid clamps its exponent (no `OverflowError` on extreme
+    config), and the migration's SHA-list parse is strict (a bare SHA is rejected, not silently
+    defaulted).
+  - **Security / CI** — `github.actor` is routed through `env:` in both push steps (zizmor
+    template-injection), the calibration-report step is `continue-on-error`, and the migration is
+    no longer excluded from the scripts coverage gate.
+  Ledgered as **F-045**; `scripts/validations/F_045.py` pins the durable invariants.
+
 ### Fixed
 - **`claude-foundation/tests/` protected-path gap (F-041):** an independent audit of the
   merged F-039 work found that `claude-foundation/` — structurally identical to the four

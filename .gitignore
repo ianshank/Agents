@@ -73,13 +73,17 @@ phoenix-server.log
 # Superpowers session artifacts (planning/spec scratch — never committed).
 docs/superpowers/
 
-# Calibrated merge gate runtime artifacts (F-010, F-032…F-035 / ADR 0018).
-# The authoritative store lives on the merge-gate-data branch; these are
-# per-run working copies (store_sync pull/push, merge_gate_ci --audit-log,
-# shadow-job context/decision files) that must never land on code branches.
+# Calibrated merge gate runtime artifacts (F-010, F-032…F-035 / ADR 0018,
+# F-042…F-043 / ADR 0023). The authoritative store lives on the
+# merge-gate-data branch; these are per-run working copies (store_sync
+# pull/push, merge_gate_ci --audit-log, shadow-job context/decision files,
+# the seed lane's agent-classifier output, and the domain-backfill migration's
+# per-store safety backup) that must never land on code branches.
 merge_outcomes.jsonl
 merge_decisions.jsonl
 context.json
 context_human.json
 seed_context.json
+agent.json
 changed_files.z
+*.pre-backfill.bak

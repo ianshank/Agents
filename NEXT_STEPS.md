@@ -2,6 +2,21 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Agent-record calibration: routing + proxy confidence + report (F-042/F-043/F-044, ADR 0023)**
+  — closed the agent-record calibration gap. Previously every merge-gate record was
+  `agent_version:null` / `domain:human/*` / `raw_confidence:0.0`, so the agent-domain predictor was
+  degenerate by construction. Now the seed-on-merge workflow routes agent changes (PR head-ref
+  prefix, `config/agent-authors.yaml`) into the agent domain with a **deterministic proxy
+  confidence** (`scripts/agent_confidence.py` — diff size / files / test-ratio / protected-path,
+  sigmoid-mapped, no network) and the real `agent_version`; `agent_core.calibration_report` reports
+  ECE/Brier/AUROC/abstention (Wilson CIs) over the agent slice, honest `DEGENERATE` guard, surfaced
+  to the daily labeller summary; and a one-off reversible backfill
+  (`scripts/migrations/agent_domain_backfill.py`) re-attributes historical agent SHAs. Hardening
+  follow-up ledgered as **F-045** (fail-safe routing, single-sourced `agent_core.domains`,
+  `ReportConfig`, shared `scripts/_config.py`, strict parse, migration coverage). This is the
+  agent-confidence artifact the merge-gate soak item was waiting on. Remaining: accumulate the
+  agent-domain HUMAN_AUDIT labels (the corpus now grows on every agent merge) before any agent
+  domain can leave cold-start ESCALATE.
 - [x] **Public-surface backwards-compat guard (F-039)** — `tests/test_public_surface.py`
   freezes every package's public `__all__` exports (exact-equality vs a committed
   baseline), so a removed/renamed export now fails CI instead of silently breaking every
@@ -113,15 +128,20 @@
   logs a decision on every PR plus a `human/<domain>` observability decision and
   seed-on-merge writes one pending record per push to main (F-035), and a weekly
   audit queue + human-triggered verdict dispatch is the only writer of HUMAN_AUDIT
-  labels (F-034). F-036 (real-transcript corpus bridge) recorded as deferred.
+  labels (F-034). The agent-confidence seam this left open is now filled by F-042
+  (see above); F-036 (real-transcript corpus bridge) stays recorded as deferred.
   Human checklist before the soak counts: add the `eval-change-approved` label to
   the activation PR (protected paths); exclude `merge-gate-data` from branch
   protection; enable required reviewers on the `merge-gate-verdict` environment;
   record the first verdict via the dispatch UI.
 - [ ] **Merge-gate soak** — accumulate N≥20 shadow decisions and weekly audits before
-  revisiting the ADR 0005 enablement checklist; agent domains stay cold-start until
-  an agent-confidence artifact exists (`merge_gate_context.py --confidence` is the
-  seam; F-036 territory).
+  revisiting the ADR 0005 enablement checklist. The agent-confidence artifact that
+  blocked agent domains now exists (F-042: `scripts/agent_confidence.py` feeds
+  `merge_gate_context.py --confidence`), so agent merges are seeded with a real varying
+  proxy confidence and the agent-domain corpus is non-degenerate; the remaining gate for
+  an agent domain leaving cold-start is accumulating its HUMAN_AUDIT labels, not the
+  predictor. (F-036, the real-transcript corpus bridge, stays deferred — it is an
+  independent enrichment, not a blocker.)
 - [x] **Operational-scripts quality gates (F-031)** — closed the 2026-07 gap analysis
   (`docs/gap-analysis-2026-07.md`): `scripts/` is now lint/type-enforced in `eval-harness-ci`
   with its own ≥85% coverage gate (`scripts/.coveragerc`); 46 new tests for `validate.py` /

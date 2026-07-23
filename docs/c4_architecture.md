@@ -155,11 +155,20 @@ timeout-bounded and failing safe.
 Real data flows through the subsystem via the F-032…F-035 activation (ADR 0018): the store
 persists on the dedicated `merge-gate-data` branch (`store_sync` — canonical deterministic
 merge because `resolved()` is file-order dependent; plumbing commits; retry-with-backoff for
-concurrent writers; unparseable lines preserved verbatim), seeded on every push to `main`
-under the reserved `human/<domain>` namespace (confidence 0.0 — human outcomes never enter
-agent-domain calibration), passively labelled daily, audited weekly through GitHub issues,
-and observed by an always-on **shadow** job that logs a decision on every PR without ever
-blocking one.
+concurrent writers; unparseable lines preserved verbatim), seeded on every push to `main`,
+passively labelled daily, audited weekly through GitHub issues, and observed by an always-on
+**shadow** job that logs a decision on every PR without ever blocking one.
+
+Seed routing (F-042, ADR 0023) decides each record's lane by the merged change's **PR
+head-ref prefix** (`config/agent-authors.yaml`, e.g. `claude/*`): an agent change is seeded in
+the un-prefixed **agent domain** with the real `agent_version` and a deterministic proxy
+confidence (`scripts/agent_confidence.py`), while every human, PR-less, or unclassifiable
+change — and any classifier failure, fail-safe — keeps the reserved `human/<domain>` namespace
+at confidence 0.0 (human outcomes never enter agent-domain calibration). This is what makes the
+agent-domain corpus non-degenerate; `agent_core.calibration_report` (F-043) reports its
+calibration (ECE/Brier/AUROC/abstention, Wilson CIs, honest `DEGENERATE` guard) to the daily
+labeller summary, and a one-off reversible backfill
+(`scripts/migrations/agent_domain_backfill.py`, F-044) re-attributed the historical agent SHAs.
 
 ```mermaid
 C4Component
@@ -174,6 +183,8 @@ C4Component
         Component(sampler, "audit_sampler", "module", "unbiased stratified sampling + HUMAN_AUDIT verdicts")
         Component(detectors, "detectors", "module", "GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo; DetectorConfig timeouts, fail-safe")
         Component(calib, "calibration", "module", "Wilson interval, AUROC, ECE (reused, not re-implemented)")
+        Component(report, "calibration_report", "read-only CLI (F-043)", "agent-domain ECE/Brier/AUROC/abstention (Wilson CIs); HUMAN_AUDIT vs passive views tagged; honest DEGENERATE guard; ReportConfig knobs; reuses calibration")
+        Component(domains, "domains", "module", "single-source HUMAN_NAMESPACE / is_agent_domain / strip_human_namespace (agent vs reserved-human lane; yaml/config-free)")
     }
 
     System_Ext(git, "git", "Local history — revert footer detection")
@@ -191,17 +202,26 @@ C4Component
     Rel(sampler, store, "select + record HUMAN_AUDIT")
     Rel(detectors, git, "git log (-z, revert footer)")
     Rel(detectors, gha, "gh api check-runs")
+    Rel(report, store, "read agent-domain slice")
+    Rel(report, calib, "auroc / brier / wilson / selective-risk")
+    Rel(report, domains, "is_agent_domain() lane filter")
 ```
 
 The CI surfaces around the subsystem (scripts layer + workflows): `merge_gate_context.py`
 composes the ChangeContext (path→domain from `config/merge-gate-domains.yaml`,
-`touches_protected` from `eval_protected_paths`, mech_pass from the regression gate);
+`touches_protected` from `eval_protected_paths`, mech_pass from the regression gate) and
+carries the F-042 `--confidence` seam that stamps the seed's `raw_confidence`;
+`agent_confidence.py` (F-042) is the deterministic proxy scorer — a pure function of diff
+size / file count / test-ratio / protected-path touches through a clamped sigmoid (no network,
+no model) that classifies the agent lane and emits its `agent_version` + confidence;
+`scripts/_config.py` is the shared changed-file / strict-YAML-loader helper both reuse;
+`scripts/migrations/agent_domain_backfill.py` (F-044) is the one-off reversible re-attribution;
 `record_audit_verdict.py` is the idempotent, SHA-validated verdict wrapper (the only
 HUMAN_AUDIT writer, dispatch-triggered); `audit_issue_sync.py` plans deduped audit issues.
-Workflows: `merge-gate-seed.yml` (push:main), `outcome-labeller.yml` (daily, checks:read
-precondition guard), `merge-gate-audit.yml` (weekly reader), `merge-gate-verdict.yml`
-(workflow_dispatch only, environment-gated), and the always-on `shadow` job in
-`calibrated-merge-gate.yml`.
+Workflows: `merge-gate-seed.yml` (push:main — F-042 head-ref routing, fail-safe to the human
+lane), `outcome-labeller.yml` (daily, checks:read precondition guard, F-043 calibration-report
+summary), `merge-gate-audit.yml` (weekly reader), `merge-gate-verdict.yml` (workflow_dispatch
+only, environment-gated), and the always-on `shadow` job in `calibrated-merge-gate.yml`.
 
 ## Level 3 — Component: Flow Calibration Corpus (F-011…F-015, airgap seam)
 
@@ -300,9 +320,9 @@ flowchart TB
     subgraph Real-Data Activation F-032…F-035 — ADR 0018
         SHADOW -->|store_sync pull, read-only| DATA[(merge-gate-data branch<br/>merge_outcomes.jsonl)]
         SHADOW --> SUMMARY[step summary:<br/>agent + human/ decisions, store stats]
-        MAIN[push: main] --> SEED[merge-gate-seed.yml<br/>human/domain @ 0.0]
+        MAIN[push: main] --> SEED[merge-gate-seed.yml<br/>F-042 head-ref routing:<br/>agent domain @ proxy conf / human/ @ 0.0]
         SEED -->|store_sync push| DATA
-        CRON1[daily cron] --> LAB[outcome-labeller.yml<br/>checks:read guard]
+        CRON1[daily cron] --> LAB[outcome-labeller.yml<br/>checks:read guard<br/>+ F-043 calibration report]
         LAB -->|passive labels, push| DATA
         CRON2[weekly cron] --> AUD[merge-gate-audit.yml<br/>reader: deduped issues]
         AUD -->|store_sync pull| DATA

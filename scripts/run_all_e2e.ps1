@@ -288,8 +288,8 @@ Invoke-PytestStep 'A' 'suite:scripts-gate' `
 # TIER B - Functionality gates (offline, always)
 # ===========================================================================
 Write-Host "`n== Tier B: functionality gates (features.yaml) ==" -ForegroundColor Cyan
-# validate.py runs every done+fast feature's validation_command (all 36 are tier
-# fast); deferred features (e.g. F-036) are skipped by design.
+# validate.py runs every done+fast feature's validation_command (all done features
+# are tier fast); deferred features (e.g. F-036) are skipped by design.
 Invoke-CmdStep 'B' 'features:validate.py' @('scripts/validate.py', '-v') $RepoRoot -TimeoutSec 1800
 
 # ===========================================================================
