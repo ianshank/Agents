@@ -210,7 +210,9 @@ C4Component
 The CI surfaces around the subsystem (scripts layer + workflows): `merge_gate_context.py`
 composes the ChangeContext (path→domain from `config/merge-gate-domains.yaml`,
 `touches_protected` from `eval_protected_paths`, mech_pass from the regression gate) and
-carries the F-042 `--confidence` seam that stamps the seed's `raw_confidence`;
+carries the F-042 `--confidence` seam that stamps the seed's `raw_confidence`; it validates
+the YAML `human_namespace` against the canonical `agent_core.domains.HUMAN_NAMESPACE` at load,
+so a drifted reserved namespace fails loud instead of silently poisoning the agent pool;
 `agent_confidence.py` (F-042) is the deterministic proxy scorer — a pure function of diff
 size / file count / test-ratio / protected-path touches through a clamped sigmoid (no network,
 no model) that classifies the agent lane and emits its `agent_version` + confidence;

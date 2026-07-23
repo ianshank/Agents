@@ -784,6 +784,7 @@ features:
       - "shared _config helpers (bytes+surrogateescape read, strict YAML loaders) and the empty-file / sigmoid-overflow / strict parse_shas_file guards are unit-tested (tests/test_config_helpers.py, tests/test_agent_confidence.py, tests/test_agent_domain_backfill.py)"
       - "ReportConfig replaces the hardcoded n_bins/risk_target/z at every call site (agent-core/tests/test_calibration_report.py); domains helpers tested (agent-core/tests/test_domains.py)"
       - "migration git functions (compute_confidence_for/_git/build_targets) covered against a real temporary git repo (tests/test_agent_domain_backfill.py); scripts coverage floor 85 holds with migrations included"
+      - "review-hardening (4-lens peer review + Copilot): merge_gate_context enforces YAML human_namespace == agent_core.domains.HUMAN_NAMESPACE at load (runtime guard, not only F_045 static); the seed fail-safe fallback agent.json is pinned to agent_confidence's real human-result shape (F_045.py); ReportConfig rejects non-finite risk_target/z; the migration has start/apply audit logging + clean exit-2 error handling; binary-diff / missing-change_id / non-finite-config / config-flag-threading paths are tested (agent_confidence.py + merge_gate_context.py at 100%, migration 99%, calibration_report + domains at 100%)"
     validation_command: "python scripts/validations/F_045.py"
     implemented_in: "88aca1a8a5c330be396482417c84c613b7c10463"
     depends_on: ["F-042", "F-043", "F-044"]
