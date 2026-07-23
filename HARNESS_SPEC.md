@@ -298,8 +298,8 @@ skills/<skill-name>/
 
 ### validate_skill.py Usage
 Skills are validated using `scripts/validate_skill.py`. It has two tiers:
-- **Structural**: Ensures `SKILL.md` conforms to the template structure, has no unreplaced placeholders, and complies with constraints (e.g. length under 500 lines).
-- **Behavioral**: Executes commands from `evals.json` offline using python scripts and asserts properties such as exit codes, output contents, and file existence.
+- **Structural**: Ensures `SKILL.md` conforms to the template structure, has no unreplaced placeholders, and complies with constraints (e.g. length under 500 lines). Graded by the `ASSERTION_GRADERS` registry for full extensibility.
+- **Behavioral**: Executes commands from `evals.json` offline using python scripts and asserts properties such as exit codes, output contents, and file existence, powered by the modular registry pattern.
 
 Run the validator with:
 ```bash

@@ -1,0 +1,5 @@
+{"id": "item-1", "inputs": {"query": "hello"}}
+{"id": "item-2", "inputs": {"query": "world"}}
+{"id": "item-3", "inputs": {"query": "foo"}}
+{"id": "item-4", "inputs": {"query": "bar"}}
+{"id": "item-5", "inputs": {"query": "baz"}}

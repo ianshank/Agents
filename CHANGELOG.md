@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.github/CODEOWNERS`.
 
 ### Added
+- **Skill Validation Assertion Registries & dataset-lint (F-045)**: Refactored `validate_skill.py` to use a dynamic registry pattern (`ASSERTION_GRADERS`) for grading structural assertions without monolithic conditionals (detailed in [ADR 0024](docs/decisions/0024-assertion-graders-registry.md)). Added the `dataset-lint` skill capable of deep-validating generic datasets against customizable rulesets via its own `FORMAT_PARSERS` registry pattern. Introduced full test matrices backing these registries with 100% test coverage.
 - **Plugin-registry surface guard:** `tests/test_plugin_registry_surface.py` freezes the
   `eval_harness` plugin registry's config-selectable keys — the `dataset`/`judge`/
   `scorer`/`sink`/`target` registries' primary names *and* their backwards-compat

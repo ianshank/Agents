@@ -57,3 +57,13 @@ but does not block on it.
   credits; they run in the release gate (and nightly), never per-PR.
 - Hooks assume a POSIX environment, or Windows with Python 3.11+ on `PATH`; hook
   scripts are stdlib-only by design (ADR 0003).
+
+## Recommended Per-File Verification
+
+Set `CLAUDE_FOUNDATION_VERIFY_CMD` to enable automatic lint/formatting feedback after every edit:
+
+```bash
+export CLAUDE_FOUNDATION_VERIFY_CMD="python -m ruff check {file}"
+```
+
+This activates the existing `post_edit_verify.py` hook (ADR 0022 §4). The hook is advisory (fail-open, always exit 0) — findings appear as model context, never blocking edits. On Windows, use `python -m ruff check {file}` (not a `.sh` script) for cross-platform compatibility.
