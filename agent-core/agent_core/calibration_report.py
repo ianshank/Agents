@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections import Counter
 from dataclasses import asdict, dataclass
@@ -59,12 +60,18 @@ class ReportConfig:
     z: float = 1.96  # Wilson-interval z (95% by default)
 
     def __post_init__(self) -> None:
+        # Messages name the offending value (repo convention: `require_exact_keys`/`parse_shas_file`
+        # both echo what they got). `math.isfinite` guards rule out NaN/inf, which would otherwise
+        # slip past the range checks (e.g. `z=inf` passes `z > 0`) and produce a maximally-wide CI.
         if self.n_bins < 1:
-            raise ConfigError("calibration-report.n_bins must be >= 1")
-        if not 0.0 <= self.risk_target <= 1.0:
-            raise ConfigError("calibration-report.risk_target must be in [0, 1]")
-        if self.z <= 0:
-            raise ConfigError("calibration-report.z must be > 0")
+            raise ConfigError(f"calibration-report.n_bins must be >= 1 (got {self.n_bins!r})")
+        if not (math.isfinite(self.risk_target) and 0.0 <= self.risk_target <= 1.0):
+            raise ConfigError(
+                "calibration-report.risk_target must be a finite value in [0, 1] "
+                f"(got {self.risk_target!r})"
+            )
+        if not (math.isfinite(self.z) and self.z > 0):
+            raise ConfigError(f"calibration-report.z must be a finite value > 0 (got {self.z!r})")
 
 
 @dataclass(frozen=True)
@@ -243,6 +250,11 @@ def build_report(
         all_records = store.all()
         resolved = store.resolved()
     else:
+        # Disambiguate "no data yet" from "wrong --store / pull misconfigured": an empty
+        # report over a nonexistent path is a common operator foot-gun worth a breadcrumb.
+        logger.warning(
+            "calibration-report: store %s does not exist; emitting an empty report", store.path
+        )
         all_records = []
         resolved = {}
     av_index = _agent_version_index(all_records)
@@ -347,11 +359,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--output", help="write here instead of stdout")
     args = ap.parse_args(argv)
 
-    doc = build_report(
-        OutcomeStore(args.store),
-        domain_filter=args.domain_filter,
-        cfg=ReportConfig(n_bins=args.n_bins, risk_target=args.risk_target, z=args.z),
-    )
+    # A bad --n-bins/--risk-target/--z is an operator error, not a bug: surface it as a
+    # clean message + exit 2, not an unhandled ReportConfig.__post_init__ traceback.
+    try:
+        cfg = ReportConfig(n_bins=args.n_bins, risk_target=args.risk_target, z=args.z)
+    except ConfigError as exc:
+        logger.error("calibration-report: %s", exc)
+        return 2
+
+    doc = build_report(OutcomeStore(args.store), domain_filter=args.domain_filter, cfg=cfg)
     rendered = render_json(doc) if args.format == "json" else render_markdown(doc)
     if args.output:
         Path(args.output).write_text(rendered + "\n", encoding="utf-8")

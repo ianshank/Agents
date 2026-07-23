@@ -20,6 +20,7 @@ Exit codes: 0 all checks passed; 1 one or more failed.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -59,6 +60,26 @@ def validate_f045() -> int:
         errors,
     )
 
+    # 1b. The fail-safe fallback agent.json must match the shape agent_confidence.py emits for a
+    #     human result; a drift between the two would silently corrupt the hardest-to-test lane.
+    #     Compare the PARSED dict, not the text, so formatting/spacing is irrelevant.
+    fallback = re.search(r"echo '(\{[^']*\"agent\"[^']*\})' > agent\.json", seed)
+    fallback_ok = False
+    if fallback:
+        try:
+            fallback_ok = json.loads(fallback.group(1)) == {
+                "agent": False,
+                "agent_version": None,
+                "confidence": None,
+            }
+        except json.JSONDecodeError:
+            fallback_ok = False
+    _check(
+        fallback_ok,
+        "seed fail-safe fallback agent.json matches agent_confidence's human-result shape",
+        errors,
+    )
+
     # 2. github.actor via env, never spliced into a run: script
     for name, wf in (("merge-gate-seed", seed), ("outcome-labeller", labeller)):
         _check("GH_ACTOR" in wf, f"{name}: actor routed through env (GH_ACTOR)", errors)
@@ -68,11 +89,19 @@ def validate_f045() -> int:
             errors,
         )
 
-    # 3. HUMAN_NAMESPACE single-sourced in agent_core and agreeing with the operator YAML
+    # 3. HUMAN_NAMESPACE single-sourced in agent_core and mirrored by the operator YAML.
+    #    Guard the parse (a malformed / non-mapping YAML is a clean F-045 failure, not an
+    #    AttributeError traceback) and accept either quote style in domains.py (a formatter
+    #    flipping " -> ' must not be able to false-fail this invariant).
     mapping = yaml.safe_load(_read(os.path.join("config", "merge-gate-domains.yaml")))
-    yaml_ns = str(mapping.get("human_namespace", ""))
+    _check(
+        isinstance(mapping, dict),
+        "config/merge-gate-domains.yaml parses to a mapping",
+        errors,
+    )
+    yaml_ns = str(mapping.get("human_namespace", "")) if isinstance(mapping, dict) else ""
     domains_src = _read(os.path.join("agent-core", "agent_core", "domains.py"))
-    match = re.search(r'HUMAN_NAMESPACE\s*=\s*"([^"]+)"', domains_src)
+    match = re.search(r"""HUMAN_NAMESPACE\s*=\s*["']([^"']+)["']""", domains_src)
     py_ns = match.group(1) if match else ""
     _check(
         bool(py_ns) and py_ns == yaml_ns,

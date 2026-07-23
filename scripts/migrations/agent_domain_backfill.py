@@ -62,6 +62,9 @@ logger = logging.getLogger(__name__)
 
 _GIT_TIMEOUT_S = 30.0
 
+EXIT_OK = 0
+EXIT_CONFIG = 2
+
 
 @dataclass(frozen=True)
 class BackfillTarget:
@@ -127,7 +130,9 @@ def _git(args: list[str], repo_dir: str) -> str:
     """Run ``git -C <repo_dir> <args>`` via the shared fail-safe runner; raise on failure."""
     result = run_failsafe(["git", "-C", repo_dir, *args], _GIT_TIMEOUT_S)
     if result.returncode != 0:
-        raise RuntimeError(f"git {' '.join(args)} failed ({result.returncode}): {result.stderr.strip()}")
+        raise RuntimeError(
+            f"git {' '.join(args)} in {repo_dir!r} failed ({result.returncode}): {result.stderr.strip()}"
+        )
     return str(result.stdout)
 
 
@@ -176,35 +181,59 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--store", required=True, help="local outcome store JSONL (pull it first)")
     ap.add_argument("--shas-file", required=True, help="hand-verified '<change_id> <agent_version>' list")
     ap.add_argument("--repo-dir", default=".", help="git repo for diff-based confidence recompute")
-    ap.add_argument("--proxy-config", default=os.path.join("config", "agent-confidence.yaml"))
+    # Reuse the live seeder's default so a config relocation can't silently make migrated rows
+    # use different weights than forward rows (the "forward == migrated" invariant this tool sells).
+    ap.add_argument("--proxy-config", default=ac.DEFAULT_PROXY_PATH)
     ap.add_argument("--apply", action="store_true", help="write the corrected store (default: dry-run)")
     args = ap.parse_args(argv)
     configure_logging()
+    logger.info(
+        "backfill: store=%s shas=%s repo_dir=%s mode=%s",
+        args.store,
+        args.shas_file,
+        args.repo_dir,
+        "apply" if args.apply else "dry-run",
+    )
 
-    records, opaque = read_store_lines(args.store)
-    with open(args.shas_file, encoding="utf-8") as fh:
-        shas = parse_shas_file(fh.read())
-    proxy = ac.ProxyConfig.load(args.proxy_config)
-    targets = build_targets(shas, args.repo_dir, proxy)
+    # Load + recompute can fail on a missing store / bad shas file / bad proxy config / git
+    # error. All abort before any write (fail toward no-op); surface them as a clean exit 2
+    # matching the sibling CLIs, not a raw traceback. ConfigError subclasses RuntimeError, so
+    # RuntimeError also covers _git's failure and ProxyConfig.load.
+    try:
+        records, opaque = read_store_lines(args.store)
+        with open(args.shas_file, encoding="utf-8") as fh:
+            shas = parse_shas_file(fh.read())
+        proxy = ac.ProxyConfig.load(args.proxy_config)
+        targets = build_targets(shas, args.repo_dir, proxy)
+    except (OSError, ValueError, RuntimeError) as exc:
+        logger.error("backfill: %s", exc)
+        return EXIT_CONFIG
 
+    logger.info("backfill: %d target change_ids resolved, %d records in store", len(targets), len(records))
     present = {r.change_id for r in records}
     missing = sorted(cid for cid in targets if cid not in present)
     if missing:
         logger.warning("%d target change_ids are not in the store (skipped): %s", len(missing), missing)
 
     new_records, diffs = plan_backfill(records, targets)
+    n_changed_ids = len({d.change_id for d in diffs})
     print(render_diff(diffs))
-    print(f"\n{len(diffs)} records would change across {len({d.change_id for d in diffs})} change_ids.")
 
     if not args.apply:
+        print(f"\n{len(diffs)} records would change across {n_changed_ids} change_ids.")
         print("\n(dry-run — pass --apply to write the corrected store locally)")
-        return 0
+        return EXIT_OK
 
-    shutil.copyfile(args.store, args.store + ".pre-backfill.bak")
+    backup = args.store + ".pre-backfill.bak"
+    shutil.copyfile(args.store, backup)
     write_store(args.store, new_records, opaque)
-    print(f"\nwrote {args.store} (backup at {args.store}.pre-backfill.bak)")
+    logger.info(
+        "backfill applied: rewrote %d records across %d change_ids; backup=%s", len(diffs), n_changed_ids, backup
+    )
+    print(f"\nrewrote {len(diffs)} records across {n_changed_ids} change_ids.")
+    print(f"wrote {args.store} (backup at {backup})")
     print(_runbook(args.store))
-    return 0
+    return EXIT_OK
 
 
 if __name__ == "__main__":

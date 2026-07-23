@@ -209,8 +209,11 @@ def compute_confidence(files: Sequence[str], lines_changed: int, cfg: ProxyConfi
         + cfg.w_tests * test_ratio
         - cfg.w_protected * protected
     )
-    # Clamp z to a numerically-safe range so extreme (mis)configured weights/caps cannot
-    # OverflowError in exp(); the result is clamped to (clamp_lo, clamp_hi) regardless.
+    # Clamp z to a numerically-safe range before exp(). The LOWER bound is load-bearing: a
+    # large-negative z makes exp(-z)=exp(+big) OverflowError. The upper bound is defensive
+    # symmetry only (a large-positive z makes exp(-z) underflow to 0.0, which is harmless), kept
+    # so the guard stays correct if the sigmoid form is ever changed. Output is clamped to
+    # (clamp_lo, clamp_hi) regardless, so neither bound alters an observable result.
     z = max(-700.0, min(700.0, z))
     raw = 1.0 / (1.0 + math.exp(-z))
     clamped = min(max(raw, cfg.clamp_lo), cfg.clamp_hi)
@@ -252,8 +255,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not files:
                 # An agent change with no resolvable files would score all-zero signals — a
                 # misleading confidence. Treat it as an undeterminable file set (exit 2); the
-                # seed workflow's fail-safe then routes the merge to the human lane.
-                raise ConfigError("no changed files resolved for an agent change (undeterminable file set)")
+                # seed workflow's fail-safe then routes the merge to the human lane. Name the
+                # inputs so an operator can tell an empty diff from a bad --files-from path.
+                raise ConfigError(
+                    "no changed files resolved for an agent change (undeterminable file set; "
+                    f"head_ref={args.head_ref or '(none)'}, files-from={args.files_from or '(none)'})"
+                )
             confidence = compute_confidence(files, args.lines_changed, proxy)
             result = {"agent": True, "agent_version": agent_version, "confidence": confidence}
     except ConfigError as exc:

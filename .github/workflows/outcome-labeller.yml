@@ -82,5 +82,12 @@ jobs:
       - name: Calibration report (agent domains, read-only)
         continue-on-error: true
         run: |
-          python -m agent_core.calibration_report --store "$STORE" \
-            --domain-filter agent --format md >> "$GITHUB_STEP_SUMMARY"
+          # continue-on-error keeps a report failure from reddening a run whose store push
+          # already succeeded. Mirror the seed lane's fail-safe and leave a step-summary
+          # breadcrumb, so a persistent report failure is visible in the (still-green) run
+          # instead of only an orange annotation nobody reads.
+          if ! python -m agent_core.calibration_report --store "$STORE" \
+            --domain-filter agent --format md >> "$GITHUB_STEP_SUMMARY"; then
+            echo "⚠️ calibration report failed — see job logs (store push already succeeded; \
+              this read-only diagnostic is non-fatal)" >> "$GITHUB_STEP_SUMMARY"
+          fi

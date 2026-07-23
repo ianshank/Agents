@@ -39,6 +39,7 @@ from _config import (
     require_major,
     resolve_explicit_files,
 )
+from agent_core.domains import HUMAN_NAMESPACE as CANONICAL_HUMAN_NAMESPACE
 from check_protected_changes import DEFAULT_BASE_REF, changed_files_from_git
 
 # _glob_to_regex is the repo's single source of glob semantics (anchored; `*`
@@ -78,6 +79,15 @@ class DomainMapping:
         namespace = str(doc["human_namespace"])
         if not namespace.endswith("/"):
             raise ConfigError("human_namespace must end with '/'")
+        # The YAML mirrors agent_core.domains.HUMAN_NAMESPACE; it is not an independent
+        # override (agent_core classifies against the canonical literal). Enforce equality at
+        # load so a drifted YAML fails loud here instead of silently poisoning the agent pool.
+        if namespace != CANONICAL_HUMAN_NAMESPACE:
+            raise ConfigError(
+                f"human_namespace {namespace!r} must equal the canonical "
+                f"agent_core.domains.HUMAN_NAMESPACE {CANONICAL_HUMAN_NAMESPACE!r} "
+                "(the reserved namespace is single-sourced there; the YAML only mirrors it)"
+            )
         raw_rules = doc["rules"]
         if not isinstance(raw_rules, list) or not raw_rules:
             raise ConfigError("rules must be a non-empty list")

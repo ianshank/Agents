@@ -1,10 +1,14 @@
 """Reserved merge-gate domain namespaces (ADR 0018 §5, ADR 0023).
 
-Single Python source of the reserved *human* namespace, so ``agent_core`` code and the
-``scripts`` that depend on it stop re-spelling the ``"human/"`` literal. ``agent_core``
-stays deliberately config-free (it never reads ``config/merge-gate-domains.yaml``); the
-YAML ``human_namespace`` remains the operator-facing override that ``merge_gate_context``
-loads, and F-045 asserts the two agree so they cannot drift.
+The single, CANONICAL Python source of the reserved *human* namespace, so ``agent_core``
+code and the ``scripts`` that depend on it stop re-spelling the ``"human/"`` literal.
+``agent_core`` stays deliberately config-free (it never reads
+``config/merge-gate-domains.yaml``). The YAML ``human_namespace`` is a *mirror* of this
+constant for operator visibility, NOT an independent override: ``is_agent_domain`` below
+classifies against this literal, so a YAML value that differed would seed rows under one
+prefix while classification used another — the exact agent-pool-poisoning hazard
+(REVIEW.md §6). ``merge_gate_context.DomainMapping.load`` validates the YAML equals this
+constant at load (fail-loud), and F-045 pins the two statically as a second line.
 """
 
 from __future__ import annotations
