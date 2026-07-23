@@ -44,6 +44,7 @@ def test_load_valid_mapping(tmp_path):
         lambda d: d.pop("default_domain"),  # missing key
         lambda d: d.update(schema_version="9.0.0"),  # unsupported schema
         lambda d: d.update(human_namespace="human"),  # namespace must end with /
+        lambda d: d.update(human_namespace="bot/"),  # valid form but != canonical HUMAN_NAMESPACE
         lambda d: d.update(rules=[]),  # empty rules
         lambda d: d.update(rules="nope"),  # non-list rules
         lambda d: d.update(rules=[{"pattern": "x/**"}]),  # rule missing domain

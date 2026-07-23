@@ -300,7 +300,10 @@ def test_cli_config_error_exits_2(tmp_path):
 
 
 def test_confidence_extreme_config_no_overflow(tmp_path):
-    # An extreme (mis)configured base must not OverflowError in exp(); z is clamped first.
+    # Output contract under extreme (mis)configured base: result stays within [clamp_lo, clamp_hi]
+    # and never OverflowErrors. The lower z-clamp is the load-bearing guard (base=-1e9 -> exp(+big)
+    # would overflow without it); base=+1e9 merely underflows exp(-big) to 0 (upper clamp is
+    # defensive symmetry, so removing it leaves the output unchanged — tested via the contract).
     hi = _proxy_cfg(tmp_path, base=1e9)
     assert ac.compute_confidence(["a.py"], 10, hi) == hi.clamp_hi
     lo = _proxy_cfg(tmp_path, base=-1e9)
