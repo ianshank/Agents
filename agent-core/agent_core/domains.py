@@ -8,7 +8,7 @@ constant for operator visibility, NOT an independent override: ``is_agent_domain
 classifies against this literal, so a YAML value that differed would seed rows under one
 prefix while classification used another — the exact agent-pool-poisoning hazard
 (REVIEW.md §6). ``merge_gate_context.DomainMapping.load`` validates the YAML equals this
-constant at load (fail-loud), and F-045 pins the two statically as a second line.
+constant at load (fail-loud), and F-046 pins the two statically as a second line.
 """
 
 from __future__ import annotations

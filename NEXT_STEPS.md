@@ -12,7 +12,7 @@
   ECE/Brier/AUROC/abstention (Wilson CIs) over the agent slice, honest `DEGENERATE` guard, surfaced
   to the daily labeller summary; and a one-off reversible backfill
   (`scripts/migrations/agent_domain_backfill.py`) re-attributes historical agent SHAs. Hardening
-  follow-up ledgered as **F-045** (fail-safe routing, single-sourced `agent_core.domains`,
+  follow-up ledgered as **F-046** (fail-safe routing, single-sourced `agent_core.domains`,
   `ReportConfig`, shared `scripts/_config.py`, strict parse, migration coverage). This is the
   agent-confidence artifact the merge-gate soak item was waiting on. Remaining: accumulate the
   agent-domain HUMAN_AUDIT labels (the corpus now grows on every agent merge) before any agent

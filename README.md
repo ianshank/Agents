@@ -207,7 +207,7 @@ python scripts/check_protected_changes.py --base-ref origin/main
   while human or unclassifiable changes stay in the reserved `human/<domain>` namespace at 0.0
   (fail-safe). The **calibration report** (`F-043`, `agent_core.calibration_report`) surfaces
   agent-domain ECE / Brier / AUROC / abstention (Wilson CIs, honest `DEGENERATE` guard) to the
-  daily run summary. `scripts/validations/F_045.py` pins the hardening invariants.
+  daily run summary. `scripts/validations/F_046.py` pins the hardening invariants.
 - **Live Phoenix validation (opt-in)** — `.github/workflows/phoenix-live.yml`
   (`workflow_dispatch`, `timeout-minutes: 20`) validates the reversible Phoenix spike
   end-to-end on a networked runner: a `dep-resolve` dry-run job surfaces the

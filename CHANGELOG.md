@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `*.pre-backfill.bak` safety copy so the migration is reversible.
 
 ### Hardening
-- **Agent-seeding hardening & reuse (F-045, follow-up to F-042…F-044).** A review-driven pass
+- **Agent-seeding hardening & reuse (F-046, follow-up to F-042…F-044).** A review-driven pass
   (self-audit + Copilot + CodeRabbit) resolving tech debt in the above without changing the trust
   boundary:
   - **Fail-safe seed routing** — a non-zero exit from the classifier now writes a human-lane
@@ -56,14 +56,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Review-driven refinements** (independent 4-lens peer review + Copilot/CodeRabbit): the
     reserved namespace is now single-authority — `merge_gate_context` validates the YAML
     `human_namespace` equals the canonical `agent_core.domains.HUMAN_NAMESPACE` at load (fail-loud,
-    not just the static F-045 check); `ReportConfig` rejects non-finite `risk_target`/`z` and its
+    not just the static F-046 check); `ReportConfig` rejects non-finite `risk_target`/`z` and its
     errors name the offending value; the migration gained a start/apply audit log and clean exit-2
     error handling; the labeller's report step leaves a step-summary breadcrumb on failure; the
-    backfill reuses `agent_confidence.DEFAULT_PROXY_PATH`; and F-045 pins the seed fail-safe's
+    backfill reuses `agent_confidence.DEFAULT_PROXY_PATH`; and F-046 pins the seed fail-safe's
     fallback JSON against the classifier's real output shape. New tests cover the binary-file diff
     path, the missing-change_id warning, non-finite config, and the config-flag threading; an e2e
     journey exercises the agent-confidence seed path. All coverage floors hold with margin.
-  Ledgered as **F-045**; `scripts/validations/F_045.py` pins the durable invariants.
+  Ledgered as **F-046**; `scripts/validations/F_046.py` pins the durable invariants.
 
 ### Fixed
 - **`claude-foundation/tests/` protected-path gap (F-041):** an independent audit of the

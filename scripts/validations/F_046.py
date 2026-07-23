@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validation script for F-045 — agent-seeding hardening & reuse (F-042..F-044 follow-up).
+"""Validation script for F-046 — agent-seeding hardening & reuse (F-042..F-044 follow-up).
 
 Deterministic and offline: reads workflow / config / module TEXT only (no agent_core import,
 which the validation gate does not install). Pins the durable hardening invariants so a
@@ -46,7 +46,7 @@ def _read(rel_path: str) -> str:
         return fh.read()
 
 
-def validate_f045() -> int:
+def validate_f046() -> int:
     configure_logging()
     errors: list[str] = []
 
@@ -90,7 +90,7 @@ def validate_f045() -> int:
         )
 
     # 3. HUMAN_NAMESPACE single-sourced in agent_core and mirrored by the operator YAML.
-    #    Guard the parse (a malformed / non-mapping YAML is a clean F-045 failure, not an
+    #    Guard the parse (a malformed / non-mapping YAML is a clean F-046 failure, not an
     #    AttributeError traceback) and accept either quote style in domains.py (a formatter
     #    flipping " -> ' must not be able to false-fail this invariant).
     mapping = yaml.safe_load(_read(os.path.join("config", "merge-gate-domains.yaml")))
@@ -125,11 +125,11 @@ def validate_f045() -> int:
             errors,
         )
 
-    return report(logger, "F-045", errors)
+    return report(logger, "F-046", errors)
 
 
 def main() -> int:
-    return validate_f045()
+    return validate_f046()
 
 
 if __name__ == "__main__":
