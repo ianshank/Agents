@@ -7,13 +7,15 @@ import json
 import pytest
 
 from agent_core.calibration_report import (
+    ReportConfig,
     analyze_slice,
     build_report,
-    is_agent_domain,
     main,
     render_json,
     render_markdown,
 )
+from agent_core.config import ConfigError
+from agent_core.domains import is_agent_domain
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 
 _TS = "2026-07-20T12:00:00+00:00"
@@ -180,3 +182,19 @@ def test_cli_json_to_file(tmp_path):
 def test_cli_rejects_bad_filter(tmp_path):
     with pytest.raises(SystemExit):
         main(["--store", str(tmp_path / "s.jsonl"), "--domain-filter", "bogus"])
+
+
+# --- ReportConfig (no magic numbers at call sites) --------------------------
+def test_report_config_defaults_and_validation():
+    cfg = ReportConfig()
+    assert (cfg.n_bins, cfg.risk_target, cfg.z) == (10, 0.05, 1.96)
+    for bad in (dict(n_bins=0), dict(risk_target=1.5), dict(z=0.0)):
+        with pytest.raises(ConfigError):
+            ReportConfig(**bad)
+
+
+def test_cli_honours_report_config_flags(tmp_path, capsys):
+    store = _store(tmp_path, _mixed_records())
+    rc = main(["--store", str(store.path), "--n-bins", "5", "--risk-target", "0.1", "--z", "1.64"])
+    assert rc == 0
+    assert "Agent-records calibration report" in capsys.readouterr().out

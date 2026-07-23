@@ -31,9 +31,15 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-import yaml
 from _cli import configure_logging
-from check_protected_changes import DEFAULT_BASE_REF, ConfigError, changed_files_from_git
+from _config import (
+    ConfigError,
+    load_yaml_mapping,
+    require_exact_keys,
+    require_major,
+    resolve_explicit_files,
+)
+from check_protected_changes import DEFAULT_BASE_REF, changed_files_from_git
 
 # _glob_to_regex is the repo's single source of glob semantics (anchored; `*`
 # stays within one path segment). fnmatch would wrongly match `*` across
@@ -43,9 +49,6 @@ from eval_protected_paths import _glob_to_regex, matched_protected
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAPPING_PATH = os.path.join("config", "merge-gate-domains.yaml")
-# Semver-style compatibility: any 1.x.y mapping loads (additive evolution stays
-# backwards-compatible); a major bump is a deliberate breaking cutover.
-SUPPORTED_SCHEMA_MAJOR = "1"
 _HUMAN_CONFIDENCE = 0.0  # ADR 0018 §5: human-authored changes carry no agent confidence
 
 EXIT_OK = 0
@@ -69,21 +72,9 @@ class DomainMapping:
 
     @staticmethod
     def load(path: str) -> DomainMapping:
-        try:
-            with open(path, encoding="utf-8") as fh:
-                doc = yaml.safe_load(fh)
-        except (OSError, yaml.YAMLError) as exc:
-            raise ConfigError(f"cannot read domain mapping '{path}': {exc}") from exc
-        if not isinstance(doc, dict):
-            raise ConfigError(f"domain mapping '{path}' must be a mapping")
-        expected = {"schema_version", "default_domain", "human_namespace", "rules"}
-        if set(doc) != expected:
-            raise ConfigError(f"domain mapping keys must be exactly {sorted(expected)}; got {sorted(doc)}")
-        version = str(doc["schema_version"])
-        if version.split(".", 1)[0] != SUPPORTED_SCHEMA_MAJOR:
-            raise ConfigError(
-                f"unsupported domain-mapping schema_version {version!r} (supported major: {SUPPORTED_SCHEMA_MAJOR}.x)"
-            )
+        doc = load_yaml_mapping(path)
+        require_exact_keys(doc, {"schema_version", "default_domain", "human_namespace", "rules"}, "domain mapping")
+        require_major(str(doc["schema_version"]), path)
         namespace = str(doc["human_namespace"])
         if not namespace.endswith("/"):
             raise ConfigError("human_namespace must end with '/'")
@@ -140,20 +131,10 @@ def build_context(
     }
 
 
-def _read_nul_delimited(path: str) -> list[str]:
-    try:
-        with open(path, encoding="utf-8") as fh:
-            raw = fh.read()
-    except OSError as exc:
-        raise ConfigError(f"cannot read --files-from '{path}': {exc}") from exc
-    return [f for f in raw.split("\0") if f.strip()]
-
-
 def resolve_files(args: argparse.Namespace) -> list[str]:
-    if args.files:
-        return [f for f in args.files if f.strip()]
-    if args.files_from:
-        return _read_nul_delimited(args.files_from)
+    explicit: list[str] | None = resolve_explicit_files(args.files, args.files_from)
+    if explicit is not None:
+        return explicit
     base_ref = args.base_ref or os.environ.get("BASE_REF") or DEFAULT_BASE_REF
     files: list[str] = changed_files_from_git(base_ref)
     return files

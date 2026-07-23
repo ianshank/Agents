@@ -43,7 +43,6 @@ import dataclasses
 import logging
 import os
 import shutil
-import subprocess
 import sys
 from dataclasses import dataclass
 
@@ -54,12 +53,14 @@ if _SCRIPTS not in sys.path:
 
 import agent_confidence as ac
 from _cli import configure_logging
+from agent_core.domains import strip_human_namespace
 from agent_core.outcome_store import LabelSource, OutcomeRecord
 from agent_core.store_sync.store import read_store_lines, write_store
+from agent_core.subprocess_util import run_failsafe
 
 logger = logging.getLogger(__name__)
 
-HUMAN_NAMESPACE = "human/"
+_GIT_TIMEOUT_S = 30.0
 
 
 @dataclass(frozen=True)
@@ -75,10 +76,6 @@ class ChangeDiff:
     new_domain: str
     old_confidence: float
     new_confidence: float
-
-
-def strip_human_namespace(domain: str) -> str:
-    return domain[len(HUMAN_NAMESPACE) :] if domain.startswith(HUMAN_NAMESPACE) else domain
 
 
 def plan_backfill(
@@ -109,20 +106,29 @@ def plan_backfill(
 
 
 def parse_shas_file(text: str) -> dict[str, str]:
-    """Parse '<change_id> [agent_version]' lines (# comments allowed) -> {id: agent_version}."""
+    """Parse '<change_id> <agent_version>' lines (# comments allowed) -> {id: agent_version}.
+
+    Every line MUST carry an explicit agent_version; a bare SHA is a malformed list and raises,
+    matching the committed file format and the F-044 safety envelope (no silent default).
+    """
     out: dict[str, str] = {}
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
         if not line:
             continue
         parts = line.split()
-        out[parts[0]] = parts[1] if len(parts) > 1 else "claude-code"
+        if len(parts) < 2:
+            raise ValueError(f"backfill SHA line must be '<change_id> <agent_version>'; got {line!r}")
+        out[parts[0]] = parts[1]
     return out
 
 
 def _git(args: list[str], repo_dir: str) -> str:
-    result = subprocess.run(["git", "-C", repo_dir, *args], capture_output=True, text=True, check=True)
-    return result.stdout
+    """Run ``git -C <repo_dir> <args>`` via the shared fail-safe runner; raise on failure."""
+    result = run_failsafe(["git", "-C", repo_dir, *args], _GIT_TIMEOUT_S)
+    if result.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)} failed ({result.returncode}): {result.stderr.strip()}")
+    return str(result.stdout)
 
 
 def compute_confidence_for(change_id: str, repo_dir: str, proxy: ac.ProxyConfig) -> float:

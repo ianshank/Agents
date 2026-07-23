@@ -42,18 +42,29 @@ from .calibration import (
     selective_risk_coverage,
     wilson_interval,
 )
+from .config import ConfigError
+from .domains import is_agent_domain
 from .logging_util import get_logger
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 
 logger = get_logger(__name__)
 
-# The reserved seed namespace for human-authored merges (ADR 0018 §5). Agent domains
-# are exactly the domains that do NOT carry it.
-HUMAN_NAMESPACE = "human/"
 
+@dataclass(frozen=True)
+class ReportConfig:
+    """Calibration-report knobs — documented defaults, not magic numbers at call sites."""
 
-def is_agent_domain(domain: str) -> bool:
-    return not domain.startswith(HUMAN_NAMESPACE)
+    n_bins: int = 10
+    risk_target: float = 0.05  # abstention risk target for the selective-risk summary
+    z: float = 1.96  # Wilson-interval z (95% by default)
+
+    def __post_init__(self) -> None:
+        if self.n_bins < 1:
+            raise ConfigError("calibration-report.n_bins must be >= 1")
+        if not 0.0 <= self.risk_target <= 1.0:
+            raise ConfigError("calibration-report.risk_target must be in [0, 1]")
+        if self.z <= 0:
+            raise ConfigError("calibration-report.z must be > 0")
 
 
 @dataclass(frozen=True)
@@ -78,9 +89,7 @@ def analyze_slice(
     pairs: list[tuple[float, bool]],
     label: str,
     *,
-    n_bins: int = 10,
-    risk_target: float = 0.05,
-    z: float = 1.96,
+    cfg: ReportConfig | None = None,
 ) -> SliceReport:
     """Compute the calibration metrics for one (confidence, correct) slice.
 
@@ -88,6 +97,7 @@ def analyze_slice(
     only one outcome class is present — discrimination is undefined, so we say so
     instead of reporting the by-construction 0.5.
     """
+    cfg = cfg or ReportConfig()
     n = len(pairs)
     if n == 0:
         return SliceReport(
@@ -103,17 +113,17 @@ def analyze_slice(
             None,
             None,
             None,
-            risk_target,
+            cfg.risk_target,
             "no labeled records",
         )
     probs = [p for p, _ in pairs]
     outcomes = [int(b) for _, b in pairs]
     n_correct = sum(outcomes)
     base_rate = n_correct / n
-    base_ci = wilson_interval(n_correct, n, z)
-    ece = expected_calibration_error(probs, outcomes, n_bins)
+    base_ci = wilson_interval(n_correct, n, cfg.z)
+    ece = expected_calibration_error(probs, outcomes, cfg.n_bins)
     brier = brier_score(probs, outcomes)
-    dec = brier_decomposition(probs, outcomes, n_bins)
+    dec = brier_decomposition(probs, outcomes, cfg.n_bins)
 
     degenerate: str | None = None
     auroc_val: float | None = None
@@ -126,7 +136,7 @@ def analyze_slice(
         auroc_val = auroc(probs, outcomes)
 
     points = selective_risk_coverage(probs, outcomes)
-    reachable = [cov for cov, risk in points if risk <= risk_target]
+    reachable = [cov for cov, risk in points if risk <= cfg.risk_target]
     abstention = 1.0 - (max(reachable) if reachable else 0.0)
 
     return SliceReport(
@@ -142,7 +152,7 @@ def analyze_slice(
         uncertainty=dec.uncertainty,
         auroc=auroc_val,
         abstention_at_target=abstention,
-        risk_target=risk_target,
+        risk_target=cfg.risk_target,
         degenerate=degenerate,
     )
 
@@ -187,12 +197,10 @@ def _build_view(
     av_index: dict[str, str],
     domain_filter: str,
     *,
-    n_bins: int,
-    risk_target: float,
-    z: float,
+    cfg: ReportConfig,
 ) -> View:
     def analyze(pairs: list[tuple[float, bool]], label: str) -> SliceReport:
-        return analyze_slice(pairs, label, n_bins=n_bins, risk_target=risk_target, z=z)
+        return analyze_slice(pairs, label, cfg=cfg)
 
     slices: list[SliceReport] = [
         analyze(
@@ -228,10 +236,9 @@ def build_report(
     store: OutcomeStore,
     *,
     domain_filter: str = "agent",
-    n_bins: int = 10,
-    risk_target: float = 0.05,
-    z: float = 1.96,
+    cfg: ReportConfig | None = None,
 ) -> ReportDoc:
+    cfg = cfg or ReportConfig()
     if store.path.exists():
         all_records = store.all()
         resolved = store.resolved()
@@ -253,9 +260,7 @@ def build_report(
             primary,
             av_index,
             domain_filter,
-            n_bins=n_bins,
-            risk_target=risk_target,
-            z=z,
+            cfg=cfg,
         ),
         _build_view(
             "DIAGNOSTIC — all labels incl. weak timeout_clean (NOT tau-eligible)",
@@ -263,9 +268,7 @@ def build_report(
             labeled,
             av_index,
             domain_filter,
-            n_bins=n_bins,
-            risk_target=risk_target,
-            z=z,
+            cfg=cfg,
         ),
     ]
     return ReportDoc(
@@ -337,18 +340,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--store", required=True)
     ap.add_argument("--domain-filter", choices=["agent", "human", "all"], default="agent")
     ap.add_argument("--format", choices=["md", "json"], default="md")
-    ap.add_argument("--n-bins", type=int, default=10)
-    ap.add_argument("--risk-target", type=float, default=0.05)
-    ap.add_argument("--z", type=float, default=1.96)
+    defaults = ReportConfig()
+    ap.add_argument("--n-bins", type=int, default=defaults.n_bins)
+    ap.add_argument("--risk-target", type=float, default=defaults.risk_target)
+    ap.add_argument("--z", type=float, default=defaults.z)
     ap.add_argument("--output", help="write here instead of stdout")
     args = ap.parse_args(argv)
 
     doc = build_report(
         OutcomeStore(args.store),
         domain_filter=args.domain_filter,
-        n_bins=args.n_bins,
-        risk_target=args.risk_target,
-        z=args.z,
+        cfg=ReportConfig(n_bins=args.n_bins, risk_target=args.risk_target, z=args.z),
     )
     rendered = render_json(doc) if args.format == "json" else render_markdown(doc)
     if args.output:

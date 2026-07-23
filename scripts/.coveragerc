@@ -7,10 +7,6 @@
 branch = True
 omit =
     */scripts/validations/*
-    # One-shot migrations (e.g. agent_domain_backfill) are dated operational
-    # scripts, not reusable units — same rationale as validations above. Their
-    # pure logic is still tested (tests/test_agent_domain_backfill.py).
-    */scripts/migrations/*
 
 [report]
 fail_under = 85
