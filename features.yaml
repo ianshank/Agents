@@ -770,3 +770,20 @@ features:
     implemented_in: "3232aaecd9e4b71241cb1e826fd63b0e23401832"
     depends_on: ["F-042"]
     notes: "ADR 0023 §4. The only operation that rewrites store history; execution is human-gated (review the dry-run diff, then the manual snapshot + force-push). Measured 2026-07-22: 18 agent change_ids, confidence now varies 0.02-0.78 (previously constant 0.0)."
+
+  - id: "F-045"
+    epic: "Skills Framework"
+    name: "dataset-lint skill and validate_skill validation assertions"
+    description: "Adds the dataset-lint skill for structural and encoding validation of datasets. Adds exit_nonzero and idempotent assertion types to scripts/validate_skill.py."
+    category: "functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "dataset-lint skill passes validate_skill.py structural and behavioral tiers"
+      - "exit_nonzero and idempotent assertions are validated by tests/test_validate_skill.py"
+    validation_command: "python scripts/validations/F_045.py"
+    implemented_in: "local"
+    depends_on: ["F-003"]
+    notes: "Provides portable dataset linting and enhanced validation capabilities."
+

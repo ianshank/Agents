@@ -89,6 +89,68 @@ def test_grade_exit_zero():
     assert not res["passed"]
 
 
+def test_grade_exit_nonzero():
+    res = grade({"type": "exit_nonzero", "text": "pass"}, 1, "", True, ".", 10)
+    assert res["passed"]
+
+    res = grade({"type": "exit_nonzero", "text": "fail"}, 0, "", True, ".", 10)
+    assert not res["passed"]
+
+    res = grade({"type": "exit_nonzero", "text": "fail"}, 1, "", False, ".", 10)
+    assert not res["passed"]
+
+
+def test_grade_idempotent(monkeypatch):
+    # Mock _run_eval to avoid pytest-cov emitting coverage warnings to subprocess stderr
+    def mock_run_eval(cmd, cwd, timeout):
+        class MockProcess:
+            def __init__(self, rc, out):
+                self.returncode = rc
+                self.stdout = out
+                self.stderr = ""
+
+        if "different" in cmd:
+            return MockProcess(0, "different")
+        elif "exit(1)" in cmd:
+            return MockProcess(1, "")
+        else:
+            return MockProcess(0, "hello")
+
+    monkeypatch.setattr("scripts.validate_skill._run_eval", mock_run_eval)
+
+    # succeeds when stdout matches second run
+    res = grade(
+        {"type": "idempotent", "text": "pass"},
+        0,
+        "hello",
+        True,
+        ".",
+        10,
+        run_cmd="python -c \"print('hello', end='')\"",
+    )
+    assert res["passed"]
+
+    # fails when stdout mismatch
+    res = grade(
+        {"type": "idempotent", "text": "fail"},
+        0,
+        "hello",
+        True,
+        ".",
+        10,
+        run_cmd="python -c \"print('different', end='')\"",
+    )
+    assert not res["passed"]
+
+    # fails when second run non-zero
+    res = grade({"type": "idempotent", "text": "fail"}, 0, "hello", True, ".", 10, run_cmd='python -c "exit(1)"')
+    assert not res["passed"]
+
+    # fails when no run
+    res = grade({"type": "idempotent", "text": "fail"}, 0, "", False, ".", 10)
+    assert not res["passed"]
+
+
 def test_grade_output_contains():
     res = grade({"type": "output_contains", "contains": "hello"}, 0, "hello world", True, ".", 10)
     assert res["passed"]

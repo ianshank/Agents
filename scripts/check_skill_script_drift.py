@@ -46,6 +46,7 @@ TRACKED_DUPLICATES: dict[str, tuple[str, ...]] = {
         "skills/project-setup/scripts/validate_skill.py",
         "skills/quality-gate/scripts/validate_skill.py",
         "skills/deploy/scripts/validate_skill.py",
+        "skills/dataset-lint/scripts/validate_skill.py",
     ),
     # The public-surface guard runs in every package's isolated pytest suite, so its logic
     # is copied into each package's tests/ (only the co-located baseline JSON differs). The

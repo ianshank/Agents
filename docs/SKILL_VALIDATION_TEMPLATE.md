@@ -54,6 +54,8 @@ label; the search payload is `contains`** (no overloaded keys).
 | `type` | Fields (besides `text`) | Passes when | Behavioral? |
 |--------|-------------------------|-------------|-------------|
 | `exit_zero` | — | the eval's `run` command exited 0 (fails if there is no `run`) | yes |
+| `exit_nonzero` | — | the eval's `run` command exited non-zero (fails if there is no `run`) | yes |
+| `idempotent` | — | running the `run` command a second time yields identical stdout/stderr (fails if no `run` or second run exits non-zero) | yes |
 | `output_contains` | `contains` | `run` stdout+stderr contains the payload (fails if no `run`) | yes |
 | `file_contains` | `path`, `contains` | file exists and contains the payload | yes |
 | `command_exit_zero` | `cmd` | `cmd` (run in the skill dir) exits 0 | yes |
