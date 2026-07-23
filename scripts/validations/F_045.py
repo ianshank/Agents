@@ -7,6 +7,7 @@ import importlib.util
 import logging
 import os
 import sys
+from pathlib import Path
 
 import yaml
 
@@ -29,11 +30,11 @@ def main() -> int:
 
     # 1. Check skills/dataset-lint/SKILL.md exists
     skill_md = os.path.join(_ROOT, "skills", "dataset-lint", "SKILL.md")
-    _check(os.path.isfile(skill_md), f"SKILL.md exists at {skill_md}", errors)
+    _check(os.path.isfile(skill_md), f"SKILL.md exists at {Path(skill_md).as_posix()}", errors)
 
     # 2. Check skills/dataset-lint/scripts/lint_dataset.py exists and is importable
     lint_script = os.path.join(_ROOT, "skills", "dataset-lint", "scripts", "lint_dataset.py")
-    _check(os.path.isfile(lint_script), f"lint_dataset.py exists at {lint_script}", errors)
+    _check(os.path.isfile(lint_script), f"lint_dataset.py exists at {Path(lint_script).as_posix()}", errors)
     if os.path.isfile(lint_script):
         try:
             spec = importlib.util.spec_from_file_location("lint_dataset", lint_script)
@@ -70,7 +71,7 @@ def main() -> int:
             "ASSERTION_GRADERS" in val_content, "validate_skill.py defines ASSERTION_GRADERS registry mapping", errors
         )
     else:
-        _check(False, f"validate_skill.py missing at {val_script}", errors)
+        _check(False, f"validate_skill.py missing at {Path(val_script).as_posix()}", errors)
 
     # 4. Check marketplace.yaml includes dataset-lint
     mkt_yaml = os.path.join(_ROOT, "skills", "marketplace.yaml")
@@ -80,7 +81,7 @@ def main() -> int:
         skills = [s["name"] for s in mkt_data.get("skills", [])]
         _check("dataset-lint" in skills, "dataset-lint is registered in marketplace.yaml", errors)
     else:
-        _check(False, f"marketplace.yaml missing at {mkt_yaml}", errors)
+        _check(False, f"marketplace.yaml missing at {Path(mkt_yaml).as_posix()}", errors)
 
     # 5. Check check_skill_script_drift.py tracks dataset-lint
     drift_script = os.path.join(_ROOT, "scripts", "check_skill_script_drift.py")
@@ -93,7 +94,7 @@ def main() -> int:
             errors,
         )
     else:
-        _check(False, f"check_skill_script_drift.py missing at {drift_script}", errors)
+        _check(False, f"check_skill_script_drift.py missing at {Path(drift_script).as_posix()}", errors)
 
     return report(logger, "F-045", errors)
 

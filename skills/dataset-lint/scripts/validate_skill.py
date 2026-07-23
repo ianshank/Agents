@@ -230,9 +230,9 @@ def grade_idempotent(
         return False, "idempotent asserted but run command is missing"
     try:
         r = _run_eval(run_cmd, skill_dir, timeout)
-        out2 = r.stdout + r.stderr
-        if r.returncode != 0:
-            return False, f"second run failed with exit={r.returncode}"
+        out2 = r.stdout
+        if r.returncode != run_rc:
+            return False, f"second run failed with exit={r.returncode} (expected {run_rc})"
         passed = out2 == run_out
         if passed:
             return True, "second run stdout matches first run"
@@ -326,8 +326,8 @@ def grade(
     timeout: int,
     run_cmd: str | None = None,
 ) -> dict[str, Any]:
-    t = a.get("type")
-    label = a.get("text") or t
+    t = str(a.get("type", ""))
+    label = str(a.get("text") or t)
     grader = ASSERTION_GRADERS.get(t)
     if grader is None:
         return {"text": label, "passed": False, "evidence": f"unknown assertion type {t!r}"}
@@ -377,8 +377,8 @@ def _run_one_eval(ev: dict[str, Any], skill_dir: str, timeout: int, errs: list[s
             errs.append(f"eval {eid}: setup failed (exit {sp.returncode}): {detail}")
             return None
     run_rc, run_out = 0, ""
-    run_cmd = ev.get("run")
-    if has_run:
+    run_cmd = str(ev.get("run", "")) if ev.get("run") else None
+    if has_run and run_cmd is not None:
         r = _exec(run_cmd, skill_dir, timeout)
         if r is None:
             run_rc, run_out = 124, f"[timeout after {timeout}s]"

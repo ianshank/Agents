@@ -785,5 +785,5 @@ features:
     validation_command: "python scripts/validations/F_045.py"
     implemented_in: "local"
     depends_on: ["F-003"]
-    notes: "Provides portable dataset linting and enhanced validation capabilities."
+    notes: "Provides portable dataset linting and enhanced validation capabilities. ASSERTION_GRADERS registry refactor is documented in docs/decisions/0024-assertion-graders-registry.md."
 

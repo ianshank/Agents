@@ -446,6 +446,9 @@ class TestCompositeScorer:
 
 
 class TestAutoevalsScorer:
+    def setup_class(self):
+        pytest.importorskip("autoevals")
+
     def test_m1_correctness_levenshtein_match(self) -> None:
         s = SCORERS.create("autoevals", {"name": "ae", "scorer": "Levenshtein"})
         r = s.score(ITEM_NORMAL, OUT_NORMAL, CTX)
@@ -459,6 +462,12 @@ class TestAutoevalsScorer:
     def test_m6_error_unknown_scorer(self) -> None:
         with pytest.raises(ValueError, match="unknown autoevals scorer"):
             SCORERS.create("autoevals", {"name": "ae", "scorer": "NonExistentScorer"})
+
+    def test_m6_error_missing_autoevals(self, monkeypatch) -> None:
+        import sys
+        monkeypatch.setitem(sys.modules, "autoevals", None)
+        with pytest.raises(RuntimeError, match="The 'autoevals' package is required"):
+            SCORERS.create("autoevals", {"name": "ae", "scorer": "Levenshtein"})
 
 
 # ============================================================================

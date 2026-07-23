@@ -250,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     report_data = {
-        "file": str(in_path.resolve()),
+        "file": in_path.resolve().as_posix(),
         "total_records": total,
         "passed": passed,
         "errors": errors,

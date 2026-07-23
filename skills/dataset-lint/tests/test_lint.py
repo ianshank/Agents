@@ -128,9 +128,10 @@ def test_lint_is_dir(tmp_path):
 def test_lint_invalid_utf8(tmp_path):
     dataset = tmp_path / "binary.jsonl"
     dataset.write_bytes(b'{"id": "item-1", "inputs": {"query": "\xff\xfe"}}\n')
-    _passed, _total, errors, _warnings = lint_dataset.lint_file(dataset, strict=False)
-    # The bytes can be decoded (possibly with replacements) or fail
-    assert len(errors) >= 0
+    passed, _total, errors, _warnings = lint_dataset.lint_file(dataset, strict=False)
+    assert not passed
+    assert len(errors) == 1
+    assert "not valid UTF-8" in errors[0]
 
 
 def test_main_cli_success(tmp_path, capsys):
@@ -319,20 +320,18 @@ def test_main_block(tmp_path, monkeypatch):
     dataset = tmp_path / "clean.jsonl"
     dataset.write_text('{"id": "item-1"}\n', encoding="utf-8")
 
+    import runpy
+
     exited = []
-
-    def mock_exit(code):
-        exited.append(code)
-
-    monkeypatch.setattr(sys, "exit", mock_exit)
 
     script_path = Path(lint_dataset.__file__).resolve()
     monkeypatch.setattr(sys, "argv", [str(script_path), "--in", str(dataset)])
 
-    code = script_path.read_text(encoding="utf-8")
-
-    global_dict = {"__name__": "__main__", "sys": sys}
-    exec(code, global_dict)
+    try:
+        runpy.run_path(str(script_path), run_name="__main__")
+    except SystemExit as e:
+        exited.append(e.code)
+    
     assert exited == [0]
 
 

@@ -11,7 +11,7 @@ When a file is modified (via `Edit` or `Write` tools), the `post_edit_verify.py`
 1. If `CLAUDE_FOUNDATION_VERIFY_CMD` is set, the hook replaces `{file}` in the configured command with the absolute path of the touched file.
 2. The command is executed as a subprocess.
 3. The hook captures stdout and stderr of the command.
-4. Any output is returned as `additionalContext` back to the Claude agent.
+4. If the command exits with a nonzero status code, the output is returned as `additionalContext` back to the Claude agent (successful verification returns no context).
 5. The hook **fails open** (always exits with code `0`), meaning that a failing linter or compiler will never block your workflow—it only surfaces the findings as warning context to the agent, allowing it to self-correct.
 
 ## Recommended Commands by Stack
@@ -22,7 +22,9 @@ export CLAUDE_FOUNDATION_VERIFY_CMD="python -m ruff check {file}"
 ```
 Alternatively, if you also want typing validation (note: might be slower):
 ```bash
-export CLAUDE_FOUNDATION_VERIFY_CMD="python -m ruff check {file} && mypy {file} --no-error-summary"
+# We recommend invoking a wrapper executable or cross-platform Python dispatcher
+# that runs both ruff and mypy sequentially rather than shell-specific && chaining.
+export CLAUDE_FOUNDATION_VERIFY_CMD="python scripts/verify_python.py {file}"
 ```
 
 ### JavaScript / TypeScript
