@@ -23,7 +23,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-BEHAVIORAL_TYPES: set[str] = {"exit_zero", "output_contains", "file_contains", "command_exit_zero"}
+BEHAVIORAL_TYPES: set[str] = {
+    "exit_zero",
+    "exit_nonzero",
+    "output_contains",
+    "file_contains",
+    "command_exit_zero",
+    "idempotent",
+}
 WORKDIR: str = ".skill-validation"
 
 
@@ -180,6 +187,136 @@ def _run_eval(cmd: str, cwd: str, timeout: int) -> subprocess.CompletedProcess[s
     )
 
 
+def grade_exit_zero(
+    a: dict[str, Any],
+    run_rc: int,
+    run_out: str,
+    has_run: bool,
+    skill_dir: str,
+    timeout: int,
+    run_cmd: str | None = None,
+) -> tuple[bool, str]:
+    if not has_run:
+        return False, "exit_zero asserted but eval has no 'run' — nothing executed"
+    return run_rc == 0, f"run exit={run_rc}"
+
+
+def grade_exit_nonzero(
+    a: dict[str, Any],
+    run_rc: int,
+    run_out: str,
+    has_run: bool,
+    skill_dir: str,
+    timeout: int,
+    run_cmd: str | None = None,
+) -> tuple[bool, str]:
+    if not has_run:
+        return False, "exit_nonzero asserted but eval has no 'run' — nothing executed"
+    return run_rc != 0, f"run exit={run_rc}"
+
+
+def grade_idempotent(
+    a: dict[str, Any],
+    run_rc: int,
+    run_out: str,
+    has_run: bool,
+    skill_dir: str,
+    timeout: int,
+    run_cmd: str | None = None,
+) -> tuple[bool, str]:
+    if not has_run:
+        return False, "idempotent asserted but eval has no 'run'"
+    if not run_cmd:
+        return False, "idempotent asserted but run command is missing"
+    try:
+        r = _run_eval(run_cmd, skill_dir, timeout)
+        out2 = r.stdout
+        if r.returncode != run_rc:
+            return False, f"second run failed with exit={r.returncode} (expected {run_rc})"
+        passed = out2 == run_out
+        if passed:
+            return True, "second run stdout matches first run"
+        else:
+            return False, f"stdout mismatch on second run:\nFirst:\n{run_out!r}\nSecond:\n{out2!r}"
+    except subprocess.TimeoutExpired:
+        return False, f"second run timed out after {timeout}s"
+
+
+def grade_output_contains(
+    a: dict[str, Any],
+    run_rc: int,
+    run_out: str,
+    has_run: bool,
+    skill_dir: str,
+    timeout: int,
+    run_cmd: str | None = None,
+) -> tuple[bool, str]:
+    if not has_run:
+        return False, "output_contains asserted but eval has no 'run'"
+    needle = a.get("contains", "")
+    return needle in run_out, f"stdout {'has' if needle in run_out else 'missing'} {needle!r}"
+
+
+def grade_file_exists(
+    a: dict[str, Any],
+    run_rc: int,
+    run_out: str,
+    has_run: bool,
+    skill_dir: str,
+    timeout: int,
+    run_cmd: str | None = None,
+) -> tuple[bool, str]:
+    p = os.path.join(skill_dir, a["path"])
+    ex = os.path.exists(p)
+    return ex, f"{a['path']} {'exists' if ex else 'absent'}"
+
+
+def grade_file_contains(
+    a: dict[str, Any],
+    run_rc: int,
+    run_out: str,
+    has_run: bool,
+    skill_dir: str,
+    timeout: int,
+    run_cmd: str | None = None,
+) -> tuple[bool, str]:
+    p = os.path.join(skill_dir, a["path"])
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            body = f.read()
+    except OSError as e:
+        return False, f"cannot read {a['path']}: {e}"
+    needle = a.get("contains", "")
+    return needle in body, f"{a['path']} {'contains' if needle in body else 'lacks'} {needle!r}"
+
+
+def grade_command_exit_zero(
+    a: dict[str, Any],
+    run_rc: int,
+    run_out: str,
+    has_run: bool,
+    skill_dir: str,
+    timeout: int,
+    run_cmd: str | None = None,
+) -> tuple[bool, str]:
+    try:
+        r = _run_eval(a["cmd"], skill_dir, timeout)
+        return r.returncode == 0, f"`{a['cmd']}` exit={r.returncode}"
+    except subprocess.TimeoutExpired:
+        return False, f"`{a['cmd']}` timed out after {timeout}s"
+
+
+ASSERTION_GRADERS = {
+    "exit_zero": grade_exit_zero,
+    "exit_nonzero": grade_exit_nonzero,
+    "idempotent": grade_idempotent,
+    "output_contains": grade_output_contains,
+    "file_exists": grade_file_exists,
+    "file_contains": grade_file_contains,
+    "command_exit_zero": grade_command_exit_zero,
+}
+
+
 def grade(
     a: dict[str, Any],
     run_rc: int,
@@ -187,42 +324,15 @@ def grade(
     has_run: bool,
     skill_dir: str,
     timeout: int,
+    run_cmd: str | None = None,
 ) -> dict[str, Any]:
-    t = a.get("type")
-    label = a.get("text") or t
-
-    def res(p: bool, ev: str) -> dict[str, Any]:
-        return {"text": label, "passed": bool(p), "evidence": ev}
-
-    if t == "exit_zero":
-        if not has_run:
-            return res(False, "exit_zero asserted but eval has no 'run' — nothing executed")
-        return res(run_rc == 0, f"run exit={run_rc}")
-    if t == "output_contains":
-        if not has_run:
-            return res(False, "output_contains asserted but eval has no 'run'")
-        needle = a.get("contains", "")
-        return res(needle in run_out, f"stdout {'has' if needle in run_out else 'missing'} {needle!r}")
-    if t == "file_exists":
-        p = os.path.join(skill_dir, a["path"])
-        ex = os.path.exists(p)
-        return res(ex, f"{a['path']} {'exists' if ex else 'absent'}")
-    if t == "file_contains":
-        p = os.path.join(skill_dir, a["path"])
-        try:
-            with open(p, encoding="utf-8", errors="replace") as f:
-                body = f.read()
-        except OSError as e:
-            return res(False, f"cannot read {a['path']}: {e}")
-        needle = a.get("contains", "")
-        return res(needle in body, f"{a['path']} {'contains' if needle in body else 'lacks'} {needle!r}")
-    if t == "command_exit_zero":
-        try:
-            r = _run_eval(a["cmd"], skill_dir, timeout)
-            return res(r.returncode == 0, f"`{a['cmd']}` exit={r.returncode}")
-        except subprocess.TimeoutExpired:
-            return res(False, f"`{a['cmd']}` timed out after {timeout}s")
-    return res(False, f"unknown assertion type {t!r}")
+    t = str(a.get("type", ""))
+    label = str(a.get("text") or t)
+    grader = ASSERTION_GRADERS.get(t)
+    if grader is None:
+        return {"text": label, "passed": False, "evidence": f"unknown assertion type {t!r}"}
+    passed, evidence = grader(a, run_rc, run_out, has_run, skill_dir, timeout, run_cmd)
+    return {"text": label, "passed": bool(passed), "evidence": evidence}
 
 
 def _exec(cmd: str, skill_dir: str, timeout: int) -> subprocess.CompletedProcess[str] | None:
@@ -267,14 +377,15 @@ def _run_one_eval(ev: dict[str, Any], skill_dir: str, timeout: int, errs: list[s
             errs.append(f"eval {eid}: setup failed (exit {sp.returncode}): {detail}")
             return None
     run_rc, run_out = 0, ""
-    if has_run:
-        r = _exec(ev["run"], skill_dir, timeout)
+    run_cmd = str(ev.get("run", "")) if ev.get("run") else None
+    if has_run and run_cmd is not None:
+        r = _exec(run_cmd, skill_dir, timeout)
         if r is None:
             run_rc, run_out = 124, f"[timeout after {timeout}s]"
             errs.append(f"eval {eid}: run timed out after {timeout}s")
         else:
             run_rc, run_out = r.returncode, (r.stdout + r.stderr)
-    graded = [grade(a, run_rc, run_out, has_run, skill_dir, timeout) for a in asserts]
+    graded = [grade(a, run_rc, run_out, has_run, skill_dir, timeout, run_cmd) for a in asserts]
     for g in graded:
         if not g["passed"]:
             errs.append(f"eval {eid}: {g['text']} — {g['evidence']}")

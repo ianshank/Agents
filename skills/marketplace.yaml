@@ -41,3 +41,9 @@ skills:
     path: skills/deploy
     description: Generate a safety-railed deployment script (strict mode, dry-run, confirm gate, rollback, health check).
     compatibility: python>=3.10
+  - name: dataset-lint
+    version: 1.0.0
+    path: skills/dataset-lint
+    description: Validate existing eval datasets for structural correctness, duplicate IDs, and encoding issues.
+    compatibility: python>=3.10
+
