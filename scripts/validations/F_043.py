@@ -63,8 +63,10 @@ def validate_f043() -> int:
     _check("agent_core.calibration_report" in wf, "labeller surfaces the calibration report", errors)
     _check("--domain-filter agent" in wf, "report is scoped to agent domains", errors)
     _check("GITHUB_STEP_SUMMARY" in wf, "report lands in the run step summary", errors)
+    push_pos = wf.rfind("store_sync push")
+    report_pos = wf.find("agent_core.calibration_report")
     _check(
-        wf.rfind("store_sync push") < wf.find("agent_core.calibration_report"),
+        push_pos != -1 and report_pos != -1 and push_pos < report_pos,
         "report step runs after the store push (read-only, no partial-state risk)",
         errors,
     )
