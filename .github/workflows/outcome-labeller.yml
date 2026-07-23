@@ -68,13 +68,19 @@ jobs:
       # Push is the LAST store touch: any earlier failure leaves the remote store
       # untouched (fail toward no-op, never toward partial state).
       - name: Sync store (push)
+        env:
+          # Route github.actor through env, never spliced into the run script (zizmor
+          # template-injection anti-pattern).
+          GH_ACTOR: ${{ github.actor }}
         run: |
           python -m agent_core.store_sync push --store "$STORE" \
-            --repo-dir . --actor "${{ github.actor }}"
+            --repo-dir . --actor "$GH_ACTOR"
       # F-043 observability: emit the agent-domain calibration curve to the run
       # summary. Read-only — it never writes the store, so it runs after the push
-      # and cannot affect the fail-toward-no-op ordering above.
+      # and cannot affect the fail-toward-no-op ordering above. continue-on-error:
+      # a report failure must never redden a run whose store push already succeeded.
       - name: Calibration report (agent domains, read-only)
+        continue-on-error: true
         run: |
           python -m agent_core.calibration_report --store "$STORE" \
             --domain-filter agent --format md >> "$GITHUB_STEP_SUMMARY"
