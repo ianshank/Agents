@@ -44,6 +44,7 @@ def test_load_valid_mapping(tmp_path):
         lambda d: d.pop("default_domain"),  # missing key
         lambda d: d.update(schema_version="9.0.0"),  # unsupported schema
         lambda d: d.update(human_namespace="human"),  # namespace must end with /
+        lambda d: d.update(human_namespace="bot/"),  # valid form but != canonical HUMAN_NAMESPACE
         lambda d: d.update(rules=[]),  # empty rules
         lambda d: d.update(rules="nope"),  # non-list rules
         lambda d: d.update(rules=[{"pattern": "x/**"}]),  # rule missing domain
@@ -73,8 +74,10 @@ def test_load_rejects_unreadable_and_non_mapping(tmp_path):
 
 
 def test_committed_mapping_loads_and_never_emits_human(tmp_path):
+    import _config
+
     mapping = mgc.DomainMapping.load(mgc.DEFAULT_MAPPING_PATH)
-    assert mapping.schema_version.split(".", 1)[0] == mgc.SUPPORTED_SCHEMA_MAJOR
+    assert mapping.schema_version.split(".", 1)[0] == _config.SUPPORTED_SCHEMA_MAJOR
     assert not mapping.default_domain.startswith(mapping.human_namespace)
     assert all(not r.domain.startswith(mapping.human_namespace) for r in mapping.rules)
 

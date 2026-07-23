@@ -297,3 +297,22 @@ def test_cli_config_error_exits_2(tmp_path):
     bad.write_text("agents: []\nschema_version: '1.0.0'\n", encoding="utf-8")
     rc = ac.main(["--head-ref", "claude/x", "--identity-config", str(bad)])
     assert rc == 2
+
+
+def test_confidence_extreme_config_no_overflow(tmp_path):
+    # Output contract under extreme (mis)configured base: result stays within [clamp_lo, clamp_hi]
+    # and never OverflowErrors. The lower z-clamp is the load-bearing guard (base=-1e9 -> exp(+big)
+    # would overflow without it); base=+1e9 merely underflows exp(-big) to 0 (upper clamp is
+    # defensive symmetry, so removing it leaves the output unchanged — tested via the contract).
+    hi = _proxy_cfg(tmp_path, base=1e9)
+    assert ac.compute_confidence(["a.py"], 10, hi) == hi.clamp_hi
+    lo = _proxy_cfg(tmp_path, base=-1e9)
+    assert ac.compute_confidence(["a.py"], 10, lo) == lo.clamp_lo
+
+
+def test_cli_agent_empty_files_is_config_error(tmp_path):
+    # An agent change that resolves no files -> exit 2 (undeterminable file set), not a bogus seed.
+    idp = _write(tmp_path, "id.yaml", _IDENTITY)
+    pp = _write(tmp_path, "proxy.yaml", _PROXY)
+    rc = ac.main(["--head-ref", "claude/x", "--identity-config", idp, "--proxy-config", pp])
+    assert rc == 2

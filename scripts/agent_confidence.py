@@ -41,9 +41,14 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-import yaml
 from _cli import configure_logging
-from check_protected_changes import ConfigError
+from _config import (
+    ConfigError,
+    load_yaml_mapping,
+    require_exact_keys,
+    require_major,
+    resolve_explicit_files,
+)
 
 # Reuse the repo's single source of glob semantics + protected-path classification,
 # exactly as scripts/merge_gate_context.py does — no second spelling of either.
@@ -53,7 +58,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_IDENTITY_PATH = os.path.join("config", "agent-authors.yaml")
 DEFAULT_PROXY_PATH = os.path.join("config", "agent-confidence.yaml")
-SUPPORTED_SCHEMA_MAJOR = "1"
 
 EXIT_OK = 0
 EXIT_CONFIG = 2
@@ -73,24 +77,6 @@ _PROXY_KEYS = frozenset(
         "clamp_hi",
     }
 )
-
-
-def _require_major(version: str, path: str) -> None:
-    if version.split(".", 1)[0] != SUPPORTED_SCHEMA_MAJOR:
-        raise ConfigError(
-            f"unsupported schema_version {version!r} in '{path}' (supported major: {SUPPORTED_SCHEMA_MAJOR}.x)"
-        )
-
-
-def _load_yaml(path: str) -> dict:
-    try:
-        with open(path, encoding="utf-8") as fh:
-            doc = yaml.safe_load(fh)
-    except (OSError, yaml.YAMLError) as exc:
-        raise ConfigError(f"cannot read config '{path}': {exc}") from exc
-    if not isinstance(doc, dict):
-        raise ConfigError(f"config '{path}' must be a mapping")
-    return doc
 
 
 # --- identity ----------------------------------------------------------------
@@ -115,10 +101,9 @@ class AgentIdentity:
 
     @staticmethod
     def load(path: str = DEFAULT_IDENTITY_PATH) -> AgentIdentity:
-        doc = _load_yaml(path)
-        if set(doc) != {"schema_version", "agents"}:
-            raise ConfigError(f"agent-authors keys must be exactly ['agents', 'schema_version']; got {sorted(doc)}")
-        _require_major(str(doc["schema_version"]), path)
+        doc = load_yaml_mapping(path)
+        require_exact_keys(doc, {"schema_version", "agents"}, "agent-authors")
+        require_major(str(doc["schema_version"]), path)
         raw_agents = doc["agents"]
         if not isinstance(raw_agents, list) or not raw_agents:
             raise ConfigError("agents must be a non-empty list")
@@ -174,15 +159,13 @@ class ProxyConfig:
 
     @staticmethod
     def load(path: str = DEFAULT_PROXY_PATH) -> ProxyConfig:
-        doc = _load_yaml(path)
-        if set(doc) != {"schema_version", "proxy", "test_globs"}:
-            raise ConfigError(
-                f"agent-confidence keys must be exactly ['proxy', 'schema_version', 'test_globs']; got {sorted(doc)}"
-            )
-        _require_major(str(doc["schema_version"]), path)
+        doc = load_yaml_mapping(path)
+        require_exact_keys(doc, {"schema_version", "proxy", "test_globs"}, "agent-confidence")
+        require_major(str(doc["schema_version"]), path)
         proxy = doc["proxy"]
-        if not isinstance(proxy, dict) or set(proxy) != _PROXY_KEYS:
-            raise ConfigError(f"proxy must have exactly the keys {sorted(_PROXY_KEYS)}")
+        if not isinstance(proxy, dict):
+            raise ConfigError("agent-confidence proxy must be a mapping")
+        require_exact_keys(proxy, _PROXY_KEYS, "proxy")
         vals: dict[str, float] = {}
         for k in _PROXY_KEYS:
             try:
@@ -226,27 +209,22 @@ def compute_confidence(files: Sequence[str], lines_changed: int, cfg: ProxyConfi
         + cfg.w_tests * test_ratio
         - cfg.w_protected * protected
     )
+    # Clamp z to a numerically-safe range before exp(). The LOWER bound is load-bearing: a
+    # large-negative z makes exp(-z)=exp(+big) OverflowError. The upper bound is defensive
+    # symmetry only (a large-positive z makes exp(-z) underflow to 0.0, which is harmless), kept
+    # so the guard stays correct if the sigmoid form is ever changed. Output is clamped to
+    # (clamp_lo, clamp_hi) regardless, so neither bound alters an observable result.
+    z = max(-700.0, min(700.0, z))
     raw = 1.0 / (1.0 + math.exp(-z))
     clamped = min(max(raw, cfg.clamp_lo), cfg.clamp_hi)
     return round(clamped, 6)
 
 
 # --- file resolution + CLI ---------------------------------------------------
-def _read_nul_delimited(path: str) -> list[str]:
-    try:
-        with open(path, encoding="utf-8") as fh:
-            raw = fh.read()
-    except OSError as exc:
-        raise ConfigError(f"cannot read --files-from '{path}': {exc}") from exc
-    return [f for f in raw.split("\0") if f.strip()]
-
-
 def resolve_files(args: argparse.Namespace) -> list[str]:
-    if args.files:
-        return [f for f in args.files if f.strip()]
-    if args.files_from:
-        return _read_nul_delimited(args.files_from)
-    return []
+    """Changed files from --files / --files-from; empty list when neither is given."""
+    explicit: list[str] | None = resolve_explicit_files(args.files, args.files_from)
+    return explicit if explicit is not None else []
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -274,6 +252,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             proxy = ProxyConfig.load(args.proxy_config)
             files = resolve_files(args)
+            if not files:
+                # An agent change with no resolvable files would score all-zero signals — a
+                # misleading confidence. Treat it as an undeterminable file set (exit 2); the
+                # seed workflow's fail-safe then routes the merge to the human lane. Name the
+                # inputs so an operator can tell an empty diff from a bad --files-from path.
+                raise ConfigError(
+                    "no changed files resolved for an agent change (undeterminable file set; "
+                    f"head_ref={args.head_ref or '(none)'}, files-from={args.files_from or '(none)'})"
+                )
             confidence = compute_confidence(files, args.lines_changed, proxy)
             result = {"agent": True, "agent_version": agent_version, "confidence": confidence}
     except ConfigError as exc:

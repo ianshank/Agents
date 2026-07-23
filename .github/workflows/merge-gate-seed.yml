@@ -74,22 +74,30 @@ jobs:
           LINES=$(git diff --numstat "$BEFORE" "$GITHUB_SHA" \
             | awk '{ if ($1 ~ /^[0-9]+$/) a+=$1; if ($2 ~ /^[0-9]+$/) d+=$2 } END { print a+d+0 }')
 
-          # Resolve the merged change's PR head ref + author. Primary: the associated
-          # PR via the API (robust to squash/rebase merges). Fallback: parse the
-          # "Merge pull request #N from owner/<branch>" subject for merge-commit merges.
-          # Both empty (direct push) -> human lane.
-          HEAD_REF="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
-            --jq '.[0].head.ref // ""' 2>/dev/null || echo "")"
-          AUTHOR="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
-            --jq '.[0].user.login // ""' 2>/dev/null || echo "")"
+          # Resolve the merged change's PR head ref + author in ONE API call (halves the
+          # quota, removes the inconsistency window). Primary: the associated PR (robust to
+          # squash/rebase merges). Fallback: parse the "Merge pull request #N from
+          # owner/<branch>" subject for merge-commit merges. Both empty (direct push) -> human.
+          PR_INFO="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '[.[0].head.ref // "", .[0].user.login // ""] | @tsv' 2>/dev/null || printf '\t')"
+          HEAD_REF="$(printf '%s' "$PR_INFO" | cut -f1)"
+          AUTHOR="$(printf '%s' "$PR_INFO" | cut -f2)"
           if [ -z "$HEAD_REF" ]; then
             HEAD_REF="$(git log -1 --format=%s "$GITHUB_SHA" \
               | sed -n 's|^Merge pull request #[0-9]* from [^/]*/\(.*\)$|\1|p')"
           fi
 
-          python scripts/agent_confidence.py --files-from changed_files.z \
+          # Classify. FAIL-SAFE (ADR 0023 §2): if agent_confidence.py errors (bad config /
+          # bug / undeterminable file set), route to the human lane instead of aborting the
+          # whole seed job. Write a fallback agent.json so the downstream jq never reads a
+          # missing file, and log the fallback so silent under-counting stays visible.
+          if ! python scripts/agent_confidence.py --files-from changed_files.z \
             --lines-changed "$LINES" --head-ref "$HEAD_REF" --author-login "$AUTHOR" \
-            --output agent.json
+            --output agent.json; then
+            echo '{"agent": false, "agent_version": null, "confidence": null}' > agent.json
+            echo "seed lane: **human** (agent-confidence classifier failed — routing to \
+              human fallback; see logs)" >> "$GITHUB_STEP_SUMMARY"
+          fi
           cat agent.json
 
           if [ "$(jq -r .agent agent.json)" = "true" ]; then
@@ -118,6 +126,10 @@ jobs:
             --merged-at "$(git show -s --format=%cI "$GITHUB_SHA")" \
             "${AGENT_ARGS[@]}"
       - name: Sync store (push — final step; earlier failure leaves remote untouched)
+        env:
+          # Route github.actor through env, never spliced into the run script (zizmor
+          # template-injection anti-pattern).
+          GH_ACTOR: ${{ github.actor }}
         run: |
           python -m agent_core.store_sync push --store "$STORE" \
-            --repo-dir . --actor "${{ github.actor }}"
+            --repo-dir . --actor "$GH_ACTOR"

@@ -288,8 +288,8 @@ Invoke-PytestStep 'A' 'suite:scripts-gate' `
 # TIER B - Functionality gates (offline, always)
 # ===========================================================================
 Write-Host "`n== Tier B: functionality gates (features.yaml) ==" -ForegroundColor Cyan
-# validate.py runs every done+fast feature's validation_command (all 36 are tier
-# fast); deferred features (e.g. F-036) are skipped by design.
+# validate.py runs every done+fast feature's validation_command (all done features
+# are tier fast); deferred features (e.g. F-036) are skipped by design.
 Invoke-CmdStep 'B' 'features:validate.py' @('scripts/validate.py', '-v') $RepoRoot -TimeoutSec 1800
 
 # ===========================================================================
@@ -415,6 +415,19 @@ $mgStore = Join-Path $Report 'merge_gate_store.jsonl'
 Invoke-CmdStep 'C' 'cli:merge_gate_ci' `
     @('-m', 'agent_core.merge_gate_ci', '--store', $mgStore, '--domain', 'human', '--raw-confidence', '0.9', '--mech-pass') `
     -PassCodes @(10, 20) -PassDetail 'decision'
+
+# C5b: agent-confidence seed path (F-042) — classify an agent change, then compose its seed
+# context. Exercises scripts/agent_confidence.py + merge_gate_context.py --confidence on the
+# host platform (Windows portability). Paths need not exist (classification is by path pattern +
+# head ref); config is read from the repo root (the default WorkDir). Both must exit 0.
+$acJson = Join-Path $Report 'agent_confidence.json'
+Invoke-CmdStep 'C' 'cli:agent_confidence (agent lane)' `
+    @('scripts/agent_confidence.py', '--files', 'src/eval_harness/x.py', 'tests/test_x.py',
+        '--lines-changed', '40', '--head-ref', 'claude/e2e-journey', '--output', $acJson)
+$agentSeedJson = Join-Path $Report 'agent_seed_context.json'
+Invoke-CmdStep 'C' 'cli:merge_gate_context (--confidence)' `
+    @('scripts/merge_gate_context.py', '--files', 'src/eval_harness/x.py', 'tests/test_x.py',
+        '--confidence', '0.5', '--output', $agentSeedJson)
 
 # C6: skill-marketplace CLI journeys
 Invoke-CmdStep 'C' 'cli:skill_marketplace list' @('scripts/skill_marketplace.py', 'list')

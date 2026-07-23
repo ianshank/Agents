@@ -7,13 +7,15 @@ import json
 import pytest
 
 from agent_core.calibration_report import (
+    ReportConfig,
     analyze_slice,
     build_report,
-    is_agent_domain,
     main,
     render_json,
     render_markdown,
 )
+from agent_core.config import ConfigError
+from agent_core.domains import is_agent_domain
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 
 _TS = "2026-07-20T12:00:00+00:00"
@@ -88,6 +90,14 @@ def test_analyze_slice_single_class_is_degenerate():
     s = analyze_slice([(0.8, True), (0.6, True), (0.4, True)], "x")
     assert s.auroc is None
     assert s.degenerate is not None and "single outcome class" in s.degenerate
+    assert "are correct" in s.degenerate
+
+
+def test_analyze_slice_single_class_all_incorrect():
+    # Covers the "incorrect" arm of the single-class message ternary (invisible to line coverage).
+    s = analyze_slice([(0.8, False), (0.6, False), (0.4, False)], "x")
+    assert s.auroc is None
+    assert s.degenerate is not None and "all 3 labels are incorrect" in s.degenerate
 
 
 def test_analyze_slice_empty():
@@ -138,10 +148,13 @@ def test_build_report_all_filter(tmp_path):
     assert diag.n == 6  # 4 agent + 2 human labeled
 
 
-def test_build_report_missing_store(tmp_path):
-    doc = build_report(OutcomeStore(tmp_path / "nope.jsonl"), domain_filter="agent")
+def test_build_report_missing_store(tmp_path, caplog):
+    with caplog.at_level("WARNING"):
+        doc = build_report(OutcomeStore(tmp_path / "nope.jsonl"), domain_filter="agent")
     assert doc.total_records == 0 and doc.resolved_records == 0
     assert _find(doc.views[0], "ALL agent domains").n == 0
+    # A nonexistent store must warn (disambiguates "no data yet" from "wrong --store").
+    assert "does not exist" in caplog.text
 
 
 # --- rendering --------------------------------------------------------------
@@ -180,3 +193,53 @@ def test_cli_json_to_file(tmp_path):
 def test_cli_rejects_bad_filter(tmp_path):
     with pytest.raises(SystemExit):
         main(["--store", str(tmp_path / "s.jsonl"), "--domain-filter", "bogus"])
+
+
+# --- ReportConfig (no magic numbers at call sites) --------------------------
+def test_report_config_defaults_and_validation():
+    cfg = ReportConfig()
+    assert (cfg.n_bins, cfg.risk_target, cfg.z) == (10, 0.05, 1.96)
+    # Range violations plus non-finite values (NaN/inf slip past bare range checks — e.g.
+    # `inf > 0` is True — so the math.isfinite guards must reject them).
+    for bad in (
+        dict(n_bins=0),
+        dict(risk_target=1.5),
+        dict(z=0.0),
+        dict(risk_target=float("nan")),
+        dict(risk_target=float("inf")),
+        dict(z=float("inf")),
+        dict(z=float("nan")),
+    ):
+        with pytest.raises(ConfigError):
+            ReportConfig(**bad)
+
+
+def test_report_config_flags_are_load_bearing():
+    # A mutant that hardcoded ReportConfig() and ignored the flags must fail: assert each knob
+    # produces an observable effect, not just rc == 0.
+    data = [(0.9, True), (0.7, True), (0.6, False), (0.3, False), (0.2, True)]
+    assert analyze_slice(data, "x", cfg=ReportConfig(risk_target=0.1)).risk_target == 0.1
+    narrow = analyze_slice(data, "x", cfg=ReportConfig(z=1.0)).base_rate_ci
+    wide = analyze_slice(data, "x", cfg=ReportConfig(z=2.58)).base_rate_ci
+    assert narrow is not None and wide is not None
+    assert (wide[1] - wide[0]) > (narrow[1] - narrow[0])  # larger z -> wider Wilson CI
+    ece_coarse = analyze_slice(data, "x", cfg=ReportConfig(n_bins=2)).ece
+    ece_fine = analyze_slice(data, "x", cfg=ReportConfig(n_bins=20)).ece
+    assert ece_coarse != ece_fine  # bin count changes the ECE partition
+
+
+def test_cli_honours_report_config_flags(tmp_path, capsys):
+    store = _store(tmp_path, _mixed_records())
+    rc = main(["--store", str(store.path), "--n-bins", "5", "--risk-target", "0.1", "--z", "1.64"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    # --risk-target must reach the rendered abstain@risk column (proves the flag is threaded,
+    # not merely accepted): non-degenerate agent rows render `@0.1`, never the `@0.05` default.
+    assert "@0.1" in out and "@0.05" not in out
+
+
+def test_cli_bad_config_is_clean_exit(tmp_path):
+    # A bad --n-bins is an operator error: clean exit 2 + logged message, not a traceback.
+    store = _store(tmp_path, _mixed_records())
+    rc = main(["--store", str(store.path), "--n-bins", "0"])
+    assert rc == 2

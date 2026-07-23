@@ -195,6 +195,19 @@ python scripts/check_protected_changes.py --base-ref origin/main
   (`scripts/.coveragerc`) in `eval-harness-ci.yml`; `scripts/validations/F_031.py` asserts the
   enforcement itself cannot silently regress. Baseline and rationale:
   [docs/gap-analysis-2026-07.md](docs/gap-analysis-2026-07.md).
+- **Calibrated merge gate** (`F-010` / `F-032…F-035`, ADR 0005 + ADR 0018) is a pure
+  `agent_core` decision subsystem that **auto-merges nothing** unless
+  `ENABLE_CALIBRATED_AUTOMERGE` is set and a populated, human-audited outcome store has earned
+  it. Real outcomes persist on the dedicated `merge-gate-data` branch; a daily labeller applies
+  passive labels behind an anti-optimism guard, a weekly queue drives human `HUMAN_AUDIT`
+  verdicts, and an always-on **shadow** job logs a decision on every PR without blocking one.
+  **Agent-confidence seeding** (`F-042`, ADR 0023) routes each merged change by its PR head-ref
+  prefix (`config/agent-authors.yaml`): agent changes are seeded in the agent domain with a
+  deterministic proxy confidence (`scripts/agent_confidence.py` — diff shape only, no network),
+  while human or unclassifiable changes stay in the reserved `human/<domain>` namespace at 0.0
+  (fail-safe). The **calibration report** (`F-043`, `agent_core.calibration_report`) surfaces
+  agent-domain ECE / Brier / AUROC / abstention (Wilson CIs, honest `DEGENERATE` guard) to the
+  daily run summary. `scripts/validations/F_046.py` pins the hardening invariants.
 - **Live Phoenix validation (opt-in)** — `.github/workflows/phoenix-live.yml`
   (`workflow_dispatch`, `timeout-minutes: 20`) validates the reversible Phoenix spike
   end-to-end on a networked runner: a `dep-resolve` dry-run job surfaces the
@@ -253,6 +266,10 @@ scripts/
   eval_protected_paths.py single source of truth for protected eval-defining paths
   check_protected_changes.py   CI guard: flags protected changes lacking approval
   check_skill_script_drift.py  CI guard: vendored skill scripts == canonical copy
+  _config.py              shared changed-file + strict-YAML-loader helpers (merge-gate seeding)
+  merge_gate_context.py   composes the merge-gate ChangeContext / seed (--confidence seam, F-042)
+  agent_confidence.py     deterministic agent-lane proxy confidence for seeding (F-042, no network)
+  migrations/             one-off reversible data migrations (agent_domain_backfill.py, F-044)
   fix_loop.py             auto-fix loop scaffolding (DESIGN-ONLY, disabled)
   run_all_e2e.ps1         one-command e2e/user-journey harness (all tiers -> artifacts/e2e-report/)
   e2e_shims/              sitecustomize.py: neutralizes the Windows platform-WMI hang for pytest

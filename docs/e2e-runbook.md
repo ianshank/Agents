@@ -56,7 +56,7 @@ pwsh scripts/run_all_e2e.ps1 -Tiers offline -FailFast           # stop at first 
   the operational-scripts coverage gate. Each runs from its own directory so its own coverage floor
   and markers apply, and each suite must collect **> 0** tests or it is failed.
 - **Tier B — functionality gates (offline, always).** `scripts/validate.py -v` runs every
-  `features.yaml` `validation_command` (the 36 `F_*` gates). Deferred features (e.g. **F-036**,
+  `features.yaml` `validation_command` (the `F_*` gates — one per done + fast feature). Deferred features (e.g. **F-036**,
   which has no `F_036.py`) are skipped by design — that is expected, not a gap. **F-006/F-007** are
   the slow ones (they materialize a git worktree baseline).
 - **Tier C — user-journey / CLI e2e (offline, always).** The three skill/hook `*e2e*`/
