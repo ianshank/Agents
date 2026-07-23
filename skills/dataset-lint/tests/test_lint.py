@@ -331,7 +331,7 @@ def test_main_block(tmp_path, monkeypatch):
         runpy.run_path(str(script_path), run_name="__main__")
     except SystemExit as e:
         exited.append(e.code)
-    
+
     assert exited == [0]
 
 

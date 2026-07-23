@@ -465,6 +465,7 @@ class TestAutoevalsScorer:
 
     def test_m6_error_missing_autoevals(self, monkeypatch) -> None:
         import sys
+
         monkeypatch.setitem(sys.modules, "autoevals", None)
         with pytest.raises(RuntimeError, match="The 'autoevals' package is required"):
             SCORERS.create("autoevals", {"name": "ae", "scorer": "Levenshtein"})
@@ -651,7 +652,7 @@ class TestGating:
         from eval_harness.config.models import GateConfig
         from eval_harness.gating import evaluate_gate
 
-        gate = GateConfig(rules=[{"score": "exact_match", "metric": "mean", "min": 0.5}])
+        gate = GateConfig.model_validate({"rules": [{"score": "exact_match", "metric": "mean", "min": 0.5}]})
         run = _make_run_result()
         result = evaluate_gate(gate, run)
         assert result.passed is True
@@ -660,7 +661,7 @@ class TestGating:
         from eval_harness.config.models import GateConfig
         from eval_harness.gating import evaluate_gate
 
-        gate = GateConfig(rules=[{"score": "exact_match", "metric": "mean", "min": 1.5}])
+        gate = GateConfig.model_validate({"rules": [{"score": "exact_match", "metric": "mean", "min": 1.5}]})
         run = _make_run_result()
         result = evaluate_gate(gate, run)
         assert result.passed is False
@@ -713,7 +714,7 @@ class TestM8Composability:
             "sinks": [{"type": "json_file", "params": {"path": str(out_json)}}],
             "gate": {"rules": [{"score": "em", "metric": "mean", "min": 0.9}]},
         }
-        config = EvalConfig(**config_dict)
+        config = EvalConfig.model_validate(config_dict)
         from eval_harness.engine import EvalEngine
 
         engine = EvalEngine.from_config(config)
@@ -737,8 +738,8 @@ class TestM8Composability:
         from eval_harness.config import EvalConfig
         from eval_harness.engine import EvalEngine
 
-        config = EvalConfig(
-            **{
+        config = EvalConfig.model_validate(
+            {
                 "schema_version": "1.0",
                 "run": {"name": "judge-test", "seed": 1},
                 "dataset": {
@@ -759,8 +760,8 @@ class TestM8Composability:
         from eval_harness.config import EvalConfig
         from eval_harness.engine import EvalEngine
 
-        config = EvalConfig(
-            **{
+        config = EvalConfig.model_validate(
+            {
                 "schema_version": "1.0",
                 "run": {"name": "composite-test", "seed": 1},
                 "dataset": {
