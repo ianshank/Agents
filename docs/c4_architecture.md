@@ -170,19 +170,27 @@ calibration (ECE/Brier/AUROC/abstention, Wilson CIs, honest `DEGENERATE` guard) 
 labeller summary, and a one-off reversible backfill
 (`scripts/migrations/agent_domain_backfill.py`, F-044) re-attributed the historical agent SHAs.
 
+The confidence path is fail-closed end to end. `ChangeContext` rejects a `raw_confidence` that
+is non-finite or outside `[0, 1]` at construction, and `BinningCalibrator.bin_index` floors any
+such score to bin 0 for records arriving straight from the store, where `OutcomeRecord` applies
+no validation — a score the gate cannot interpret is never read as maximum confidence. The CLI
+maps every out-of-contract input to exit 2 (usage), never 0, which CI reads as proceed-to-merge.
+See `docs/gap-analysis-merge-gate-2026-07-24.md` for the reproductions behind these guards and
+the subsystem's open findings.
+
 ```mermaid
 C4Component
     title Component Diagram: Calibrated Merge Gate (agent_core)
 
     Container_Boundary(gate, "agent_core merge-gate subsystem") {
-        Component(ci, "merge_gate_ci", "CLI entrypoint", "exit 0/10/20 (+1 internal, +2 usage); --audit-log JSONL")
-        Component(decide, "merge_gate.decide()", "pure function", "REJECT mech-fail -> ESCALATE protected -> calibrated trust + Wilson bin floor -> AUTO_MERGE")
-        Component(store, "outcome_store", "append-only JSONL", "OutcomeStore, BinningCalibrator, build_domain_models (held-out fold)")
+        Component(ci, "merge_gate_ci", "CLI entrypoint", "exit 0/10/20 (+1 internal, +2 usage — incl. any out-of-contract input value; never 0 on bad input); --audit-log JSONL")
+        Component(decide, "merge_gate.decide()", "pure function", "ChangeContext enforces raw_confidence in [0,1] at construction; REJECT mech-fail -> ESCALATE protected -> calibrated trust + Wilson bin floor -> AUTO_MERGE")
+        Component(store, "outcome_store", "append-only JSONL", "OutcomeStore, BinningCalibrator (fail-closed: non-finite / out-of-[0,1] scores floor to bin 0, never the top bin), build_domain_models (held-out fold; logs why records are excluded from the fit)")
         Component(sync, "store_sync", "package + CLI (F-032)", "models/serialization/store/git_sync submodules; pull/push/stats vs merge-gate-data branch; canonical merge, opaque-line preservation, retry-backoff; byte-oriented git-plumbing runner (shared subprocess_util); exit 0/4/5")
         Component(labeller, "outcome_labeller", "module", "passive revert / CI-failure / timeout-clean labels (alerting only)")
         Component(sampler, "audit_sampler", "module", "unbiased stratified sampling + HUMAN_AUDIT verdicts")
         Component(detectors, "detectors", "module", "GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo; DetectorConfig timeouts, fail-safe")
-        Component(calib, "calibration", "module", "Wilson interval, AUROC, ECE (reused, not re-implemented)")
+        Component(calib, "calibration", "module", "Wilson interval, AUROC, ECE (reused, not re-implemented); reports degenerate slices (constant predictor / single outcome class / undersized) — enforcement opt-in via CalibrationConfig, defaults preserve prior verdicts")
         Component(report, "calibration_report", "read-only CLI (F-043)", "agent-domain ECE/Brier/AUROC/abstention (Wilson CIs); HUMAN_AUDIT vs passive views tagged; honest DEGENERATE guard; ReportConfig knobs; reuses calibration")
         Component(domains, "domains", "module", "single-source HUMAN_NAMESPACE / is_agent_domain / strip_human_namespace (agent vs reserved-human lane; yaml/config-free)")
     }
