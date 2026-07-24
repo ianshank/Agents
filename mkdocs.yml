@@ -65,6 +65,7 @@ nav:
       - "Gap analysis (2026-07)": gap-analysis-2026-07.md
       - Remediation: gap-analysis-2026-07-remediation.md
       - "py.typed / mypy": gap-analysis-2026-07-py-typed-mypy.md
+      - "Merge gate (2026-07-24)": gap-analysis-merge-gate-2026-07-24.md
   - Conventions:
       - Style & taxonomy: STYLE.md
       - Skill template: SKILL_TEMPLATE.md
