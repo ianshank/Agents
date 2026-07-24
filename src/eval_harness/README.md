@@ -16,11 +16,11 @@ for Phoenix and BrainTrust.
 | `core/` | types, interfaces (abstract base classes), the generic `Registry` |
 | `scorers/` | exact_match, regex_match, contains, json_keys, llm_judge, weighted, autoevals |
 | `datasets/` | inline, jsonl, langfuse, braintrust, csv, parquet |
-| `targets/` | echo, callable (dynamic import) |
+| `targets/` | echo, callable (dynamic import), model (alias llm) |
 | `sinks/` | console, json_file, html_file, langfuse, phoenix, braintrust |
-| `judges/` | mock, openai (Nemotron/GPT), anthropic, bedrock, phoenix_evals, budgeted |
+| `judges/` | mock, openai (Nemotron/GPT), anthropic, bedrock, phoenix_evals |
 | `langfuse_client/`, `phoenix_client/`, `braintrust_client/` | SDK-optional tracing/export seams |
-| `agent_core_adapter/` | bridge to `agent-core` (budget ledger, calibration surface) |
+| `agent_core_adapter/` | bridge to `agent-core` (budget ledger, calibration surface, BudgetedJudge cost-cap wrapper) |
 | `gating/` | the config-driven quality gate |
 | `engine.py`, `cli.py` | orchestration and the `eval-harness` entry point |
 
