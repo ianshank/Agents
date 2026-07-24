@@ -130,9 +130,10 @@ suite runs with zero network. Reversible-adoption pattern:
 | **Opik** | — | — | — | — | — | — | **Under evaluation** ² |
 
 ¹ OpenAI, **NVIDIA Nemotron**, and a local **LM Studio** server are the *same* path —
-the `openai` judge and the `model` (alias `llm`) target pointed at a different
-`base_url` (`config/nemotron_eval.yaml`, `config/lm_studio_eval.yaml`), not separate
-integrations.
+the `openai` judge (its `base_url` set inline in the YAML, e.g.
+`config/nemotron_eval.yaml` / `config/lm_studio_eval.yaml`) and the `model` (alias
+`llm`) target (its `base_url` from `EVAL_BASE_URL`, e.g. `config/model_target.yaml`)
+pointed at a different endpoint — not separate integrations.
 
 ² **Opik** has no code under `src/eval_harness/`; it is a *candidate* eval backend
 probed alongside Langfuse in the isolated, unsigned
