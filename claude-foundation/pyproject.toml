@@ -9,7 +9,7 @@ description = "Validation, scanning, and eval-gate tooling for the foundation Cl
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",

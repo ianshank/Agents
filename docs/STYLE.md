@@ -64,5 +64,5 @@ ADRs) rather than restating them.
 - Cross-link with **relative** paths so links work on GitHub and in the mkdocs
   site.
 - Fenced code blocks get a language tag.
-- Mermaid diagrams use a ```mermaid fence (the site enables
+- Mermaid diagrams use a fenced code block tagged `mermaid` (the site enables
   `pymdownx.superfences`).
