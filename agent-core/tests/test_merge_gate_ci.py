@@ -200,3 +200,44 @@ def test_seed_store_ignored_without_change_id(tmp_path):
     )
     assert rc == 0
     assert not seed_path.exists()
+
+
+@pytest.mark.parametrize(
+    "bad", ["nan", "inf", "1.5", "-0.2"], ids=["nan", "inf", "above-1", "below-0"]
+)
+def test_main_rejects_out_of_contract_confidence_as_usage_error(tmp_path, bad, capsys):
+    """Bad input exits 2 (usage), not 0 (AUTO_MERGE) and not 1 (internal error).
+
+    Exit 0 is the dangerous outcome here: CI treats it as "proceed to merge".
+    """
+    rc = main(
+        [
+            "--store",
+            str(tmp_path / "s.jsonl"),
+            "--mech-pass",
+            "--raw-confidence",
+            bad,
+            "--domain",
+            "core",
+        ]
+    )
+    assert rc == 2
+    assert "invalid input" in capsys.readouterr().err
+
+
+def test_main_rejects_out_of_contract_confidence_from_context_file(tmp_path, capsys):
+    ctx_file = tmp_path / "ctx.json"
+    ctx_file.write_text(
+        json.dumps(
+            {
+                "mech_pass": True,
+                "touches_protected": False,
+                "raw_confidence": float("nan"),
+                "domain": "core",
+            }
+        ),
+        encoding="utf-8",
+    )
+    rc = main(["--store", str(tmp_path / "s.jsonl"), "--context", str(ctx_file)])
+    assert rc == 2
+    assert "invalid input" in capsys.readouterr().err

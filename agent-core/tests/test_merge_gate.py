@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from agent_core.merge_gate import (
     CalibratorHealth,
     ChangeContext,
@@ -132,3 +134,27 @@ def test_gate_decision_values():
     assert GateDecision.AUTO_MERGE.value == "auto_merge"
     assert GateDecision.ESCALATE.value == "escalate"
     assert GateDecision.REJECT.value == "reject"
+
+
+# --- ChangeContext input contract -------------------------------------------
+@pytest.mark.parametrize(
+    "bad",
+    [float("nan"), float("inf"), float("-inf"), 1.0000001, 5.0, -0.1],
+    ids=["nan", "inf", "-inf", "just-above-1", "far-above-1", "below-0"],
+)
+def test_change_context_rejects_out_of_contract_confidence(bad: float) -> None:
+    """The gate must never be handed a confidence it cannot interpret.
+
+    Regression test for a one-sided fail-open: NaN compares False against every bin
+    edge, so it fell through to the *top* bin and, with a trustworthy calibrator,
+    produced AUTO_MERGE -- as did any value above 1.0. Values below 0 escalated, so
+    only the unsafe direction was silent.
+    """
+    with pytest.raises(ValueError, match="raw_confidence"):
+        ChangeContext(mech_pass=True, touches_protected=False, raw_confidence=bad, domain="core")
+
+
+@pytest.mark.parametrize("ok", [0.0, 0.5, 1.0])
+def test_change_context_accepts_the_documented_range(ok: float) -> None:
+    ctx = ChangeContext(mech_pass=True, touches_protected=False, raw_confidence=ok, domain="core")
+    assert ctx.raw_confidence == ok

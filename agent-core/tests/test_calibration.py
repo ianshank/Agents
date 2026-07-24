@@ -149,3 +149,100 @@ def test_ship_gate_rejects_calibrated_but_undiscriminating_model():
     assert report.auroc is not None
     assert math.isclose(report.auroc, 0.5, abs_tol=1e-9)
     assert report.passes is False  # the vanity-metric guard in action
+    # A constant score cannot rank anything, so the slice is also reported as degenerate —
+    # here AUROC is still defined (both classes present) and rejects it on its own.
+    assert report.degenerate is not None
+    assert "constant predictor" in report.degenerate
+
+
+_GATE_TARGETS = {"n_bins": 10, "ece_target": 0.05, "mce_target": 0.12, "auroc_target": 0.80}
+
+# (label, probs, outcomes, expected substring in `degenerate`). The single-class cases vary
+# the probabilities so the slice is *only* single-class, not also a constant predictor.
+_DEGENERATE_SLICES = [
+    ("all-correct", [0.5, 0.6, 0.7, 0.8, 0.9, 0.95], [1] * 6, "single outcome class"),
+    ("all-incorrect", [0.5, 0.6, 0.7, 0.8, 0.9, 0.95], [0] * 6, "single outcome class"),
+    ("constant-predictor", [0.7] * 12, [1] * 6 + [0] * 6, "constant predictor"),
+]
+
+
+@pytest.mark.parametrize(
+    ("label", "probs", "outcomes", "expected"),
+    _DEGENERATE_SLICES,
+    ids=[case[0] for case in _DEGENERATE_SLICES],
+)
+def test_degeneracy_is_reported_without_changing_the_default_verdict(
+    label: str, probs: list[float], outcomes: list[int], expected: str
+) -> None:
+    """Degeneracy is always *named*; by default it does not change `passes`.
+
+    Reporting is unconditional so an operator can see that a green verdict rests on a
+    slice with no discrimination evidence. Enforcement stays opt-in (next test) because
+    an all-correct golden set is a legitimate, desired shape.
+    """
+    report = evaluate_calibration(probs, outcomes, **_GATE_TARGETS)
+    assert report.degenerate is not None
+    assert expected in report.degenerate
+
+
+def test_require_discrimination_rejects_slices_that_cannot_evidence_it() -> None:
+    """The bug this guard closes: a forecaster wrong 100% of the time used to pass.
+
+    All-incorrect at confidence 0.0 is 'perfectly calibrated' against its own base rate
+    (ECE 0) and has an undefined AUROC, so every criterion was vacuously satisfied.
+    """
+    probs, outcomes = [0.0] * 12, [0] * 12
+    lenient = evaluate_calibration(probs, outcomes, **_GATE_TARGETS)
+    assert lenient.ece < 1e-9 and lenient.auroc is None
+    assert lenient.passes is True  # documents the historical (default) behaviour
+
+    strict = evaluate_calibration(probs, outcomes, require_discrimination=True, **_GATE_TARGETS)
+    assert strict.passes is False
+    assert strict.degenerate is not None
+
+
+def test_min_samples_floor_rejects_undersized_slices() -> None:
+    """An explicit floor rejects on its own -- it does not need the discrimination flag."""
+    report = evaluate_calibration([1.0], [1], min_samples=12, **_GATE_TARGETS)
+    assert report.passes is False
+    assert report.degenerate == "insufficient samples: n=1 < min_samples=12"
+
+
+def test_min_samples_reports_size_before_shape() -> None:
+    """A slice that is both undersized and constant names the sample floor first."""
+    report = evaluate_calibration([0.5] * 3, [1, 0, 1], min_samples=12, **_GATE_TARGETS)
+    assert report.degenerate is not None
+    assert report.degenerate.startswith("insufficient samples")
+
+
+def test_guards_default_to_pre_guard_behaviour() -> None:
+    """A healthy slice is scored identically with guards implicit or explicitly off."""
+    probs = [0.9] * 10 + [0.2] * 10
+    outcomes = [1] * 9 + [0] + [1] * 2 + [0] * 8
+    implicit = evaluate_calibration(probs, outcomes, **_GATE_TARGETS)
+    explicit = evaluate_calibration(
+        probs, outcomes, min_samples=1, require_discrimination=False, **_GATE_TARGETS
+    )
+    assert implicit == explicit
+
+
+def test_require_discrimination_does_not_rescue_a_failing_slice() -> None:
+    """The guard only ever removes a pass; it never turns a fail into a pass."""
+    probs = [0.99] * 10  # badly over-confident against a 50% base rate
+    outcomes = [1] * 5 + [0] * 5
+    assert evaluate_calibration(probs, outcomes, **_GATE_TARGETS).passes is False
+    assert (
+        evaluate_calibration(probs, outcomes, require_discrimination=True, **_GATE_TARGETS).passes
+        is False
+    )
+
+
+def test_invalid_min_samples_is_rejected() -> None:
+    with pytest.raises(ValueError, match="min_samples must be >= 1"):
+        evaluate_calibration([1.0], [1], min_samples=0, **_GATE_TARGETS)
+
+
+def test_degeneracy_is_logged_for_operator_visibility(caplog) -> None:
+    with caplog.at_level("WARNING", logger="agent_core.calibration"):
+        evaluate_calibration([1.0] * 12, [1] * 12, **_GATE_TARGETS)
+    assert any("cannot evidence discrimination" in r.message for r in caplog.records)

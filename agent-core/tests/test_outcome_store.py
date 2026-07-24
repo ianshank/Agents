@@ -196,3 +196,50 @@ def test_build_models_ignores_passive_labels(tmp_path):
     store = OutcomeStore(tmp_path / "s.jsonl")
     store.append(_rec("c1", "core", 0.9, True, LabelSource.TIMEOUT_CLEAN))
     assert build_domain_models(store, CFG) == {}
+
+
+def test_build_models_reports_why_records_were_excluded(tmp_path, caplog):
+    """The exclusion is correct but was invisible: an all-passive store looks like an
+    empty one from the outside (no models, no tau). It has to say which it is."""
+    store = OutcomeStore(tmp_path / "s.jsonl")
+    store.append(_rec("c1", "core", 0.9, True, LabelSource.TIMEOUT_CLEAN))
+    store.append(_rec("c2", "core", 0.8, False, LabelSource.CI_FAILURE))
+    store.append(_rec("c3", "core", 0.7, None, None))  # merged, not yet labelled
+    with caplog.at_level("INFO", logger="agent_core.outcome_store"):
+        assert build_domain_models(store, CFG) == {}
+    logged = "\n".join(r.message for r in caplog.records)
+    assert "passive:timeout_clean=1" in logged
+    assert "passive:ci_failure=1" in logged
+    assert "unlabelled=1" in logged
+    assert "no HUMAN_AUDIT records available" in logged
+
+
+def test_build_models_does_not_warn_when_audit_records_exist(tmp_path, caplog):
+    store = OutcomeStore(tmp_path / "s.jsonl")
+    store.append(_rec("c1", "core", 0.9, True, LabelSource.HUMAN_AUDIT))
+    with caplog.at_level("INFO", logger="agent_core.outcome_store"):
+        assert build_domain_models(store, CFG) != {}
+    assert not any("no HUMAN_AUDIT records available" in r.message for r in caplog.records)
+
+
+def test_bin_index_floors_nan_instead_of_top_binning_it(caplog):
+    """A NaN score must never read as the highest-confidence bucket.
+
+    `NaN < edge` is False for every edge, so an unguarded NaN fell through the scan
+    to the `score >= top edge` return -- scoring garbage as maximum confidence. Records
+    reach this method straight from the store, bypassing ChangeContext validation.
+    """
+    cal = BinningCalibrator.fit([0.05] * 10 + [0.95] * 10, [False] * 10 + [True] * 10)
+    assert cal.bin_index(0.95) == 9  # sanity: real high confidence still lands high
+    with caplog.at_level("WARNING", logger="agent_core.outcome_store"):
+        assert cal.bin_index(float("nan")) == 0
+    assert cal.predict(float("nan")) == cal.bin_acc[0]
+    assert any("NaN raw_score" in r.message for r in caplog.records)
+
+
+def test_bin_index_boundaries_are_unchanged():
+    """The fail-closed NaN branch must not perturb ordinary routing."""
+    cal = BinningCalibrator.fit([0.5], [True])
+    assert cal.bin_index(0.0) == 0
+    assert cal.bin_index(0.55) == 5
+    assert cal.bin_index(1.0) == 9  # exactly the top edge still lands in the top bin

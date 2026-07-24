@@ -14,7 +14,8 @@ Exit codes (stable contract for CI):
   0  AUTO_MERGE  -> CI proceeds to merge
   10 ESCALATE    -> CI applies a needs-human-review label, leaves PR open
   20 REJECT      -> CI fails the check (mechanical ground-truth failure)
-  2  usage error (argparse);  1 unexpected internal error
+  2  usage error (argparse, or an out-of-contract input value such as a
+     raw_confidence outside [0, 1]);  1 unexpected internal error
 """
 
 from __future__ import annotations
@@ -127,7 +128,13 @@ def main(argv: list[str] | None = None) -> int:
 
     configure_logging(level="INFO")
     try:
-        ctx = _load_context(args)
+        try:
+            ctx = _load_context(args)
+        except ValueError as exc:
+            # An out-of-contract confidence is bad input, not an internal fault: report it
+            # as a usage error (2) so CI shows "fix your inputs" rather than "the gate broke".
+            print(f"merge-gate invalid input: {exc}", file=sys.stderr)
+            return 2
         decision, why = run(ctx, OutcomeStore(args.store), GatePolicyConfig())
         if args.audit_log:
             _append_audit(args.audit_log, ctx, decision, why)

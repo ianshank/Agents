@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
@@ -104,7 +105,18 @@ class BinningCalibrator:
 
     def bin_index(self, raw_score: float) -> int:
         """Index of the score's bin. Distinct bins never conflate even when they
-        share the same empirical accuracy (unlike grouping by ``predict``)."""
+        share the same empirical accuracy (unlike grouping by ``predict``).
+
+        ``NaN`` is floored to bin 0 rather than left to fall through the scan. Every
+        ``NaN < edge`` test is False, so an unguarded NaN reached the ``score >= top
+        edge`` return and was scored as the *highest*-confidence bucket. Records reach
+        this method straight from the store, bypassing ``ChangeContext`` validation, so
+        the fail-closed choice is made here too: an uninterpretable score is treated as
+        no confidence, never as maximum confidence.
+        """
+        if math.isnan(raw_score):
+            logger.warning("NaN raw_score in bin_index; scoring as bin 0 (fail-closed)")
+            return 0
         for i in range(len(self.bin_acc)):
             if raw_score < self.edges[i + 1]:
                 return i
@@ -164,9 +176,32 @@ def build_domain_models(store: OutcomeStore, cfg: GatePolicyConfig) -> dict[str,
     is earned per domain as unbiased audit labels accumulate.
     """
     by_domain: dict[str, list[OutcomeRecord]] = {}
+    # Everything that is not an authoritative, labelled audit record is excluded from the
+    # fit. That exclusion is correct but invisible: an all-passive store yields no models
+    # and therefore no tau, which is indistinguishable from "no records at all" unless we
+    # say so. Tally the reasons and report them.
+    excluded: dict[str, int] = {}
     for r in store.resolved().values():
         if r.label_source == LabelSource.HUMAN_AUDIT.value and r.label is not None:
             by_domain.setdefault(r.domain, []).append(r)
+        else:
+            reason = "unlabelled" if r.label is None else f"passive:{r.label_source}"
+            excluded[reason] = excluded.get(reason, 0) + 1
+
+    if excluded:
+        logger.info(
+            "build_domain_models: fitting on %d HUMAN_AUDIT record(s) across %d domain(s); "
+            "excluded %d record(s) ineligible for the fit (%s)",
+            sum(len(v) for v in by_domain.values()),
+            len(by_domain),
+            sum(excluded.values()),
+            ", ".join(f"{k}={v}" for k, v in sorted(excluded.items())),
+        )
+    if not by_domain:
+        logger.warning(
+            "build_domain_models: no HUMAN_AUDIT records available -- every domain stays "
+            "cold-start (tau=None) regardless of how many passive labels exist"
+        )
 
     models: dict[str, DomainModel] = {}
     for domain, recs in by_domain.items():
