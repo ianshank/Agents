@@ -138,3 +138,77 @@ jobs:
           # (continue-on-error), so a red result never blocks the merge.
           sys.exit(1 if broken else 0)
           PY
+
+  registry-drift:
+    name: README/registry drift (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.12"
+      # The component names in the READMEs are hand-maintained copies of what the
+      # @REGISTRY.register(...) decorators own, so they drift silently (this is exactly
+      # how `model` went missing and `budgeted` was listed as a judge). Harvest the
+      # registered names STATICALLY via ast — no install, no imports, no side effects —
+      # and assert each one is still documented. Advisory while it soaks; promote to
+      # blocking once it has proven quiet.
+      - name: READMEs still match the component registries
+        shell: bash
+        run: |
+          python - <<'PY'
+          import ast, pathlib, re, sys
+          SRC = pathlib.Path("src/eval_harness")
+          REGISTRIES = {"SCORERS": "scorers", "DATASETS": "datasets", "TARGETS": "targets",
+                        "SINKS": "sinks", "JUDGES": "judges"}
+          found = {k: set() for k in REGISTRIES}
+          for py in SRC.rglob("*.py"):
+              try:
+                  tree = ast.parse(py.read_text(encoding="utf-8"))
+              except SyntaxError:
+                  continue
+              for node in ast.walk(tree):
+                  for dec in getattr(node, "decorator_list", []):
+                      if not isinstance(dec, ast.Call):
+                          continue
+                      fn = dec.func
+                      if not (isinstance(fn, ast.Attribute) and fn.attr == "register"):
+                          continue
+                      if getattr(fn.value, "id", None) not in found:
+                          continue
+                      if dec.args and isinstance(dec.args[0], ast.Constant):
+                          found[getattr(fn.value, "id")].add(dec.args[0].value)
+
+          def section(text, key):
+              m = re.search(rf"^  {key}/\s+(.*?)(?=^  \w+[/.]|\Z)", text, re.M | re.S)
+              if m:
+                  return m.group(1)
+              m = re.search(rf"\|\s*`{key}/`\s*\|([^|]*)\|", text)
+              return m.group(1) if m else None
+
+          docs = {"README.md": pathlib.Path("README.md").read_text(),
+                  "src/eval_harness/README.md": (SRC / "README.md").read_text()}
+          problems = []
+          for var, key in REGISTRIES.items():
+              names = found[var]
+              if not names:
+                  problems.append(f"no @{var}.register(...) found - extractor may be broken")
+                  continue
+              for doc, text in docs.items():
+                  sec = section(text, key)
+                  if sec is None:
+                      continue
+                  missing = sorted(n for n in names if not re.search(rf"\b{re.escape(n)}\b", sec))
+                  if missing:
+                      problems.append(f"{doc}: {key}/ omits registered {missing}")
+          if problems:
+              print("REGISTRY DRIFT:")
+              for x in problems:
+                  print("  -", x)
+              sys.exit(1)
+          print("READMEs match the registries:",
+                {k: len(v) for k, v in found.items()})
+          PY
