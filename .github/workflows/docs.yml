@@ -127,15 +127,3 @@ jobs:
                       print(f"  BROKEN  {md}  ->  {tgt}"); broken += 1
           print(f"{broken} broken relative link(s)")
           PY
-
-  markdownlint:
-    name: markdownlint (advisory)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-        with:
-          persist-credentials: false
-      - name: Run markdownlint-cli2
-        shell: bash
-        run: npx --yes markdownlint-cli2 "**/*.md" "#node_modules" "#site"
