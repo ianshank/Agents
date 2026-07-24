@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from agent_core.merge_gate import GatePolicyConfig
 from agent_core.outcome_store import (
     BinningCalibrator,
@@ -222,19 +224,26 @@ def test_build_models_does_not_warn_when_audit_records_exist(tmp_path, caplog):
     assert not any("no HUMAN_AUDIT records available" in r.message for r in caplog.records)
 
 
-def test_bin_index_floors_nan_instead_of_top_binning_it(caplog):
-    """A NaN score must never read as the highest-confidence bucket.
+@pytest.mark.parametrize(
+    "bad",
+    [float("nan"), float("inf"), float("-inf"), 1.5, 5.0, -0.1],
+    ids=["nan", "inf", "-inf", "just-above-1", "far-above-1", "below-0"],
+)
+def test_bin_index_floors_out_of_contract_scores(bad, caplog):
+    """An out-of-contract score must never read as the highest-confidence bucket.
 
-    `NaN < edge` is False for every edge, so an unguarded NaN fell through the scan
-    to the `score >= top edge` return -- scoring garbage as maximum confidence. Records
-    reach this method straight from the store, bypassing ChangeContext validation.
+    `NaN < edge` is False for every edge and `inf` exceeds them all, so both fell
+    through the scan to the `score >= top edge` return -- scoring garbage as maximum
+    confidence; anything above 1.0 did the same. Records reach this method straight
+    from the store, where OutcomeRecord applies no validation and ChangeContext's
+    check is bypassed.
     """
     cal = BinningCalibrator.fit([0.05] * 10 + [0.95] * 10, [False] * 10 + [True] * 10)
     assert cal.bin_index(0.95) == 9  # sanity: real high confidence still lands high
     with caplog.at_level("WARNING", logger="agent_core.outcome_store"):
-        assert cal.bin_index(float("nan")) == 0
-    assert cal.predict(float("nan")) == cal.bin_acc[0]
-    assert any("NaN raw_score" in r.message for r in caplog.records)
+        assert cal.bin_index(bad) == 0
+    assert cal.predict(bad) == cal.bin_acc[0]
+    assert any("out-of-contract raw_score" in r.message for r in caplog.records)
 
 
 def test_bin_index_boundaries_are_unchanged():
@@ -242,4 +251,4 @@ def test_bin_index_boundaries_are_unchanged():
     cal = BinningCalibrator.fit([0.5], [True])
     assert cal.bin_index(0.0) == 0
     assert cal.bin_index(0.55) == 5
-    assert cal.bin_index(1.0) == 9  # exactly the top edge still lands in the top bin
+    assert cal.bin_index(1.0) == 9  # exactly the top edge is in contract -> top bin

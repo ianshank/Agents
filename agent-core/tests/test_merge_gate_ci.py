@@ -241,3 +241,35 @@ def test_main_rejects_out_of_contract_confidence_from_context_file(tmp_path, cap
     rc = main(["--store", str(tmp_path / "s.jsonl"), "--context", str(ctx_file)])
     assert rc == 2
     assert "invalid input" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("payload", "why"),
+    [
+        ('{"mech_pass": true, "touches_protected": false, "domain": "core"}', "missing field"),
+        (
+            '{"mech_pass": true, "touches_protected": false, '
+            '"raw_confidence": null, "domain": "core"}',
+            "null where a value belongs",
+        ),
+        ("{not json at all", "malformed JSON"),
+    ],
+    ids=["missing-key", "null-value", "malformed-json"],
+)
+def test_main_malformed_context_is_a_usage_error(tmp_path, payload, why, capsys):
+    """Every way a caller can hand over a bad context maps to exit 2, not exit 1.
+
+    KeyError (missing field) and TypeError (null) are as much "your input is wrong" as a
+    ValueError is; reporting them as internal faults sent CI chasing a gate bug instead.
+    """
+    ctx_file = tmp_path / "ctx.json"
+    ctx_file.write_text(payload, encoding="utf-8")
+    rc = main(["--store", str(tmp_path / "s.jsonl"), "--context", str(ctx_file)])
+    assert rc == 2, why
+    assert "invalid input" in capsys.readouterr().err
+
+
+def test_main_unreadable_context_path_stays_an_internal_error(tmp_path):
+    """A missing --context file is the environment failing, not a bad caller value."""
+    rc = main(["--store", str(tmp_path / "s.jsonl"), "--context", str(tmp_path / "nope.json")])
+    assert rc == 1

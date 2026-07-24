@@ -107,15 +107,21 @@ class BinningCalibrator:
         """Index of the score's bin. Distinct bins never conflate even when they
         share the same empirical accuracy (unlike grouping by ``predict``).
 
-        ``NaN`` is floored to bin 0 rather than left to fall through the scan. Every
-        ``NaN < edge`` test is False, so an unguarded NaN reached the ``score >= top
-        edge`` return and was scored as the *highest*-confidence bucket. Records reach
-        this method straight from the store, bypassing ``ChangeContext`` validation, so
-        the fail-closed choice is made here too: an uninterpretable score is treated as
-        no confidence, never as maximum confidence.
+        Any score outside the ``[0, 1]`` contract -- including ``NaN`` and ``±inf`` -- is
+        floored to bin 0 rather than left to fall through the scan. ``NaN < edge`` is False
+        for every edge and ``inf`` exceeds them all, so both reached the ``score >= top
+        edge`` return and were scored as the *highest*-confidence bucket; anything above
+        1.0 did the same. Records reach this method straight from the store, where
+        ``OutcomeRecord`` applies no validation and ``ChangeContext``'s check is bypassed,
+        so the fail-closed choice is made here too: a score we cannot interpret is treated
+        as no confidence, never as maximum confidence. ``1.0`` exactly is in contract and
+        still lands in the top bin.
         """
-        if math.isnan(raw_score):
-            logger.warning("NaN raw_score in bin_index; scoring as bin 0 (fail-closed)")
+        if not math.isfinite(raw_score) or not 0.0 <= raw_score <= 1.0:
+            logger.warning(
+                "out-of-contract raw_score %r in bin_index; scoring as bin 0 (fail-closed)",
+                raw_score,
+            )
             return 0
         for i in range(len(self.bin_acc)):
             if raw_score < self.edges[i + 1]:

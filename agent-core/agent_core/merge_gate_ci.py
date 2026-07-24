@@ -130,10 +130,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         try:
             ctx = _load_context(args)
-        except ValueError as exc:
-            # An out-of-contract confidence is bad input, not an internal fault: report it
-            # as a usage error (2) so CI shows "fix your inputs" rather than "the gate broke".
-            print(f"merge-gate invalid input: {exc}", file=sys.stderr)
+        except (ValueError, KeyError, TypeError) as exc:
+            # Bad input, not an internal fault: report it as a usage error (2) so CI shows
+            # "fix your inputs" rather than "the gate broke" -- and never as 0, which CI
+            # reads as proceed-to-merge. Covers an out-of-contract confidence (ValueError),
+            # malformed JSON (JSONDecodeError, a ValueError), a context file missing a
+            # required field (KeyError), and a null where a value belongs (TypeError).
+            # An unreadable/absent --context path stays an internal error: that is the
+            # environment failing, not the caller passing a bad value.
+            print(f"merge-gate invalid input: {exc!s} ({type(exc).__name__})", file=sys.stderr)
             return 2
         decision, why = run(ctx, OutcomeStore(args.store), GatePolicyConfig())
         if args.audit_log:
