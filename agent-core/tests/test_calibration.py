@@ -155,7 +155,25 @@ def test_ship_gate_rejects_calibrated_but_undiscriminating_model():
     assert "constant predictor" in report.degenerate
 
 
-_GATE_TARGETS = {"n_bins": 10, "ece_target": 0.05, "mce_target": 0.12, "auroc_target": 0.80}
+def _gate(
+    probs: list[float],
+    outcomes: list[int],
+    *,
+    min_samples: int = 1,
+    require_discrimination: bool = False,
+):
+    """Score a slice against fixed ship-gate targets, varying only the guards."""
+    return evaluate_calibration(
+        probs,
+        outcomes,
+        n_bins=10,
+        ece_target=0.05,
+        mce_target=0.12,
+        auroc_target=0.80,
+        min_samples=min_samples,
+        require_discrimination=require_discrimination,
+    )
+
 
 # (label, probs, outcomes, expected substring in `degenerate`). The single-class cases vary
 # the probabilities so the slice is *only* single-class, not also a constant predictor.
@@ -180,7 +198,7 @@ def test_degeneracy_is_reported_without_changing_the_default_verdict(
     slice with no discrimination evidence. Enforcement stays opt-in (next test) because
     an all-correct golden set is a legitimate, desired shape.
     """
-    report = evaluate_calibration(probs, outcomes, **_GATE_TARGETS)
+    report = _gate(probs, outcomes)
     assert report.degenerate is not None
     assert expected in report.degenerate
 
@@ -192,25 +210,25 @@ def test_require_discrimination_rejects_slices_that_cannot_evidence_it() -> None
     (ECE 0) and has an undefined AUROC, so every criterion was vacuously satisfied.
     """
     probs, outcomes = [0.0] * 12, [0] * 12
-    lenient = evaluate_calibration(probs, outcomes, **_GATE_TARGETS)
+    lenient = _gate(probs, outcomes)
     assert lenient.ece < 1e-9 and lenient.auroc is None
     assert lenient.passes is True  # documents the historical (default) behaviour
 
-    strict = evaluate_calibration(probs, outcomes, require_discrimination=True, **_GATE_TARGETS)
+    strict = _gate(probs, outcomes, require_discrimination=True)
     assert strict.passes is False
     assert strict.degenerate is not None
 
 
 def test_min_samples_floor_rejects_undersized_slices() -> None:
     """An explicit floor rejects on its own -- it does not need the discrimination flag."""
-    report = evaluate_calibration([1.0], [1], min_samples=12, **_GATE_TARGETS)
+    report = _gate([1.0], [1], min_samples=12)
     assert report.passes is False
     assert report.degenerate == "insufficient samples: n=1 < min_samples=12"
 
 
 def test_min_samples_reports_size_before_shape() -> None:
     """A slice that is both undersized and constant names the sample floor first."""
-    report = evaluate_calibration([0.5] * 3, [1, 0, 1], min_samples=12, **_GATE_TARGETS)
+    report = _gate([0.5] * 3, [1, 0, 1], min_samples=12)
     assert report.degenerate is not None
     assert report.degenerate.startswith("insufficient samples")
 
@@ -219,10 +237,11 @@ def test_guards_default_to_pre_guard_behaviour() -> None:
     """A healthy slice is scored identically with guards implicit or explicitly off."""
     probs = [0.9] * 10 + [0.2] * 10
     outcomes = [1] * 9 + [0] + [1] * 2 + [0] * 8
-    implicit = evaluate_calibration(probs, outcomes, **_GATE_TARGETS)
-    explicit = evaluate_calibration(
-        probs, outcomes, min_samples=1, require_discrimination=False, **_GATE_TARGETS
+    # Called the pre-guard way: no guard arguments at all.
+    implicit = evaluate_calibration(
+        probs, outcomes, n_bins=10, ece_target=0.05, mce_target=0.12, auroc_target=0.80
     )
+    explicit = _gate(probs, outcomes, min_samples=1, require_discrimination=False)
     assert implicit == explicit
 
 
@@ -230,19 +249,16 @@ def test_require_discrimination_does_not_rescue_a_failing_slice() -> None:
     """The guard only ever removes a pass; it never turns a fail into a pass."""
     probs = [0.99] * 10  # badly over-confident against a 50% base rate
     outcomes = [1] * 5 + [0] * 5
-    assert evaluate_calibration(probs, outcomes, **_GATE_TARGETS).passes is False
-    assert (
-        evaluate_calibration(probs, outcomes, require_discrimination=True, **_GATE_TARGETS).passes
-        is False
-    )
+    assert _gate(probs, outcomes).passes is False
+    assert _gate(probs, outcomes, require_discrimination=True).passes is False
 
 
 def test_invalid_min_samples_is_rejected() -> None:
     with pytest.raises(ValueError, match="min_samples must be >= 1"):
-        evaluate_calibration([1.0], [1], min_samples=0, **_GATE_TARGETS)
+        _gate([1.0], [1], min_samples=0)
 
 
 def test_degeneracy_is_logged_for_operator_visibility(caplog) -> None:
     with caplog.at_level("WARNING", logger="agent_core.calibration"):
-        evaluate_calibration([1.0] * 12, [1] * 12, **_GATE_TARGETS)
+        _gate([1.0] * 12, [1] * 12)
     assert any("cannot evidence discrimination" in r.message for r in caplog.records)
