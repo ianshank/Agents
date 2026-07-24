@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Enterprise documentation, licensing & repository organization.** Added an Apache-2.0
+  `LICENSE` (+ `NOTICE` and per-package copies) and declared PEP 639 packaging metadata
+  (`license`/`license-files`/`readme`/`classifiers`/`[project.urls]`, setuptools `>=77`) across
+  every package; added the root community-health set (`CONTRIBUTING`, `SECURITY`,
+  `CODE_OF_CONDUCT`, `SUPPORT`, `GOVERNANCE`, `MAINTAINERS`); authored the missing component
+  READMEs (`flow-corpus`, `flow-protocol`, `skills`, `scripts`, `experiments`, `src/eval_harness`)
+  and `behavioral-regression/CHANGELOG.md`; added a `docs/` index, an ADR index, and a
+  `docs/STYLE.md` taxonomy; introduced a `mkdocs-material` site (`mkdocs.yml`, `.[docs]` extra);
+  and restructured the root README (badges, TOC, monorepo map). Documentation- and
+  metadata-only — no evaluation logic, gate threshold, or `features.yaml` change.
 - **Agent-record calibration: routing, proxy confidence & report (F-042/F-043/F-044, ADR 0023).**
   Closes the agent-record calibration gap — the merge-gate outcome store had crossed its soak
   target but every record was `agent_version:null` / `domain:human/*` / `raw_confidence:0.0`,

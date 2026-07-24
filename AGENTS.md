@@ -32,8 +32,9 @@ Before writing code, read in order:
 
 ## Root documentation map
 
-Six root-level docs answer different questions; check this table before guessing which one
-to read or update:
+These root-level docs answer different questions; check this table before guessing which one
+to read or update. Governance and community-health files (bottom rows) were added in the
+enterprise-docs pass and point at the charter as the single source of truth:
 
 | File | Answers | Currency |
 |---|---|---|
@@ -43,6 +44,14 @@ to read or update:
 | `NEXT_STEPS.md` | What shipped recently, what's next? | A rolling log of intent — an entry's `[x]` reflects the state *when written*, not necessarily now. Cross-check `features.yaml` / `scripts/validations/F_*.py` (run `python scripts/validate.py --tier fast`) for a feature's current enforced state rather than trusting the checkbox alone |
 | `CHANGELOG.md` | What changed, release by release? | Keep-a-changelog format; append to the `[Unreleased]`/dev section |
 | `progress.md` | What happened in each work session? | Rotates to `progress-archive/YYYY-MM.md` once large (see `HARNESS_SPEC.md`'s "progress-archive/" section) |
+| `docs/README.md` | Where is every doc, by category? | The documentation index (mirrors this table) |
+| `CONTRIBUTING.md` | How do I set up, test, and submit a change? | Generalizes `agent-core/CONTRIBUTING.md` to the monorepo |
+| `GOVERNANCE.md` | Who decides, and how? | Defers to `docs/CHARTER.md` §3/§6 |
+| `SECURITY.md` | How do I report a vulnerability? | Private GitHub advisories; reuses the Snyk/secret-scan posture |
+| `SUPPORT.md` | Where do I ask for help? | Points at docs + issue templates |
+| `CODE_OF_CONDUCT.md` | What behavior is expected? | Contributor Covenant 2.1 |
+| `MAINTAINERS.md` | Who maintains this? | Derived from `.github/CODEOWNERS` |
+| `LICENSE` / `NOTICE` | Under what terms is this licensed? | Apache-2.0 |
 
 `docs/decisions/` ADR numbers are **not** contiguous by design — `0007` is an intentional
 gap in the sequence (see `docs/plans/agents-critical-path/REVIEW.md`); do not backfill it

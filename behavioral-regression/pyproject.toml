@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,26 @@ name = "behavioral-regression"
 dynamic = ["version"]
 description = "Calibrated, offline behavioral-regression detector: did model v2 drift (e.g. more sycophantic) vs v1? Composes agent_core calibration + flow_corpus oracle/bootstrap primitives into a ship/hold/escalate gate."
 requires-python = ">=3.10"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
 dependencies = ["agent-core", "flow-protocol", "flow-corpus"]
+
+[project.urls]
+Homepage = "https://github.com/ianshank/Agents"
+Repository = "https://github.com/ianshank/Agents"
+Documentation = "https://github.com/ianshank/Agents/tree/main/docs"
+Issues = "https://github.com/ianshank/Agents/issues"
+Changelog = "https://github.com/ianshank/Agents/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dashboard = ["streamlit>=1.30"]

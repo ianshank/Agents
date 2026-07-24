@@ -1,0 +1,18 @@
+langfuse-eval-harness
+Copyright 2026 Ian Cruickshank
+
+This product includes software developed as part of the ianshank/Agents
+monorepo (the langfuse-eval-harness LLM evaluation platform and its sibling
+packages: agent-core, behavioral-regression, flow-corpus, flow-protocol, and
+claude-foundation-tools).
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+these files except in compliance with the License. A copy of the License is
+provided in the LICENSE file at the root of this repository and is also
+available at http://www.apache.org/licenses/LICENSE-2.0.
+
+Optional integrations are pulled in only via extras (see pyproject.toml
+[project.optional-dependencies]) and remain under their own licenses; installing
+an extra brings in that third-party software under the license its authors
+distribute it with. Notable optional dependencies include the Langfuse, OpenAI,
+Anthropic, AWS (boto3), Arize Phoenix, BrainTrust, and autoevals SDKs.
