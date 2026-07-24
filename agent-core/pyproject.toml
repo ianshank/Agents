@@ -9,7 +9,7 @@ description = "Deterministic control & calibration core for a research-assessmen
 requires-python = ">=3.10"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",

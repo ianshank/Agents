@@ -9,7 +9,7 @@ description = "Calibration corpus of agentic flow variants: specimens, task suit
 requires-python = ">=3.10"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
