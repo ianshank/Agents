@@ -51,14 +51,14 @@ dependencies (F-032), and every `__all__` public-surface baseline still matches.
 
 ## 4. Known tech debt / follow-ups
 
-1. **Registry-name drift (the live risk).** Component names (sinks, judges,
-   datasets, targets, scorers) are enumerated in three unguarded places: the root
-   README Layout block, the root README backends matrix, and
-   `src/eval_harness/README.md`. Nothing mechanically keeps them in sync with the
-   `@REGISTRY.register(...)` calls that own them. A drift check comparing the
-   registries to the READMEs is the durable fix — **deliberately not added here**,
-   because both README copies are corrected in the separate backends PR and the
-   check would be red until that merges. File it once that lands.
+1. **Registry-name drift — ✅ now guarded.** Component names are enumerated in the
+   root README Layout block, the root README backends matrix, and
+   `src/eval_harness/README.md`, with nothing mechanically tying them to the
+   `@REGISTRY.register(...)` calls that own them (how the `model` target went
+   undocumented and `budgeted` was listed as a judge). `docs.yml` now runs a
+   **registry-drift check** that harvests registered names statically via `ast`
+   and asserts each is still documented. Currently **advisory** while it soaks —
+   promote to blocking once quiet.
 2. **Doc-quality checks are workflow steps, not `scripts/*.py`** — by design, to
    avoid the ≥85% `scripts/` coverage floor and new protected `tests/**`. The
    trade-off is they are not unit-tested; they are simple and fail loudly.
