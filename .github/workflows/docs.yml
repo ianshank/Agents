@@ -59,49 +59,74 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.12"
-      # Blocking: every top-level component ships a README; every first-class package
-      # declares Apache-2.0 license + project URLs. Inline (not scripts/*.py) so it does
-      # not fall under the scripts/ coverage floor (F-031) or the protected tests/** guard.
+      # Blocking. Component list is DERIVED (every top-level dir except an explicit,
+      # documented EXEMPT set), so a newly added component fails here until it ships a
+      # README — rather than being silently missed by a hard-coded allowlist. Also pins
+      # the license to an expected SPDX value so a relicense can't slip through.
+      # Inline (not scripts/*.py) so it stays out of the scripts/ coverage floor (F-031)
+      # and the protected tests/** guard.
       - name: Component READMEs + package license/urls present
         shell: bash
         run: |
           python - <<'PY'
-          import pathlib, tomllib, sys
-          # Single source for the expected SPDX expression; bump here if the project relicenses.
+          import pathlib, subprocess, tomllib, sys
+
           EXPECTED_LICENSE = "Apache-2.0"
+          # Build/tooling dirs that are never components.
+          IGNORED = {".git", ".github", "site", "build", "dist", "htmlcov", "node_modules"}
+          # Top-level dirs deliberately NOT required to carry a README, each with a reason.
+          # Anything not listed here is REQUIRED by default.
+          EXEMPT = {
+              "src": "package README lives at src/eval_harness/README.md (checked below)",
+              "tests": "test suite, not a shipped component",
+              "examples": "runnable snippets, documented from the root README",
+              "progress-archive": "rotated session logs",
+          }
+          NESTED_REQUIRED = ["src/eval_harness"]
+          PACKAGES = ["pyproject.toml", "agent-core/pyproject.toml",
+                      "behavioral-regression/pyproject.toml", "flow-corpus/pyproject.toml",
+                      "flow-protocol/pyproject.toml", "claude-foundation/pyproject.toml"]
+
+          def git_ignored(path):
+              return subprocess.run(["git", "check-ignore", "-q", path]).returncode == 0
+
           fail = []
-          components = ["src/eval_harness","agent-core","behavioral-regression","flow-corpus",
-                        "flow-protocol","claude-foundation","skills","scripts","experiments",
-                        "demo","config"]
-          for c in components:
+          derived = []
+          for d in sorted(p.name for p in pathlib.Path(".").iterdir() if p.is_dir()):
+              if d.startswith(".") or d in IGNORED or d in EXEMPT or git_ignored(d):
+                  continue
+              derived.append(d)
+          for c in derived + NESTED_REQUIRED:
               if not pathlib.Path(c, "README.md").is_file():
                   fail.append(f"missing README: {c}/README.md")
-          pyprojects = ["pyproject.toml","agent-core/pyproject.toml","behavioral-regression/pyproject.toml",
-                        "flow-corpus/pyproject.toml","flow-protocol/pyproject.toml",
-                        "claude-foundation/pyproject.toml"]
-          for f in pyprojects:
+
+          for f in PACKAGES:
               try:
-                  proj = tomllib.loads(pathlib.Path(f).read_text()).get("project", {})
+                  # tomllib.load on a binary handle: pyproject.toml is UTF-8 by spec, so
+                  # this avoids locale-dependent decoding.
+                  with open(f, "rb") as fh:
+                      proj = tomllib.load(fh).get("project", {})
               except (OSError, tomllib.TOMLDecodeError) as exc:
                   fail.append(f"{f}: could not read/parse pyproject ({exc})")
                   continue
               if not proj:
                   fail.append(f"{f}: [project] table missing")
                   continue
-              license = proj.get("license")
-              if license is None:
+              lic = proj.get("license")
+              if lic is None:
                   fail.append(f"{f}: [project].license missing")
-              elif license != EXPECTED_LICENSE:
+              elif lic != EXPECTED_LICENSE:
                   fail.append(
-                      f"{f}: [project].license is {license!r}, expected {EXPECTED_LICENSE!r}"
+                      f"{f}: [project].license is {lic!r}, expected {EXPECTED_LICENSE!r}"
                   )
               if "urls" not in proj:
                   fail.append(f"{f}: [project.urls] missing")
+
           if fail:
               print("DOC-GUARD FAILURES:")
               for x in fail: print("  -", x)
               sys.exit(1)
-          print("doc-structure guards OK")
+          print("doc-structure guards OK; components checked:", derived + NESTED_REQUIRED)
           PY
 
   links:
@@ -189,8 +214,8 @@ jobs:
               m = re.search(rf"\|\s*`{key}/`\s*\|([^|]*)\|", text)
               return m.group(1) if m else None
 
-          docs = {"README.md": pathlib.Path("README.md").read_text(),
-                  "src/eval_harness/README.md": (SRC / "README.md").read_text()}
+          docs = {"README.md": pathlib.Path("README.md").read_text(encoding="utf-8"),
+                  "src/eval_harness/README.md": (SRC / "README.md").read_text(encoding="utf-8")}
           problems = []
           for var, key in REGISTRIES.items():
               names = found[var]
