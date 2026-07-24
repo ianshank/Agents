@@ -22,7 +22,7 @@
 ## Protected paths
 
 - [ ] This PR **does not** touch protected evaluation paths (`features.yaml`, `config/**`, `src/eval_harness/{gating,scorers,judges}/`, `scripts/validations/**`, `tests/**`, `.github/**`); **or**
-- [ ] It does, and I have requested the **`eval-change-approved`** label and CODEOWNER review. See [CONTRIBUTING.md](../CONTRIBUTING.md#protected-paths-require-a-labeled-approval).
+- [ ] It does, and I have requested the **`eval-change-approved`** label and CODEOWNER review. See [CONTRIBUTING.md](https://github.com/ianshank/Agents/blob/main/CONTRIBUTING.md#protected-paths-require-a-labeled-approval).
 
 ## Notes for reviewers
 
