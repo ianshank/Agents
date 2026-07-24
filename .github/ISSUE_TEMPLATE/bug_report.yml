@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a defect in the harness or a sibling package.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please do not report security issues here — see
+        [SECURITY.md](https://github.com/ianshank/Agents/blob/main/SECURITY.md).
+  - type: input
+    id: package
+    attributes:
+      label: Affected package / area
+      description: e.g. langfuse-eval-harness, agent-core, flow-corpus, skills, scripts
+      placeholder: langfuse-eval-harness
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The exact command(s) you ran and the output. Prefer the offline suite where possible.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: One of the supported versions (3.10–3.12).
+      placeholder: "3.12"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Were you running offline or a live integration?
+      options:
+        - Offline (no network / no live SDK)
+        - Live integration (Langfuse / OpenAI / Anthropic / Bedrock / Phoenix / BrainTrust)
+    validations:
+      required: true

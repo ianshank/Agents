@@ -1,0 +1,32 @@
+name: ADR proposal
+description: Propose an architecture decision (to become a numbered ADR).
+labels: ["adr", "decision"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for decisions with lasting consequences. If accepted, it becomes a
+        numbered record under `docs/decisions/` — see
+        [the ADR index](https://github.com/ianshank/Agents/blob/main/docs/decisions/README.md)
+        for the convention (the `0007` gap is intentional; do not backfill it).
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: The forces at play — technical, product, or organizational — that make a decision necessary.
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Proposed decision
+      description: What do you propose to do?
+    validations:
+      required: true
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Consequences
+      description: What becomes easier or harder as a result? Trade-offs and follow-ups.
+    validations:
+      required: true

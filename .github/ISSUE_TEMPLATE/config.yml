@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / usage help
+    url: https://github.com/ianshank/Agents/blob/main/SUPPORT.md
+    about: How to get help, and where to ask questions.
+  - name: Report a security vulnerability
+    url: https://github.com/ianshank/Agents/blob/main/SECURITY.md
+    about: Do NOT open a public issue for vulnerabilities — follow the security policy (private reporting).

@@ -1,0 +1,10 @@
+{
+  // Advisory config. Disabled rules are ones the existing docs intentionally use.
+  "default": true,
+  "MD013": false,   // line length — prose/tables run long by design
+  "MD033": false,   // inline HTML — used in some docs
+  "MD041": false,   // first line heading — badges/blockquotes lead some files
+  "MD024": { "siblings_only": true },  // duplicate headings OK across sections
+  "MD029": false,   // ordered-list numbering style
+  "MD036": false    // emphasis-as-heading (used in tables/notes)
+}
