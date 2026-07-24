@@ -110,11 +110,20 @@ cp .env.example .env
 
 The harness talks to observability, dataset, and model backends through registry
 components — `eval-harness list-plugins` prints the selectable names. Every external
-SDK is **optional** and sits behind a reversible seam (a `Null*` double for
-offline/tests, a guarded `SDK*` for production, built by a `build_*` factory) that
-**fails safe to offline** when the SDK or credentials are absent, so the default
-suite runs with zero network. Reversible-adoption pattern:
-[`docs/phoenix-spike.md`](docs/phoenix-spike.md) and
+SDK is an **optional extra**, but the two kinds of integration behave differently
+when one is missing:
+
+- **Tracing / export clients** (`langfuse_client`, `phoenix_client`,
+  `braintrust_client`) sit behind a reversible seam — a `Null*` double for
+  offline/tests and a guarded SDK implementation for production, chosen by a
+  `build_*` factory. These **degrade to a no-op** when the SDK or credentials are
+  absent, which is why the default suite runs with zero network.
+- **Judges, targets, datasets and sinks are opt-in by config.** Selecting one
+  whose extra is not installed **raises a clear install error** (e.g. the `openai`
+  judge or the `model` target without `[openai]`) rather than silently degrading —
+  the run tells you what to install instead of quietly scoring nothing.
+
+Reversible-adoption pattern: [`docs/phoenix-spike.md`](docs/phoenix-spike.md) and
 [`docs/braintrust-spike.md`](docs/braintrust-spike.md); a live opt-in check runs in
 [`.github/workflows/phoenix-live.yml`](.github/workflows/phoenix-live.yml).
 
