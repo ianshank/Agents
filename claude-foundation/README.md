@@ -1,9 +1,13 @@
 # claude-foundation
 
-> **STAGING NOTICE:** this directory is currently staged inside the `ianshank/Agents`
-> repository (at `claude-foundation/`) pending extraction to its own repository,
-> `ianshank/claude-foundation`. All paths and commands below assume the extracted
-> repository root.
+> **STAGING NOTICE:** this component currently lives **in-tree** inside the
+> `ianshank/Agents` monorepo at `claude-foundation/`. Extraction to its own
+> repository (`ianshank/claude-foundation`) is planned but not yet done — see
+> [ADR 0017](../docs/decisions/0017-claude-foundation-reconciliation.md). Until
+> then, treat **this directory** (`claude-foundation/`) as the repository root:
+> run the commands below from here (`cd claude-foundation`), and read the
+> `ianshank/claude-foundation` marketplace references as the post-extraction
+> target.
 
 `claude-foundation` is a versioned Claude Code plugin (plugin name: **`foundation`**)
 plus a self-hosted marketplace, packaging the reusable generic layer of an agentic

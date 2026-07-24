@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,26 @@ name = "flow-protocol"
 dynamic = ["version"]
 description = "Versioned contract surface between the flow-calibration corpus and the validation harness"
 requires-python = ">=3.10"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
 dependencies = ["pydantic>=2"]
+
+[project.urls]
+Homepage = "https://github.com/ianshank/Agents"
+Repository = "https://github.com/ianshank/Agents"
+Documentation = "https://github.com/ianshank/Agents/tree/main/docs"
+Issues = "https://github.com/ianshank/Agents/issues"
+Changelog = "https://github.com/ianshank/Agents/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # ruff/mypy are pinned (not `>=`) so local and CI lint/type identically across every

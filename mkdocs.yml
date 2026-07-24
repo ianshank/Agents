@@ -1,0 +1,71 @@
+site_name: langfuse-eval-harness
+site_description: >-
+  Dynamic, modular, backwards-compatible enterprise LLM evaluation harness with
+  first-class Langfuse integration — and its sibling packages.
+repo_url: https://github.com/ianshank/Agents
+repo_name: ianshank/Agents
+docs_dir: docs
+site_dir: site
+
+# NB: the docs corpus cross-links to repo-root files that live outside docs_dir
+# (../README.md, ../AGENTS.md, ../architecture.yaml, per-package READMEs). Do NOT
+# run `mkdocs build --strict` until that link graph is brought inside docs_dir or
+# handled by a monorepo/include plugin — strict mode treats those as broken links.
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: README.md
+  - Architecture:
+      - Charter: CHARTER.md
+      - C4 architecture: c4_architecture.md
+  - Decisions:
+      - Overview: decisions/README.md
+  - Runbooks:
+      - End-to-end harness: e2e-runbook.md
+  - Spikes:
+      - Phoenix seam: phoenix-spike.md
+      - BrainTrust seam: braintrust-spike.md
+  - Baselines:
+      - "Gap analysis (2026-07)": gap-analysis-2026-07.md
+      - Remediation: gap-analysis-2026-07-remediation.md
+      - "py.typed / mypy": gap-analysis-2026-07-py-typed-mypy.md
+  - Conventions:
+      - Style & taxonomy: STYLE.md
+      - Skill template: SKILL_TEMPLATE.md
+      - Skill validation template: SKILL_VALIDATION_TEMPLATE.md

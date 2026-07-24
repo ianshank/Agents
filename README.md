@@ -1,8 +1,56 @@
 # langfuse-eval-harness
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](pyproject.toml)
+[![Coverage](https://img.shields.io/badge/branch%20coverage-%E2%89%A595%25-brightgreen.svg)](#test)
+[![CI](https://github.com/ianshank/Agents/actions/workflows/eval-harness-ci.yml/badge.svg)](https://github.com/ianshank/Agents/actions/workflows/eval-harness-ci.yml)
+
 A dynamic, modular, backwards-compatible enterprise LLM evaluation harness with
 first-class Langfuse integration, Snyk dependency scanning, and a pluggable skill
 framework.
+
+
+## Contents
+
+- [Monorepo map](#monorepo-map)
+- [Documentation](#documentation)
+- [Architecture](#architecture)
+- [Install](#install)
+- [Environment Variables](#environment-variables)
+- [Run](#run)
+- [Demo](#demo)
+- [Extend (no core changes)](#extend-no-core-changes)
+- [Test](#test)
+- [Quality Gates](#quality-gates)
+- [Security Scanning](#security-scanning)
+- [Layout](#layout)
+- [CI Integration](#ci-integration)
+- [Changelog](#changelog)
+
+## Monorepo map
+
+A monorepo of five installable Python packages plus a skills marketplace and
+operational tooling. Each package builds and tests **independently** with its own
+coverage floor. Full package table and version gates: [AGENTS.md](AGENTS.md).
+
+| Path | Package | Role |
+|---|---|---|
+| [`src/eval_harness/`](src/eval_harness/README.md) | `langfuse-eval-harness` | LLM evaluation harness (this package) |
+| [`agent-core/`](agent-core/README.md) | `agent-core` | Deterministic control & calibration core |
+| [`behavioral-regression/`](behavioral-regression/README.md) | `behavioral-regression` | Calibrated ship/hold/escalate regression gate |
+| [`flow-corpus/`](flow-corpus/README.md) | `flow-corpus` | Calibration corpus of agentic flow variants |
+| [`flow-protocol/`](flow-protocol/README.md) | `flow-protocol` | Versioned contract between corpus and harness |
+| [`claude-foundation/`](claude-foundation/README.md) | `claude-foundation-tools` | Foundation Claude Code plugin tooling |
+| [`skills/`](skills/README.md) | — | Vendored skills registered in `marketplace.yaml` |
+| [`scripts/`](scripts/README.md) | — | Feature validators + CI guards |
+
+## Documentation
+
+- **[docs/](docs/README.md)** — the documentation index (architecture, ADRs, runbooks, spikes, baselines).
+- **[AGENTS.md](AGENTS.md)** — orientation for coding agents and the root-documentation map.
+- **[docs/CHARTER.md](docs/CHARTER.md)** — north-star scope & invariants.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** · **[GOVERNANCE.md](GOVERNANCE.md)** · **[SECURITY.md](SECURITY.md)** · **[SUPPORT.md](SUPPORT.md)** · **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**
+- Docs also render as a site: `pip install -e '.[docs]' && mkdocs serve` (see [mkdocs.yml](mkdocs.yml)).
 
 ## Architecture
 

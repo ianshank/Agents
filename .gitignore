@@ -87,3 +87,6 @@ seed_context.json
 agent.json
 changed_files.z
 *.pre-backfill.bak
+
+# mkdocs site build output
+/site/
