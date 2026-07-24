@@ -7,6 +7,7 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - "**/*.md"
+      - "**/pyproject.toml"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
@@ -66,6 +67,8 @@ jobs:
         run: |
           python - <<'PY'
           import pathlib, tomllib, sys
+          # Single source for the expected SPDX expression; bump here if the project relicenses.
+          EXPECTED_LICENSE = "Apache-2.0"
           fail = []
           components = ["src/eval_harness","agent-core","behavioral-regression","flow-corpus",
                         "flow-protocol","claude-foundation","skills","scripts","experiments",
@@ -85,8 +88,13 @@ jobs:
               if not proj:
                   fail.append(f"{f}: [project] table missing")
                   continue
-              if "license" not in proj:
+              license = proj.get("license")
+              if license is None:
                   fail.append(f"{f}: [project].license missing")
+              elif license != EXPECTED_LICENSE:
+                  fail.append(
+                      f"{f}: [project].license is {license!r}, expected {EXPECTED_LICENSE!r}"
+                  )
               if "urls" not in proj:
                   fail.append(f"{f}: [project.urls] missing")
           if fail:
@@ -113,7 +121,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import pathlib, re
+          import pathlib, re, sys
           link = re.compile(r'\[[^\]]+\]\(([^)]+)\)')
           broken = 0
           for md in pathlib.Path(".").rglob("*.md"):
@@ -126,4 +134,7 @@ jobs:
                   if not (md.parent / tgt).exists():
                       print(f"  BROKEN  {md}  ->  {tgt}"); broken += 1
           print(f"{broken} broken relative link(s)")
+          # Exit non-zero so broken links surface in the UI; the job is advisory
+          # (continue-on-error), so a red result never blocks the merge.
+          sys.exit(1 if broken else 0)
           PY
