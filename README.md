@@ -17,6 +17,7 @@ framework.
 - [Architecture](#architecture)
 - [Install](#install)
 - [Environment Variables](#environment-variables)
+- [Backends and integrations](#backends-and-integrations)
 - [Run](#run)
 - [Demo](#demo)
 - [Extend (no core changes)](#extend-no-core-changes)
@@ -104,6 +105,46 @@ Create a `.env` file from the template:
 cp .env.example .env
 # Edit .env with your credentials
 ```
+
+## Backends and integrations
+
+The harness talks to observability, dataset, and model backends through registry
+components — `eval-harness list-plugins` prints the selectable names. Every external
+SDK is **optional** and sits behind a reversible seam (a `Null*` double for
+offline/tests, a guarded `SDK*` for production, built by a `build_*` factory) that
+**fails safe to offline** when the SDK or credentials are absent, so the default
+suite runs with zero network. Reversible-adoption pattern:
+[`docs/phoenix-spike.md`](docs/phoenix-spike.md) and
+[`docs/braintrust-spike.md`](docs/braintrust-spike.md); a live opt-in check runs in
+[`.github/workflows/phoenix-live.yml`](.github/workflows/phoenix-live.yml).
+
+| Backend | Dataset | Sink | Judge | Scorer | Client | Install extra | Status |
+|---|---|---|---|---|---|---|---|
+| **Langfuse** | `langfuse` | `langfuse` | — | — | `langfuse_client` (engine-injected) | `[langfuse]` | **Shipped — first-class** |
+| **Phoenix** | — | `phoenix` | `phoenix_evals` | — | `phoenix_client` (OTLP tracing + score export) | `[phoenix]`, `[phoenix-evals]` | **Shipped — SDK-optional** |
+| **BrainTrust** | `braintrust` | `braintrust` | — | `autoevals` | `braintrust_client` | `[braintrust]`, `[autoevals]` | **Shipped — SDK-optional** |
+| **Local** | `inline`, `jsonl`, `csv`, `parquet` | `console`, `json_file`, `html_file` | — | — | — | core (`[parquet]` for parquet) | **Shipped** |
+| **OpenAI-compatible** ¹ | — | — | `openai` | — | — | `[openai]` | **Shipped** |
+| **Anthropic** | — | — | `anthropic` | — | — | `[anthropic]` | **Shipped** |
+| **AWS Bedrock** | — | — | `bedrock` | — | — | `[bedrock]` | **Shipped** |
+| **Opik** | — | — | — | — | — | — | **Under evaluation** ² |
+
+¹ OpenAI, **NVIDIA Nemotron**, and a local **LM Studio** server are the *same* path —
+the `openai` judge and the `model` (alias `llm`) target pointed at a different
+`base_url` (`config/nemotron_eval.yaml`, `config/lm_studio_eval.yaml`), not separate
+integrations.
+
+² **Opik** has no code under `src/eval_harness/`; it is a *candidate* eval backend
+probed alongside Langfuse in the isolated, unsigned
+[`experiments/backend-validation/`](experiments/backend-validation/README.md) sandbox
+(own gate; not in `make check-all`) — **not** a shipped integration.
+
+The `budgeted` judge budget wraps any of the above judges with a per-run cost cap
+(`agent_core_adapter`), applied by the engine when configured — it is not itself a
+selectable judge. Per-backend credentials live in [`.env.example`](.env.example) (the
+[Environment Variables](#environment-variables) table lists the common ones; Bedrock
+uses the standard AWS credential chain). For the component **file layout**, see
+[Layout](#layout).
 
 ## Run
 
@@ -288,16 +329,18 @@ src/eval_harness/
   scorers/           exact_match, regex_match, contains, json_keys, llm_judge, weighted,
                      autoevals (bridges BrainTrust's autoevals scorer library)
   datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
-  targets/           echo, callable (dynamic import)
+  targets/           echo, callable (dynamic import), model (alias llm; calls an
+                     OpenAI-compatible / LM Studio / Nemotron endpoint)
   sinks/             console, json_file, html_file, langfuse, phoenix, braintrust
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
-                     phoenix_evals, budgeted (wraps another judge with a cost cap)
+                     phoenix_evals
   langfuse_client/   Langfuse tracing + score export (SDK-optional seam)
   phoenix_client/    Phoenix tracing + score export (SDK-optional seam; mirrors
                      langfuse_client — see docs/phoenix-spike.md)
   braintrust_client/ BrainTrust experiment export (SDK-optional seam; mirrors
                      phoenix_client — see docs/braintrust-spike.md)
-  agent_core_adapter/  agent_core bridge (BudgetLedger, calibration surface)
+  agent_core_adapter/  agent_core bridge (BudgetLedger, calibration surface, and the
+                       BudgetedJudge cost-cap wrapper applied around another judge)
   gating/            config-driven quality gate
   engine.py          orchestration
   cli.py             entry point
