@@ -38,3 +38,4 @@
 {"agent_version": "claude-code", "change_id": "0ffd03790591fd4b4ed08244797db2b9f2776313", "domain": "agent-core", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-22T06:14:08-04:00", "raw_confidence": 0.02}
 {"agent_version": null, "change_id": "378d0c14f0b9980ca0dee331106a9f778b2eba79", "domain": "human/skills", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-23T11:47:37-04:00", "raw_confidence": 0.0}
 {"agent_version": "claude-code", "change_id": "4e9a329805a67a1231895329fe6e9e774a20ec58", "domain": "agent-core", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-23T15:52:13-04:00", "raw_confidence": 0.02}
+{"agent_version": "claude-code", "change_id": "e8f2b40c54b484440c67173ce86b6b948972b9ba", "domain": "agent-core", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-24T08:41:35-04:00", "raw_confidence": 0.02}
