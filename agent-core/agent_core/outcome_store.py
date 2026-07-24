@@ -18,7 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
 
@@ -56,7 +56,34 @@ class OutcomeRecord:
 
     @staticmethod
     def from_json(line: str) -> OutcomeRecord:
-        return OutcomeRecord(**json.loads(line))
+        """Parse one store line, tolerating fields a newer writer added (ADR 0025).
+
+        Corruption still raises: malformed JSON, a non-object payload, a missing required
+        field, or a wrong type all propagate, because an append-only audit store with a
+        corrupt line has already lost its integrity guarantee and hiding that would be
+        worse. An *unknown extra* field is a different thing — it is additive schema
+        evolution, and `OutcomeRecord(**payload)` could not tell the two apart, since both
+        raise ``TypeError``. Since ``store_sync`` deliberately preserves such a line
+        verbatim so a pull/push never rewrites history it does not own, this reader used to
+        be guaranteed to meet a record it would crash on during any rolling upgrade.
+
+        Unknown fields are dropped from the in-memory record and logged, never written
+        back: ``store_sync`` remains the writer and still round-trips the original line.
+        """
+        payload = json.loads(line)
+        if not isinstance(payload, dict):
+            raise TypeError(f"outcome record must be a JSON object, got {type(payload).__name__}")
+        known = {f.name for f in fields(OutcomeRecord)}
+        unknown = sorted(set(payload) - known)
+        if unknown:
+            logger.warning(
+                "outcome record %s carries unknown field(s) %s -- ignoring them; a newer "
+                "writer is active against this reader (store_sync preserves the line as-is)",
+                payload.get("change_id", "<no change_id>"),
+                ", ".join(unknown),
+            )
+            payload = {k: v for k, v in payload.items() if k in known}
+        return OutcomeRecord(**payload)
 
 
 class OutcomeStore:

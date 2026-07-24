@@ -252,3 +252,63 @@ def test_bin_index_boundaries_are_unchanged():
     assert cal.bin_index(0.0) == 0
     assert cal.bin_index(0.55) == 5
     assert cal.bin_index(1.0) == 9  # exactly the top edge is in contract -> top bin
+
+
+# --- forward compatibility (ADR 0025) ----------------------------------------
+def test_from_json_tolerates_fields_a_newer_writer_added(caplog):
+    """An unknown field is additive schema evolution, not corruption."""
+    line = (
+        '{"change_id": "c1", "domain": "core", "raw_confidence": 0.9, '
+        '"merged_at": "2026-01-01T00:00:00+00:00", "label": null, "label_source": null, '
+        '"labeled_at": null, "agent_version": null, "future_field": "from a newer writer"}'
+    )
+    with caplog.at_level("WARNING", logger="agent_core.outcome_store"):
+        rec = OutcomeRecord.from_json(line)
+    assert rec.change_id == "c1" and rec.raw_confidence == 0.9
+    assert not hasattr(rec, "future_field")  # dropped in memory, never invented
+    logged = "\n".join(r.message for r in caplog.records)
+    assert "future_field" in logged and "c1" in logged
+
+
+@pytest.mark.parametrize(
+    ("line", "exc", "why"),
+    [
+        ("{not json at all", ValueError, "malformed JSON"),
+        ('["a", "list"]', TypeError, "non-object payload"),
+        ('{"domain": "core", "raw_confidence": 0.9}', TypeError, "missing required field"),
+    ],
+    ids=["malformed-json", "non-object", "missing-required"],
+)
+def test_from_json_still_raises_on_corruption(line, exc, why):
+    """Tolerating unknown fields must not weaken strictness about corruption."""
+    with pytest.raises(exc):
+        OutcomeRecord.from_json(line)
+
+
+def test_store_sync_opaque_line_is_readable_by_outcome_store(tmp_path, caplog):
+    """The seam neither module's suite crossed.
+
+    store_sync preserves a line carrying a newer writer's field verbatim, so that a
+    pull/push never rewrites history it does not own. OutcomeStore used to raise
+    TypeError on that exact line, which would fail the gate on every PR. Both sides
+    must now hold at once: preserved on write, readable on read.
+    """
+    from agent_core.store_sync import read_store_lines
+
+    path = tmp_path / "s.jsonl"
+    path.write_text(
+        _rec("c1", "core", 0.9, True, LabelSource.HUMAN_AUDIT).to_json() + "\n"
+        '{"change_id": "c2", "domain": "core", "raw_confidence": 0.8, '
+        '"merged_at": "2026-01-01T00:00:00+00:00", "tomorrows_field": 1}\n',
+        encoding="utf-8",
+    )
+    # store_sync still classifies it as opaque and keeps it verbatim.
+    records, opaque = read_store_lines(path)
+    assert len(records) == 1 and len(opaque) == 1
+    assert "tomorrows_field" in opaque[0]
+
+    # OutcomeStore now reads the whole file instead of raising.
+    with caplog.at_level("WARNING", logger="agent_core.outcome_store"):
+        loaded = OutcomeStore(path).all()
+    assert [r.change_id for r in loaded] == ["c1", "c2"]
+    assert any("tomorrows_field" in r.message for r in caplog.records)

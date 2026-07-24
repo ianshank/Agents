@@ -76,6 +76,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Ledgered as **F-046**; `scripts/validations/F_046.py` pins the durable invariants.
 
 ### Fixed
+- **Outcome-record forward compatibility: a newer writer's record crashed every reader
+  (ADR 0025).** `agent_core.store_sync` deliberately preserves a line it cannot parse so a
+  rolling upgrade never loses data; `agent_core.jsonl` is deliberately strict so a corrupt
+  line cannot pass unnoticed. Both are right, but `OutcomeRecord(**json.loads(line))` could
+  not tell an **unknown extra key** from a **missing required key** — both raise `TypeError` —
+  so the mechanism built to survive a rolling upgrade produced exactly the record that broke
+  every other consumer: `merge_gate_ci` exits 1 in both the gate and shadow jobs, failing
+  every PR, and `outcome_labeller` / `audit_sampler` / `merge_seed` have no handler at all.
+  `OutcomeRecord.from_json` now separates additive schema evolution from corruption — unknown
+  fields are dropped and logged by name; malformed JSON, a non-object payload, a missing
+  required field, and wrong types all still raise. `store_sync` is untouched and still
+  round-trips such a line verbatim, so the writer never rewrites a field it does not
+  understand while the reader no longer crashes on one. A test now crosses that seam in one
+  assertion, which neither module's suite previously did.
 - **Merge-gate fail-open on out-of-contract confidences, and a vacuous ship-gate pass.**
   Found while peer-reviewing the agent-record calibration plan
   (`docs/plans/agent-record-decontamination/`); each defect was reproduced before being fixed,

@@ -6,6 +6,22 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 ## [Unreleased]
 
 ### Fixed
+- **A record from a newer writer crashed every reader (ADR 0025).** `store_sync` deliberately
+  preserves a line it cannot parse — "an upgraded writer during a rolling upgrade … must NOT
+  crash the pipeline — and must NOT be silently dropped either" — while `jsonl` is strict
+  because "an append-only audit store with a corrupt line is a store whose integrity guarantee
+  is already gone". Both rationales are right, but `OutcomeRecord(**json.loads(line))` could
+  not tell an **unknown extra key** from a **missing required key**: both raise `TypeError`. So
+  the mechanism built to survive a rolling upgrade produced precisely the record that broke
+  every other consumer — `merge_gate_ci` exiting 1 in both the gate and shadow jobs (failing
+  every PR), with `outcome_labeller`, `audit_sampler`, and `merge_seed` having no handler at
+  all. `OutcomeRecord.from_json` now distinguishes additive schema evolution from corruption:
+  unknown fields are dropped and logged with their names, while malformed JSON, a non-object
+  payload, a missing required field, and wrong types all still raise. `store_sync` is
+  unchanged — it calls the constructor directly, so it still treats such a line as opaque and
+  round-trips it verbatim; the writer never rewrites a field it does not understand and the
+  reader no longer crashes on one. The repo already handled the *backward* direction (a
+  pre-1.3.0 line without `agent_version` still loads); this closes the forward one.
 - **Merge-gate fail-open: an uninterpretable confidence scored as maximum confidence.**
   `NaN` compares False against every bin edge and `inf` exceeds them all, so both fell through
   `BinningCalibrator.bin_index`'s scan to its `score >= top edge` return — the *highest*-

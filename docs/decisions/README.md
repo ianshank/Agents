@@ -42,3 +42,4 @@ changes course is a *new* ADR that supersedes the old one, not an edit.
 | [0022](0022-determinism-boundary-for-inference-skills.md) | Determinism boundary for inference skills (consume, don't contain) |
 | [0023](0023-agent-confidence-proxy-and-agent-domain-seeding.md) | Agent-confidence proxy + agent-domain seeding & backfill |
 | [0024](0024-assertion-graders-registry.md) | Assertion graders registry and skill-validation alignment |
+| [0025](0025-outcome-record-forward-compatibility.md) | Outcome-record forward compatibility: unknown fields are not corruption |
