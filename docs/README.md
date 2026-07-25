@@ -45,6 +45,8 @@ See that index for the full list and the (intentional) numbering gap.
 - [gap-analysis-2026-07.md](gap-analysis-2026-07.md) — measured lint/type/coverage baseline.
 - [gap-analysis-2026-07-remediation.md](gap-analysis-2026-07-remediation.md) — the remediation record.
 - [gap-analysis-2026-07-py-typed-mypy.md](gap-analysis-2026-07-py-typed-mypy.md) — typing/`py.typed` follow-up.
+- [gap-analysis-merge-gate-2026-07-24.md](gap-analysis-merge-gate-2026-07-24.md) — merge-gate /
+  calibration subsystem: three fixed defects and ten open findings, each with its reproduction.
 
 ## Templates & conventions
 

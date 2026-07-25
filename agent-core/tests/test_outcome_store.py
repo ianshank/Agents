@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from agent_core.merge_gate import GatePolicyConfig
 from agent_core.outcome_store import (
     BinningCalibrator,
@@ -196,3 +198,117 @@ def test_build_models_ignores_passive_labels(tmp_path):
     store = OutcomeStore(tmp_path / "s.jsonl")
     store.append(_rec("c1", "core", 0.9, True, LabelSource.TIMEOUT_CLEAN))
     assert build_domain_models(store, CFG) == {}
+
+
+def test_build_models_reports_why_records_were_excluded(tmp_path, caplog):
+    """The exclusion is correct but was invisible: an all-passive store looks like an
+    empty one from the outside (no models, no tau). It has to say which it is."""
+    store = OutcomeStore(tmp_path / "s.jsonl")
+    store.append(_rec("c1", "core", 0.9, True, LabelSource.TIMEOUT_CLEAN))
+    store.append(_rec("c2", "core", 0.8, False, LabelSource.CI_FAILURE))
+    store.append(_rec("c3", "core", 0.7, None, None))  # merged, not yet labelled
+    with caplog.at_level("INFO", logger="agent_core.outcome_store"):
+        assert build_domain_models(store, CFG) == {}
+    logged = "\n".join(r.message for r in caplog.records)
+    assert "passive:timeout_clean=1" in logged
+    assert "passive:ci_failure=1" in logged
+    assert "unlabelled=1" in logged
+    assert "no HUMAN_AUDIT records available" in logged
+
+
+def test_build_models_does_not_warn_when_audit_records_exist(tmp_path, caplog):
+    store = OutcomeStore(tmp_path / "s.jsonl")
+    store.append(_rec("c1", "core", 0.9, True, LabelSource.HUMAN_AUDIT))
+    with caplog.at_level("INFO", logger="agent_core.outcome_store"):
+        assert build_domain_models(store, CFG) != {}
+    assert not any("no HUMAN_AUDIT records available" in r.message for r in caplog.records)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [float("nan"), float("inf"), float("-inf"), 1.5, 5.0, -0.1],
+    ids=["nan", "inf", "-inf", "just-above-1", "far-above-1", "below-0"],
+)
+def test_bin_index_floors_out_of_contract_scores(bad, caplog):
+    """An out-of-contract score must never read as the highest-confidence bucket.
+
+    `NaN < edge` is False for every edge and `inf` exceeds them all, so both fell
+    through the scan to the `score >= top edge` return -- scoring garbage as maximum
+    confidence; anything above 1.0 did the same. Records reach this method straight
+    from the store, where OutcomeRecord applies no validation and ChangeContext's
+    check is bypassed.
+    """
+    cal = BinningCalibrator.fit([0.05] * 10 + [0.95] * 10, [False] * 10 + [True] * 10)
+    assert cal.bin_index(0.95) == 9  # sanity: real high confidence still lands high
+    with caplog.at_level("WARNING", logger="agent_core.outcome_store"):
+        assert cal.bin_index(bad) == 0
+    assert cal.predict(bad) == cal.bin_acc[0]
+    assert any("out-of-contract raw_score" in r.message for r in caplog.records)
+
+
+def test_bin_index_boundaries_are_unchanged():
+    """The fail-closed NaN branch must not perturb ordinary routing."""
+    cal = BinningCalibrator.fit([0.5], [True])
+    assert cal.bin_index(0.0) == 0
+    assert cal.bin_index(0.55) == 5
+    assert cal.bin_index(1.0) == 9  # exactly the top edge is in contract -> top bin
+
+
+# --- forward compatibility (ADR 0025) ----------------------------------------
+def test_from_json_tolerates_fields_a_newer_writer_added(caplog):
+    """An unknown field is additive schema evolution, not corruption."""
+    line = (
+        '{"change_id": "c1", "domain": "core", "raw_confidence": 0.9, '
+        '"merged_at": "2026-01-01T00:00:00+00:00", "label": null, "label_source": null, '
+        '"labeled_at": null, "agent_version": null, "future_field": "from a newer writer"}'
+    )
+    with caplog.at_level("WARNING", logger="agent_core.outcome_store"):
+        rec = OutcomeRecord.from_json(line)
+    assert rec.change_id == "c1" and rec.raw_confidence == 0.9
+    assert not hasattr(rec, "future_field")  # dropped in memory, never invented
+    logged = "\n".join(r.message for r in caplog.records)
+    assert "future_field" in logged and "c1" in logged
+
+
+@pytest.mark.parametrize(
+    ("line", "exc", "why"),
+    [
+        ("{not json at all", ValueError, "malformed JSON"),
+        ('["a", "list"]', TypeError, "non-object payload"),
+        ('{"domain": "core", "raw_confidence": 0.9}', TypeError, "missing required field"),
+    ],
+    ids=["malformed-json", "non-object", "missing-required"],
+)
+def test_from_json_still_raises_on_corruption(line, exc, why):
+    """Tolerating unknown fields must not weaken strictness about corruption."""
+    with pytest.raises(exc):
+        OutcomeRecord.from_json(line)
+
+
+def test_store_sync_opaque_line_is_readable_by_outcome_store(tmp_path, caplog):
+    """The seam neither module's suite crossed.
+
+    store_sync preserves a line carrying a newer writer's field verbatim, so that a
+    pull/push never rewrites history it does not own. OutcomeStore used to raise
+    TypeError on that exact line, which would fail the gate on every PR. Both sides
+    must now hold at once: preserved on write, readable on read.
+    """
+    from agent_core.store_sync import read_store_lines
+
+    path = tmp_path / "s.jsonl"
+    path.write_text(
+        _rec("c1", "core", 0.9, True, LabelSource.HUMAN_AUDIT).to_json() + "\n"
+        '{"change_id": "c2", "domain": "core", "raw_confidence": 0.8, '
+        '"merged_at": "2026-01-01T00:00:00+00:00", "tomorrows_field": 1}\n',
+        encoding="utf-8",
+    )
+    # store_sync still classifies it as opaque and keeps it verbatim.
+    records, opaque = read_store_lines(path)
+    assert len(records) == 1 and len(opaque) == 1
+    assert "tomorrows_field" in opaque[0]
+
+    # OutcomeStore now reads the whole file instead of raising.
+    with caplog.at_level("WARNING", logger="agent_core.outcome_store"):
+        loaded = OutcomeStore(path).all()
+    assert [r.change_id for r in loaded] == ["c1", "c2"]
+    assert any("tomorrows_field" in r.message for r in caplog.records)

@@ -2,6 +2,22 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Merge-gate fail-open fixes + peer review of the agent-record decontamination plan** —
+  a peer review of the 2026-07-24 draft plan (`docs/plans/agent-record-decontamination/`, whose
+  corrected v2 supersedes it) turned up three verified defects, each reproduced before being
+  fixed. A confidence of `NaN`, `inf`, or anything above 1.0 was routed to the *top* calibration
+  bin and scored as maximum confidence, so `decide()` returned `AUTO_MERGE` for garbage — latent
+  only because every domain is still cold-start, i.e. it would have activated exactly when the
+  gate went live. `evaluate_calibration` let an *undefined* AUROC satisfy the discrimination
+  criterion vacuously, so a forecaster wrong 100% of the time passed the ship gate. And
+  `build_domain_models` decided per-domain autonomy with no log at all, making an all-passive
+  store indistinguishable from an empty one. Guards are config-driven
+  (`CalibrationConfig.min_eval_samples` / `require_discrimination`) and default to the prior
+  behaviour, so no existing verdict changes. A fourth defect found in the same sweep is closed
+  by [ADR 0025](docs/decisions/0025-outcome-record-forward-compatibility.md): `store_sync`
+  preserved records from a newer writer that `OutcomeStore` then refused to parse, so an
+  ordinary version skew would have failed every PR. Nine further findings are ranked with
+  reproductions in `docs/gap-analysis-merge-gate-2026-07-24.md`.
 - [x] **Agent-record calibration: routing + proxy confidence + report (F-042/F-043/F-044, ADR 0023)**
   — closed the agent-record calibration gap. Previously every merge-gate record was
   `agent_version:null` / `domain:human/*` / `raw_confidence:0.0`, so the agent-domain predictor was
@@ -135,6 +151,15 @@
   the activation PR (protected paths); exclude `merge-gate-data` from branch
   protection; enable required reviewers on the `merge-gate-verdict` environment;
   record the first verdict via the dispatch UI.
+- [ ] **Merge-gate tech debt (`docs/gap-analysis-merge-gate-2026-07-24.md`)** — nine findings
+  remain, ranked by severity, each with the reproduction that established it. The former top
+  item (a forward-compatible record that `store_sync` preserved but `OutcomeStore` refused to
+  parse, which would have failed every PR) is resolved in [ADR 0025](docs/decisions/0025-outcome-record-forward-compatibility.md).
+  Now highest: `GatePolicyConfig` is unreachable from any config or CLI — the values governing
+  autonomy can only change by editing library source, and it has no validation, so it accepts
+  `risk_target=1.0`; then the four independent binning implementations (two of which disagree
+  out-of-range, which is what made the fail-open reachable); then `_upper_half_ci_width`
+  returning `0.0` for "no data", which passes a health floor vacuously.
 - [ ] **Merge-gate soak** — accumulate N≥20 shadow decisions and weekly audits before
   revisiting the ADR 0005 enablement checklist. The agent-confidence artifact that
   blocked agent domains now exists (F-042: `scripts/agent_confidence.py` feeds

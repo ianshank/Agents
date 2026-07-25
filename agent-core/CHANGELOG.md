@@ -5,6 +5,53 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 
 ## [Unreleased]
 
+### Fixed
+- **A record from a newer writer crashed every reader (ADR 0025).** `store_sync` deliberately
+  preserves a line it cannot parse — "an upgraded writer during a rolling upgrade … must NOT
+  crash the pipeline — and must NOT be silently dropped either" — while `jsonl` is strict
+  because "an append-only audit store with a corrupt line is a store whose integrity guarantee
+  is already gone". Both rationales are right, but `OutcomeRecord(**json.loads(line))` could
+  not tell an **unknown extra key** from a **missing required key**: both raise `TypeError`. So
+  the mechanism built to survive a rolling upgrade produced precisely the record that broke
+  every other consumer — `merge_gate_ci` exiting 1 in both the gate and shadow jobs (failing
+  every PR), with `outcome_labeller`, `audit_sampler`, and `merge_seed` having no handler at
+  all. `OutcomeRecord.from_json` now distinguishes additive schema evolution from corruption:
+  unknown fields are dropped and logged with their names, while malformed JSON, a non-object
+  payload, a missing required field, and wrong types all still raise. `store_sync` is
+  unchanged — it calls the constructor directly, so it still treats such a line as opaque and
+  round-trips it verbatim; the writer never rewrites a field it does not understand and the
+  reader no longer crashes on one. The repo already handled the *backward* direction (a
+  pre-1.3.0 line without `agent_version` still loads); this closes the forward one.
+- **Merge-gate fail-open: an uninterpretable confidence scored as maximum confidence.**
+  `NaN` compares False against every bin edge and `inf` exceeds them all, so both fell through
+  `BinningCalibrator.bin_index`'s scan to its `score >= top edge` return — the *highest*-
+  confidence bucket — as did any value above 1.0. Values below 0 escalated, so the failure was
+  one-sided toward unsafe: with a trustworthy calibrator, `merge_gate.decide()` returned
+  `AUTO_MERGE` for both `NaN` and `5.0`. `ChangeContext` now enforces the `[0, 1]` contract its
+  field comment always claimed, and `bin_index` floors any non-finite or out-of-range score to
+  bin 0 — records reach it straight from the store, where `OutcomeRecord` applies no validation
+  and `ChangeContext`'s check is bypassed. Exactly `1.0` is in contract and still lands in the
+  top bin. Latent only because every domain is cold-start (`tau is None` without `HUMAN_AUDIT`
+  records), so it would have activated exactly when the gate went live.
+- **`evaluate_calibration` passed slices that cannot evidence discrimination.** An undefined
+  AUROC satisfied the resolution criterion vacuously, so a forecaster wrong 100% of the time —
+  perfectly calibrated against its own base rate — passed the ship gate, as did a single record.
+  Degeneracy (constant predictor / single outcome class / undersized) is now always named on the
+  new `CalibrationReport.degenerate` field and logged at WARNING. **Enforcement is opt-in** via
+  the keyword-only `min_samples` / `require_discrimination`, surfaced as
+  `CalibrationConfig.min_eval_samples` / `require_discrimination`; both default to the prior
+  behaviour, so no existing caller's verdict changes and configs persisted before the fields
+  existed still load and round-trip. An all-correct golden set is a legitimate shape, so it
+  keeps passing until a caller opts in.
+- **`merge_gate_ci` reported bad input as an internal fault.** Out-of-contract values, malformed
+  JSON, a missing context field, and a `null` where a value belongs now all exit **2** (usage)
+  rather than 1 — and never 0, which CI reads as proceed-to-merge. An unreadable `--context`
+  path stays exit 1: the environment failing, not the caller passing a bad value.
+- **`build_domain_models` decided per-domain autonomy silently.** The `HUMAN_AUDIT`-only filter
+  dropped every other record with no count and no log, so an all-passive store was
+  indistinguishable from an empty one. It now reports the excluded records by reason and warns
+  when no audit records exist at all.
+
 ### Added
 - **`subprocess_util.run_failsafe`** and **`atomic_io.atomic_write_text`** — stdlib-only shared
   utilities extracting two idioms that were duplicated and had drifted: the fail-safe subprocess

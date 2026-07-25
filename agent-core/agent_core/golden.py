@@ -192,4 +192,6 @@ def evaluate_on_split(
         ece_target=calib_config.ece_target,
         mce_target=calib_config.mce_target,
         auroc_target=calib_config.auroc_target,
+        min_samples=calib_config.min_eval_samples,
+        require_discrimination=calib_config.require_discrimination,
     )

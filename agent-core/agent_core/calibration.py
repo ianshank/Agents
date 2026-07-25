@@ -18,6 +18,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+from .logging_util import get_logger
+
+logger = get_logger(__name__)
+
 
 def _check_pairs(probs: Sequence[float], outcomes: Sequence[int]) -> None:
     if len(probs) != len(outcomes):
@@ -300,6 +304,27 @@ class CalibrationReport:
     brier: float
     auroc: float | None
     passes: bool
+    # Why discrimination could not be measured (constant predictor / single outcome class /
+    # too few samples), or ``None`` when the slice supports a meaningful verdict. Mirrors
+    # ``calibration_report.SliceReport.degenerate`` so both report paths say the same thing.
+    # Defaulted so existing keyword construction and unpacking keep working.
+    degenerate: str | None = None
+
+
+def _shape_degeneracy(probs: Sequence[float], outcomes: Sequence[int], roc: float | None) -> str:
+    """Describe why this slice's *shape* cannot evidence discrimination (``""`` if it can).
+
+    Constant predictors are named ahead of single-class outcomes because when a slice is
+    both, the constant score is the root cause: it cannot rank anything, whatever the
+    labels do. Mirrors the ordering in ``calibration_report.analyze_slice``.
+    """
+    n = len(probs)
+    if len(set(probs)) == 1:
+        return f"constant predictor: probability == {probs[0]:.4g} for all {n} records"
+    if roc is None:
+        cls = "correct" if outcomes and outcomes[0] == 1 else "incorrect"
+        return f"single outcome class: all {n} outcomes are {cls}"
+    return ""
 
 
 def evaluate_calibration(
@@ -310,7 +335,31 @@ def evaluate_calibration(
     ece_target: float,
     mce_target: float,
     auroc_target: float,
+    min_samples: int = 1,
+    require_discrimination: bool = False,
 ) -> CalibrationReport:
+    """Score a slice against the ship-gate targets.
+
+    Calibration alone is a vanity metric: a forecaster that is confidently wrong every
+    time is perfectly "calibrated" against its own base rate. ``auroc_target`` is the
+    resolution check that catches that — but AUROC is undefined when the slice has one
+    outcome class or a constant predictor, and an undefined check cannot reject anything.
+
+    ``degenerate`` therefore always reports such a slice (and logs it at WARNING), while
+    two independent, opt-in guards decide whether it also *fails*:
+
+    * ``min_samples`` — floor on slice size. An explicit floor is a rejection in its own
+      right, so it fails the gate whenever it trips; the default of 1 can never trip
+      (``_check_pairs`` already rejects empty input).
+    * ``require_discrimination`` — when True, a slice whose *shape* precludes measuring
+      discrimination (constant predictor, single outcome class) cannot pass. Left False
+      by default so existing gates keep their semantics until they opt in: an all-correct
+      golden set is a legitimate, desired shape, not a failure.
+
+    Both default to the pre-guard behaviour, so callers that pass neither are unaffected.
+    """
+    if min_samples < 1:
+        raise ValueError(f"min_samples must be >= 1, got {min_samples}")
     # Bin once and derive ECE/MCE from the shared bins (avoids re-binning 2-3x).
     bins = reliability_bins(probs, outcomes, n_bins)
     total = len(probs)
@@ -322,5 +371,34 @@ def evaluate_calibration(
         roc = auroc(list(probs), list(outcomes))
     except ValueError:
         roc = None  # single-class slice: discrimination undefined
-    passes = ece <= ece_target and mce <= mce_target and (roc is None or roc >= auroc_target)
-    return CalibrationReport(ece=ece, mce=mce, brier=brier, auroc=roc, passes=passes)
+
+    undersized = len(probs) < min_samples
+    shape_reason = _shape_degeneracy(probs, outcomes, roc)
+    # Size before shape: when a slice is both undersized and misshapen, too little data is
+    # the root cause and the caller should hear that first.
+    degenerate = (
+        f"insufficient samples: n={len(probs)} < min_samples={min_samples}"
+        if undersized
+        else (shape_reason or None)
+    )
+    if degenerate is not None:
+        enforced = undersized or (require_discrimination and bool(shape_reason))
+        logger.warning(
+            "calibration slice cannot evidence discrimination (%s); this slice %s the gate "
+            "on that criterion (min_samples=%d, require_discrimination=%s)",
+            degenerate,
+            "fails" if enforced else "is not judged by",
+            min_samples,
+            require_discrimination,
+        )
+
+    passes = (
+        ece <= ece_target
+        and mce <= mce_target
+        and (roc is None or roc >= auroc_target)
+        and not undersized
+        and not (require_discrimination and bool(shape_reason))
+    )
+    return CalibrationReport(
+        ece=ece, mce=mce, brier=brier, auroc=roc, passes=passes, degenerate=degenerate
+    )

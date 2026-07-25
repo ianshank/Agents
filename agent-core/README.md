@@ -73,8 +73,14 @@ from agent_core import evaluate_calibration, IsotonicCalibrator
 report = evaluate_calibration(
     probs, outcomes, n_bins=10,
     ece_target=0.05, mce_target=0.12, auroc_target=0.80,
+    # Opt-in guards; these defaults (1 / False) reproduce the pre-guard behaviour.
+    min_samples=30, require_discrimination=True,
 )
-# report.passes is False if calibrated-but-undiscriminating (the vanity-metric guard)
+# A calibrated-but-undiscriminating model fails on the AUROC target — but only when AUROC
+# is *defined*. A slice with one outcome class or a constant predictor cannot evidence
+# discrimination at all, so it is always named on report.degenerate (and logged); pass
+# require_discrimination=True to make that fail the gate rather than pass it vacuously.
+
 cal = IsotonicCalibrator().fit(train_probs, train_outcomes)   # fit on a held-out split
 recalibrated = [cal.predict(p) for p in test_probs]
 ```
@@ -99,10 +105,10 @@ agent_core/
   outcome_store.py OutcomeStore (append-only JSONL), BinningCalibrator, build_domain_models
   outcome_labeller.py passive revert/CI-failure/timeout-clean labels (real detectors)
   audit_sampler.py unbiased stratified sampling + HUMAN_AUDIT verdicts
-  merge_gate_ci.py CI entrypoint (exit 0/10/20), audit-logged decisions
+  merge_gate_ci.py CI entrypoint (exit 0/10/20; 2 = usage/bad input, 1 = internal), audit-logged
   detectors.py     GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo (fail-safe)
   timeutil.py      parse_iso8601 (Z-tolerant, UTC-default)
-tests/             330 tests across all modules
+tests/             474 tests across all modules
 ```
 
 ## Calibrated merge gate (F-010, default-off)

@@ -76,6 +76,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Ledgered as **F-046**; `scripts/validations/F_046.py` pins the durable invariants.
 
 ### Fixed
+- **Outcome-record forward compatibility: a newer writer's record crashed every reader
+  (ADR 0025).** `agent_core.store_sync` deliberately preserves a line it cannot parse so a
+  rolling upgrade never loses data; `agent_core.jsonl` is deliberately strict so a corrupt
+  line cannot pass unnoticed. Both are right, but `OutcomeRecord(**json.loads(line))` could
+  not tell an **unknown extra key** from a **missing required key** — both raise `TypeError` —
+  so the mechanism built to survive a rolling upgrade produced exactly the record that broke
+  every other consumer: `merge_gate_ci` exits 1 in both the gate and shadow jobs, failing
+  every PR, and `outcome_labeller` / `audit_sampler` / `merge_seed` have no handler at all.
+  `OutcomeRecord.from_json` now separates additive schema evolution from corruption — unknown
+  fields are dropped and logged by name; malformed JSON, a non-object payload, a missing
+  required field, and wrong types all still raise. `store_sync` is untouched and still
+  round-trips such a line verbatim, so the writer never rewrites a field it does not
+  understand while the reader no longer crashes on one. A test now crosses that seam in one
+  assertion, which neither module's suite previously did.
+- **Merge-gate fail-open on out-of-contract confidences, and a vacuous ship-gate pass.**
+  Found while peer-reviewing the agent-record calibration plan
+  (`docs/plans/agent-record-decontamination/`); each defect was reproduced before being fixed,
+  and the full sweep — three fixed, ten still open — is recorded in
+  `docs/gap-analysis-merge-gate-2026-07-24.md`.
+  - **Confidences outside `[0, 1]` could reach AUTO_MERGE.** `NaN` compares False against
+    every bin edge and `inf` exceeds them all, so both fell through
+    `BinningCalibrator.bin_index`'s scan to its `score >= top edge` return — the
+    *highest*-confidence bucket — as did any value above 1.0. Values below 0 escalated, so the
+    failure was one-sided toward unsafe: with a trustworthy calibrator, `decide()` returned
+    `AUTO_MERGE` for both `NaN` and `5.0`. Latent only because every domain is still
+    cold-start (zero `HUMAN_AUDIT` records ⇒ `tau is None`), so it would have activated exactly
+    when the gate went live. `ChangeContext` now enforces the `[0, 1]` contract its field
+    comment always claimed, and `bin_index` floors any non-finite or out-of-range score to
+    bin 0 for records arriving straight from the store, where `OutcomeRecord` applies no
+    validation. Exactly `1.0` stays in contract and still lands in the top bin.
+  - **`merge_gate_ci` reported bad input as an internal fault.** Invalid values, malformed
+    JSON, a missing context field, and a `null` where a value belongs now all exit **2**
+    (usage) rather than 1 — and never 0, which CI reads as proceed-to-merge. An unreadable
+    `--context` path stays exit 1: the environment failing, not the caller passing a bad value.
+  - **`evaluate_calibration` passed slices that cannot evidence discrimination.** An undefined
+    AUROC satisfied the resolution criterion vacuously, so a forecaster wrong 100% of the time
+    — perfectly calibrated against its own base rate — passed the ship gate, as did a single
+    record. Degeneracy is now always reported on `CalibrationReport.degenerate` and logged;
+    *enforcement* is opt-in via `CalibrationConfig.min_eval_samples` /
+    `require_discrimination`, both defaulting to the prior behaviour, so no existing caller's
+    verdict changes and configs persisted before the fields existed still load and round-trip.
+    An all-correct golden set is a legitimate shape, so it keeps passing until a caller opts in.
+  - **`build_domain_models` decided per-domain autonomy silently.** The `HUMAN_AUDIT`-only
+    filter dropped every other record with no count and no log, making an all-passive store
+    indistinguishable from an empty one — which is the live state today (43 records,
+    12 labelled, 0 audited). It now reports exclusions by reason and warns when no audit
+    records exist at all.
 - **`claude-foundation/tests/` protected-path gap (F-041):** an independent audit of the
   merged F-039 work found that `claude-foundation/` — structurally identical to the four
   packages F-039 protects — was missed by that sweep. Its `tests/test_eval_gate.py`

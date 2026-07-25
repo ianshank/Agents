@@ -22,6 +22,7 @@ literal appears in decision logic. The Wilson math is reused from
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -82,6 +83,23 @@ class ChangeContext:
     touches_protected: bool  # from eval_protected_paths.py
     raw_confidence: float  # agent self-reported, in [0, 1]
     domain: str
+
+    def __post_init__(self) -> None:
+        """Enforce the ``[0, 1]`` contract that the field comment has always claimed.
+
+        This is a fail-closed boundary, not a formality. ``NaN`` compares False against
+        every edge, so an unvalidated ``NaN`` fell through the bin scan to the *top*
+        bin -- the highest-confidence bucket -- and could reach AUTO_MERGE; so could any
+        value above 1.0. Out-of-range low values escalated, so the failure was one-sided
+        toward unsafe. Reject at construction instead: a confidence we cannot interpret
+        must never read as maximum confidence.
+        """
+        if not math.isfinite(self.raw_confidence):
+            raise ValueError(
+                f"raw_confidence must be a finite number in [0, 1] (got {self.raw_confidence!r})"
+            )
+        if not 0.0 <= self.raw_confidence <= 1.0:
+            raise ValueError(f"raw_confidence must be in [0, 1] (got {self.raw_confidence!r})")
 
 
 def _wilson_bound(successes: int, n: int, z: float, *, lower: bool) -> float:
