@@ -62,7 +62,12 @@ pwsh scripts/run_all_e2e.ps1 -Tiers offline -FailFast           # stop at first 
 - **Tier C — user-journey / CLI e2e (offline, always).** The three skill/hook `*e2e*`/
   `test_end_to_end.py` files, plus every package CLI: `eval-harness`
   (`list-plugins`/`run`/`compare`/`campaign`), `bregress` (`python -m behavioral_regression`),
-  `python -m agent_core.merge_gate_ci`, and `scripts/skill_marketplace.py`. The `compare`/`campaign`
+  `python -m agent_core.merge_gate_ci`, the read-only agent-core reporting CLIs
+  (`merge_seed` -> `audit_sampler select --with-propensity` -> `record
+  --selection-propensity` -> `calibration_report` under BOTH estimators -> `proxy_eval`
+  with a JSON parse check), and `scripts/skill_marketplace.py`. The reporting steps must
+  exit 0 — unlike the gate CLI, whose 0/10/20 are all valid decisions — because they are
+  read-only and never influence a merge. The `compare`/`campaign`
   fixtures are generated into `artifacts/e2e-report/fixtures/` at runtime (the `config/` dir is a
   protected path, so nothing is written there).
 - **Tier D — live integrations (credential-gated).** Langfuse + Phoenix smokes, a live judge run
@@ -119,7 +124,7 @@ docker run -p 6006:6006 arizephoenix/phoenix
 
 ## Test status on this checkout
 
-A clean `-Tiers offline` run reports **21 PASS / 0 FAIL**. Nine cross-platform root causes were
+A clean `-Tiers offline` run reports **27 PASS / 0 FAIL** (21 before the C5c reporting-CLI steps; each `Invoke-CmdStep` contributes one PASS, and the `proxy_eval json-valid` guard only records a result on failure). Nine cross-platform root causes were
 found and fixed:
 
 | Area | Root cause | Fix |

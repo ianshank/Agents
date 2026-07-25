@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Follow-up hardening + end-to-end propensity wiring (F-047, ADR 0026).** Closes the
+  review findings on the merged proxy/PPI++ work and makes `selection_propensity` live.
+  Correctness: `proxy_eval` no longer reports a by-construction `AUROC = 0.5` for a
+  constant proxy (its sibling `calibration_report` had always withheld it); a tuned
+  `lambda` can no longer run out of residual degrees of freedom (`min_labeled >= 3` plus a
+  runtime guard — at `n = 2` the residual variance collapsed to `0.0` and the interval
+  reported a half-width of **0.06 from two observations**); the proxy-range check streams
+  instead of materialising two full copies of the unlabeled pool; and a stale docstring
+  pointed at the pre-split module. **Propensity is no longer dead data**: `merge-gate-audit`
+  selects `--with-propensity`, `audit_issue_sync` carries the value into the audit issue
+  *and* the dispatch command the human copies out, and `merge-gate-verdict` →
+  `record_audit_verdict` thread it to the write boundary — backwards compatible at every
+  seam (both `selected.txt` formats parse, bare ids still accepted, a blank input records
+  NULL rather than a fabricated probability). Also corrected: the spike's removal
+  instructions omitted the `mkdocs.yml` nav entry, which leaves a dangling-nav warning
+  (measured — the build is non-strict by design, so it is a warning today and a hard
+  failure under `--strict`). Docs refreshed to match: C4 merge-gate component diagram,
+  `NEXT_STEPS.md` (whose `N≥20` claim contradicted the peer review merged alongside it),
+  both READMEs, `AGENTS.md`, the e2e runbook, and the ADR index.
 - **Peer-review hardening of the proxy/PPI work (`agent-core`).** An adversarial
   correctness review and a gap/hygiene audit of the change below found six real defects,
   all fixed here: a prediction-powered interval could render **inverted** (`lo > hi`, a

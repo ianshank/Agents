@@ -50,19 +50,25 @@ which becomes a hard failure the day `--strict` is adopted. Remove the reference
 
 ```bash
 rm -rf openspec/ docs/openspec-spike.md
-# Drop the four references added alongside it, or the nav is left dangling:
+# Drop the six references added alongside it, or the nav is left dangling:
 #   mkdocs.yml        nav -> "OpenSpec coordination layer: openspec-spike.md"
-#   docs/README.md    the openspec-spike bullet under "Spikes"
+#   docs/README.md    BOTH: the `../openspec/` entry under "Change proposals"
+#                     AND the openspec-spike bullet under "Spikes"
 #   AGENTS.md         the `openspec/` row in the root documentation map
+#   README.md         the `openspec/` block in the repository Layout tree
 #   .dockerignore     the `openspec/` line under "Docs (not needed in container)"
 
 python scripts/validate.py --tier fast   # still green — no F-proof depends on openspec/
-mkdocs build                              # 0 warnings: proves no dangling nav entry
 make check-all                            # unaffected
+
+# The removal is clean when mkdocs emits NO openspec nav warning. Do not check for a
+# zero total: the tree already carries ~50 pre-existing warnings (docs/ pages linking to
+# repo-root files that are not part of the site), so a raw count proves nothing here.
+mkdocs build 2>&1 | grep -i openspec       # expect no WARNING line (INFO is fine)
 ```
 
 No code imports `openspec/`; no CI job reads it; no F-ID validation references it. The only
-coupling is documentation navigation, which the four lines above cover.
+coupling is documentation navigation, which the six references above cover.
 
 ## Evaluate-and-decide criteria
 

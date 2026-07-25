@@ -167,7 +167,10 @@ change — and any classifier failure, fail-safe — keeps the reserved `human/<
 at confidence 0.0 (human outcomes never enter agent-domain calibration). This is what makes the
 agent-domain corpus non-degenerate; `agent_core.calibration_report` (F-043) reports its
 calibration (ECE/Brier/AUROC/abstention, Wilson CIs, honest `DEGENERATE` guard) to the daily
-labeller summary, and a one-off reversible backfill
+labeller summary — and since F-047 can dual-report a prediction-powered interval under
+`--estimator ppi++`, while `agent_core.proxy_eval` measures whether any proxy is actually
+informative *on the subsets the gate operates over* (the marginal correlation is not the
+operative number). Both are read-only: the gate's own estimator is unchanged, and a one-off reversible backfill
 (`scripts/migrations/agent_domain_backfill.py`, F-044) re-attributed the historical agent SHAs.
 
 The confidence path is fail-closed end to end. `ChangeContext` rejects a `raw_confidence` that
@@ -188,11 +191,15 @@ C4Component
         Component(store, "outcome_store", "append-only JSONL", "OutcomeStore, BinningCalibrator (fail-closed: non-finite / out-of-[0,1] scores floor to bin 0, never the top bin), build_domain_models (held-out fold; logs why records are excluded from the fit)")
         Component(sync, "store_sync", "package + CLI (F-032)", "models/serialization/store/git_sync submodules; pull/push/stats vs merge-gate-data branch; canonical merge, opaque-line preservation, retry-backoff; byte-oriented git-plumbing runner (shared subprocess_util); exit 0/4/5")
         Component(labeller, "outcome_labeller", "module", "passive revert / CI-failure / timeout-clean labels (alerting only)")
-        Component(sampler, "audit_sampler", "module", "unbiased stratified sampling + HUMAN_AUDIT verdicts")
+        Component(sampler, "audit_sampler", "module", "unbiased stratified sampling + HUMAN_AUDIT verdicts; records each pick's marginal inclusion probability (selection_propensity) so audits can later be reweighted by 1/p -- unreconstructable after the round")
         Component(detectors, "detectors", "module", "GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo; DetectorConfig timeouts, fail-safe")
         Component(calib, "calibration", "module", "Wilson interval, AUROC, ECE (reused, not re-implemented); reports degenerate slices (constant predictor / single outcome class / undersized) — enforcement opt-in via CalibrationConfig, defaults preserve prior verdicts")
-        Component(report, "calibration_report", "read-only CLI (F-043)", "agent-domain ECE/Brier/AUROC/abstention (Wilson CIs); HUMAN_AUDIT vs passive views tagged; honest DEGENERATE guard; ReportConfig knobs; reuses calibration")
-        Component(domains, "domains", "module", "single-source HUMAN_NAMESPACE / is_agent_domain / strip_human_namespace (agent vs reserved-human lane; yaml/config-free)")
+        Component(report, "calibration_report", "read-only CLI (F-043)", "agent-domain ECE/Brier/AUROC/abstention; --estimator {wilson,ppi++} dual-reports Wilson + the prediction-powered interval + the classical lambda=0 baseline the reduction is measured against (wilson stays the default and the GATE's estimator); HUMAN_AUDIT vs passive views tagged; honest DEGENERATE guard; ReportConfig knobs")
+        Component(domains, "domains", "module", "single-source HUMAN_NAMESPACE / is_agent_domain / strip_human_namespace + in_domain_scope + DOMAIN_FILTERS (canonical --domain-filter predicate; agent vs reserved-human lane; yaml/config-free)")
+        Component(ppi, "ppi", "module (F-047)", "power-tuned prediction-powered interval + pearson_r / effective_n_multiplier; FAIL-CLOSED -- too few labels, single outcome class, constant or out-of-range proxy, or no residual dof all return the WILSON interval with a stated reason; lambda=0 reproduces the classical estimator exactly; variance_reduction derives from the standard errors, never the clipped bounds")
+        Component(proxies, "proxies", "module (F-047)", "pluggable ProxyExtractor Protocol: RawConfidenceProxy, PassiveLabelProxy, MappingProxy (the seam for an external LLM-judge score, so agent_core takes no dependency)")
+        Component(proxyeval, "proxy_eval", "read-only CLI (F-047)", "proxy-vs-HUMAN_AUDIT correlation, marginal AND conditional on the gated subsets (score >= candidate tau, per bin) + implied 1/(1-rho^2) effective-sample multiplier; degenerate slices withhold rho AND auroc rather than printing a by-construction 0.5")
+        Component(rtypes, "report_types + calibration_report_render", "modules", "shared report config/records + estimator names, and the markdown/JSON presentation; split from calibration_report to stay inside the 500-line file budget (every previously importable name still resolves from its original module, pinned by __all__)")
     }
 
     System_Ext(git, "git", "Local history — revert footer detection")
@@ -207,13 +214,25 @@ C4Component
     Rel(sync, store, "canonical merged JSONL")
     Rel(labeller, detectors, "was_reverted() / caused_failure()")
     Rel(labeller, store, "append passive labels")
-    Rel(sampler, store, "select + record HUMAN_AUDIT")
+    Rel(sampler, store, "select + record HUMAN_AUDIT, with the round's selection_propensity")
     Rel(detectors, git, "git log (-z, revert footer)")
     Rel(detectors, gha, "gh api check-runs")
     Rel(report, store, "read agent-domain slice")
     Rel(report, calib, "auroc / brier / wilson / selective-risk")
     Rel(report, domains, "is_agent_domain() lane filter")
+    Rel(report, ppi, "ppi_plus_interval() when --estimator ppi++ (report-only)")
+    Rel(report, rtypes, "ReportConfig / SliceReport / rendering")
+    Rel(proxyeval, store, "join proxy value to the authoritative HUMAN_AUDIT label by change_id")
+    Rel(proxyeval, proxies, "ProxyExtractor.value()")
+    Rel(proxyeval, calib, "auroc() — withheld on a degenerate slice")
+    Rel(proxyeval, ppi, "pearson_r / effective_n_multiplier / ppi_plus_interval")
+    Rel(proxyeval, domains, "in_domain_scope() lane filter")
 ```
+
+`selection_propensity` is captured but **not yet consumed**: no estimator applies the `1/p`
+correction today, so cross-domain aggregates remain unweighted (ADR 0026). It is recorded
+now only because the inclusion probability is knowable during the round that produced it
+and unreconstructable afterwards — there is deliberately no edge into `ppi` for it.
 
 The CI surfaces around the subsystem (scripts layer + workflows): `merge_gate_context.py`
 composes the ChangeContext (path→domain from `config/merge-gate-domains.yaml`,

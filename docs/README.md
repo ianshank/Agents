@@ -35,6 +35,13 @@ See that index for the full list and the (intentional) numbering gap.
 - [e2e-runbook.md](e2e-runbook.md) — running and reading the one-command
   end-to-end / user-journey harness.
 
+## Change proposals
+
+- [`../openspec/`](../openspec/) — the reversible OpenSpec coordination layer: in-flight
+  change proposals and the agent-ownership contract, compiled down to `features.yaml`
+  F-IDs, `scripts/validations/F_*.py` proofs and ADRs. Mirrors the `openspec/` row in
+  [`AGENTS.md`](../AGENTS.md)'s root documentation map.
+
 ## Spikes (reversible-adoption patterns)
 
 - [phoenix-spike.md](phoenix-spike.md) — the SDK-optional Phoenix seam.

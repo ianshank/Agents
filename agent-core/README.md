@@ -96,6 +96,7 @@ agent_core/
   loop.py          LoopController (admission gate -> cycle -> outcome check)
   calibration.py   bins, ECE, MCE, Brier+Murphy, AUROC, Wilson, selective, isotonic
   ppi.py           PPI++ interval (fail-closed to Wilson), pearson_r, effective-N multiplier
+  domains.py       HUMAN_NAMESPACE / is_agent_domain / in_domain_scope (canonical lane filter)
   logging_util.py  config-driven logging + debug_span
   sanitize.py      RuleSanitizer, Sanitizer protocol, build_sanitized_claims
   golden.py        GoldenSet, split (hash-bucket), cohen_kappa, evaluate_on_split
@@ -108,12 +109,36 @@ agent_core/
   audit_sampler.py unbiased stratified sampling (+ inclusion propensity) + HUMAN_AUDIT verdicts
   proxies.py       pluggable proxy extractors (raw confidence / passive label / external)
   proxy_eval.py    proxy-vs-audit correlation, marginal AND conditional on gated subsets
-  calibration_report.py  agent-records report (wilson | ppi++); report_types + _render split
+  calibration_report.py  agent-records report (wilson | ppi++); analysis only
+  report_types.py  shared report config/records + estimator names (analysis <-> rendering)
+  calibration_report_render.py  markdown / JSON presentation for the report
+  merge_seed.py    seed one pending OutcomeRecord per merged change
+  store_sync/      sync the local JSONL store with the merge-gate-data branch
+  atomic_io.py     atomic write helpers    jsonl.py  strict JSONL reader
+  subprocess_util.py  timeout-bounded, fail-safe subprocess runner
   merge_gate_ci.py CI entrypoint (exit 0/10/20; 2 = usage/bad input, 1 = internal), audit-logged
   detectors.py     GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo (fail-safe)
   timeutil.py      parse_iso8601 (Z-tolerant, UTC-default)
-tests/             688 tests across all modules
+tests/             693 tests across all modules
 ```
+
+## Reports & CLIs (read-only)
+
+```bash
+# Calibration of the agent-domain slice. `--estimator ppi++` additionally reports a
+# prediction-powered interval and the classical baseline it is measured against; wilson
+# is the default and the only estimator the GATE uses.
+python -m agent_core.calibration_report --store merge_outcomes.jsonl \
+    --domain-filter agent [--estimator ppi++] [--format md|json]
+
+# Is a cheap proxy actually informative *where the gate operates*? Reports marginal AND
+# conditional correlation with the implied 1/(1-rho^2) effective-sample multiplier.
+# --judge-scores injects an external signal (e.g. an LLM judge) without a dependency.
+python -m agent_core.proxy_eval --store merge_outcomes.jsonl \
+    --domain-filter agent [--judge-scores scores.json] [--format md|json]
+```
+
+Neither writes to the store or influences a gate decision.
 
 ## Calibrated merge gate (F-010, default-off)
 A pure, deterministic merge-decision subsystem (ADR 0005). `merge_gate.decide()` is REJECT on

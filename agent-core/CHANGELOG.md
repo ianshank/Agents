@@ -5,6 +5,25 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 
 ## [Unreleased]
 
+### Fixed
+- **A degenerate slice reported a by-construction `AUROC = 0.5`.** `proxy_eval` computed
+  AUROC whenever both outcome classes were present, even for a *constant* proxy — which
+  cannot rank anything, so 0.5 is its value by construction. That is precisely the number
+  `calibration_report.analyze_slice` refuses to print ("rather than a misleading AUROC of
+  0.5"), in the module whose stated purpose is honesty about degeneracy. The degeneracy
+  flag now gates it.
+- **A tuned `lambda` could run out of residual degrees of freedom.** Charging the residual
+  a second degree of freedom (correct, and what repaired small-n coverage) left `n = 2`
+  with none: `_variance(..., ddof=2)` returns `0.0`, the residual term vanished, and the
+  interval reported a half-width of ~0.06 from two observations. `PPIConfig` now requires
+  `min_labeled >= 3` and `ppi_plus_interval` independently refuses when
+  `n - resid_ddof < 1`.
+- **The proxy-range check allocated two full copies of the unlabeled pool** to print one
+  example; replaced by a streaming `_count_out_of_range` helper keeping only the count and
+  first offender.
+- `proxy_eval`'s module docstring cited `agent_core.calibration.effective_n_multiplier`;
+  the symbol moved to `agent_core.ppi` in the 500-line split.
+
 ### Added
 - **Proxy-correlation measurement + prediction-powered intervals (`ppi`, `proxies`,
   `proxy_eval`).** `proxy_eval` measures how well a cheap proxy predicts the authoritative

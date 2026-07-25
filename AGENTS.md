@@ -84,7 +84,7 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 - **`from_dict` is strict.** Unknown keys raise `ConfigError`. Do not add permissive fallbacks.
 - **`ClaimId` is opaque `str`.** Never sanitize `CycleState.unresolved`.
 - **Ruff and mypy are pinned** in the `dev` extra (`ruff==0.15.20`, `mypy==2.1.0`). Do not bump them casually — CI/local skew broke `ruff format --check` before.
-- **Backwards-compat shims are documented.** `ece`/`expected_calibration_error` alias in `agent-core/agent_core/__init__.py` is deliberate. Do not remove without a separate deprecation ADR.
+- **Backwards-compat shims are documented.** `ece`/`expected_calibration_error` alias in `agent-core/agent_core/__init__.py` is deliberate. Do not remove without a separate deprecation ADR. The same applies to the re-exports left by the 500-line file split (ADR 0026): PPI moved to `agent_core/ppi.py` and the calibration report to `report_types.py` + `calibration_report_render.py`, but every previously importable name still resolves from its original module — `calibration_report.__all__` pins that promise and the public-surface guard freezes it.
 
 ## Entry points
 
@@ -110,6 +110,7 @@ The following files implement "SDK-optional" seams: the real dependency is impor
 - `src/eval_harness/braintrust_client/__init__.py` — BrainTrust experiment export (`build_client`) + dataset read (`fetch_dataset_items`); mirrors `phoenix_client`, `docs/braintrust-spike.md`.
 - `src/eval_harness/judges/*.py` — `MockJudge` (offline default), `OpenAIJudge`, `AnthropicJudge`, `BedrockJudge`, `PhoenixEvalJudge`.
 - `src/eval_harness/sinks/__init__.py` — `console`, `json_file`, `html_file`, `langfuse`, `phoenix`, `braintrust`.
+- `agent-core/agent_core/proxies.py` — `ProxyExtractor` Protocol + `MappingProxy`. Same shape, different direction: an external score (an LLM judge, a static analyser) is *injected* rather than a client being lazily imported, so `agent_core` measures a judge's signal while staying dependency-free and pure stdlib. Add a proxy here, never a dependency there.
 - `src/eval_harness/scorers/__init__.py` — `autoevals` bridges BrainTrust's `autoevals` scorer library (heuristic offline-safe; LLM/Embedding need a provider key). `src/eval_harness/datasets/__init__.py` — `braintrust` pulls a dataset via `init_dataset` (fail-fast when the SDK is absent).
 
 Test the "SDK absent" path via `sys.modules` injection, not `@patch(...)` — see `feedback_agents_offline_optional_dep_testing` behaviour documented in existing tests. `@patch("phoenix.otel.register")` raises `ModuleNotFoundError` at patch time when the SDK isn't installed. The concrete idiom is `monkeypatch.setitem(sys.modules, "phoenix.otel", None)`, which forces the lazy import to `ImportError` even when the extra *is* installed (this venv installs all extras).
