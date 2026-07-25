@@ -16,6 +16,21 @@ All notable changes to `agent-core` are documented here. The format loosely foll
   silently changes the value.
 
 ### Fixed
+- **`format_propensity` could render a valid propensity into an unusable one.** Fixed-point
+  (`.6f`) turned `1e-7` into `"0.000000"`, which parses back to `0.0` and is rejected by
+  `is_valid_propensity`. That output is not decoration — it is pasted into the `gh workflow
+  run` command the audit issue prints — so a propensity the contract accepts produced a
+  dispatch guaranteed to fail at the recorder, the same failure mode the ingestion guard
+  exists to prevent, one layer later. Now renders significant figures (`.6g`), which switches
+  to an exponent instead of collapsing to zero and is tidier for the arithmetic-noise values
+  the sampler actually emits (`0.6`, not `0.600000`). A Hypothesis property test over the
+  contract's domain pins it; the previous round-trip test had hand-picked exactly the three
+  values that survive.
+- **Two sites bypassed the shared renderer entirely** — the `selected.txt` writer and a debug
+  log. The writer is the *serialisation boundary* `audit_issue_sync` reads back, so the
+  producer could emit a value its own consumer rejects. Found by running the seam end to end
+  rather than trusting the unit tests, which stub it. Defining a single point of truth is not
+  the same as using it, so `F_047` now fails on a local `.6f` in either module.
 - **A degenerate slice reported a by-construction `AUROC = 0.5`.** `proxy_eval` computed
   AUROC whenever both outcome classes were present, even for a *constant* proxy — which
   cannot rank anything, so 0.5 is its value by construction. That is precisely the number

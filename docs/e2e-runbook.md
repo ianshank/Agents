@@ -124,7 +124,7 @@ docker run -p 6006:6006 arizephoenix/phoenix
 
 ## Test status on this checkout
 
-A clean `-Tiers offline` run reports **27 PASS / 0 FAIL** (21 before the C5c reporting-CLI steps; each `Invoke-CmdStep` contributes one PASS, and the `proxy_eval json-valid` guard only records a result on failure). Nine cross-platform root causes were
+A clean `-Tiers offline` run reports **28 PASS / 0 FAIL** (21 before the C5c reporting-CLI steps; each `Invoke-CmdStep` contributes one PASS, plus the `proxy_eval json-valid` guard, which now records an outcome whether the artifact is valid, invalid, or missing — previously a missing artifact recorded nothing, so the journey could pass without ever validating the JSON it exists to produce). Nine cross-platform root causes were
 found and fixed:
 
 | Area | Root cause | Fix |
