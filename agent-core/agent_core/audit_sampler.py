@@ -27,6 +27,54 @@ from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 logger = get_logger(__name__)
 
 
+#: SIGNIFICANT FIGURES (not decimal places) used whenever a propensity is rendered. Single
+#: point of truth: the issue body, the dispatch command it prints, and the recorder's log
+#: must agree, or an operator copying one into the other silently changes the value.
+PROPENSITY_SIGFIGS = 6
+
+#: Rendered in place of a probability that was never captured.
+PROPENSITY_UNKNOWN = "unknown"
+
+
+def is_valid_propensity(value: float | None) -> bool:
+    """``True`` when ``value`` is a usable inclusion probability, or ``None`` (unknown).
+
+    The single definition of the contract. Every layer that touches a propensity checks
+    against *this* predicate rather than restating the comparison, because the naive
+    ``0.0 < value <= 1.0`` form silently admits nothing but also silently *depends* on
+    NaN comparing false — an equivalence that is true by accident, not by design, and
+    that a later edit could easily break in one copy but not the others.
+
+    ``0`` is excluded, not merely out of range: a record sampled with probability zero is
+    a contradiction, and its ``1 / p`` weight is undefined.
+    """
+    return value is None or (math.isfinite(value) and 0.0 < value <= 1.0)
+
+
+def format_propensity(value: float | None, *, unknown: str = PROPENSITY_UNKNOWN) -> str:
+    """Render a propensity, or ``unknown`` when it was never captured.
+
+    Uses ``g`` (significant figures), **not** ``f`` (decimal places), because this output is
+    not merely displayed — it is pasted into the ``gh workflow run`` command the audit issue
+    prints, so it has to parse back to the *same* usable probability.
+
+    Fixed-point rendering broke that: ``1e-7`` became ``"0.000000"``, which parses to ``0.0``
+    and is rejected by :func:`is_valid_propensity`. A value the contract accepts would have
+    produced a dispatch command guaranteed to fail at the recorder — the same failure mode
+    the ingestion guard exists to prevent, reintroduced one layer later. ``g`` switches to an
+    exponent instead of collapsing to zero, so ``format`` -> ``float`` preserves validity
+    across the whole domain (pinned by a property test), and it is *tidier* for the
+    arithmetic-noise values ``inclusion_probability`` actually emits: ``0.6`` not
+    ``0.600000``.
+
+    The round trip preserves *validity and value to the rendered precision*, not the exact
+    bits: six significant figures costs ~1e-6 relative error, which is immaterial in a
+    ``1 / p`` weight and buys a number a human can actually read (``0.2 + 0.4`` renders
+    ``0.6``, not ``0.6000000000000001``).
+    """
+    return unknown if value is None else f"{value:.{PROPENSITY_SIGFIGS}g}"
+
+
 @dataclass(frozen=True)
 class AuditConfig:
     base_rate: float = 0.05  # audit ~5% of merges at random
@@ -111,12 +159,12 @@ def select_for_audit_detailed(
                 picked_here += 1
         logger.debug(
             "audit selection: domain=%s candidates=%d audited=%d need_floor=%d "
-            "propensity=%.6f picked=%d",
+            "propensity=%s picked=%d",
             domain,
             len(recs),
             have,
             need_floor,
-            propensity,
+            format_propensity(propensity),
             picked_here,
         )
     logger.info(
@@ -157,9 +205,7 @@ def record_verdict(
     that record is a deliberately dumb, load-tolerant holder (ADR 0025) — this is the
     write boundary, and a propensity we cannot interpret must not enter the store.
     """
-    if selection_propensity is not None and (
-        not math.isfinite(selection_propensity) or not 0.0 < selection_propensity <= 1.0
-    ):
+    if not is_valid_propensity(selection_propensity):
         raise ValueError(
             f"selection_propensity must be a finite number in (0, 1] (got {selection_propensity!r})"
         )
@@ -183,7 +229,7 @@ def record_verdict(
         change_id,
         rec.domain,
         correct,
-        "unknown" if selection_propensity is None else f"{selection_propensity:.6f}",
+        format_propensity(selection_propensity),
     )
     return rec
 
@@ -219,8 +265,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "select":
         picks = select_for_audit_detailed(store, AuditConfig(args.base_rate, args.per_domain_floor))
         for sel in picks:
+            # Through the shared renderer, not a local format spec: this line IS the
+            # serialisation boundary that audit_issue_sync reads back, so a hand-rolled
+            # `.6f` here would let the producer emit values its own consumer rejects.
             print(
-                f"{sel.change_id}\t{sel.propensity:.6f}" if args.with_propensity else sel.change_id
+                f"{sel.change_id}\t{format_propensity(sel.propensity)}"
+                if args.with_propensity
+                else sel.change_id
             )
         print(f"# selected {len(picks)} for audit", file=sys.stderr)
     else:

@@ -306,7 +306,11 @@ python scripts/check_protected_changes.py --base-ref origin/main
   while human or unclassifiable changes stay in the reserved `human/<domain>` namespace at 0.0
   (fail-safe). The **calibration report** (`F-043`, `agent_core.calibration_report`) surfaces
   agent-domain ECE / Brier / AUROC / abstention (Wilson CIs, honest `DEGENERATE` guard) to the
-  daily run summary. `scripts/validations/F_046.py` pins the hardening invariants.
+  daily run summary, and can dual-report a prediction-powered interval under
+  `--estimator ppi++` (`F-047`, ADR 0026 — report-only; the gate's own estimator is
+  unchanged). `agent_core.proxy_eval` measures whether a proxy is informative *on the
+  subsets the gate operates over*, and each audit now records the probability it was
+  sampled with. `scripts/validations/F_046.py` and `F_047.py` pin the hardening invariants.
 - **Live Phoenix validation (opt-in)** — `.github/workflows/phoenix-live.yml`
   (`workflow_dispatch`, `timeout-minutes: 20`) validates the reversible Phoenix spike
   end-to-end on a networked runner: a `dep-resolve` dry-run job surfaces the
@@ -393,6 +397,8 @@ experiments/
                       harness as a dependency only; ships unsigned (probes gated behind human
                       sign-off). Not a package/skill; not in `make check-all`.
 
+openspec/            reversible OpenSpec coordination layer over features.yaml/ADRs (docs only)
+  changes/<id>/      in-flight change proposals (proposal/design/tasks/review + spec deltas)
 docs/
   c4_architecture.md  hand-maintained C4 diagrams (runtime/call semantics; the import-edge view is generated at the repo root)
   e2e-runbook.md      how to run and read the one-command e2e harness

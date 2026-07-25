@@ -2,6 +2,23 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Proxy-correlation measurement, PPI++ report estimator & audit propensity (F-047,
+  ADR 0026)** — an external critique proposed swapping the gate's Wilson interval for
+  PPI++. The peer review
+  (`openspec/changes/eval-proxy-and-estimator/review.md`) verified its arithmetic and
+  citations but found it aimed at the wrong lever: PPI++ on the calibrated-confidence proxy
+  buys only ~1.05–1.1× effective-N at the system's own `min_auroc=0.65` floor, and ~0 on the
+  *conditional* subsets the gate operates over (restriction of range). Measured on a
+  synthetic soak, changing the **proxy** was worth 1.63× where changing the **estimator**
+  was worth 1.08×. So `agent_core.proxy_eval` now measures proxy↔audit correlation
+  marginally *and* conditionally, `agent_core.ppi` adds a fail-closed prediction-powered
+  interval (`--estimator ppi++`, report-only — the gate still uses Wilson), and
+  `selection_propensity` is recorded end-to-end so audits can later be reweighted by `1/p`.
+  Six defects found by adversarial review *after* the code was fully covered are pinned by
+  regression tests. **Still open:** nothing consumes the propensity yet (aggregates are
+  reported as unweighted), and the dated proxy-correlation snapshot waits on real data —
+  the live store still holds 0 `human_audit` rows.
+
 - [x] **Merge-gate fail-open fixes + peer review of the agent-record decontamination plan** —
   a peer review of the 2026-07-24 draft plan (`docs/plans/agent-record-decontamination/`, whose
   corrected v2 supersedes it) turned up three verified defects, each reproduced before being
@@ -160,8 +177,14 @@
   `risk_target=1.0`; then the four independent binning implementations (two of which disagree
   out-of-range, which is what made the fail-open reachable); then `_upper_half_ci_width`
   returning `0.0` for "no data", which passes a health floor vacuously.
-- [ ] **Merge-gate soak** — accumulate N≥20 shadow decisions and weekly audits before
-  revisiting the ADR 0005 enablement checklist. The agent-confidence artifact that
+- [ ] **Merge-gate soak** — accumulate shadow decisions and weekly audits before
+  revisiting the ADR 0005 enablement checklist. **The "N≥20" this entry used to quote is a
+  soak *counter*, not the activation bar**: the peer review in
+  `openspec/changes/eval-proxy-and-estimator/review.md` establishes that `tau` is gated by
+  a four-gate Wilson stack whose binding term (`threshold_for_risk` at `risk_target=0.02`,
+  measured on a held-out fold) needs roughly **380 near-perfect audited records per
+  domain**. Treat N≥20 as "enough to publish an honest first report", never as "enough to
+  enable auto-merge". The agent-confidence artifact that
   blocked agent domains now exists (F-042: `scripts/agent_confidence.py` feeds
   `merge_gate_context.py --confidence`), so agent merges are seeded with a real varying
   proxy confidence and the agent-domain corpus is non-degenerate; the remaining gate for

@@ -429,6 +429,45 @@ Invoke-CmdStep 'C' 'cli:merge_gate_context (--confidence)' `
     @('scripts/merge_gate_context.py', '--files', 'src/eval_harness/x.py', 'tests/test_x.py',
         '--confidence', '0.5', '--output', $agentSeedJson)
 
+# C5c: agent-core read-only reporting CLIs over a seeded throwaway store. These never
+# write to the store and never influence a gate decision, so unlike C5 they must exit 0.
+# The store is built by the audit-sampler CLI so the journey also covers the propensity
+# round-trip (select --with-propensity -> record --selection-propensity).
+$reportStore = Join-Path $Report 'report_store.jsonl'
+Invoke-CmdStep 'C' 'cli:merge_seed (report store)' `
+    @('-m', 'agent_core.merge_seed', '--store', $reportStore, '--change-id', 'e2e0001',
+        '--domain', 'agent-core', '--raw-confidence', '0.7')
+Invoke-CmdStep 'C' 'cli:audit_sampler select --with-propensity' `
+    @('-m', 'agent_core.audit_sampler', '--store', $reportStore, 'select',
+        '--base-rate', '1.0', '--per-domain-floor', '0', '--with-propensity')
+Invoke-CmdStep 'C' 'cli:audit_sampler record --selection-propensity' `
+    @('-m', 'agent_core.audit_sampler', '--store', $reportStore, 'record',
+        '--change-id', 'e2e0001', '--correct', '--selection-propensity', '1.0')
+# Both estimators must render. `ppi++` is report-only: it never changes a gate decision,
+# and falls back to Wilson (saying so) whenever the proxy cannot support it.
+Invoke-CmdStep 'C' 'cli:calibration_report (wilson)' `
+    @('-m', 'agent_core.calibration_report', '--store', $reportStore, '--domain-filter', 'all')
+Invoke-CmdStep 'C' 'cli:calibration_report (--estimator ppi++)' `
+    @('-m', 'agent_core.calibration_report', '--store', $reportStore, '--domain-filter', 'all',
+        '--estimator', 'ppi++')
+$proxyJson = Join-Path $Report 'proxy_eval.json'
+Invoke-CmdStep 'C' 'cli:proxy_eval (json)' `
+    @('-m', 'agent_core.proxy_eval', '--store', $reportStore, '--domain-filter', 'all',
+        '--format', 'json', '--output', $proxyJson)
+# Records an outcome in ALL three cases. A missing artifact used to record nothing, so the
+# journey could pass while never validating the JSON it exists to produce; and a guard that
+# is invisible when it succeeds offers no evidence it ran at all.
+if ((Test-Path $proxyJson)) {
+    try {
+        Get-Content -Raw -Encoding UTF8 $proxyJson | ConvertFrom-Json | Out-Null
+        Add-Result 'C' 'cli:proxy_eval json-valid' 'PASS'
+    }
+    catch { Add-Result 'C' 'cli:proxy_eval json-valid' 'FAIL' 'proxy_eval.json is not valid JSON' }
+}
+else {
+    Add-Result 'C' 'cli:proxy_eval json-valid' 'FAIL' 'proxy_eval did not write proxy_eval.json'
+}
+
 # C6: skill-marketplace CLI journeys
 Invoke-CmdStep 'C' 'cli:skill_marketplace list' @('scripts/skill_marketplace.py', 'list')
 Invoke-CmdStep 'C' 'cli:skill_marketplace verify' @('scripts/skill_marketplace.py', 'verify')

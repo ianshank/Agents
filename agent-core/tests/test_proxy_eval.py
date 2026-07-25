@@ -508,3 +508,30 @@ def test_authoritative_audit_wins_over_an_earlier_unlabelled_audit_row(tmp_path)
     assert ds.labeled[0].correct is True
     assert ds.unlabeled == ()
     assert store.resolved()["z1"].label is True  # agrees with the canonical resolution
+
+
+def test_a_degenerate_slice_withholds_auroc(tmp_path) -> None:
+    """Regression: a constant proxy reported `auroc = 0.5`.
+
+    A constant proxy cannot rank anything, so 0.5 is its value *by construction* — the
+    exact number `calibration_report.analyze_slice` refuses to print ("rather than a
+    misleading AUROC of 0.5"). Both outcome classes being present makes AUROC *defined*,
+    not meaningful, so the degeneracy flag has to gate it.
+    """
+    store = _audited(tmp_path, [(0.5, i % 2 == 0) for i in range(6)])
+    rep = analyze_dataset(build_dataset(store, RawConfidenceProxy(), domain_filter="all"), CFG)
+    m = rep.marginal
+    assert m.degenerate is not None and "constant proxy" in m.degenerate
+    assert m.rho is None
+    assert m.auroc is None, "a degenerate slice must not report a by-construction AUROC"
+    assert m.effective_n == 1.0
+
+
+def test_a_healthy_slice_still_reports_auroc(tmp_path) -> None:
+    """The guard must not suppress AUROC on slices that can genuinely evidence ranking."""
+    store = _audited(tmp_path, [(i / 10, i >= 3) for i in range(8)])
+    m = analyze_dataset(
+        build_dataset(store, RawConfidenceProxy(), domain_filter="all"), CFG
+    ).marginal
+    assert m.degenerate is None
+    assert m.auroc is not None

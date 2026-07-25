@@ -5,11 +5,16 @@ from __future__ import annotations
 import math
 import random
 
+import hypothesis.strategies as st
 import pytest
+from hypothesis import given
 
 from agent_core.audit_sampler import (
+    PROPENSITY_UNKNOWN,
     AuditConfig,
+    format_propensity,
     inclusion_probability,
+    is_valid_propensity,
     main,
     record_verdict,
     select_for_audit,
@@ -298,3 +303,91 @@ def test_cli_unknown_change_id_still_raises(tmp_path) -> None:
     store = _store(tmp_path, _pending("c1"))
     with pytest.raises(KeyError):
         main(["--store", str(store.path), "record", "--change-id", "nope", "--correct"])
+
+
+# --- the shared propensity contract ------------------------------------------
+@pytest.mark.parametrize(
+    "value",
+    [None, 1.0, 0.5, 1e-12],
+    ids=["unknown", "certain", "half", "tiny-but-positive"],
+)
+def test_valid_propensities_are_accepted(value: float | None) -> None:
+    assert is_valid_propensity(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [0.0, -0.0, -0.1, 1.0000001, float("nan"), float("inf"), float("-inf")],
+    ids=["zero", "neg-zero", "negative", "just-above-one", "nan", "inf", "neg-inf"],
+)
+def test_out_of_contract_propensities_are_rejected(value: float) -> None:
+    """Zero is excluded deliberately: its 1/p weight is undefined, not merely large."""
+    assert not is_valid_propensity(value)
+
+
+def test_the_predicate_does_not_rely_on_nan_comparison_semantics() -> None:
+    """`0.0 < nan <= 1.0` is False *by accident*; the guard must be explicit.
+
+    Pins the reason the predicate exists: a caller restating the naive comparison would
+    look equivalent and silently diverge the day the operands change.
+    """
+    assert not (0.0 < float("nan") <= 1.0)  # the accident
+    assert not is_valid_propensity(float("nan"))  # the intent
+    assert not math.isfinite(float("nan"))
+
+
+def test_every_inclusion_probability_satisfies_the_contract() -> None:
+    """The producer and the validator must agree, or the sampler writes rejectable data."""
+    for n in (1, 2, 7, 50, 500):
+        for floor in (0, 1, 30, 999):
+            for rate in (0.0, 0.05, 1.0):
+                p = inclusion_probability(n, floor, rate)
+                if p > 0.0:
+                    assert is_valid_propensity(p), (n, floor, rate, p)
+
+
+def test_format_propensity_marks_unknown_distinctly() -> None:
+    """An uncaptured probability must read as absent, never as a number.
+
+    Concrete numeric rendering is covered by the readability and round-trip tests below;
+    this one exists for the ``None`` case, where the risk is a placeholder that an operator
+    could mistake for a real value.
+    """
+    assert format_propensity(None) == PROPENSITY_UNKNOWN
+    assert format_propensity(None, unknown="n/a") == "n/a"
+    assert not PROPENSITY_UNKNOWN.replace(".", "").isdigit(), "must not look like a number"
+
+
+@given(st.floats(min_value=0.0, max_value=1.0, exclude_min=True, allow_nan=False))
+def test_any_valid_propensity_survives_the_render_parse_round_trip(value: float) -> None:
+    """Rendering is SERIALISATION, not decoration: the text is pasted into a dispatch.
+
+    Drawn from the contract's own domain rather than a hand-picked list. The previous
+    version of this test sampled (1.0, 0.05, 1e-6) -- precisely the values that survive
+    fixed-point rendering -- so it passed while a sibling test asserted 1e-12 was valid.
+    Two tests, mutually contradictory, neither failing.
+    """
+    assert is_valid_propensity(value), "strategy must stay inside the contract"
+    rendered = format_propensity(value)
+    assert is_valid_propensity(float(rendered)), (
+        f"{value!r} rendered as {rendered!r}, which is no longer a usable propensity"
+    )
+
+
+@pytest.mark.parametrize("value", [1e-7, 1e-12, 5e-324], ids=["1e-7", "1e-12", "denormal"])
+def test_a_tiny_propensity_is_not_rendered_away(value: float) -> None:
+    """Explicit regression for the fixed-point bug, legible without reading Hypothesis.
+
+    Under ``.6f`` each of these became ``"0.000000"`` -> ``0.0`` -> rejected, so the audit
+    issue printed a `gh workflow run` command guaranteed to fail at the recorder.
+    """
+    rendered = format_propensity(value)
+    assert float(rendered) != 0.0, f"{value!r} collapsed to {rendered!r}"
+    assert is_valid_propensity(float(rendered))
+
+
+def test_rendering_stays_readable_for_the_values_the_sampler_emits() -> None:
+    """Round-trip safety must not come at the cost of unreadable arithmetic noise."""
+    assert format_propensity(0.05) == "0.05"
+    assert format_propensity(1.0) == "1"
+    assert format_propensity(0.2 + 0.4) == "0.6"  # not '0.6000000000000001'

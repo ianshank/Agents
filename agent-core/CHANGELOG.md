@@ -6,6 +6,50 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 ## [Unreleased]
 
 ### Added
+- **The audit-propensity contract is single-sourced** as `audit_sampler.is_valid_propensity`
+  / `format_propensity` (with `PROPENSITY_PRECISION` / `PROPENSITY_UNKNOWN`). Three layers
+  previously restated `0.0 < p <= 1.0` independently, and they had already drifted: only
+  the store's write boundary also checked `math.isfinite`. The copies were equivalent
+  solely because `0.0 < nan` happens to be `False` — true by accident, not by design.
+  Rendering is shared for the same reason: the audit issue, the `gh workflow run` command
+  it prints, and the recorder's log must agree, or an operator copying one into the other
+  silently changes the value.
+
+### Fixed
+- **`format_propensity` could render a valid propensity into an unusable one.** Fixed-point
+  (`.6f`) turned `1e-7` into `"0.000000"`, which parses back to `0.0` and is rejected by
+  `is_valid_propensity`. That output is not decoration — it is pasted into the `gh workflow
+  run` command the audit issue prints — so a propensity the contract accepts produced a
+  dispatch guaranteed to fail at the recorder, the same failure mode the ingestion guard
+  exists to prevent, one layer later. Now renders significant figures (`.6g`), which switches
+  to an exponent instead of collapsing to zero and is tidier for the arithmetic-noise values
+  the sampler actually emits (`0.6`, not `0.600000`). A Hypothesis property test over the
+  contract's domain pins it; the previous round-trip test had hand-picked exactly the three
+  values that survive.
+- **Two sites bypassed the shared renderer entirely** — the `selected.txt` writer and a debug
+  log. The writer is the *serialisation boundary* `audit_issue_sync` reads back, so the
+  producer could emit a value its own consumer rejects. Found by running the seam end to end
+  rather than trusting the unit tests, which stub it. Defining a single point of truth is not
+  the same as using it, so `F_047` now fails on a local `.6f` in either module.
+- **A degenerate slice reported a by-construction `AUROC = 0.5`.** `proxy_eval` computed
+  AUROC whenever both outcome classes were present, even for a *constant* proxy — which
+  cannot rank anything, so 0.5 is its value by construction. That is precisely the number
+  `calibration_report.analyze_slice` refuses to print ("rather than a misleading AUROC of
+  0.5"), in the module whose stated purpose is honesty about degeneracy. The degeneracy
+  flag now gates it.
+- **A tuned `lambda` could run out of residual degrees of freedom.** Charging the residual
+  a second degree of freedom (correct, and what repaired small-n coverage) left `n = 2`
+  with none: `_variance(..., ddof=2)` returns `0.0`, the residual term vanished, and the
+  interval reported a half-width of ~0.06 from two observations. `PPIConfig` now requires
+  `min_labeled >= 3` and `ppi_plus_interval` independently refuses when
+  `n - resid_ddof < 1`.
+- **The proxy-range check allocated two full copies of the unlabeled pool** to print one
+  example; replaced by a streaming `_count_out_of_range` helper keeping only the count and
+  first offender.
+- `proxy_eval`'s module docstring cited `agent_core.calibration.effective_n_multiplier`;
+  the symbol moved to `agent_core.ppi` in the 500-line split.
+
+### Added
 - **Proxy-correlation measurement + prediction-powered intervals (`ppi`, `proxies`,
   `proxy_eval`).** `proxy_eval` measures how well a cheap proxy predicts the authoritative
   `HUMAN_AUDIT` label — marginally *and* conditionally on the subsets the gate operates

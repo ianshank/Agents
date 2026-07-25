@@ -20,8 +20,9 @@ must never render as the tightest one on the page.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from itertools import chain
 
 from .calibration import wilson_interval
 from .logging_util import get_logger
@@ -155,8 +156,13 @@ class PPIConfig:
                 f"ppi.lambda_min must be <= lambda_max (got {self.lambda_min!r} > "
                 f"{self.lambda_max!r})"
             )
-        if self.min_labeled < 2:
-            raise ValueError(f"ppi.min_labeled must be >= 2 (got {self.min_labeled!r})")
+        # Three, not two: a tuned lambda costs the residual a second degree of freedom, so
+        # at n == 2 the residual variance has none left, collapses to 0.0, and the interval
+        # reports a half-width of ~0.06 from two observations. The runtime guard in
+        # `ppi_plus_interval` enforces this independently, but rejecting it here makes the
+        # contract explicit rather than leaving it to be discovered.
+        if self.min_labeled < 3:
+            raise ValueError(f"ppi.min_labeled must be >= 3 (got {self.min_labeled!r})")
         if not (math.isfinite(self.proxy_lo) and math.isfinite(self.proxy_hi)):
             raise ValueError("ppi.proxy_lo/proxy_hi must be finite")
         if self.proxy_lo >= self.proxy_hi:
@@ -212,6 +218,24 @@ class PPIEstimate:
             return None
         ratio = self.se / self.se_classical
         return 1.0 - ratio * ratio
+
+
+def _count_out_of_range(values: Iterable[float], cfg: PPIConfig) -> tuple[int, float | None]:
+    """Count out-of-contract proxy values, returning ``(count, first_offender)``.
+
+    A single streaming pass keeping only what the error message needs. Collecting every
+    offender into a list -- and concatenating the two pools into a tuple to feed it --
+    allocated two full copies of an arbitrarily large unlabeled pool just to print one
+    example.
+    """
+    count = 0
+    first: float | None = None
+    for v in values:
+        if not cfg.proxy_lo <= v <= cfg.proxy_hi:
+            count += 1
+            if first is None:
+                first = v
+    return count, first
 
 
 def ppi_plus_interval(
@@ -275,13 +299,11 @@ def ppi_plus_interval(
         return _degenerate("no unlabeled proxy values: nothing to borrow strength from")
 
     proxies = [p for p, _ in labeled]
-    out_of_range = [
-        p for p in (*proxies, *unlabeled_proxy) if not cfg.proxy_lo <= p <= cfg.proxy_hi
-    ]
-    if out_of_range:
+    n_bad, first_bad = _count_out_of_range(chain(proxies, unlabeled_proxy), cfg)
+    if first_bad is not None:
         return _degenerate(
             f"proxy outside [{cfg.proxy_lo:g}, {cfg.proxy_hi:g}]: "
-            f"{len(out_of_range)} value(s), e.g. {out_of_range[0]:.4g} -- standardise first"
+            f"{n_bad} value(s), e.g. {first_bad:.4g} -- standardise first"
         )
 
     ys = [float(o) for o in outcomes]
@@ -314,6 +336,13 @@ def ppi_plus_interval(
     # the "lambda = 0 recovers the classical estimator" guarantee the whole no-worse-than-
     # classical argument rests on.
     resid_ddof = 1 if lam == 0.0 else 2
+    if n - resid_ddof < 1:
+        # Defence in depth against a lowered `min_labeled`: with no residual degrees of
+        # freedom `_variance` returns 0.0, the residual term vanishes, and the interval
+        # advertises spectacular precision from a handful of points. Refuse instead.
+        return _degenerate(
+            f"no residual degrees of freedom: n={n} with a tuned lambda needs n > {resid_ddof}"
+        )
     var_resid = _variance([y - lam * f for f, y in zip(proxies, ys, strict=True)], ddof=resid_ddof)
     var_point = max(0.0, var_resid) / n + (lam * lam) * var_u_f / big_n
     se = math.sqrt(var_point)

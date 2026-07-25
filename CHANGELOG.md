@@ -6,7 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Security
+- **Argument injection in the `merge-gate verdict` workflow dispatch.** The optional
+  `selection_propensity` input was interpolated into an *unquoted* shell scalar and then
+  word-split into the `python` invocation, so an input of `0.5 --store /tmp/x` appended a
+  second `--store` that argparse resolves last-wins — redirecting where the verdict was
+  written. Routing the value through `env` (already done) stops *template* injection; only
+  a quoted bash-array expansion stops *argument* injection. Reachable by an authorized
+  auditor only, since the job gates on `MERGE_GATE_AUDITORS`. Pinned by `F_047.py`, which
+  now fails if the array expansion is ever replaced by a bare `$PROP_ARGS`, and by a test
+  asserting the value reaches argparse as a single token.
+
 ### Added
+- **A single-sourced propensity contract.** `is_valid_propensity` / `format_propensity`
+  replace three independent restatements of `0.0 < p <= 1.0`, which had already drifted
+  (only one also checked `math.isfinite`) and were equivalent only because `0.0 < nan` is
+  incidentally `False`. `audit_issue_sync` now also validates at *ingestion*: `float()`
+  accepts `"nan"`, `"inf"` and any magnitude, so parsing was never validation — an
+  out-of-contract column used to render into the issue body and into a dispatch command
+  guaranteed to fail downstream. It is now logged and treated as unknown, so the change
+  still gets audited, it just cannot be reweighted.
+- **Follow-up hardening + end-to-end propensity wiring (F-047, ADR 0026).** Closes the
+  review findings on the merged proxy/PPI++ work and makes `selection_propensity` live.
+  Correctness: `proxy_eval` no longer reports a by-construction `AUROC = 0.5` for a
+  constant proxy (its sibling `calibration_report` had always withheld it); a tuned
+  `lambda` can no longer run out of residual degrees of freedom (`min_labeled >= 3` plus a
+  runtime guard — at `n = 2` the residual variance collapsed to `0.0` and the interval
+  reported a half-width of **0.06 from two observations**); the proxy-range check streams
+  instead of materialising two full copies of the unlabeled pool; and a stale docstring
+  pointed at the pre-split module. **Propensity is no longer dead data**: `merge-gate-audit`
+  selects `--with-propensity`, `audit_issue_sync` carries the value into the audit issue
+  *and* the dispatch command the human copies out, and `merge-gate-verdict` →
+  `record_audit_verdict` thread it to the write boundary — backwards compatible at every
+  seam (both `selected.txt` formats parse, bare ids still accepted, a blank input records
+  NULL rather than a fabricated probability). Also corrected: the spike's removal
+  instructions omitted the `mkdocs.yml` nav entry, which leaves a dangling-nav warning
+  (measured — the build is non-strict by design, so it is a warning today and a hard
+  failure under `--strict`). Docs refreshed to match: C4 merge-gate component diagram,
+  `NEXT_STEPS.md` (whose `N≥20` claim contradicted the peer review merged alongside it),
+  both READMEs, `AGENTS.md`, the e2e runbook, and the ADR index.
 - **Peer-review hardening of the proxy/PPI work (`agent-core`).** An adversarial
   correctness review and a gap/hygiene audit of the change below found six real defects,
   all fixed here: a prediction-powered interval could render **inverted** (`lo > hi`, a
