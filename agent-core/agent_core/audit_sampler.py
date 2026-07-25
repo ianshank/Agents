@@ -222,12 +222,21 @@ def main(argv: list[str] | None = None) -> int:
             )
         print(f"# selected {len(picks)} for audit", file=sys.stderr)
     else:
-        rec = record_verdict(
-            store,
-            args.change_id,
-            args.correct,
-            selection_propensity=args.selection_propensity,
-        )
+        # An out-of-contract --selection-propensity is an operator error, not a bug:
+        # surface it as a clean message + exit 2 (the repo's usage-error code) rather than
+        # a raw traceback. An unknown --change-id keeps raising, unchanged: that means the
+        # store does not hold the record, which is a real integrity problem, not a typo in
+        # a flag.
+        try:
+            rec = record_verdict(
+                store,
+                args.change_id,
+                args.correct,
+                selection_propensity=args.selection_propensity,
+            )
+        except ValueError as exc:
+            logger.error("audit-sampler: %s", exc)
+            return 2
         print(f"recorded audit {rec.change_id} correct={rec.label}")
     return 0
 

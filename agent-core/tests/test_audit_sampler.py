@@ -269,3 +269,32 @@ def test_cli_record_threads_the_propensity(tmp_path) -> None:
     )
     assert rc == 0
     assert store.resolved()["c1"].selection_propensity == 0.05
+
+
+def test_cli_bad_propensity_is_a_clean_exit(tmp_path, caplog) -> None:
+    """An operator typo must not surface as a traceback (repo convention: exit 2)."""
+    store = _store(tmp_path, _pending("c1"))
+    with caplog.at_level("ERROR", logger="agent_core.audit_sampler"):
+        rc = main(
+            [
+                "--store",
+                str(store.path),
+                "record",
+                "--change-id",
+                "c1",
+                "--correct",
+                "--selection-propensity",
+                "1.5",
+            ]
+        )
+    assert rc == 2
+    assert any("selection_propensity" in r.message for r in caplog.records)
+    assert store.resolved()["c1"].label is None  # nothing was written
+
+
+def test_cli_unknown_change_id_still_raises(tmp_path) -> None:
+    """Unchanged: an unknown id means the store lacks the record — an integrity problem,
+    not a flag typo, so it must stay loud rather than become a tidy exit code."""
+    store = _store(tmp_path, _pending("c1"))
+    with pytest.raises(KeyError):
+        main(["--store", str(store.path), "record", "--change-id", "nope", "--correct"])
