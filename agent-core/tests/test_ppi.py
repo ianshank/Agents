@@ -132,6 +132,7 @@ def test_ppi_config_defaults() -> None:
         lambda: PPIConfig(lambda_min=0.9, lambda_max=0.1),
         lambda: PPIConfig(lambda_min=float("nan")),
         lambda: PPIConfig(min_labeled=1),
+        lambda: PPIConfig(min_labeled=2),
         lambda: PPIConfig(proxy_lo=1.0, proxy_hi=0.0),
         lambda: PPIConfig(proxy_lo=float("nan")),
     ],
@@ -319,3 +320,33 @@ def test_coverage_is_near_nominal_at_the_configured_floor() -> None:
         elif est.degenerate is not None:
             covered += 1  # fell back to Wilson, which is conservative by construction
     assert covered / trials >= 0.90, f"coverage {covered / trials:.3f} far below nominal 0.95"
+
+
+def test_a_tuned_lambda_never_runs_out_of_residual_degrees_of_freedom() -> None:
+    """Regression: `ddof=2` at n=2 left zero dof, so the residual variance collapsed to 0.
+
+    The interval then reported a half-width of ~0.06 from TWO observations — the exact
+    false certainty this estimator exists to refuse. The default ``min_labeled`` hid it,
+    but the config permitted ``min_labeled=2``, so both the contract and a runtime guard
+    now reject it.
+    """
+    with pytest.raises(ValueError, match="min_labeled must be >= 3"):
+        PPIConfig(min_labeled=2)
+
+    # And no permitted configuration can produce an implausibly tight interval.
+    narrowest = min(
+        (
+            est.half_width
+            for n in range(3, 15)
+            for est in [
+                ppi_plus_interval(
+                    [(i / 20, i % 2) for i in range(n)],
+                    [0.5] * 50 + [0.9] * 50,
+                    PPIConfig(min_labeled=3),
+                )
+            ]
+            if est.degenerate is None
+        ),
+        default=1.0,
+    )
+    assert narrowest > 0.1, f"half-width {narrowest:.4f} is implausible at n < 15"

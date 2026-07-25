@@ -155,8 +155,13 @@ class PPIConfig:
                 f"ppi.lambda_min must be <= lambda_max (got {self.lambda_min!r} > "
                 f"{self.lambda_max!r})"
             )
-        if self.min_labeled < 2:
-            raise ValueError(f"ppi.min_labeled must be >= 2 (got {self.min_labeled!r})")
+        # Three, not two: a tuned lambda costs the residual a second degree of freedom, so
+        # at n == 2 the residual variance has none left, collapses to 0.0, and the interval
+        # reports a half-width of ~0.06 from two observations. The runtime guard in
+        # `ppi_plus_interval` enforces this independently, but rejecting it here makes the
+        # contract explicit rather than leaving it to be discovered.
+        if self.min_labeled < 3:
+            raise ValueError(f"ppi.min_labeled must be >= 3 (got {self.min_labeled!r})")
         if not (math.isfinite(self.proxy_lo) and math.isfinite(self.proxy_hi)):
             raise ValueError("ppi.proxy_lo/proxy_hi must be finite")
         if self.proxy_lo >= self.proxy_hi:
@@ -314,6 +319,13 @@ def ppi_plus_interval(
     # the "lambda = 0 recovers the classical estimator" guarantee the whole no-worse-than-
     # classical argument rests on.
     resid_ddof = 1 if lam == 0.0 else 2
+    if n - resid_ddof < 1:
+        # Defence in depth against a lowered `min_labeled`: with no residual degrees of
+        # freedom `_variance` returns 0.0, the residual term vanishes, and the interval
+        # advertises spectacular precision from a handful of points. Refuse instead.
+        return _degenerate(
+            f"no residual degrees of freedom: n={n} with a tuned lambda needs n > {resid_ddof}"
+        )
     var_resid = _variance([y - lam * f for f, y in zip(proxies, ys, strict=True)], ddof=resid_ddof)
     var_point = max(0.0, var_resid) / n + (lam * lam) * var_u_f / big_n
     se = math.sqrt(var_point)
