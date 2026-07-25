@@ -312,3 +312,39 @@ def test_store_sync_opaque_line_is_readable_by_outcome_store(tmp_path, caplog):
         loaded = OutcomeStore(path).all()
     assert [r.change_id for r in loaded] == ["c1", "c2"]
     assert any("tomorrows_field" in r.message for r in caplog.records)
+
+
+# --- selection propensity (forward/backward compatibility) -------------------
+def test_selection_propensity_round_trips() -> None:
+    rec = OutcomeRecord(
+        change_id="c1",
+        domain="core",
+        raw_confidence=0.9,
+        merged_at="2026-01-01T00:00:00+00:00",
+        label=True,
+        label_source=LabelSource.HUMAN_AUDIT.value,
+        labeled_at="2026-01-02T00:00:00+00:00",
+        selection_propensity=0.05,
+    )
+    assert OutcomeRecord.from_json(rec.to_json()) == rec
+
+
+def test_record_written_before_the_field_existed_loads_as_none() -> None:
+    """Old lines carry no propensity key; they must load, not raise, and stay unknown."""
+    legacy = (
+        '{"change_id": "c1", "domain": "core", "raw_confidence": 0.9, '
+        '"merged_at": "2026-01-01T00:00:00+00:00", "label": true, '
+        '"label_source": "human_audit", "labeled_at": "2026-01-02T00:00:00+00:00", '
+        '"agent_version": null}'
+    )
+    rec = OutcomeRecord.from_json(legacy)
+    assert rec.change_id == "c1"
+    assert rec.selection_propensity is None  # unknown, never silently 0.0 or 1.0
+
+
+def test_propensity_absent_records_still_build_domain_models(tmp_path) -> None:
+    """The new field must not become a hidden precondition of the calibration fit."""
+    store = OutcomeStore(tmp_path / "s.jsonl")
+    for i in range(4):
+        store.append(_rec(f"c{i}", "core", 0.1 + 0.2 * i, i % 2 == 0, LabelSource.HUMAN_AUDIT))
+    assert set(build_domain_models(store, CFG)) == {"core"}

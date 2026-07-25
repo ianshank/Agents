@@ -218,6 +218,256 @@ def selective_risk_coverage(
     return points
 
 
+# --- shared moment helpers ---------------------------------------------------
+# Smallest denominator tolerated before a variance ratio is treated as saturated.
+_MIN_VARIANCE_DENOM = 1e-12
+
+
+def _mean(xs: Sequence[float]) -> float:
+    return sum(xs) / len(xs)
+
+
+def _variance(xs: Sequence[float], ddof: int = 1) -> float:
+    """Sample variance. Returns 0.0 when fewer than ``ddof + 1`` points exist.
+
+    Squaring a large deviation can exceed the float range, which CPython raises on rather
+    than saturating. An unrepresentable spread is reported as ``inf`` so callers reject it
+    through their existing finiteness guards instead of crashing on a valid input.
+    """
+    n = len(xs)
+    if n - ddof < 1:
+        return 0.0
+    mu = _mean(xs)
+    try:
+        return sum((x - mu) ** 2 for x in xs) / (n - ddof)
+    except OverflowError:
+        return math.inf
+
+
+def _covariance(xs: Sequence[float], ys: Sequence[float], ddof: int = 1) -> float:
+    n = len(xs)
+    if n - ddof < 1:
+        return 0.0
+    mx, my = _mean(xs), _mean(ys)
+    try:
+        return sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True)) / (n - ddof)
+    except OverflowError:
+        return math.inf
+
+
+def pearson_r(xs: Sequence[float], ys: Sequence[float]) -> float | None:
+    """Pearson correlation, or ``None`` when either series is constant.
+
+    ``None`` rather than ``0.0``: a constant series makes correlation *undefined*, not
+    zero, and reporting the difference is the whole point of the degeneracy handling
+    elsewhere in this module. Result is clamped to ``[-1, 1]`` against float drift.
+    """
+    if len(xs) != len(ys):
+        raise ValueError("xs and ys must have equal length")
+    if len(xs) < 2:
+        return None
+    vx, vy = _variance(xs), _variance(ys)
+    if vx <= 0.0 or vy <= 0.0:
+        return None
+    # Root each variance BEFORE multiplying. ``sqrt(vx * vy)`` looks equivalent but the
+    # product underflows to exactly 0.0 for tiny-but-positive variances (two points
+    # ~1e-83 apart give vx*vy ~1e-331, below the smallest subnormal), and the division
+    # then raises ZeroDivisionError. Rooting first keeps both factors representable.
+    denom = math.sqrt(vx) * math.sqrt(vy)
+    if denom <= 0.0 or not math.isfinite(denom):
+        return None
+    r = _covariance(xs, ys) / denom
+    if not math.isfinite(r):
+        return None
+    return max(-1.0, min(1.0, r))
+
+
+def effective_n_multiplier(rho: float | None) -> float:
+    """Asymptotic ``n_eff / n`` for a control-variate estimator: ``1 / (1 - rho^2)``.
+
+    How much labelling effort a proxy of correlation ``rho`` is worth. Returns ``1.0``
+    (no gain) for an undefined correlation, and saturates at ``|rho| -> 1`` rather than
+    dividing by zero — a perfect proxy would need no labels at all, which is never the
+    regime we are in.
+    """
+    if rho is None:
+        return 1.0
+    denom = 1.0 - rho * rho
+    if denom <= _MIN_VARIANCE_DENOM:
+        return 1.0 / _MIN_VARIANCE_DENOM
+    return 1.0 / denom
+
+
+# --- prediction-powered inference (PPI++) ------------------------------------
+@dataclass(frozen=True)
+class PPIConfig:
+    """Tunables for the prediction-powered interval. No literal appears at a call site."""
+
+    z: float = 1.96  # normal-approximation quantile (95% by default)
+    lambda_min: float = 0.0  # clamp floor; 0 => classical labelled-only estimator
+    lambda_max: float = 1.0  # clamp ceiling; 1 => vanilla (untuned) PPI
+    min_labeled: int = 2  # below this a sample variance does not exist
+
+    def __post_init__(self) -> None:
+        if not (math.isfinite(self.z) and self.z > 0):
+            raise ValueError(f"ppi.z must be a finite value > 0 (got {self.z!r})")
+        if not (math.isfinite(self.lambda_min) and math.isfinite(self.lambda_max)):
+            raise ValueError("ppi.lambda_min/lambda_max must be finite")
+        if self.lambda_min > self.lambda_max:
+            raise ValueError(
+                f"ppi.lambda_min must be <= lambda_max (got {self.lambda_min!r} > "
+                f"{self.lambda_max!r})"
+            )
+        if self.min_labeled < 2:
+            raise ValueError(f"ppi.min_labeled must be >= 2 (got {self.min_labeled!r})")
+
+
+@dataclass(frozen=True)
+class PPIEstimate:
+    """A prediction-powered mean estimate and its interval.
+
+    ``classical_lo``/``classical_hi`` are the *same-family* (lambda = 0) interval on the
+    labelled data alone. Comparing against those isolates the gain actually attributable
+    to the proxy; comparing a normal-approximation PPI interval directly against a Wilson
+    score interval would also fold in the interval-type difference, which at small ``n``
+    is the larger effect and is not a gain at all.
+    """
+
+    point: float
+    lo: float
+    hi: float
+    lam: float
+    n_labeled: int
+    n_unlabeled: int
+    classical_lo: float
+    classical_hi: float
+    degenerate: str | None = None
+
+    @property
+    def half_width(self) -> float:
+        return (self.hi - self.lo) / 2.0
+
+    @property
+    def classical_half_width(self) -> float:
+        return (self.classical_hi - self.classical_lo) / 2.0
+
+    @property
+    def variance_reduction(self) -> float:
+        """Fraction of the classical variance removed by the proxy, in ``[0, 1)``."""
+        c = self.classical_half_width
+        if c <= 0.0:
+            return 0.0
+        ratio = self.half_width / c
+        return max(0.0, 1.0 - ratio * ratio)
+
+
+def ppi_plus_interval(
+    labeled: Sequence[tuple[float, int]],
+    unlabeled_proxy: Sequence[float],
+    cfg: PPIConfig | None = None,
+) -> PPIEstimate:
+    """Power-tuned prediction-powered interval for a mean outcome rate.
+
+    ``labeled`` pairs each authoritative outcome with the proxy's value for the same
+    unit; ``unlabeled_proxy`` holds proxy values for units with no authoritative label.
+    The estimator is ``theta = mean_L(Y) + lambda * (mean_U(f) - mean_L(f))`` with
+    ``lambda`` chosen to minimise variance, so ``lambda = 0`` recovers the classical
+    estimator exactly and the tuned form is asymptotically never worse (PPI++).
+
+    Fail-closed by construction: whenever the normal approximation cannot be trusted —
+    too few labels, a single outcome class (zero labelled variance, which would collapse
+    the interval to a false-certainty point), a constant proxy, or no unlabeled data —
+    the returned interval is the **Wilson** interval on the labelled outcomes and
+    ``degenerate`` says why. An interval we cannot trust must never read as the tightest.
+    """
+    cfg = cfg or PPIConfig()
+    n = len(labeled)
+    outcomes = [o for _, o in labeled]
+    for o in outcomes:
+        if o not in (0, 1):
+            raise ValueError(f"outcome must be 0 or 1, got {o}")
+    k = sum(outcomes)
+    fallback_lo, fallback_hi = wilson_interval(k, n, cfg.z)
+    point_fallback = (k / n) if n else 0.0
+
+    def _degenerate(reason: str) -> PPIEstimate:
+        logger.warning(
+            "prediction-powered interval unavailable (%s); falling back to the Wilson "
+            "interval on %d labelled record(s)",
+            reason,
+            n,
+        )
+        return PPIEstimate(
+            point=point_fallback,
+            lo=fallback_lo,
+            hi=fallback_hi,
+            lam=0.0,
+            n_labeled=n,
+            n_unlabeled=len(unlabeled_proxy),
+            classical_lo=fallback_lo,
+            classical_hi=fallback_hi,
+            degenerate=reason,
+        )
+
+    if n < cfg.min_labeled:
+        return _degenerate(f"insufficient labelled samples: n={n} < {cfg.min_labeled}")
+    if len(set(outcomes)) == 1:
+        cls = "correct" if outcomes[0] == 1 else "incorrect"
+        return _degenerate(f"single outcome class: all {n} labelled outcomes are {cls}")
+
+    big_n = len(unlabeled_proxy)
+    if big_n == 0:
+        return _degenerate("no unlabeled proxy values: nothing to borrow strength from")
+
+    proxies = [p for p, _ in labeled]
+    ys = [float(o) for o in outcomes]
+    var_f_l = _variance(proxies)
+    if var_f_l <= 0.0:
+        return _degenerate(f"constant proxy: value == {proxies[0]:.4g} for all {n} records")
+    if not math.isfinite(var_f_l):
+        return _degenerate("proxy variance is not representable as a float")
+
+    var_y = _variance(ys)
+    cov_yf = _covariance(proxies, ys)
+    # lambda* = cov / (var_f * (1 + n/N)); the (1 + n/N) factor charges for the noise in
+    # the unlabeled mean, so a small unlabeled pool tunes conservatively toward classical.
+    lam = cov_yf / (var_f_l * (1.0 + n / big_n))
+    lam = max(cfg.lambda_min, min(cfg.lambda_max, lam))
+
+    var_u_f = _variance(unlabeled_proxy) if big_n >= 2 else 0.0
+    point = _mean(ys) + lam * (_mean(unlabeled_proxy) - _mean(proxies))
+    var_resid = var_y - 2.0 * lam * cov_yf + lam * lam * var_f_l
+    var_point = max(0.0, var_resid) / n + (lam * lam) * var_u_f / big_n
+    se = math.sqrt(var_point)
+    # lambda = 0 baseline in the same (normal-approximation) family, for honest attribution.
+    se_classical = math.sqrt(var_y / n)
+
+    def _clip(lo: float, hi: float) -> tuple[float, float]:
+        return max(0.0, lo), min(1.0, hi)
+
+    lo, hi = _clip(point - cfg.z * se, point + cfg.z * se)
+    c_lo, c_hi = _clip(_mean(ys) - cfg.z * se_classical, _mean(ys) + cfg.z * se_classical)
+    logger.debug(
+        "ppi++: n=%d N=%d lam=%.6f point=%.6f se=%.6f se_classical=%.6f",
+        n,
+        big_n,
+        lam,
+        point,
+        se,
+        se_classical,
+    )
+    return PPIEstimate(
+        point=max(0.0, min(1.0, point)),
+        lo=lo,
+        hi=hi,
+        lam=lam,
+        n_labeled=n,
+        n_unlabeled=big_n,
+        classical_lo=c_lo,
+        classical_hi=c_hi,
+    )
+
+
 # --- recalibration -----------------------------------------------------------
 @runtime_checkable
 class Calibrator(Protocol):
