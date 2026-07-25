@@ -20,8 +20,9 @@ must never render as the tightest one on the page.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from itertools import chain
 
 from .calibration import wilson_interval
 from .logging_util import get_logger
@@ -219,6 +220,24 @@ class PPIEstimate:
         return 1.0 - ratio * ratio
 
 
+def _count_out_of_range(values: Iterable[float], cfg: PPIConfig) -> tuple[int, float | None]:
+    """Count out-of-contract proxy values, returning ``(count, first_offender)``.
+
+    A single streaming pass keeping only what the error message needs. Collecting every
+    offender into a list -- and concatenating the two pools into a tuple to feed it --
+    allocated two full copies of an arbitrarily large unlabeled pool just to print one
+    example.
+    """
+    count = 0
+    first: float | None = None
+    for v in values:
+        if not cfg.proxy_lo <= v <= cfg.proxy_hi:
+            count += 1
+            if first is None:
+                first = v
+    return count, first
+
+
 def ppi_plus_interval(
     labeled: Sequence[tuple[float, int]],
     unlabeled_proxy: Sequence[float],
@@ -280,13 +299,11 @@ def ppi_plus_interval(
         return _degenerate("no unlabeled proxy values: nothing to borrow strength from")
 
     proxies = [p for p, _ in labeled]
-    out_of_range = [
-        p for p in (*proxies, *unlabeled_proxy) if not cfg.proxy_lo <= p <= cfg.proxy_hi
-    ]
-    if out_of_range:
+    n_bad, first_bad = _count_out_of_range(chain(proxies, unlabeled_proxy), cfg)
+    if first_bad is not None:
         return _degenerate(
             f"proxy outside [{cfg.proxy_lo:g}, {cfg.proxy_hi:g}]: "
-            f"{len(out_of_range)} value(s), e.g. {out_of_range[0]:.4g} -- standardise first"
+            f"{n_bad} value(s), e.g. {first_bad:.4g} -- standardise first"
         )
 
     ys = [float(o) for o in outcomes]

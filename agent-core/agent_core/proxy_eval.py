@@ -6,7 +6,7 @@ authoritative HUMAN_AUDIT label — on the subsets the gate actually operates ov
 
 A control-variate estimator (PPI/PPI++) shrinks the variance of a mean by roughly
 ``1 - rho**2``, so a proxy correlated at ``rho`` is worth an effective-sample multiplier
-of ``1 / (1 - rho**2)`` (:func:`agent_core.calibration.effective_n_multiplier`). Two
+of ``1 / (1 - rho**2)`` (:func:`agent_core.ppi.effective_n_multiplier`). Two
 consequences drive this module's shape:
 
 * A *marginal* correlation is not the operative number. The merge gate conditions on
@@ -219,8 +219,13 @@ def _analyze_pairs(
         # of records, which is exactly the false precision this report exists to avoid.
         degenerate = f"perfect correlation on n={n} records: too collinear to be evidence"
         rho = None
+    # Withhold AUROC on a degenerate slice, matching `calibration_report.analyze_slice`.
+    # A constant proxy cannot rank anything, so its AUROC is 0.5 *by construction* -- and
+    # emitting that number is precisely the false precision this module exists to refuse.
+    # Both classes being present is necessary for AUROC to be defined, but not sufficient
+    # for it to mean anything.
     roc: float | None = None
-    if len({int(y) for y in ys}) == 2:
+    if degenerate is None and len({int(y) for y in ys}) == 2:
         roc = auroc(xs, [int(y) for y in ys])
     return SliceCorrelation(label, n, rho, roc, effective_n_multiplier(rho), degenerate)
 

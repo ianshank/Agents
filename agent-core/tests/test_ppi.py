@@ -350,3 +350,16 @@ def test_a_tuned_lambda_never_runs_out_of_residual_degrees_of_freedom() -> None:
         default=1.0,
     )
     assert narrowest > 0.1, f"half-width {narrowest:.4f} is implausible at n < 15"
+
+
+def test_out_of_range_proxy_reports_a_count_and_one_example() -> None:
+    """The message needs the first offender and a count -- not every offending value.
+
+    Materialising them all (plus the concatenated proxy tuple that fed the comprehension)
+    allocated two full copies of an arbitrarily large unlabeled pool to print one example.
+    """
+    est = ppi_plus_interval([(i / 20, i % 2) for i in range(12)], [5.0] * 1000)
+    assert est.degenerate is not None
+    assert "1000 value(s)" in est.degenerate
+    assert "e.g. 5" in est.degenerate
+    assert math.isclose(est.lo, wilson_interval(6, 12)[0], abs_tol=1e-12)

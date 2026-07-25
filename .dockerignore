@@ -69,5 +69,9 @@ phoenix-server.log
 
 # Docs (not needed in container)
 docs/
+# Change proposals + the agent-coordination contract: markdown only, no runtime role.
+# `*.md` below already covers its contents; the directory entry keeps it explicit and
+# consistent with `docs/` above.
+openspec/
 *.md
 !README.md

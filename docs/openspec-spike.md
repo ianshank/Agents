@@ -38,15 +38,31 @@ in `features.yaml`.
 
 ## Reversibility contract
 
-The spike is load-bearing for nothing. To remove it:
+The spike is load-bearing for nothing — but it *is* referenced from the navigation
+surfaces, so deleting only the directory leaves `mkdocs.yml` pointing at a page that no
+longer exists. Measured: the build still exits 0 (this repo runs mkdocs **non-strict** by
+design, see the note in `mkdocs.yml`) but emits
+
+> `WARNING - A reference to 'openspec-spike.md' is included in the 'nav' configuration,
+> which is not found in the documentation files.`
+
+which becomes a hard failure the day `--strict` is adopted. Remove the references too:
 
 ```bash
 rm -rf openspec/ docs/openspec-spike.md
+# Drop the four references added alongside it, or the nav is left dangling:
+#   mkdocs.yml        nav -> "OpenSpec coordination layer: openspec-spike.md"
+#   docs/README.md    the openspec-spike bullet under "Spikes"
+#   AGENTS.md         the `openspec/` row in the root documentation map
+#   .dockerignore     the `openspec/` line under "Docs (not needed in container)"
+
 python scripts/validate.py --tier fast   # still green — no F-proof depends on openspec/
+mkdocs build                              # 0 warnings: proves no dangling nav entry
 make check-all                            # unaffected
 ```
 
-No code imports `openspec/`; no CI job reads it; no F-ID validation references it.
+No code imports `openspec/`; no CI job reads it; no F-ID validation references it. The only
+coupling is documentation navigation, which the four lines above cover.
 
 ## Evaluate-and-decide criteria
 

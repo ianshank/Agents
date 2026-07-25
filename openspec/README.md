@@ -31,5 +31,12 @@ registry).
 
 ## Removing this spike
 
-`rm -rf openspec/ docs/openspec-spike.md` then `python scripts/validate.py --tier fast` —
-still green; nothing depends on this directory.
+`rm -rf openspec/ docs/openspec-spike.md`, then drop the four navigation references added
+with it — the `mkdocs.yml` nav entry, the `docs/README.md` spike bullet, the `openspec/`
+row in `AGENTS.md`'s documentation map, and the `.dockerignore` line. Deleting the
+directory alone leaves `mkdocs.yml` pointing at a missing page — a dangling-nav warning
+today (the docs build is deliberately non-strict), and a hard failure under `--strict`.
+
+Verify with `python scripts/validate.py --tier fast` and a warning-free `mkdocs build`; no
+code, CI job, or F-ID validation depends on this directory. Full procedure in
+[`../docs/openspec-spike.md`](../docs/openspec-spike.md).
