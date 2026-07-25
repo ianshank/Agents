@@ -5,6 +5,16 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 
 ## [Unreleased]
 
+### Added
+- **The audit-propensity contract is single-sourced** as `audit_sampler.is_valid_propensity`
+  / `format_propensity` (with `PROPENSITY_PRECISION` / `PROPENSITY_UNKNOWN`). Three layers
+  previously restated `0.0 < p <= 1.0` independently, and they had already drifted: only
+  the store's write boundary also checked `math.isfinite`. The copies were equivalent
+  solely because `0.0 < nan` happens to be `False` — true by accident, not by design.
+  Rendering is shared for the same reason: the audit issue, the `gh workflow run` command
+  it prints, and the recorder's log must agree, or an operator copying one into the other
+  silently changes the value.
+
 ### Fixed
 - **A degenerate slice reported a by-construction `AUROC = 0.5`.** `proxy_eval` computed
   AUROC whenever both outcome classes were present, even for a *constant* proxy — which

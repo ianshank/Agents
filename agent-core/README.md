@@ -119,7 +119,7 @@ agent_core/
   merge_gate_ci.py CI entrypoint (exit 0/10/20; 2 = usage/bad input, 1 = internal), audit-logged
   detectors.py     GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo (fail-safe)
   timeutil.py      parse_iso8601 (Z-tolerant, UTC-default)
-tests/             693 tests across all modules
+tests/             708 tests across all modules
 ```
 
 ## Reports & CLIs (read-only)

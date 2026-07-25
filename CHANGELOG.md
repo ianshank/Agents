@@ -6,7 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Security
+- **Argument injection in the `merge-gate verdict` workflow dispatch.** The optional
+  `selection_propensity` input was interpolated into an *unquoted* shell scalar and then
+  word-split into the `python` invocation, so an input of `0.5 --store /tmp/x` appended a
+  second `--store` that argparse resolves last-wins — redirecting where the verdict was
+  written. Routing the value through `env` (already done) stops *template* injection; only
+  a quoted bash-array expansion stops *argument* injection. Reachable by an authorized
+  auditor only, since the job gates on `MERGE_GATE_AUDITORS`. Pinned by `F_047.py`, which
+  now fails if the array expansion is ever replaced by a bare `$PROP_ARGS`, and by a test
+  asserting the value reaches argparse as a single token.
+
 ### Added
+- **A single-sourced propensity contract.** `is_valid_propensity` / `format_propensity`
+  replace three independent restatements of `0.0 < p <= 1.0`, which had already drifted
+  (only one also checked `math.isfinite`) and were equivalent only because `0.0 < nan` is
+  incidentally `False`. `audit_issue_sync` now also validates at *ingestion*: `float()`
+  accepts `"nan"`, `"inf"` and any magnitude, so parsing was never validation — an
+  out-of-contract column used to render into the issue body and into a dispatch command
+  guaranteed to fail downstream. It is now logged and treated as unknown, so the change
+  still gets audited, it just cannot be reweighted.
 - **Follow-up hardening + end-to-end propensity wiring (F-047, ADR 0026).** Closes the
   review findings on the merged proxy/PPI++ work and makes `selection_propensity` live.
   Correctness: `proxy_eval` no longer reports a by-construction `AUROC = 0.5` for a
