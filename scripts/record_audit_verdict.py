@@ -50,10 +50,23 @@ def resolve_actor(cli_actor: str | None) -> str:
     return cli_actor or os.environ.get(DEFAULT_ACTOR_ENV) or "unknown"
 
 
-def record(store_path: str, change_id: str, correct: bool, actor: str) -> int:
+def record(
+    store_path: str,
+    change_id: str,
+    correct: bool,
+    actor: str,
+    selection_propensity: float | None = None,
+) -> int:
     """Pre-checked, idempotent verdict recording. See module docstring."""
     if not CHANGE_ID_RE.match(change_id):
         logger.error("record-verdict: change_id %r is not a commit SHA", change_id)
+        return EXIT_CONFIG
+    if selection_propensity is not None and not 0.0 < selection_propensity <= 1.0:
+        # Validated here, beside the SHA-shape check, so `record` keeps returning exit
+        # codes rather than raising: the value is typed into a workflow dispatch by hand,
+        # making an out-of-range one an operator error, not a bug. The store's own write
+        # boundary re-checks it (incl. NaN/inf) as the authoritative guard.
+        logger.error("record-verdict: selection_propensity %r is not in (0, 1]", selection_propensity)
         return EXIT_CONFIG
     store = OutcomeStore(store_path)
     current = store.resolved().get(change_id)
@@ -72,13 +85,14 @@ def record(store_path: str, change_id: str, correct: bool, actor: str) -> int:
             actor,
         )
         return EXIT_OK
-    rec = record_verdict(store, change_id, correct)
+    rec = record_verdict(store, change_id, correct, selection_propensity=selection_propensity)
     logger.info(
-        "record-verdict: change_id=%s correct=%s domain=%s actor=%s",
+        "record-verdict: change_id=%s correct=%s domain=%s actor=%s propensity=%s",
         rec.change_id,
         rec.label,
         rec.domain,
         actor,
+        "unknown" if rec.selection_propensity is None else f"{rec.selection_propensity:.6f}",
     )
     return EXIT_OK
 
@@ -91,11 +105,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     group.add_argument("--correct", dest="correct", action="store_true")
     group.add_argument("--incorrect", dest="correct", action="store_false")
     ap.add_argument("--actor", help=f"acting human (default ${DEFAULT_ACTOR_ENV})")
+    ap.add_argument(
+        "--selection-propensity",
+        type=float,
+        default=None,
+        help="probability this change was sampled with, from the audit issue / "
+        "`audit_sampler select --with-propensity`; omit when unknown",
+    )
     args = ap.parse_args(argv)
 
     configure_logging()
     try:
-        return record(args.store, args.change_id, args.correct, resolve_actor(args.actor))
+        return record(
+            args.store,
+            args.change_id,
+            args.correct,
+            resolve_actor(args.actor),
+            selection_propensity=args.selection_propensity,
+        )
+    except ValueError as exc:
+        # An out-of-contract propensity is an operator error (the value is typed into a
+        # workflow dispatch by hand), not a bug: clean exit 2, never a raw traceback.
+        logger.error("record-verdict: %s", exc)
+        return EXIT_CONFIG
     except Exception as exc:  # unexpected -> exit 1, never silently pass
         print(f"record-verdict internal error: {exc}", file=sys.stderr)
         return EXIT_INTERNAL

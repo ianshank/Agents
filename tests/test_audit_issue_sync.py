@@ -112,3 +112,51 @@ def test_main_input_errors_exit_2(tmp_path, break_input):
         ]
     )
     assert rc == 2
+
+
+# --- selection propensity ----------------------------------------------------
+def test_read_selected_accepts_both_line_formats(tmp_path) -> None:
+    """The sampler grew `--with-propensity`; an older selection file must still parse."""
+    path = tmp_path / "selected.txt"
+    path.write_text("sha1\t0.050000\nsha2\n", encoding="utf-8")
+    got = ais._read_selected(str(path))
+    assert got == [
+        ais.SelectedChange("sha1", 0.05),
+        ais.SelectedChange("sha2", None),
+    ]
+
+
+def test_read_selected_treats_a_malformed_propensity_as_unknown(tmp_path, caplog) -> None:
+    """A bad probability column must not drop the change: it still deserves an audit.
+
+    Unknown stays unknown rather than defaulting to a number, because inventing one
+    would silently corrupt any later 1/p reweighting.
+    """
+    path = tmp_path / "selected.txt"
+    path.write_text("sha1\tnot-a-number\n", encoding="utf-8")
+    with caplog.at_level("WARNING", logger="audit_issue_sync"):
+        got = ais._read_selected(str(path))
+    assert got == [ais.SelectedChange("sha1", None)]
+    assert any("unparseable propensity" in r.message for r in caplog.records)
+
+
+def test_issue_body_carries_the_propensity_into_the_dispatch_command() -> None:
+    """The human copies the command out of the issue, so the value must travel with it."""
+    rec = OutcomeRecord("sha1", "agent-core", 0.7, "2026-01-01T00:00:00+00:00")
+    with_p = ais.issue_body(rec, "o/r", 0.05)
+    assert "**selection_propensity**: `0.050000`" in with_p
+    assert "-f selection_propensity=0.050000" in with_p
+
+    without = ais.issue_body(rec, "o/r", None)
+    assert "selection_propensity" not in without, "unknown must not render a placeholder"
+
+
+def test_plan_issues_accepts_bare_ids_and_selected_changes(tmp_path) -> None:
+    """Both input shapes work, so a caller holding plain ids is unaffected."""
+    store = OutcomeStore(tmp_path / "s.jsonl")
+    store.append(OutcomeRecord("sha1", "agent-core", 0.7, "2026-01-01T00:00:00+00:00"))
+    bare = ais.plan_issues(["sha1"], store, [], "o/r")
+    typed = ais.plan_issues([ais.SelectedChange("sha1", 0.05)], store, [], "o/r")
+    assert [p["change_id"] for p in bare] == ["sha1"]
+    assert "selection_propensity" not in bare[0]["body"]
+    assert "selection_propensity" in typed[0]["body"]

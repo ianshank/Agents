@@ -5,7 +5,10 @@ All ``gh`` calls stay in the workflow — this script turns three inputs into an
 issue plan, so the dedupe/rendering logic is unit-testable offline:
 
   * ``--selected``         change_ids picked by ``audit_sampler select`` (one per
-                           line; sampler logic untouched, I-2)
+                           line; sampler logic untouched, I-2). Each line is either
+                           ``<change_id>`` or ``<change_id>\t<propensity>`` -- the
+                           sampler emits the second form under ``--with-propensity``,
+                           and both parse, so an older selection file still works.
   * ``--existing-issues``  JSON from ``gh issue list --state all --json title,state``
                            (closed issues count as handled: closed-as-audited or
                            dismissed audits are never reopened)
@@ -27,6 +30,7 @@ import json
 import logging
 import sys
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 from _cli import configure_logging
 from agent_core.outcome_store import OutcomeRecord, OutcomeStore
@@ -41,6 +45,19 @@ VERDICT_WORKFLOW = "merge-gate-verdict.yml"
 
 class InputError(RuntimeError):
     """Raised when an input file cannot be read or parsed (exit code 2)."""
+
+
+@dataclass(frozen=True)
+class SelectedChange:
+    """One sampled change and the probability it was sampled with, when known.
+
+    ``propensity`` is ``None`` for a selection file written before the sampler emitted
+    it. Unknown must stay unknown: inventing a value here would silently corrupt any
+    later ``1/p`` reweighting, which is the entire reason the sampler records it.
+    """
+
+    change_id: str
+    propensity: float | None = None
 
 
 def issue_title(change_id: str) -> str:
@@ -58,7 +75,7 @@ def audited_change_ids(issues: Sequence[Mapping[str, object]]) -> set[str]:
     return handled
 
 
-def issue_body(rec: OutcomeRecord, repo: str) -> str:
+def issue_body(rec: OutcomeRecord, repo: str, propensity: float | None = None) -> str:
     label = "pending" if rec.label is None else f"{rec.label} ({rec.label_source})"
     return "\n".join(
         [
@@ -70,6 +87,7 @@ def issue_body(rec: OutcomeRecord, repo: str) -> str:
             f"- **merged_at**: `{rec.merged_at}`",
             f"- **raw_confidence**: `{rec.raw_confidence}`",
             f"- **current label**: `{label}`",
+            *([] if propensity is None else [f"- **selection_propensity**: `{propensity:.6f}`"]),
             "",
             f"Review the change (`git show {rec.change_id}`) and judge whether it was",
             "**correct** (no defect attributable to it) or **incorrect**.",
@@ -78,7 +96,8 @@ def issue_body(rec: OutcomeRecord, repo: str) -> str:
             "",
             '1. Actions -> "merge-gate verdict" -> Run workflow -> paste the',
             f"   change_id `{rec.change_id}` and pick a verdict, or",
-            f"2. `gh workflow run {VERDICT_WORKFLOW} -f change_id={rec.change_id} -f verdict=correct`",
+            f"2. `gh workflow run {VERDICT_WORKFLOW} -f change_id={rec.change_id} -f verdict=correct"
+            + ("`" if propensity is None else f" -f selection_propensity={propensity:.6f}`"),
             "   (or `verdict=incorrect`).",
             "",
             f"_Repo: {repo}. This issue is closed automatically once the verdict lands._",
@@ -87,7 +106,7 @@ def issue_body(rec: OutcomeRecord, repo: str) -> str:
 
 
 def plan_issues(
-    selected: Sequence[str],
+    selected: Sequence[SelectedChange | str],
     store: OutcomeStore,
     existing: Sequence[Mapping[str, object]],
     repo: str,
@@ -98,7 +117,12 @@ def plan_issues(
     handled = audited_change_ids(existing)
     resolved = store.resolved()
     plan: list[dict[str, str]] = []
-    for change_id in selected:
+    for raw in selected:
+        # A bare change_id is accepted as "propensity unknown", mirroring the tolerance
+        # `_read_selected` applies to the file format, so any caller holding plain ids
+        # keeps working.
+        sel = raw if isinstance(raw, SelectedChange) else SelectedChange(raw)
+        change_id = sel.change_id
         if change_id in handled:
             logger.info("audit-issue-sync: %s already has an issue; skipping", change_id)
             continue
@@ -110,7 +134,7 @@ def plan_issues(
             {
                 "change_id": change_id,
                 "title": issue_title(change_id),
-                "body": issue_body(rec, repo),
+                "body": issue_body(rec, repo, sel.propensity),
             }
         )
     logger.info(
@@ -122,12 +146,35 @@ def plan_issues(
     return plan
 
 
-def _read_selected(path: str) -> list[str]:
+def _read_selected(path: str) -> list[SelectedChange]:
+    """Parse the sampler's selection file, tolerating both line formats.
+
+    ``<change_id>`` and ``<change_id>\t<propensity>`` both parse, so a file written
+    before the sampler grew ``--with-propensity`` still works. A malformed probability
+    column is logged and treated as unknown rather than failing the whole queue: the
+    change still deserves an audit, it just cannot be reweighted.
+    """
     try:
         with open(path, encoding="utf-8") as fh:
-            return [line.strip() for line in fh if line.strip()]
+            lines = [line.strip() for line in fh if line.strip()]
     except OSError as exc:
         raise InputError(f"cannot read --selected '{path}': {exc}") from exc
+
+    out: list[SelectedChange] = []
+    for line in lines:
+        change_id, _, raw = line.partition("\t")
+        propensity: float | None = None
+        if raw.strip():
+            try:
+                propensity = float(raw)
+            except ValueError:
+                logger.warning(
+                    "audit-issue-sync: %s has an unparseable propensity %r; treating as unknown",
+                    change_id.strip(),
+                    raw.strip(),
+                )
+        out.append(SelectedChange(change_id.strip(), propensity))
+    return out
 
 
 def _read_existing(path: str) -> list[Mapping[str, object]]:
