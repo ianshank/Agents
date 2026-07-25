@@ -27,10 +27,10 @@ from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 logger = get_logger(__name__)
 
 
-#: Digits used whenever a propensity is rendered for a human or a command line. Single
+#: SIGNIFICANT FIGURES (not decimal places) used whenever a propensity is rendered. Single
 #: point of truth: the issue body, the dispatch command it prints, and the recorder's log
 #: must agree, or an operator copying one into the other silently changes the value.
-PROPENSITY_PRECISION = 6
+PROPENSITY_SIGFIGS = 6
 
 #: Rendered in place of a probability that was never captured.
 PROPENSITY_UNKNOWN = "unknown"
@@ -52,8 +52,27 @@ def is_valid_propensity(value: float | None) -> bool:
 
 
 def format_propensity(value: float | None, *, unknown: str = PROPENSITY_UNKNOWN) -> str:
-    """Render a propensity for display, or ``unknown`` when it was never captured."""
-    return unknown if value is None else f"{value:.{PROPENSITY_PRECISION}f}"
+    """Render a propensity, or ``unknown`` when it was never captured.
+
+    Uses ``g`` (significant figures), **not** ``f`` (decimal places), because this output is
+    not merely displayed — it is pasted into the ``gh workflow run`` command the audit issue
+    prints, so it has to parse back to the *same* usable probability.
+
+    Fixed-point rendering broke that: ``1e-7`` became ``"0.000000"``, which parses to ``0.0``
+    and is rejected by :func:`is_valid_propensity`. A value the contract accepts would have
+    produced a dispatch command guaranteed to fail at the recorder — the same failure mode
+    the ingestion guard exists to prevent, reintroduced one layer later. ``g`` switches to an
+    exponent instead of collapsing to zero, so ``format`` -> ``float`` preserves validity
+    across the whole domain (pinned by a property test), and it is *tidier* for the
+    arithmetic-noise values ``inclusion_probability`` actually emits: ``0.6`` not
+    ``0.600000``.
+
+    The round trip preserves *validity and value to the rendered precision*, not the exact
+    bits: six significant figures costs ~1e-6 relative error, which is immaterial in a
+    ``1 / p`` weight and buys a number a human can actually read (``0.2 + 0.4`` renders
+    ``0.6``, not ``0.6000000000000001``).
+    """
+    return unknown if value is None else f"{value:.{PROPENSITY_SIGFIGS}g}"
 
 
 @dataclass(frozen=True)
@@ -140,12 +159,12 @@ def select_for_audit_detailed(
                 picked_here += 1
         logger.debug(
             "audit selection: domain=%s candidates=%d audited=%d need_floor=%d "
-            "propensity=%.6f picked=%d",
+            "propensity=%s picked=%d",
             domain,
             len(recs),
             have,
             need_floor,
-            propensity,
+            format_propensity(propensity),
             picked_here,
         )
     logger.info(
@@ -246,8 +265,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "select":
         picks = select_for_audit_detailed(store, AuditConfig(args.base_rate, args.per_domain_floor))
         for sel in picks:
+            # Through the shared renderer, not a local format spec: this line IS the
+            # serialisation boundary that audit_issue_sync reads back, so a hand-rolled
+            # `.6f` here would let the producer emit values its own consumer rejects.
             print(
-                f"{sel.change_id}\t{sel.propensity:.6f}" if args.with_propensity else sel.change_id
+                f"{sel.change_id}\t{format_propensity(sel.propensity)}"
+                if args.with_propensity
+                else sel.change_id
             )
         print(f"# selected {len(picks)} for audit", file=sys.stderr)
     else:

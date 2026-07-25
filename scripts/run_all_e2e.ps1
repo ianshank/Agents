@@ -454,9 +454,18 @@ $proxyJson = Join-Path $Report 'proxy_eval.json'
 Invoke-CmdStep 'C' 'cli:proxy_eval (json)' `
     @('-m', 'agent_core.proxy_eval', '--store', $reportStore, '--domain-filter', 'all',
         '--format', 'json', '--output', $proxyJson)
+# Records an outcome in ALL three cases. A missing artifact used to record nothing, so the
+# journey could pass while never validating the JSON it exists to produce; and a guard that
+# is invisible when it succeeds offers no evidence it ran at all.
 if ((Test-Path $proxyJson)) {
-    try { Get-Content -Raw -Encoding UTF8 $proxyJson | ConvertFrom-Json | Out-Null }
+    try {
+        Get-Content -Raw -Encoding UTF8 $proxyJson | ConvertFrom-Json | Out-Null
+        Add-Result 'C' 'cli:proxy_eval json-valid' 'PASS'
+    }
     catch { Add-Result 'C' 'cli:proxy_eval json-valid' 'FAIL' 'proxy_eval.json is not valid JSON' }
+}
+else {
+    Add-Result 'C' 'cli:proxy_eval json-valid' 'FAIL' 'proxy_eval did not write proxy_eval.json'
 }
 
 # C6: skill-marketplace CLI journeys

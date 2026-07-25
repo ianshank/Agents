@@ -55,10 +55,23 @@ class SelectedChange:
     ``propensity`` is ``None`` for a selection file written before the sampler emitted
     it. Unknown must stay unknown: inventing a value here would silently corrupt any
     later ``1/p`` reweighting, which is the entire reason the sampler records it.
+
+    The contract is enforced on the *type*, not only on the parse path, so a caller
+    constructing one directly cannot smuggle an uninterpretable probability into an issue
+    body. ``_read_selected`` still screens its input and downgrades a bad column to
+    unknown -- that keeps a malformed file from dropping a change that still deserves an
+    audit, and leaves this as defence in depth rather than the only guard.
     """
 
     change_id: str
     propensity: float | None = None
+
+    def __post_init__(self) -> None:
+        if not is_valid_propensity(self.propensity):
+            raise ValueError(
+                f"selection_propensity must be a finite number in (0, 1] or None "
+                f"(got {self.propensity!r} for {self.change_id!r})"
+            )
 
 
 def issue_title(change_id: str) -> str:

@@ -125,18 +125,26 @@ tests/             708 tests across all modules
 ## Reports & CLIs (read-only)
 
 ```bash
-# Calibration of the agent-domain slice. `--estimator ppi++` additionally reports a
-# prediction-powered interval and the classical baseline it is measured against; wilson
-# is the default and the only estimator the GATE uses.
+# Calibration of the agent-domain slice.
+python -m agent_core.calibration_report --store merge_outcomes.jsonl --domain-filter agent
+
+# `--estimator ppi++` additionally reports a prediction-powered interval and the classical
+# baseline it is measured against. `wilson` is the default and the only estimator the GATE
+# uses; this flag changes the REPORT only.
 python -m agent_core.calibration_report --store merge_outcomes.jsonl \
-    --domain-filter agent [--estimator ppi++] [--format md|json]
+    --domain-filter agent --estimator ppi++
 
 # Is a cheap proxy actually informative *where the gate operates*? Reports marginal AND
 # conditional correlation with the implied 1/(1-rho^2) effective-sample multiplier.
-# --judge-scores injects an external signal (e.g. an LLM judge) without a dependency.
+python -m agent_core.proxy_eval --store merge_outcomes.jsonl --domain-filter agent
+
+# `--judge-scores` injects an external signal (e.g. an LLM judge) without a dependency.
 python -m agent_core.proxy_eval --store merge_outcomes.jsonl \
-    --domain-filter agent [--judge-scores scores.json] [--format md|json]
+    --domain-filter agent --judge-scores scores.json --format json
 ```
+
+Both CLIs take `--format md` (default) or `--format json`, and `--output PATH` to write to a
+file instead of stdout.
 
 Neither writes to the store or influences a gate decision.
 
