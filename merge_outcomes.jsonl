@@ -41,3 +41,4 @@
 {"agent_version": "claude-code", "change_id": "e8f2b40c54b484440c67173ce86b6b948972b9ba", "domain": "agent-core", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-24T08:41:35-04:00", "raw_confidence": 0.02}
 {"agent_version": "claude-code", "change_id": "d22d65cd993c14ec631e51b98de6a80edcf740ef", "domain": "eval-harness", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-24T18:00:04-04:00", "raw_confidence": 0.724122}
 {"agent_version": "claude-code", "change_id": "961cfd14ea6d0ca3062a3178986a29ecfc8e1cf7", "domain": "eval-harness", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-24T18:08:21-04:00", "raw_confidence": 0.024844}
+{"agent_version": "claude-code", "change_id": "0b6592dc665ef61b9c4c12176c6e56c52b09af95", "domain": "agent-core", "label": null, "label_source": null, "labeled_at": null, "merged_at": "2026-07-24T20:00:35-04:00", "raw_confidence": 0.02}
