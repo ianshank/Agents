@@ -819,6 +819,8 @@ features:
       - "variance_reduction is derived from the standard errors, not the [0,1]-clipped bounds -- sliding only the unlabeled proxy mean must not change it, and a genuine widening reports negative (agent-core/tests/test_ppi.py)"
       - "a degenerate slice withholds AUROC instead of printing the by-construction 0.5, matching calibration_report (F_047.py, agent-core/tests/test_proxy_eval.py)"
       - "selection_propensity has a producer, carrier and consumer, is nullable so pre-existing records load unchanged, and both selected.txt line formats parse (F_047.py, tests/test_audit_issue_sync.py, tests/test_record_audit_verdict.py)"
+      - "the propensity contract is single-sourced in agent_core (is_valid_propensity / format_propensity): no layer restates the range check, out-of-contract values (nan/inf/0/>1) are rejected at ingestion rather than rendered into an issue and a doomed dispatch command, and 1.0 survives as a legitimate certainty (F_047.py, agent-core/tests/test_audit_sampler.py, tests/test_audit_issue_sync.py)"
+      - "the verdict workflow builds its optional flag as a quoted bash array, so a dispatch input cannot word-split into a second --store that argparse resolves last-wins (F_047.py, tests/test_record_audit_verdict.py)"
     validation_command: "python scripts/validations/F_047.py"
     implemented_in: "local"
     depends_on: ["F-043", "F-034"]

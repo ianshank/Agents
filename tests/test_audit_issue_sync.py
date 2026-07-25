@@ -140,6 +140,36 @@ def test_read_selected_treats_a_malformed_propensity_as_unknown(tmp_path, caplog
     assert any("unparseable propensity" in r.message for r in caplog.records)
 
 
+@pytest.mark.parametrize(
+    "column",
+    ["nan", "inf", "-inf", "0", "0.0", "1.5", "-0.2"],
+    ids=["nan", "inf", "neg-inf", "zero", "zero-float", "above-one", "negative"],
+)
+def test_read_selected_rejects_an_out_of_contract_propensity(tmp_path, caplog, column) -> None:
+    """`float()` parses "nan"/"inf"/any magnitude, so parsing is not validation.
+
+    Each of these would otherwise render into the issue body and into a dispatch command
+    that is guaranteed to fail at the recorder. Reject at ingestion; the change still gets
+    audited, it just cannot be reweighted.
+    """
+    path = tmp_path / "selected.txt"
+    path.write_text(f"sha1\t{column}\n", encoding="utf-8")
+    with caplog.at_level("WARNING", logger="audit_issue_sync"):
+        got = ais._read_selected(str(path))
+    assert got == [ais.SelectedChange("sha1", None)]
+    assert any("out-of-contract propensity" in r.message for r in caplog.records)
+
+
+def test_read_selected_keeps_the_boundary_values_of_the_contract(tmp_path) -> None:
+    """(0, 1] is half-open: 1.0 is a legitimate certainty, so it must survive."""
+    path = tmp_path / "selected.txt"
+    path.write_text("sha1\t1.0\nsha2\t0.000001\n", encoding="utf-8")
+    assert ais._read_selected(str(path)) == [
+        ais.SelectedChange("sha1", 1.0),
+        ais.SelectedChange("sha2", 0.000001),
+    ]
+
+
 def test_issue_body_carries_the_propensity_into_the_dispatch_command() -> None:
     """The human copies the command out of the issue, so the value must travel with it."""
     rec = OutcomeRecord("sha1", "agent-core", 0.7, "2026-01-01T00:00:00+00:00")

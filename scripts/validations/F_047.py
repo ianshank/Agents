@@ -63,6 +63,7 @@ def validate_f047() -> int:
     audit_wf = _read(".github", "workflows", "merge-gate-audit.yml")
     verdict_wf = _read(".github", "workflows", "merge-gate-verdict.yml")
     recorder = _read("scripts", "record_audit_verdict.py")
+    issue_sync = _read("scripts", "audit_issue_sync.py")
 
     # 1. The gate is untouched and unreachable from the new reporting modules.
     _check("wilson_interval(" in gate, "merge_gate still computes the Wilson bound", errors)
@@ -139,6 +140,43 @@ def validate_f047() -> int:
     _check(
         "def inclusion_probability(" in sampler,
         "the sampler computes a marginal inclusion probability",
+        errors,
+    )
+
+    # 7. The propensity contract is single-sourced, and every layer defers to it.
+    _check(
+        "def is_valid_propensity(" in sampler and "def format_propensity(" in sampler,
+        "the propensity contract (validity + rendering) is defined once, in agent_core",
+        errors,
+    )
+    _check(
+        "if not is_valid_propensity(selection_propensity):" in sampler,
+        "the store write boundary validates through the shared predicate",
+        errors,
+    )
+    for name, src in (("audit_issue_sync", issue_sync), ("record_audit_verdict", recorder)):
+        _check(
+            "is_valid_propensity" in src,
+            f"{name} screens propensities through the shared predicate, not a restated comparison",
+            errors,
+        )
+        _check(
+            "0.0 < " not in src,
+            f"{name} does not restate the range check (it would drift from the contract)",
+            errors,
+        )
+
+    # 8. The verdict workflow cannot be argument-injected through the dispatch input.
+    #    An unquoted scalar word-splits, so `0.5 --store /tmp/x` would append a second
+    #    --store that argparse resolves last-wins. Only an array expansion prevents it.
+    _check(
+        "PROP_ARGS=()" in verdict_wf and '"${PROP_ARGS[@]}"' in verdict_wf,
+        "the verdict workflow builds the optional flag as a quoted array (no word-split)",
+        errors,
+    )
+    _check(
+        "$PROP_ARGS" not in verdict_wf.replace('"${PROP_ARGS[@]}"', ""),
+        "the verdict workflow never expands the propensity args unquoted",
         errors,
     )
 

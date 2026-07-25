@@ -8,8 +8,11 @@ import random
 import pytest
 
 from agent_core.audit_sampler import (
+    PROPENSITY_UNKNOWN,
     AuditConfig,
+    format_propensity,
     inclusion_probability,
+    is_valid_propensity,
     main,
     record_verdict,
     select_for_audit,
@@ -298,3 +301,58 @@ def test_cli_unknown_change_id_still_raises(tmp_path) -> None:
     store = _store(tmp_path, _pending("c1"))
     with pytest.raises(KeyError):
         main(["--store", str(store.path), "record", "--change-id", "nope", "--correct"])
+
+
+# --- the shared propensity contract ------------------------------------------
+@pytest.mark.parametrize(
+    "value",
+    [None, 1.0, 0.5, 1e-12],
+    ids=["unknown", "certain", "half", "tiny-but-positive"],
+)
+def test_valid_propensities_are_accepted(value: float | None) -> None:
+    assert is_valid_propensity(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [0.0, -0.0, -0.1, 1.0000001, float("nan"), float("inf"), float("-inf")],
+    ids=["zero", "neg-zero", "negative", "just-above-one", "nan", "inf", "neg-inf"],
+)
+def test_out_of_contract_propensities_are_rejected(value: float) -> None:
+    """Zero is excluded deliberately: its 1/p weight is undefined, not merely large."""
+    assert not is_valid_propensity(value)
+
+
+def test_the_predicate_does_not_rely_on_nan_comparison_semantics() -> None:
+    """`0.0 < nan <= 1.0` is False *by accident*; the guard must be explicit.
+
+    Pins the reason the predicate exists: a caller restating the naive comparison would
+    look equivalent and silently diverge the day the operands change.
+    """
+    assert not (0.0 < float("nan") <= 1.0)  # the accident
+    assert not is_valid_propensity(float("nan"))  # the intent
+    assert not math.isfinite(float("nan"))
+
+
+def test_every_inclusion_probability_satisfies_the_contract() -> None:
+    """The producer and the validator must agree, or the sampler writes rejectable data."""
+    for n in (1, 2, 7, 50, 500):
+        for floor in (0, 1, 30, 999):
+            for rate in (0.0, 0.05, 1.0):
+                p = inclusion_probability(n, floor, rate)
+                if p > 0.0:
+                    assert is_valid_propensity(p), (n, floor, rate, p)
+
+
+def test_format_propensity_is_stable_and_marks_unknown() -> None:
+    """The issue body, its dispatch command and the recorder log must render identically."""
+    assert format_propensity(None) == PROPENSITY_UNKNOWN
+    assert format_propensity(0.05) == "0.050000"
+    assert format_propensity(1.0) == "1.000000"
+    assert format_propensity(None, unknown="n/a") == "n/a"
+
+
+def test_formatted_propensity_round_trips_through_the_contract() -> None:
+    """An operator copies the rendered text into a dispatch, so it must parse back valid."""
+    for value in (1.0, 0.05, 0.000001):
+        assert is_valid_propensity(float(format_propensity(value)))

@@ -124,3 +124,46 @@ def test_cli_threads_the_propensity(tmp_path) -> None:
     )
     assert rc == 0
     assert store.resolved()[SHA].selection_propensity == 0.25
+
+
+def test_cli_converts_a_write_boundary_rejection_into_exit_2(tmp_path, monkeypatch, caplog) -> None:
+    """The store's own guard must surface as a clean exit 2, never a raw traceback.
+
+    `record` screens the propensity with the same shared predicate, so this path is only
+    reachable when the write boundary rejects something `record` let through. Forced here
+    rather than left uncovered: it is the last line of defence for the store's contract.
+    """
+    store = _seeded(tmp_path)
+
+    def _reject(*_a: object, **_k: object) -> None:
+        raise ValueError("selection_propensity must be a finite number in (0, 1] (got 7.0)")
+
+    monkeypatch.setattr(rav, "record_verdict", _reject)
+    with caplog.at_level(logging.ERROR, logger="record_audit_verdict"):
+        rc = rav.main(["--store", str(store.path), "--change-id", SHA, "--correct", "--actor", "t"])
+    assert rc == 2
+    assert any("finite number in (0, 1]" in r.getMessage() for r in caplog.records)
+
+
+def test_an_injected_argument_is_rejected_as_one_token(tmp_path) -> None:
+    """Guards the workflow's array expansion (see merge-gate-verdict.yml).
+
+    The dispatch input reaches argparse as a SINGLE argument. If the workflow ever went
+    back to an unquoted scalar it would word-split into a second `--store` that argparse
+    resolves last-wins, redirecting the write. As one token, `type=float` refuses it.
+    """
+    store = _seeded(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        rav.main(
+            [
+                "--store",
+                str(store.path),
+                "--change-id",
+                SHA,
+                "--correct",
+                "--selection-propensity",
+                f"0.5 --store {tmp_path / 'evil.jsonl'}",
+            ]
+        )
+    assert exc.value.code == 2, "argparse must reject a non-float, not accept a split"
+    assert not (tmp_path / "evil.jsonl").exists()
