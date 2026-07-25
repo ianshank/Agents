@@ -30,7 +30,7 @@ import sys
 from collections.abc import Sequence
 
 from _cli import configure_logging
-from agent_core.audit_sampler import record_verdict
+from agent_core.audit_sampler import format_propensity, is_valid_propensity, record_verdict
 from agent_core.outcome_store import LabelSource, OutcomeStore
 
 logger = logging.getLogger(__name__)
@@ -61,12 +61,16 @@ def record(
     if not CHANGE_ID_RE.match(change_id):
         logger.error("record-verdict: change_id %r is not a commit SHA", change_id)
         return EXIT_CONFIG
-    if selection_propensity is not None and not 0.0 < selection_propensity <= 1.0:
-        # Validated here, beside the SHA-shape check, so `record` keeps returning exit
-        # codes rather than raising: the value is typed into a workflow dispatch by hand,
-        # making an out-of-range one an operator error, not a bug. The store's own write
-        # boundary re-checks it (incl. NaN/inf) as the authoritative guard.
-        logger.error("record-verdict: selection_propensity %r is not in (0, 1]", selection_propensity)
+    if not is_valid_propensity(selection_propensity):
+        # Checked here, beside the SHA-shape check, so `record` keeps returning exit codes
+        # rather than raising: the value is typed into a workflow dispatch by hand, making
+        # a bad one an operator error, not a bug. Shares the predicate with the store's
+        # write boundary so the two cannot drift apart -- that boundary still re-raises as
+        # the authoritative guard for any caller that bypasses this one.
+        logger.error(
+            "record-verdict: selection_propensity %r is not a finite number in (0, 1]",
+            selection_propensity,
+        )
         return EXIT_CONFIG
     store = OutcomeStore(store_path)
     current = store.resolved().get(change_id)
@@ -92,7 +96,7 @@ def record(
         rec.label,
         rec.domain,
         actor,
-        "unknown" if rec.selection_propensity is None else f"{rec.selection_propensity:.6f}",
+        format_propensity(rec.selection_propensity),
     )
     return EXIT_OK
 

@@ -79,11 +79,16 @@ jobs:
           [ "$VERDICT" = "correct" ] && FLAG=--correct
           # Blank means unknown: omit the flag entirely rather than passing an empty
           # value, so the record stores NULL instead of a fabricated probability.
-          PROP_ARGS=""
-          [ -n "$PROPENSITY" ] && PROP_ARGS="--selection-propensity $PROPENSITY"
-          # shellcheck disable=SC2086  # intentional word-split: empty means "no flag"
+          #
+          # Built as an ARRAY and expanded with "${PROP_ARGS[@]}". An unquoted scalar
+          # would word-split, so a dispatch input of `0.5 --store /tmp/x` would append
+          # a second --store that argparse resolves last-wins -- writing the verdict
+          # somewhere else entirely. Routing through env stops template injection; only
+          # the array stops argument injection.
+          PROP_ARGS=()
+          [ -n "$PROPENSITY" ] && PROP_ARGS=(--selection-propensity "$PROPENSITY")
           python scripts/record_audit_verdict.py --store "$STORE" \
-            --change-id "$CHANGE_ID" "$FLAG" --actor "$ACTOR" $PROP_ARGS
+            --change-id "$CHANGE_ID" "$FLAG" --actor "$ACTOR" "${PROP_ARGS[@]}"
       - name: Sync store (push — the verdict reaches the data branch, attributed)
         env:
           ACTOR: ${{ github.actor }}

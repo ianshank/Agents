@@ -33,6 +33,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from _cli import configure_logging
+from agent_core.audit_sampler import format_propensity, is_valid_propensity
 from agent_core.outcome_store import OutcomeRecord, OutcomeStore
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,7 @@ def issue_body(rec: OutcomeRecord, repo: str, propensity: float | None = None) -
             f"- **merged_at**: `{rec.merged_at}`",
             f"- **raw_confidence**: `{rec.raw_confidence}`",
             f"- **current label**: `{label}`",
-            *([] if propensity is None else [f"- **selection_propensity**: `{propensity:.6f}`"]),
+            *([] if propensity is None else [f"- **selection_propensity**: `{format_propensity(propensity)}`"]),
             "",
             f"Review the change (`git show {rec.change_id}`) and judge whether it was",
             "**correct** (no defect attributable to it) or **incorrect**.",
@@ -97,7 +98,7 @@ def issue_body(rec: OutcomeRecord, repo: str, propensity: float | None = None) -
             '1. Actions -> "merge-gate verdict" -> Run workflow -> paste the',
             f"   change_id `{rec.change_id}` and pick a verdict, or",
             f"2. `gh workflow run {VERDICT_WORKFLOW} -f change_id={rec.change_id} -f verdict=correct"
-            + ("`" if propensity is None else f" -f selection_propensity={propensity:.6f}`"),
+            + ("`" if propensity is None else f" -f selection_propensity={format_propensity(propensity)}`"),
             "   (or `verdict=incorrect`).",
             "",
             f"_Repo: {repo}. This issue is closed automatically once the verdict lands._",
@@ -166,13 +167,27 @@ def _read_selected(path: str) -> list[SelectedChange]:
         propensity: float | None = None
         if raw.strip():
             try:
-                propensity = float(raw)
+                parsed = float(raw)
             except ValueError:
                 logger.warning(
                     "audit-issue-sync: %s has an unparseable propensity %r; treating as unknown",
                     change_id.strip(),
                     raw.strip(),
                 )
+            else:
+                # `float()` happily accepts "nan", "inf" and any out-of-range number, so
+                # parsing is not validation. Reject here, at ingestion, rather than
+                # rendering an uninterpretable value into the issue body and a dispatch
+                # command that is guaranteed to fail at the recorder.
+                if is_valid_propensity(parsed):
+                    propensity = parsed
+                else:
+                    logger.warning(
+                        "audit-issue-sync: %s has an out-of-contract propensity %r "
+                        "(want a finite number in (0, 1]); treating as unknown",
+                        change_id.strip(),
+                        parsed,
+                    )
         out.append(SelectedChange(change_id.strip(), propensity))
     return out
 

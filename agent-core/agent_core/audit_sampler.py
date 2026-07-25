@@ -27,6 +27,35 @@ from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 logger = get_logger(__name__)
 
 
+#: Digits used whenever a propensity is rendered for a human or a command line. Single
+#: point of truth: the issue body, the dispatch command it prints, and the recorder's log
+#: must agree, or an operator copying one into the other silently changes the value.
+PROPENSITY_PRECISION = 6
+
+#: Rendered in place of a probability that was never captured.
+PROPENSITY_UNKNOWN = "unknown"
+
+
+def is_valid_propensity(value: float | None) -> bool:
+    """``True`` when ``value`` is a usable inclusion probability, or ``None`` (unknown).
+
+    The single definition of the contract. Every layer that touches a propensity checks
+    against *this* predicate rather than restating the comparison, because the naive
+    ``0.0 < value <= 1.0`` form silently admits nothing but also silently *depends* on
+    NaN comparing false — an equivalence that is true by accident, not by design, and
+    that a later edit could easily break in one copy but not the others.
+
+    ``0`` is excluded, not merely out of range: a record sampled with probability zero is
+    a contradiction, and its ``1 / p`` weight is undefined.
+    """
+    return value is None or (math.isfinite(value) and 0.0 < value <= 1.0)
+
+
+def format_propensity(value: float | None, *, unknown: str = PROPENSITY_UNKNOWN) -> str:
+    """Render a propensity for display, or ``unknown`` when it was never captured."""
+    return unknown if value is None else f"{value:.{PROPENSITY_PRECISION}f}"
+
+
 @dataclass(frozen=True)
 class AuditConfig:
     base_rate: float = 0.05  # audit ~5% of merges at random
@@ -157,9 +186,7 @@ def record_verdict(
     that record is a deliberately dumb, load-tolerant holder (ADR 0025) — this is the
     write boundary, and a propensity we cannot interpret must not enter the store.
     """
-    if selection_propensity is not None and (
-        not math.isfinite(selection_propensity) or not 0.0 < selection_propensity <= 1.0
-    ):
+    if not is_valid_propensity(selection_propensity):
         raise ValueError(
             f"selection_propensity must be a finite number in (0, 1] (got {selection_propensity!r})"
         )
@@ -183,7 +210,7 @@ def record_verdict(
         change_id,
         rec.domain,
         correct,
-        "unknown" if selection_propensity is None else f"{selection_propensity:.6f}",
+        format_propensity(selection_propensity),
     )
     return rec
 
