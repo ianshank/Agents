@@ -821,6 +821,8 @@ features:
       - "selection_propensity has a producer, carrier and consumer, is nullable so pre-existing records load unchanged, and both selected.txt line formats parse (F_047.py, tests/test_audit_issue_sync.py, tests/test_record_audit_verdict.py)"
       - "the propensity contract is single-sourced in agent_core (is_valid_propensity / format_propensity): no layer restates the range check, out-of-contract values (nan/inf/0/>1) are rejected at ingestion rather than rendered into an issue and a doomed dispatch command, and 1.0 survives as a legitimate certainty (F_047.py, agent-core/tests/test_audit_sampler.py, tests/test_audit_issue_sync.py)"
       - "the verdict workflow builds its optional flag as a quoted bash array, so a dispatch input cannot word-split into a second --store that argparse resolves last-wins (F_047.py, tests/test_record_audit_verdict.py)"
+      - "rendering is serialisation: format_propensity uses significant figures so every valid propensity parses back valid (fixed-point collapsed 1e-7 to 0.000000, producing a dispatch command guaranteed to fail); property-tested over the contract's whole domain, and no module renders a propensity with a local .6f (F_047.py, agent-core/tests/test_audit_sampler.py)"
+      - "the gate-boundary proof is syntax-aware, not substring-based: decide() must REACH a Wilson bound through the call graph (it calls _wilson_bound, so the old substring matched elsewhere and proved nothing), and the import ban covers every form including 'import agent_core.ppi as p' (F_047.py)"
     validation_command: "python scripts/validations/F_047.py"
     implemented_in: "local"
     depends_on: ["F-043", "F-034"]

@@ -5,9 +5,12 @@ Deterministic and offline: reads module / workflow TEXT only (no ``agent_core`` 
 which the validation gate does not install). Pins the invariants that make the new
 reporting honest, so a future edit cannot silently regress them.
 
-    1. The GATE is untouched: merge_gate.decide() still calls wilson_interval, and neither
+    1. The GATE is untouched: merge_gate.decide() still REACHES a Wilson bound, and neither
        merge_gate nor merge_gate_ci imports the estimator or either report module -- no new
-       code path can reach an auto-merge decision.
+       code path can reach an auto-merge decision. Both halves are checked with ``ast``, not
+       substrings: decide() calls ``_wilson_bound``, so ``"wilson_interval(" in src`` matched
+       elsewhere in the module and proved nothing, and ``import agent_core.ppi as p`` shares
+       no ``"import ppi"`` substring at all.
     2. Wilson remains the report DEFAULT; ``ppi++`` is opt-in.
     3. PPI++ is fail-closed: every guarded path returns the Wilson interval, and the
        degenerate reasons that make small-n honest are present (min_labeled floor, single
@@ -24,6 +27,7 @@ Exit codes: 0 all checks passed; 1 one or more failed.
 
 from __future__ import annotations
 
+import ast
 import logging
 import os
 import sys
@@ -44,11 +48,74 @@ _AC = os.path.join("agent-core", "agent_core")
 
 
 def _read(*parts: str) -> str:
+    """Return the text of a repo-relative file (never imported -- the gate installs nothing)."""
     with open(os.path.join(_ROOT, *parts), encoding="utf-8") as fh:
         return fh.read()
 
 
+def _called_names(node: ast.AST) -> set[str]:
+    """Every function name called anywhere inside ``node``, bare or attribute-style."""
+    out: set[str] = set()
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Call):
+            fn = sub.func
+            if isinstance(fn, ast.Name):
+                out.add(fn.id)
+            elif isinstance(fn, ast.Attribute):
+                out.add(fn.attr)
+    return out
+
+
+def reaches_call(src: str, entry: str, target: str) -> bool:
+    """``True`` when ``entry`` reaches a call to ``target`` within this module.
+
+    Follows the intra-module call graph instead of grepping the file, because a substring
+    match proves only that the name occurs *somewhere*. ``merge_gate.decide()`` calls
+    ``_wilson_bound``, which calls ``wilson_interval`` -- so ``"wilson_interval(" in src``
+    passed while establishing nothing at all about ``decide``. The invariant this file
+    exists to defend is precisely that ``decide`` still computes a Wilson bound.
+    """
+    tree = ast.parse(src)
+    funcs = {n.name: n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    if entry not in funcs:
+        return False
+    seen: set[str] = set()
+    stack = [entry]
+    while stack:
+        name = stack.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        called = _called_names(funcs[name])
+        if target in called:
+            return True
+        stack.extend(c for c in called if c in funcs and c not in seen)
+    return False
+
+
+def imports_module(src: str, banned: str) -> bool:
+    """``True`` when ``src`` imports ``banned`` in ANY form.
+
+    Covers what substring matching missed -- ``import agent_core.ppi as p`` shares no
+    ``"import ppi"`` substring, so the previous check waved it straight through.
+    """
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Import):
+            for alias in node.names:  # import a.b.c  /  import a.b.c as d
+                if banned in alias.name.split("."):
+                    return True
+        elif isinstance(node, ast.ImportFrom):
+            # from .banned import x  /  from pkg.banned import x
+            if banned in (node.module or "").split("."):
+                return True
+            # from . import banned  /  from pkg import banned
+            if any(alias.name == banned for alias in node.names):
+                return True
+    return False
+
+
 def validate_f047() -> int:
+    """Assert every F-047 invariant; returns 0 when all pass, 1 otherwise."""
     configure_logging()
     errors: list[str] = []
 
@@ -66,12 +133,18 @@ def validate_f047() -> int:
     issue_sync = _read("scripts", "audit_issue_sync.py")
 
     # 1. The gate is untouched and unreachable from the new reporting modules.
-    _check("wilson_interval(" in gate, "merge_gate still computes the Wilson bound", errors)
+    #    Syntax-aware on purpose: both halves of this were substring checks that could pass
+    #    for the wrong reason (see reaches_call / imports_module).
+    _check(
+        reaches_call(gate, "decide", "wilson_interval"),
+        "merge_gate.decide() still reaches a Wilson bound (call graph, not a substring)",
+        errors,
+    )
     for name, src in (("merge_gate", gate), ("merge_gate_ci", gate_ci)):
         for banned in ("ppi", "proxy_eval", "calibration_report"):
             _check(
-                f"from .{banned} import" not in src and f"import {banned}" not in src,
-                f"{name} does not import {banned} (no new path to a gate decision)",
+                not imports_module(src, banned),
+                f"{name} does not import {banned} in any form (no new path to a gate decision)",
                 errors,
             )
 
@@ -160,9 +233,24 @@ def validate_f047() -> int:
             f"{name} screens propensities through the shared predicate, not a restated comparison",
             errors,
         )
+    # The renderer is SERIALISATION -- its output is pasted into a dispatch command, so it
+    # must parse back to a usable probability. Fixed-point rendering collapsed 1e-7 to
+    # "0.000000", which the contract then rejects.
+    _check(
+        'f"{value:.{PROPENSITY_SIGFIGS}g}"' in sampler,
+        "format_propensity renders significant figures, so tiny propensities round-trip",
+        errors,
+    )
+    # Scoped to the propensity format spec in the module that owns it -- narrow enough not
+    # to fire on unrelated code. Two sites (the selected.txt writer and a log line) bypassed
+    # the helper with a hand-rolled `.6f`, so the producer could emit a value its own
+    # consumer rejects. Defining a shared renderer is not the same as using it.
+    # Matches the format-spec SYNTAX (`:.6f` / `%.6f`), not the bare string -- the bare form
+    # also matched prose in a comment explaining this very rule.
+    for name, src in (("audit_sampler", sampler), ("audit_issue_sync", issue_sync)):
         _check(
-            "0.0 < " not in src,
-            f"{name} does not restate the range check (it would drift from the contract)",
+            ":.6f" not in src and "%.6f" not in src,
+            f"{name} renders every propensity through format_propensity, never a local .6f",
             errors,
         )
 
@@ -184,6 +272,7 @@ def validate_f047() -> int:
 
 
 def main() -> int:
+    """CLI entry point."""
     return validate_f047()
 
 

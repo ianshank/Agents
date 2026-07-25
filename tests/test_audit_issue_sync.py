@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import audit_issue_sync as ais
@@ -170,13 +171,49 @@ def test_read_selected_keeps_the_boundary_values_of_the_contract(tmp_path) -> No
     ]
 
 
-def test_issue_body_carries_the_propensity_into_the_dispatch_command() -> None:
-    """The human copies the command out of the issue, so the value must travel with it."""
-    rec = OutcomeRecord("sha1", "agent-core", 0.7, "2026-01-01T00:00:00+00:00")
-    with_p = ais.issue_body(rec, "o/r", 0.05)
-    assert "**selection_propensity**: `0.050000`" in with_p
-    assert "-f selection_propensity=0.050000" in with_p
+@pytest.mark.parametrize("value", [0.05, 1.0, 1e-7, 0.2 + 0.4], ids=["typical", "certain", "tiny", "noisy"])
+def test_issue_body_carries_a_usable_propensity_into_the_dispatch_command(value) -> None:
+    """The human copies the command out of the issue, so the value must travel *usably*.
 
+    Asserts the round-trip rather than a literal string: the rendered text has to parse back
+    to the same value and still satisfy the contract, which is the property that matters. A
+    hardcoded `0.050000` would pass while `1e-7` silently rendered as `0.000000` — a command
+    guaranteed to fail at the recorder.
+
+    Equality is to the *rendered* precision, not bit-exact: 6 significant figures is a
+    deliberate choice, trading ~1e-6 relative error (meaningless in a `1 / p` weight) for a
+    number a human can read. `0.2 + 0.4` renders `0.6`, not `0.6000000000000001`.
+    """
+    rec = OutcomeRecord("sha1", "agent-core", 0.7, "2026-01-01T00:00:00+00:00")
+    body = ais.issue_body(rec, "o/r", value)
+
+    dispatch = next(ln for ln in body.splitlines() if "gh workflow run" in ln)
+    sent = dispatch.split("selection_propensity=")[1].rstrip("`")
+    assert math.isclose(float(sent), value, rel_tol=1e-6), f"dispatch carried {sent!r}, not {value!r}"
+    assert ais.is_valid_propensity(float(sent)), "the copied value must still be usable"
+    assert f"**selection_propensity**: `{sent}`" in body, "display and command must agree"
+
+
+@pytest.mark.parametrize("bad", [0.0, 1.5, -0.1, float("nan"), float("inf")], ids=["zero", "gt1", "neg", "nan", "inf"])
+def test_selected_change_enforces_the_contract_on_the_type(bad) -> None:
+    """Construction is a second entry point; the guard belongs on the type, not one path.
+
+    `_read_selected` screens the file, but a caller building one directly would otherwise
+    smuggle an uninterpretable probability straight into an issue body.
+    """
+    with pytest.raises(ValueError, match=r"finite number in \(0, 1\]"):
+        ais.SelectedChange("sha1", bad)
+
+
+def test_selected_change_still_accepts_unknown() -> None:
+    """Enforcing the contract must not outlaw the legitimate 'not captured' case."""
+    assert ais.SelectedChange("sha1").propensity is None
+    assert ais.SelectedChange("sha1", None).propensity is None
+    assert ais.SelectedChange("sha1", 1.0).propensity == 1.0
+
+
+def test_issue_body_omits_an_unknown_propensity_entirely() -> None:
+    rec = OutcomeRecord("sha1", "agent-core", 0.7, "2026-01-01T00:00:00+00:00")
     without = ais.issue_body(rec, "o/r", None)
     assert "selection_propensity" not in without, "unknown must not render a placeholder"
 
