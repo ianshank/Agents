@@ -28,11 +28,9 @@ Run as a module::
 from __future__ import annotations
 
 import argparse
-import json
-import math
 import sys
 from collections import Counter
-from dataclasses import asdict, dataclass
+from collections.abc import Sequence
 from pathlib import Path
 
 from .calibration import (
@@ -43,53 +41,47 @@ from .calibration import (
     selective_risk_coverage,
     wilson_interval,
 )
+
+# Re-exported (mypy's explicit `X as X` form) so the rendering entry points stay
+# importable from here after the presentation split.
+from .calibration_report_render import render_json as render_json
+from .calibration_report_render import render_markdown as render_markdown
 from .config import ConfigError
-from .domains import is_agent_domain
+from .domains import DOMAIN_FILTERS, in_domain_scope, is_agent_domain
 from .logging_util import get_logger
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from .ppi import PPIConfig, ppi_plus_interval
+from .report_types import (
+    ESTIMATORS,
+    PPI_PLUS,
+    WILSON,
+    ReportConfig,
+    ReportDoc,
+    SliceReport,
+    View,
+)
 
 logger = get_logger(__name__)
 
-
-@dataclass(frozen=True)
-class ReportConfig:
-    """Calibration-report knobs — documented defaults, not magic numbers at call sites."""
-
-    n_bins: int = 10
-    risk_target: float = 0.05  # abstention risk target for the selective-risk summary
-    z: float = 1.96  # Wilson-interval z (95% by default)
-
-    def __post_init__(self) -> None:
-        # Messages name the offending value (repo convention: `require_exact_keys`/`parse_shas_file`
-        # both echo what they got). `math.isfinite` guards rule out NaN/inf, which would otherwise
-        # slip past the range checks (e.g. `z=inf` passes `z > 0`) and produce a maximally-wide CI.
-        if self.n_bins < 1:
-            raise ConfigError(f"calibration-report.n_bins must be >= 1 (got {self.n_bins!r})")
-        if not (math.isfinite(self.risk_target) and 0.0 <= self.risk_target <= 1.0):
-            raise ConfigError(
-                "calibration-report.risk_target must be a finite value in [0, 1] "
-                f"(got {self.risk_target!r})"
-            )
-        if not (math.isfinite(self.z) and self.z > 0):
-            raise ConfigError(f"calibration-report.z must be a finite value > 0 (got {self.z!r})")
-
-
-@dataclass(frozen=True)
-class SliceReport:
-    label: str
-    n: int
-    n_correct: int
-    base_rate: float | None
-    base_rate_ci: tuple[float, float] | None
-    ece: float | None
-    brier: float | None
-    reliability: float | None
-    resolution: float | None
-    uncertainty: float | None
-    auroc: float | None
-    abstention_at_target: float | None
-    risk_target: float
-    degenerate: str | None
+# This module was split into analysis (here), shared types (`report_types`) and
+# presentation (`calibration_report_render`) to stay inside the repo's file-size budget.
+# The split is internal: every name callers already imported from here still resolves
+# from here, and declaring them explicitly is what keeps that a promise (mypy treats an
+# `__all__` entry as an explicit re-export, and the public-surface guard freezes it).
+__all__ = [
+    "ESTIMATORS",
+    "PPI_PLUS",
+    "WILSON",
+    "ReportConfig",
+    "ReportDoc",
+    "SliceReport",
+    "View",
+    "analyze_slice",
+    "build_report",
+    "main",
+    "render_json",
+    "render_markdown",
+]
 
 
 def analyze_slice(
@@ -97,12 +89,18 @@ def analyze_slice(
     label: str,
     *,
     cfg: ReportConfig | None = None,
+    unlabeled_proxy: Sequence[float] = (),
 ) -> SliceReport:
     """Compute the calibration metrics for one (confidence, correct) slice.
 
     ``degenerate`` is set (and ``auroc`` withheld) when the predictor is constant or
     only one outcome class is present — discrimination is undefined, so we say so
     instead of reporting the by-construction 0.5.
+
+    ``unlabeled_proxy`` carries the confidence values of records this slice could *not*
+    authoritatively label. It is used only by the ``ppi++`` estimator, which borrows
+    strength from them; the Wilson interval is computed identically either way, so the
+    default path is unchanged.
     """
     cfg = cfg or ReportConfig()
     n = len(pairs)
@@ -146,6 +144,14 @@ def analyze_slice(
     reachable = [cov for cov, risk in points if risk <= cfg.risk_target]
     abstention = 1.0 - (max(reachable) if reachable else 0.0)
 
+    ppi = (
+        ppi_plus_interval(
+            list(zip(probs, outcomes, strict=True)), unlabeled_proxy, PPIConfig(z=cfg.z)
+        )
+        if cfg.estimator == PPI_PLUS
+        else None
+    )
+
     return SliceReport(
         label=label,
         n=n,
@@ -161,23 +167,8 @@ def analyze_slice(
         abstention_at_target=abstention,
         risk_target=cfg.risk_target,
         degenerate=degenerate,
+        ppi=ppi,
     )
-
-
-@dataclass(frozen=True)
-class View:
-    name: str
-    tau_eligible: bool
-    slices: list[SliceReport]
-
-
-@dataclass(frozen=True)
-class ReportDoc:
-    domain_filter: str
-    total_records: int
-    resolved_records: int
-    by_label_source: dict[str, int]
-    views: list[View]
 
 
 def _agent_version_index(records: list[OutcomeRecord]) -> dict[str, str]:
@@ -190,11 +181,8 @@ def _agent_version_index(records: list[OutcomeRecord]) -> dict[str, str]:
 
 
 def _in_scope(domain: str, domain_filter: str) -> bool:
-    if domain_filter == "agent":
-        return is_agent_domain(domain)
-    if domain_filter == "human":
-        return not is_agent_domain(domain)
-    return True
+    """Thin alias for the canonical predicate in :mod:`agent_core.domains`."""
+    return in_domain_scope(domain, domain_filter)
 
 
 def _build_view(
@@ -205,22 +193,41 @@ def _build_view(
     domain_filter: str,
     *,
     cfg: ReportConfig,
+    unlabeled: Sequence[OutcomeRecord] = (),
 ) -> View:
-    def analyze(pairs: list[tuple[float, bool]], label: str) -> SliceReport:
-        return analyze_slice(pairs, label, cfg=cfg)
+    """Build one view's slices.
+
+    ``unlabeled`` are the in-scope records this view could not authoritatively label.
+    Each slice is paired with the *same* grouping of that pool, so a per-domain interval
+    borrows strength only from that domain — never from the whole store.
+    """
+
+    def analyze(
+        pairs: list[tuple[float, bool]], label: str, pool: Sequence[OutcomeRecord]
+    ) -> SliceReport:
+        return analyze_slice(
+            pairs, label, cfg=cfg, unlabeled_proxy=[r.raw_confidence for r in pool]
+        )
 
     slices: list[SliceReport] = [
         analyze(
-            [(r.raw_confidence, bool(r.label)) for r in records], f"ALL {domain_filter} domains"
+            [(r.raw_confidence, bool(r.label)) for r in records],
+            f"ALL {domain_filter} domains",
+            unlabeled,
         )
     ]
     by_domain: dict[str, list[OutcomeRecord]] = {}
     for r in records:
         by_domain.setdefault(r.domain, []).append(r)
+    unlabeled_by_domain: dict[str, list[OutcomeRecord]] = {}
+    for r in unlabeled:
+        unlabeled_by_domain.setdefault(r.domain, []).append(r)
     for domain in sorted(by_domain):
         slices.append(
             analyze(
-                [(r.raw_confidence, bool(r.label)) for r in by_domain[domain]], f"domain: {domain}"
+                [(r.raw_confidence, bool(r.label)) for r in by_domain[domain]],
+                f"domain: {domain}",
+                unlabeled_by_domain.get(domain, []),
             )
         )
 
@@ -229,10 +236,16 @@ def _build_view(
         for r in records:
             if is_agent_domain(r.domain):
                 by_av.setdefault(av_index.get(r.change_id, "(unknown)"), []).append(r)
+        unlabeled_by_av: dict[str, list[OutcomeRecord]] = {}
+        for r in unlabeled:
+            if is_agent_domain(r.domain):
+                unlabeled_by_av.setdefault(av_index.get(r.change_id, "(unknown)"), []).append(r)
         for av in sorted(by_av):
             slices.append(
                 analyze(
-                    [(r.raw_confidence, bool(r.label)) for r in by_av[av]], f"agent_version: {av}"
+                    [(r.raw_confidence, bool(r.label)) for r in by_av[av]],
+                    f"agent_version: {av}",
+                    unlabeled_by_av.get(av, []),
                 )
             )
 
@@ -265,6 +278,15 @@ def build_report(
     ]
     primary = [r for r in labeled if r.label_source == LabelSource.HUMAN_AUDIT.value]
 
+    # The unlabeled pool differs per view, because "unlabeled" means "carries no label this
+    # view would trust": for PRIMARY that includes every passively-labelled record, which is
+    # exactly the large N a prediction-powered estimator borrows from.
+    in_scope = [r for r in resolved.values() if _in_scope(r.domain, domain_filter)]
+    primary_ids = {r.change_id for r in primary}
+    labeled_ids = {r.change_id for r in labeled}
+    unlabeled_primary = [r for r in in_scope if r.change_id not in primary_ids]
+    unlabeled_diagnostic = [r for r in in_scope if r.change_id not in labeled_ids]
+
     views = [
         _build_view(
             "PRIMARY — HUMAN_AUDIT only (tau-relevant)",
@@ -273,6 +295,7 @@ def build_report(
             av_index,
             domain_filter,
             cfg=cfg,
+            unlabeled=unlabeled_primary,
         ),
         _build_view(
             "DIAGNOSTIC — all labels incl. weak timeout_clean (NOT tau-eligible)",
@@ -281,6 +304,7 @@ def build_report(
             av_index,
             domain_filter,
             cfg=cfg,
+            unlabeled=unlabeled_diagnostic,
         ),
     ]
     return ReportDoc(
@@ -289,80 +313,38 @@ def build_report(
         resolved_records=len(resolved),
         by_label_source=dict(sorted(by_source.items())),
         views=views,
+        estimator=cfg.estimator,
     )
-
-
-# --- rendering ---------------------------------------------------------------
-def _f(x: float | None) -> str:
-    return "—" if x is None else f"{x:.4f}"
-
-
-def _ci(ci: tuple[float, float] | None) -> str:
-    return "—" if ci is None else f"[{ci[0]:.3f}, {ci[1]:.3f}]"
-
-
-def render_markdown(doc: ReportDoc) -> str:
-    lines: list[str] = []
-    lines.append(f"# Agent-records calibration report (domain-filter: {doc.domain_filter})")
-    lines.append("")
-    lines.append(
-        "> These numbers calibrate a **deterministic proxy** (ADR 0023 §1), not an agent's "
-        "belief. The PRIMARY view (HUMAN_AUDIT) is the only tau-relevant one; the DIAGNOSTIC "
-        "view mixes in weak optimistic `timeout_clean` labels and is not tau-eligible. At low "
-        "N the Wilson CIs are wide — treat this as a proof the pipeline emits a real, "
-        "correctly-uncertain number, not a precise calibration."
-    )
-    lines.append("")
-    lines.append(
-        f"Store: {doc.total_records} records, {doc.resolved_records} resolved change_ids; "
-        f"by label_source: {doc.by_label_source}"
-    )
-    for view in doc.views:
-        lines.append("")
-        lines.append(f"## {view.name}")
-        lines.append("")
-        lines.append(
-            "| slice | N | correct | base rate [Wilson 95%] | ECE | Brier |"
-            " resolution | AUROC | abstain@risk | note |"
-        )
-        lines.append("|---|--:|--:|---|--:|--:|--:|--:|--:|---|")
-        for s in view.slices:
-            auroc_cell = _f(s.auroc) if s.degenerate is None else "—"
-            note = s.degenerate or ""
-            abstain = (
-                "—"
-                if s.abstention_at_target is None
-                else f"{s.abstention_at_target:.2f}@{s.risk_target:g}"
-            )
-            lines.append(
-                f"| {s.label} | {s.n} | {s.n_correct} | "
-                f"{_f(s.base_rate)} {_ci(s.base_rate_ci)} | {_f(s.ece)} | {_f(s.brier)} | "
-                f"{_f(s.resolution)} | {auroc_cell} | {abstain} | {note} |"
-            )
-    lines.append("")
-    return "\n".join(lines)
-
-
-def render_json(doc: ReportDoc) -> str:
-    return json.dumps(asdict(doc), sort_keys=True, indent=2)
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Agent-records calibration report (F-043).")
     ap.add_argument("--store", required=True)
-    ap.add_argument("--domain-filter", choices=["agent", "human", "all"], default="agent")
+    ap.add_argument("--domain-filter", choices=list(DOMAIN_FILTERS), default="agent")
     ap.add_argument("--format", choices=["md", "json"], default="md")
     defaults = ReportConfig()
     ap.add_argument("--n-bins", type=int, default=defaults.n_bins)
     ap.add_argument("--risk-target", type=float, default=defaults.risk_target)
     ap.add_argument("--z", type=float, default=defaults.z)
+    ap.add_argument(
+        "--estimator",
+        choices=list(ESTIMATORS),
+        default=defaults.estimator,
+        help="interval estimator for the base rate; 'ppi++' additionally reports a "
+        "prediction-powered interval alongside Wilson (report-only, never the gate)",
+    )
     ap.add_argument("--output", help="write here instead of stdout")
     args = ap.parse_args(argv)
 
     # A bad --n-bins/--risk-target/--z is an operator error, not a bug: surface it as a
     # clean message + exit 2, not an unhandled ReportConfig.__post_init__ traceback.
     try:
-        cfg = ReportConfig(n_bins=args.n_bins, risk_target=args.risk_target, z=args.z)
+        cfg = ReportConfig(
+            n_bins=args.n_bins,
+            risk_target=args.risk_target,
+            z=args.z,
+            estimator=args.estimator,
+        )
     except ConfigError as exc:
         logger.error("calibration-report: %s", exc)
         return 2

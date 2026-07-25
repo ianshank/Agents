@@ -50,6 +50,14 @@ class OutcomeRecord:
     # Defaults to None so pre-1.3.0 JSONL lines (no field) still load via from_json.
     # The merge gate's per-domain models ignore this; corpus tooling groups by it.
     agent_version: str | None = None
+    # Marginal probability with which the audit sampler selected this change, when known.
+    # Defaults to None so records written before the field existed -- and every passively
+    # labelled or pending record, which was never sampled -- still load unchanged.
+    # Nothing in the gate reads it: it exists so a later estimator can weight audits by
+    # 1/p (Horvitz-Thompson / prediction-powered), which is impossible to reconstruct after
+    # the fact. Validation lives at the write boundary (``audit_sampler.record_verdict``),
+    # not here, because this record is a deliberately dumb, load-tolerant holder (ADR 0025).
+    selection_propensity: float | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), sort_keys=True)

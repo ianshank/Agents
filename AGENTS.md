@@ -45,6 +45,7 @@ enterprise-docs pass and point at the charter as the single source of truth:
 | `CHANGELOG.md` | What changed, release by release? | Keep-a-changelog format; append to the `[Unreleased]`/dev section |
 | `progress.md` | What happened in each work session? | Rotates to `progress-archive/YYYY-MM.md` once large (see `HARNESS_SPEC.md`'s "progress-archive/" section) |
 | `docs/README.md` | Where is every doc, by category? | The documentation index (mirrors this table) |
+| `openspec/` | What in-flight change proposals exist, and which agent owns each phase? | A reversible coordination layer over `features.yaml`/ADRs; see `openspec/README.md` and `docs/openspec-spike.md`. Delete-safe |
 | `CONTRIBUTING.md` | How do I set up, test, and submit a change? | Generalizes `agent-core/CONTRIBUTING.md` to the monorepo |
 | `GOVERNANCE.md` | Who decides, and how? | Defers to `docs/CHARTER.md` §3/§6 |
 | `SECURITY.md` | How do I report a vulnerability? | Private GitHub advisories; reuses the Snyk/secret-scan posture |

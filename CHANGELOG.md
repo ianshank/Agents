@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Peer-review hardening of the proxy/PPI work (`agent-core`).** An adversarial
+  correctness review and a gap/hygiene audit of the change below found six real defects,
+  all fixed here: a prediction-powered interval could render **inverted** (`lo > hi`, a
+  negative half-width, the point outside its own interval) with no degeneracy flag;
+  `variance_reduction` was computed from `[0,1]`-clipped bounds and **over-reported a 3%
+  gain as 94%**, non-monotonically; per-bin slices assumed a unit-interval proxy and
+  silently dropped every out-of-range external judge score; `build_dataset` took the
+  *first* audit row rather than the authoritative one, disagreeing with
+  `OutcomeStore.resolved()`; small-n coverage sat below nominal because the fitted
+  `lambda` was not charged a degree of freedom; and three files had grown past the repo's
+  500-line budget (`scripts/check_size_budget.py`), which the `quality-gates.yml` path
+  filter would have left latent for an unrelated PR to inherit. `calibration.py` is
+  therefore split into `ppi.py`, and the report into `report_types.py` +
+  `calibration_report_render.py`, with every previously importable name still resolving
+  from its original module (`calibration_report.__all__` pins that). The report also now
+  renders the classical (λ=0) baseline the reduction is measured against, and states that
+  cross-domain aggregates are **unweighted** while no estimator applies the `1/p`
+  correction the per-domain audit floor calls for. Full workspace gate green: harness
+  97.55%, agent-core 98.45%, behavioral-regression 100%, flow-corpus 100%,
+  flow-protocol 100%, scripts 95.85%, foundation 96.03%; 43/43 feature validations pass.
+- **Proxy-correlation measurement, audit-selection propensity, and a dual `wilson`/`ppi++`
+  report estimator (`agent-core`).** Implements the minimal, reversible slice from the
+  2026-07-25 peer review. **The merge gate is untouched** — `merge_gate.decide()`, `tau`,
+  `wilson_floor`, `risk_target`, and `min_calibration_n` are unchanged, and auto-merge
+  remains off; every addition is report-side or additive data.
+  - **`agent_core.proxy_eval` (new).** Read-only CLI + library measuring how well a cheap
+    proxy predicts the authoritative `HUMAN_AUDIT` label, reported **marginally and
+    conditionally** on the subsets the gate operates over (`score >= tau`, per-bin), with
+    the implied effective-sample multiplier `1/(1-rho^2)`. Proxies are pluggable via a
+    `ProxyExtractor` Protocol — `RawConfidenceProxy`, `PassiveLabelProxy`, and
+    `MappingProxy` (the seam for externally-computed scores such as an LLM judge, keeping
+    `agent_core` dependency-free). Degenerate slices are named, never scored: a constant
+    proxy, a single outcome class, fewer than three pairs, or a perfect correlation (any
+    two points are collinear, so `n=2` yields `|rho|=1` and a nonsense multiplier).
+  - **`ppi_plus_interval` + `pearson_r` + `effective_n_multiplier` (`agent_core.calibration`).**
+    Power-tuned prediction-powered interval for a mean outcome rate; `lambda` is
+    variance-minimising and clamped, so `lambda = 0` recovers the classical estimator and
+    the tuned form is asymptotically never worse. **Fail-closed:** where the normal
+    approximation cannot be trusted — too few labels, a single outcome class (zero
+    variance would collapse the interval to a false-certainty point), a constant proxy, or
+    no unlabeled pool — it returns the **Wilson** interval and says why. Carries a
+    same-family `lambda = 0` baseline so a reported gain is attributable to the proxy
+    rather than to the interval type.
+  - **`OutcomeRecord.selection_propensity` + `audit_sampler.select_for_audit_detailed`.**
+    The sampler now reports each pick's marginal inclusion probability and `record_verdict`
+    stores it, enabling later Horvitz–Thompson / prediction-powered reweighting (which
+    cannot be reconstructed after the round). Nullable and additive: pre-existing rows load
+    with `None`, `select_for_audit` keeps its exact signature and selection (same RNG
+    order), and the CLI's default output is byte-identical (`--with-propensity` is opt-in).
+  - **`calibration_report --estimator {wilson,ppi++}`.** Dual-reports both intervals plus
+    the variance reduction; `wilson` remains the default and the only estimator the gate
+    uses.
+  - Hardening found by the property suite: `pearson_r` no longer raises `ZeroDivisionError`
+    when two tiny-but-positive variances underflow to zero in their product (roots are
+    taken before multiplying), the moment helpers report an unrepresentable spread as `inf`
+    instead of raising `OverflowError`, and `inclusion_probability` is written so
+    `p >= base_rate` and `p <= 1` hold exactly in floating point.
+- **Peer review of the "swap Wilson → PPI++" estimator critique + OpenSpec coordination spike
+  (planning only).** Added a committed objective peer review
+  (`openspec/changes/eval-proxy-and-estimator/review.md`) that verifies the critique's
+  arithmetic and citations but corrects it on target, magnitude, and mechanism: the merge
+  gate's real activation bar is a four-gate Wilson stack needing ~380 near-perfect audits per
+  domain (not one `N≥20` gate), and PPI++ on the calibrated-confidence proxy buys only
+  ~1.05–1.1× effective-N at the `min_auroc=0.65` floor — the leverage is in the *proxy* choice
+  (passive REVERT/CI labels or an independent LLM judge with conditional variance), not the
+  estimator swap. Introduced a reversible **OpenSpec** front-end (`openspec/`, `docs/openspec-spike.md`)
+  used as a thin coordination layer over the existing enforced spec system (`features.yaml` +
+  `scripts/validations/F_*.py` + ADRs), with a change proposal (proposal/design/tasks/spec
+  deltas) for proxy-correlation measurement, audit-selection-propensity logging, and a dual
+  `wilson`/`ppi++` report estimator. Planning/documentation-only — no evaluation logic, gate
+  threshold, `agent_core` source, or `features.yaml` change; the merge gate is untouched.
 - **Enterprise documentation, licensing & repository organization.** Added an Apache-2.0
   `LICENSE` (+ `NOTICE` and per-package copies) and declared PEP 639 packaging metadata
   (`license`/`license-files`/`readme`/`classifiers`/`[project.urls]`, setuptools `>=77`) across

@@ -95,6 +95,7 @@ agent_core/
   stop.py          4 stop conditions + Gate (first-true-wins)
   loop.py          LoopController (admission gate -> cycle -> outcome check)
   calibration.py   bins, ECE, MCE, Brier+Murphy, AUROC, Wilson, selective, isotonic
+  ppi.py           PPI++ interval (fail-closed to Wilson), pearson_r, effective-N multiplier
   logging_util.py  config-driven logging + debug_span
   sanitize.py      RuleSanitizer, Sanitizer protocol, build_sanitized_claims
   golden.py        GoldenSet, split (hash-bucket), cohen_kappa, evaluate_on_split
@@ -104,11 +105,14 @@ agent_core/
   merge_gate.py    GatePolicyConfig, decide() (REJECT->ESCALATE->AUTO_MERGE), threshold_for_risk
   outcome_store.py OutcomeStore (append-only JSONL), BinningCalibrator, build_domain_models
   outcome_labeller.py passive revert/CI-failure/timeout-clean labels (real detectors)
-  audit_sampler.py unbiased stratified sampling + HUMAN_AUDIT verdicts
+  audit_sampler.py unbiased stratified sampling (+ inclusion propensity) + HUMAN_AUDIT verdicts
+  proxies.py       pluggable proxy extractors (raw confidence / passive label / external)
+  proxy_eval.py    proxy-vs-audit correlation, marginal AND conditional on gated subsets
+  calibration_report.py  agent-records report (wilson | ppi++); report_types + _render split
   merge_gate_ci.py CI entrypoint (exit 0/10/20; 2 = usage/bad input, 1 = internal), audit-logged
   detectors.py     GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo (fail-safe)
   timeutil.py      parse_iso8601 (Z-tolerant, UTC-default)
-tests/             474 tests across all modules
+tests/             688 tests across all modules
 ```
 
 ## Calibrated merge gate (F-010, default-off)

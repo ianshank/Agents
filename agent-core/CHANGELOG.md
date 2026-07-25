@@ -5,6 +5,65 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 
 ## [Unreleased]
 
+### Added
+- **Proxy-correlation measurement + prediction-powered intervals (`ppi`, `proxies`,
+  `proxy_eval`).** `proxy_eval` measures how well a cheap proxy predicts the authoritative
+  `HUMAN_AUDIT` label — marginally *and* conditionally on the subsets the gate operates
+  over (`score >= tau`, per bin) — with the implied `1/(1-rho^2)` effective-sample
+  multiplier. Proxies are pluggable via a `ProxyExtractor` Protocol, so an external LLM
+  judge arrives through `MappingProxy` without `agent_core` gaining a dependency.
+  `ppi.ppi_plus_interval` is a power-tuned control-variate interval that reduces exactly to
+  the classical estimator at `lambda = 0`, and falls back to **Wilson** (with a stated
+  reason) on every path where the normal approximation cannot be trusted.
+- **`OutcomeRecord.selection_propensity` + `audit_sampler.select_for_audit_detailed`.** The
+  sampler now reports each pick's marginal inclusion probability and `record_verdict`
+  stores it, so audits can later be reweighted (`1/p`) — a quantity that cannot be
+  reconstructed once the round is over. Nullable and additive: pre-existing records load
+  with `None`, and `select_for_audit` keeps its exact signature, selection and RNG order.
+- **`calibration_report --estimator {wilson,ppi++}`** dual-reports both intervals plus the
+  same-family classical baseline. `wilson` remains the default and the only estimator the
+  gate uses.
+
+### Fixed
+- **A prediction-powered interval could render inverted (`lo > hi`) with no degeneracy
+  flag.** The point estimate is unbounded above (proxy shift x lambda), and clipping `lo`
+  and `hi` independently of it produced `[1.240, 1.000]` — a negative half-width and a
+  point outside its own interval — printed as a trustworthy estimate. The point is now
+  clamped *before* the bounds are derived, and the bounds are ordered.
+- **`variance_reduction` was computed from clipped bounds, over-reporting a 3% gain as
+  94%.** A ratio of `[0, 1]`-clipped widths measures proximity to a boundary, not variance:
+  holding the data fixed and sliding only the unlabeled proxy mean swung the figure
+  6.8% -> 93.8% -> 62.5%, though the standard error never moved. It is now derived from the
+  standard errors, returns `None` when no trustworthy comparison exists, and reports a
+  genuine widening as negative instead of flooring it at zero.
+- **Per-bin conditional slices assumed a `[0, 1]` proxy**, silently dropping every negative
+  external judge score and sweeping everything above 1.0 into a bin mislabelled `[0.9,1)`.
+  Bin edges now span the observed range.
+- **`build_dataset` took the *first* audit row rather than the authoritative one**,
+  disagreeing with `OutcomeStore.resolved()`: an early row carrying `label=None` demoted a
+  genuinely audited change into the unlabelled pool. Resolution is delegated to
+  `resolved()`, which owns that precedence.
+- **Small-n coverage.** `lambda` is fitted from the same points the residual variance is
+  measured on, so the residual now costs a second degree of freedom (except at
+  `lambda == 0`, where the estimator *is* the classical mean and the exact equivalence must
+  hold). `lambda` also uses the measured unlabeled proxy variance rather than assuming it
+  equals the labelled pool's.
+- **`pearson_r` raised `ZeroDivisionError`** when two tiny-but-positive variances underflowed
+  to zero in their product (found by the property suite); each variance is now rooted before
+  multiplying. The moment helpers report an unrepresentable spread as `inf` rather than
+  raising `OverflowError`.
+- **`inclusion_probability`** is written `base_rate + f*(1-base_rate)` so `p >= base_rate`
+  and `p <= 1` hold exactly in floating point.
+
+### Changed
+- `calibration.py` was split: prediction-powered inference moved to `ppi.py`, and the
+  calibration report into `report_types.py` (shared types) + `calibration_report_render.py`
+  (presentation), keeping every file inside the repo's 500-line budget. The split is
+  internal — every previously importable name still resolves from its original module, and
+  `calibration_report.__all__` now pins that promise.
+- `domains.in_domain_scope` is the single source for `--domain-filter` classification; two
+  report modules had grown byte-identical copies.
+
 ### Fixed
 - **A record from a newer writer crashed every reader (ADR 0025).** `store_sync` deliberately
   preserves a line it cannot parse — "an upgraded writer during a rolling upgrade … must NOT

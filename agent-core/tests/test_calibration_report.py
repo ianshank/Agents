@@ -7,7 +7,6 @@ import json
 import pytest
 
 from agent_core.calibration_report import (
-    ReportConfig,
     analyze_slice,
     build_report,
     main,
@@ -17,6 +16,7 @@ from agent_core.calibration_report import (
 from agent_core.config import ConfigError
 from agent_core.domains import is_agent_domain
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from agent_core.report_types import ReportConfig
 
 _TS = "2026-07-20T12:00:00+00:00"
 
@@ -243,3 +243,139 @@ def test_cli_bad_config_is_clean_exit(tmp_path):
     store = _store(tmp_path, _mixed_records())
     rc = main(["--store", str(store.path), "--n-bins", "0"])
     assert rc == 2
+
+
+# --- estimator selection (wilson / ppi++) ------------------------------------
+# The estimator is a *reporting* choice only. The gate keeps using Wilson, so the
+# tests below pin both that the default path is untouched and that ppi++ is additive.
+
+
+def test_estimator_defaults_to_wilson() -> None:
+    assert ReportConfig().estimator == "wilson"
+
+
+def test_estimator_rejects_an_unknown_name() -> None:
+    with pytest.raises(ConfigError, match="estimator"):
+        ReportConfig(estimator="bootstrap")
+
+
+def test_default_report_carries_no_ppi(tmp_path) -> None:
+    """Byte-for-byte the previous behaviour: no PPI computed unless asked for."""
+    doc = build_report(_store(tmp_path, _mixed_records()), domain_filter="agent")
+    assert doc.estimator == "wilson"
+    assert all(s.ppi is None for v in doc.views for s in v.slices)
+
+
+def test_ppi_estimator_attaches_an_estimate_to_every_slice(tmp_path) -> None:
+    cfg = ReportConfig(estimator="ppi++")
+    doc = build_report(_store(tmp_path, _mixed_records()), domain_filter="agent", cfg=cfg)
+    assert doc.estimator == "ppi++"
+    populated = [s for v in doc.views for s in v.slices if s.n > 0]
+    assert populated and all(s.ppi is not None for s in populated)
+
+
+def test_ppi_never_changes_the_wilson_columns(tmp_path) -> None:
+    """Dual-report means *adding* a column, never silently altering the existing one."""
+    records = _mixed_records()
+    base = build_report(_store(tmp_path, records), domain_filter="agent")
+    dual = build_report(
+        _store(tmp_path, records), domain_filter="agent", cfg=ReportConfig(estimator="ppi++")
+    )
+    for v_base, v_dual in zip(base.views, dual.views, strict=True):
+        for s_base, s_dual in zip(v_base.slices, v_dual.slices, strict=True):
+            assert s_base.base_rate_ci == s_dual.base_rate_ci
+            assert (s_base.n, s_base.n_correct, s_base.ece) == (
+                s_dual.n,
+                s_dual.n_correct,
+                s_dual.ece,
+            )
+
+
+def test_markdown_renders_both_estimators(tmp_path) -> None:
+    cfg = ReportConfig(estimator="ppi++")
+    md = render_markdown(
+        build_report(_store(tmp_path, _mixed_records()), domain_filter="agent", cfg=cfg)
+    )
+    assert "base rate [Wilson 95%]" in md
+    assert "PPI++ 95%" in md
+    assert "var-reduction" in md
+    assert "does **not** change" in md  # the honesty note about the gate
+
+
+def test_markdown_default_has_no_ppi_column(tmp_path) -> None:
+    md = render_markdown(build_report(_store(tmp_path, _mixed_records()), domain_filter="agent"))
+    assert "PPI++" not in md
+
+
+def test_analyze_slice_unlabeled_pool_is_ignored_by_wilson() -> None:
+    """The extra argument must be inert on the default path."""
+    pairs = [(0.9, True), (0.8, False), (0.7, True)]
+    without = analyze_slice(pairs, "s")
+    with_pool = analyze_slice(pairs, "s", unlabeled_proxy=[0.1, 0.2, 0.3])
+    assert without == with_pool
+
+
+def test_analyze_slice_ppi_uses_the_unlabeled_pool() -> None:
+    pairs = [(i / 10, i % 2 == 0) for i in range(10)]
+    cfg = ReportConfig(estimator="ppi++")
+    est = analyze_slice(pairs, "s", cfg=cfg, unlabeled_proxy=[i / 10 for i in range(100)]).ppi
+    assert est is not None
+    assert est.n_labeled == 10 and est.n_unlabeled == 100
+
+
+def test_ppi_falls_back_to_wilson_on_a_degenerate_slice() -> None:
+    """A single-class slice must not report a tighter interval than Wilson."""
+    pairs = [(0.9, True)] * 6
+    cfg = ReportConfig(estimator="ppi++")
+    report = analyze_slice(pairs, "s", cfg=cfg, unlabeled_proxy=[0.9] * 50)
+    assert report.ppi is not None and report.ppi.degenerate is not None
+    assert report.base_rate_ci is not None
+    assert abs(report.ppi.lo - report.base_rate_ci[0]) < 1e-12
+
+
+def test_cli_accepts_the_estimator_flag(tmp_path, capsys) -> None:
+    store = _store(tmp_path, _mixed_records())
+    assert main(["--store", str(store.path), "--estimator", "ppi++"]) == 0
+    assert "PPI++ 95%" in capsys.readouterr().out
+
+
+def test_cli_rejects_an_unknown_estimator(tmp_path) -> None:
+    store = _store(tmp_path, _mixed_records())
+    with pytest.raises(SystemExit):
+        main(["--store", str(store.path), "--estimator", "jackknife"])
+
+
+def test_cli_json_includes_the_estimator(tmp_path) -> None:
+    store = _store(tmp_path, _mixed_records())
+    out = tmp_path / "r.json"
+    rc = main(
+        [
+            "--store",
+            str(store.path),
+            "--format",
+            "json",
+            "--estimator",
+            "ppi++",
+            "--output",
+            str(out),
+        ]
+    )
+    assert rc == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["estimator"] == "ppi++"
+
+
+def test_public_names_survive_the_module_split() -> None:
+    """The report was split into analysis/types/rendering; imports must not break.
+
+    External callers (and older code) import these from `calibration_report`; the split
+    is an internal layering change, so every name must still resolve from there.
+    """
+    import agent_core.calibration_report as cr
+    from agent_core import calibration_report_render, report_types
+
+    assert cr.ReportConfig is report_types.ReportConfig
+    assert cr.SliceReport is report_types.SliceReport
+    assert cr.ReportDoc is report_types.ReportDoc
+    assert cr.View is report_types.View
+    assert cr.render_markdown is calibration_report_render.render_markdown
+    assert cr.render_json is calibration_report_render.render_json
