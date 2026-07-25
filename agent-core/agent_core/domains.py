@@ -26,3 +26,25 @@ def is_agent_domain(domain: str) -> bool:
 def strip_human_namespace(domain: str) -> str:
     """Return the bare domain, dropping a leading reserved human namespace if present."""
     return domain[len(HUMAN_NAMESPACE) :] if domain.startswith(HUMAN_NAMESPACE) else domain
+
+
+# Selector values every report's ``--domain-filter`` accepts. Single-sourced so the CLIs,
+# their argparse choices, and this predicate cannot drift apart.
+DOMAIN_FILTERS = ("agent", "human", "all")
+
+
+def in_domain_scope(domain: str, domain_filter: str) -> bool:
+    """True when ``domain`` is selected by ``domain_filter``.
+
+    Lives here, next to :func:`is_agent_domain`, because two report modules had grown
+    byte-identical copies of this three-branch predicate — and a classification that
+    disagreed between them is the agent-pool-poisoning hazard this module exists to
+    prevent.
+    """
+    if domain_filter not in DOMAIN_FILTERS:
+        raise ValueError(f"domain_filter must be one of {DOMAIN_FILTERS} (got {domain_filter!r})")
+    if domain_filter == "all":
+        return True
+    if domain_filter == "agent":
+        return is_agent_domain(domain)
+    return not is_agent_domain(domain)

@@ -40,31 +40,28 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Protocol, runtime_checkable
 
-from .calibration import (
+from .calibration import auroc
+from .config import ConfigError
+from .domains import DOMAIN_FILTERS, in_domain_scope
+from .logging_util import debug_span, get_logger
+from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from .ppi import (
     PPIConfig,
     PPIEstimate,
-    auroc,
     effective_n_multiplier,
     pearson_r,
     ppi_plus_interval,
 )
-from .config import ConfigError
-from .domains import is_agent_domain
-from .logging_util import debug_span, get_logger
-from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+
+# Re-exported (`X as X` is mypy's explicit re-export form) so the proxies stay importable
+# from here after being split into `agent_core.proxies`.
+from .proxies import MappingProxy as MappingProxy
+from .proxies import PassiveLabelProxy as PassiveLabelProxy
+from .proxies import ProxyExtractor as ProxyExtractor
+from .proxies import RawConfidenceProxy as RawConfidenceProxy
 
 logger = get_logger(__name__)
-
-# Passive label sources mapped to the outcome they predict. TIMEOUT_CLEAN is optimistic by
-# construction (nothing was observed within the window, which is weak evidence of success),
-# which is precisely why it is a *proxy* here and never an authoritative label.
-_PASSIVE_PREDICTION: dict[str, float] = {
-    LabelSource.REVERT.value: 0.0,
-    LabelSource.CI_FAILURE.value: 0.0,
-    LabelSource.TIMEOUT_CLEAN.value: 1.0,
-}
 
 
 @dataclass(frozen=True)
@@ -93,72 +90,6 @@ class ProxyEvalConfig:
                 raise ConfigError(
                     f"proxy-eval.tau_quantiles must be finite values in [0, 1) (got {q!r})"
                 )
-
-
-# --- proxies -----------------------------------------------------------------
-@runtime_checkable
-class ProxyExtractor(Protocol):
-    """Turns every record a change accumulated into one proxy value, or ``None``.
-
-    ``None`` means "this proxy has nothing to say about this change" and drops the change
-    from that proxy's dataset — never silently coerced to zero, which would fabricate a
-    correlation.
-    """
-
-    @property
-    def name(self) -> str: ...
-
-    def value(self, change_id: str, records: Sequence[OutcomeRecord]) -> float | None: ...
-
-
-@dataclass(frozen=True)
-class RawConfidenceProxy:
-    """The agent's proxy confidence — the baseline every other proxy must beat.
-
-    This is the signal the gate's calibrator already consumes, so its *conditional*
-    correlation is the number that says whether PPI can help the gate itself.
-    """
-
-    name: str = "raw_confidence"
-
-    def value(self, change_id: str, records: Sequence[OutcomeRecord]) -> float | None:
-        for r in records:
-            if r.label_source != LabelSource.HUMAN_AUDIT.value:
-                return r.raw_confidence
-        return records[0].raw_confidence if records else None
-
-
-@dataclass(frozen=True)
-class PassiveLabelProxy:
-    """Mechanical outcome signals (revert / CI failure / clean timeout) as a proxy.
-
-    Collected on *every* merge by the labeller and orthogonal to the confidence bin, so
-    unlike confidence it can retain variance on a gated subset.
-    """
-
-    name: str = "passive_label"
-
-    def value(self, change_id: str, records: Sequence[OutcomeRecord]) -> float | None:
-        for r in records:
-            if r.label_source in _PASSIVE_PREDICTION:
-                return _PASSIVE_PREDICTION[r.label_source]
-        return None
-
-
-@dataclass(frozen=True)
-class MappingProxy:
-    """Externally-computed scores keyed by ``change_id``.
-
-    The seam for any proxy this package must not depend on — an LLM judge, a static
-    analyser, a human triage score. Compute elsewhere, hand the mapping in.
-    """
-
-    name: str
-    scores: Mapping[str, float]
-
-    def value(self, change_id: str, records: Sequence[OutcomeRecord]) -> float | None:
-        v = self.scores.get(change_id)
-        return None if v is None or not math.isfinite(v) else float(v)
 
 
 # --- dataset assembly --------------------------------------------------------
@@ -201,16 +132,27 @@ def build_dataset(
     """
     labeled: list[ProxyPair] = []
     unlabeled: list[float] = []
+    # `resolved()` owns the authoritative-label precedence (HUMAN_AUDIT wins, later
+    # verdict supersedes). Re-deriving it here by scanning for the *first* audit row got a
+    # different answer whenever an early audit row carried `label=None`, silently demoting
+    # an audited change into the unlabelled pool -- losing a scarce label and breaking the
+    # disjointness the variance formula assumes. The grouping below is still needed
+    # because a proxy may read rows `resolved()` collapses away.
+    resolved = store.resolved()
     for change_id, records in sorted(_records_by_change(store).items()):
-        domain = records[0].domain
-        if not _domain_selected(domain, domain_filter):
+        authoritative = resolved.get(change_id)
+        domain = authoritative.domain if authoritative is not None else records[0].domain
+        if not in_domain_scope(domain, domain_filter):
             continue
         proxy = extractor.value(change_id, records)
         if proxy is None:
             continue
-        audit = next((r for r in records if r.label_source == LabelSource.HUMAN_AUDIT.value), None)
-        if audit is not None and audit.label is not None:
-            labeled.append(ProxyPair(change_id, domain, proxy, bool(audit.label)))
+        if (
+            authoritative is not None
+            and authoritative.label_source == LabelSource.HUMAN_AUDIT.value
+            and authoritative.label is not None
+        ):
+            labeled.append(ProxyPair(change_id, domain, proxy, bool(authoritative.label)))
         else:
             unlabeled.append(proxy)
     logger.debug(
@@ -223,12 +165,18 @@ def build_dataset(
     return ProxyDataset(extractor.name, tuple(labeled), tuple(unlabeled))
 
 
-def _domain_selected(domain: str, domain_filter: str) -> bool:
-    if domain_filter == "all":
-        return True
-    if domain_filter == "agent":
-        return is_agent_domain(domain)
-    return not is_agent_domain(domain)
+def _standardise(xs: Sequence[float]) -> list[float]:
+    """Min-max the proxy into ``[0, 1]``.
+
+    The PPI estimator targets a probability, so it requires a bounded proxy; an external
+    judge's scores (the ``--judge-scores`` seam) carry no such contract. Rescaling is
+    lossless for this purpose because the estimator's ``lambda`` is scale-free — only the
+    proxy's *shape* matters, and a monotone affine map preserves it exactly.
+    """
+    lo, hi = min(xs), max(xs)
+    if hi <= lo:
+        return [0.0] * len(xs)
+    return [(x - lo) / (hi - lo) for x in xs]
 
 
 # --- analysis ----------------------------------------------------------------
@@ -307,17 +255,29 @@ def analyze_dataset(dataset: ProxyDataset, cfg: ProxyEvalConfig | None = None) -
         cut = _quantile(xs_sorted, q)
         subset = [p for p in pairs if p.proxy >= cut]
         conditional.append(_analyze_pairs(f"proxy >= q{q:g} ({cut:.4g})", subset, cfg))
-    for b in range(cfg.n_bins):
-        lo, hi = b / cfg.n_bins, (b + 1) / cfg.n_bins
-        subset = [p for p in pairs if p.proxy >= lo and (p.proxy < hi or b == cfg.n_bins - 1)]
-        if subset:
-            conditional.append(_analyze_pairs(f"bin [{lo:.2g},{hi:.2g})", subset, cfg))
+    # Bin edges span the proxy's OBSERVED range, not a presumed [0, 1]. Fixed unit edges
+    # silently dropped every negative score and swept everything above 1.0 into a bin
+    # labelled "[0.9,1)" -- and an external judge's scores (the whole point of the
+    # MappingProxy seam) carry no unit-interval contract.
+    if xs_sorted and xs_sorted[-1] > xs_sorted[0]:
+        span_lo, span_hi = xs_sorted[0], xs_sorted[-1]
+        width = (span_hi - span_lo) / cfg.n_bins
+        for b in range(cfg.n_bins):
+            lo, hi = span_lo + width * b, span_lo + width * (b + 1)
+            last = b == cfg.n_bins - 1
+            subset = [p for p in pairs if p.proxy >= lo and (p.proxy < hi or last)]
+            if subset:
+                conditional.append(_analyze_pairs(f"bin [{lo:.4g},{hi:.4g})", subset, cfg))
 
     ppi: PPIEstimate | None = None
     if pairs:
+        # Standardise both pools on the SAME scale before the estimator sees them: it
+        # targets a probability and so requires a bounded proxy, while lambda is
+        # scale-free, making a shared affine map lossless.
+        scaled = _standardise([p.proxy for p in pairs] + list(dataset.unlabeled))
         ppi = ppi_plus_interval(
-            [(p.proxy, int(p.correct)) for p in pairs],
-            dataset.unlabeled,
+            [(f, int(p.correct)) for f, p in zip(scaled[: len(pairs)], pairs, strict=True)],
+            scaled[len(pairs) :],
             PPIConfig(z=cfg.z),
         )
     return ProxyReport(
@@ -404,7 +364,12 @@ def render_markdown(reports: Sequence[ProxyReport], cfg: ProxyEvalConfig) -> str
                 "",
                 f"Same-family classical (lambda=0) interval: [{p.classical_lo:.4f}, "
                 f"{p.classical_hi:.4f}] -> variance reduction "
-                f"**{p.variance_reduction * 100:.1f}%**.",
+                + (
+                    "**n/a** (no trustworthy comparison)."
+                    if p.variance_reduction is None
+                    else f"**{p.variance_reduction * 100:.1f}%** (from the standard errors, "
+                    "not the clipped bounds)."
+                ),
                 "",
             ]
             if p.degenerate:
@@ -465,7 +430,7 @@ def _load_judge_scores(path: str | None) -> dict[str, float] | None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Proxy-correlation report for audit estimates.")
     ap.add_argument("--store", required=True)
-    ap.add_argument("--domain-filter", choices=["agent", "human", "all"], default="agent")
+    ap.add_argument("--domain-filter", choices=list(DOMAIN_FILTERS), default="agent")
     ap.add_argument("--format", choices=["md", "json"], default="md")
     defaults = ProxyEvalConfig()
     ap.add_argument("--n-bins", type=int, default=defaults.n_bins)

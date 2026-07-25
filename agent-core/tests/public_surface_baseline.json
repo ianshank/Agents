@@ -20,6 +20,7 @@
       "CalibratorRegistry",
       "ConfigError",
       "ConvergenceCondition",
+      "CorrelationConfig",
       "CostEstimator",
       "CycleResult",
       "CycleRunner",
@@ -82,6 +83,20 @@
       "selective_risk_coverage",
       "split",
       "wilson_interval"
+    ],
+    "agent_core.calibration_report": [
+      "ESTIMATORS",
+      "PPI_PLUS",
+      "ReportConfig",
+      "ReportDoc",
+      "SliceReport",
+      "View",
+      "WILSON",
+      "analyze_slice",
+      "build_report",
+      "main",
+      "render_json",
+      "render_markdown"
     ],
     "agent_core.store_sync": [
       "EXIT_FETCH_FAILED",

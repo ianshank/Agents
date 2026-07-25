@@ -104,9 +104,11 @@ def select_for_audit_detailed(
         rng.shuffle(recs)
         # NOTE: `or` short-circuits, so rng.random() is consumed only past the floor.
         # Any refactor here must preserve that call order or seeded selection changes.
+        picked_here = 0
         for i, r in enumerate(recs):
             if i < need_floor or rng.random() < cfg.base_rate:
                 picked.append(AuditSelection(r.change_id, domain, propensity))
+                picked_here += 1
         logger.debug(
             "audit selection: domain=%s candidates=%d audited=%d need_floor=%d "
             "propensity=%.6f picked=%d",
@@ -115,7 +117,7 @@ def select_for_audit_detailed(
             have,
             need_floor,
             propensity,
-            sum(1 for s in picked if s.domain == domain),
+            picked_here,
         )
     logger.info(
         "audit sampler selected %d change(s) across %d domain(s) (base_rate=%s, floor=%s)",

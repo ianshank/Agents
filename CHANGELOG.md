@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Peer-review hardening of the proxy/PPI work (`agent-core`).** An adversarial
+  correctness review and a gap/hygiene audit of the change below found six real defects,
+  all fixed here: a prediction-powered interval could render **inverted** (`lo > hi`, a
+  negative half-width, the point outside its own interval) with no degeneracy flag;
+  `variance_reduction` was computed from `[0,1]`-clipped bounds and **over-reported a 3%
+  gain as 94%**, non-monotonically; per-bin slices assumed a unit-interval proxy and
+  silently dropped every out-of-range external judge score; `build_dataset` took the
+  *first* audit row rather than the authoritative one, disagreeing with
+  `OutcomeStore.resolved()`; small-n coverage sat below nominal because the fitted
+  `lambda` was not charged a degree of freedom; and three files had grown past the repo's
+  500-line budget (`scripts/check_size_budget.py`), which the `quality-gates.yml` path
+  filter would have left latent for an unrelated PR to inherit. `calibration.py` is
+  therefore split into `ppi.py`, and the report into `report_types.py` +
+  `calibration_report_render.py`, with every previously importable name still resolving
+  from its original module (`calibration_report.__all__` pins that). The report also now
+  renders the classical (λ=0) baseline the reduction is measured against, and states that
+  cross-domain aggregates are **unweighted** while no estimator applies the `1/p`
+  correction the per-domain audit floor calls for. Full workspace gate green: harness
+  97.55%, agent-core 98.45%, behavioral-regression 100%, flow-corpus 100%,
+  flow-protocol 100%, scripts 95.85%, foundation 96.03%; 43/43 feature validations pass.
 - **Proxy-correlation measurement, audit-selection propensity, and a dual `wilson`/`ppi++`
   report estimator (`agent-core`).** Implements the minimal, reversible slice from the
   2026-07-25 peer review. **The merge gate is untouched** — `merge_gate.decide()`, `tau`,

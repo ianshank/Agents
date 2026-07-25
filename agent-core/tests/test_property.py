@@ -97,9 +97,14 @@ def test_isotonic_monotone_at_arbitrary_points(pairs):
 _UNIT = st.floats(min_value=0.0, max_value=1.0)
 
 
+# The estimator accepts ANY finite proxy, so the strategy must too -- confining it to
+# [0, 1] is what let an inverted-interval bug (lo > hi) survive a "fully covered" suite.
+_ANY = st.floats(allow_nan=False, allow_infinity=False, min_value=-1e6, max_value=1e6)
+
+
 @given(
-    pairs=st.lists(st.tuples(_UNIT, st.integers(0, 1)), min_size=1, max_size=200),
-    unlabeled=st.lists(_UNIT, max_size=400),
+    pairs=st.lists(st.tuples(_ANY, st.integers(0, 1)), min_size=1, max_size=200),
+    unlabeled=st.lists(_ANY, max_size=400),
 )
 def test_ppi_interval_is_always_a_valid_probability_interval(pairs, unlabeled):
     """Whatever the input, the interval must stay a usable probability interval."""
@@ -107,11 +112,13 @@ def test_ppi_interval_is_always_a_valid_probability_interval(pairs, unlabeled):
     assert 0.0 <= est.lo <= est.hi <= 1.0
     assert 0.0 <= est.point <= 1.0
     assert 0.0 <= est.lam <= 1.0
+    assert est.lo <= est.point <= est.hi, "point must lie inside its own interval"
+    assert est.half_width >= 0.0
 
 
 @given(
-    pairs=st.lists(st.tuples(_UNIT, st.integers(0, 1)), min_size=1, max_size=200),
-    unlabeled=st.lists(_UNIT, max_size=400),
+    pairs=st.lists(st.tuples(_ANY, st.integers(0, 1)), min_size=1, max_size=200),
+    unlabeled=st.lists(_ANY, max_size=400),
 )
 def test_ppi_degenerate_results_are_exactly_wilson(pairs, unlabeled):
     """The fail-closed contract: a degenerate estimate is never tighter than Wilson.

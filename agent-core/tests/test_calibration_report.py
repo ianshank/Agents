@@ -7,7 +7,6 @@ import json
 import pytest
 
 from agent_core.calibration_report import (
-    ReportConfig,
     analyze_slice,
     build_report,
     main,
@@ -17,6 +16,7 @@ from agent_core.calibration_report import (
 from agent_core.config import ConfigError
 from agent_core.domains import is_agent_domain
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from agent_core.report_types import ReportConfig
 
 _TS = "2026-07-20T12:00:00+00:00"
 
@@ -362,3 +362,20 @@ def test_cli_json_includes_the_estimator(tmp_path) -> None:
     )
     assert rc == 0
     assert json.loads(out.read_text(encoding="utf-8"))["estimator"] == "ppi++"
+
+
+def test_public_names_survive_the_module_split() -> None:
+    """The report was split into analysis/types/rendering; imports must not break.
+
+    External callers (and older code) import these from `calibration_report`; the split
+    is an internal layering change, so every name must still resolve from there.
+    """
+    import agent_core.calibration_report as cr
+    from agent_core import calibration_report_render, report_types
+
+    assert cr.ReportConfig is report_types.ReportConfig
+    assert cr.SliceReport is report_types.SliceReport
+    assert cr.ReportDoc is report_types.ReportDoc
+    assert cr.View is report_types.View
+    assert cr.render_markdown is calibration_report_render.render_markdown
+    assert cr.render_json is calibration_report_render.render_json

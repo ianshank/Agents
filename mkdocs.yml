@@ -61,6 +61,7 @@ nav:
   - Spikes:
       - Phoenix seam: phoenix-spike.md
       - BrainTrust seam: braintrust-spike.md
+      - OpenSpec coordination layer: openspec-spike.md
   - Baselines:
       - "Gap analysis (2026-07)": gap-analysis-2026-07.md
       - Remediation: gap-analysis-2026-07-remediation.md

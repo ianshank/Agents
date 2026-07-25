@@ -13,9 +13,9 @@ import math
 
 import pytest
 
-from agent_core.calibration import PPIEstimate
 from agent_core.config import ConfigError
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from agent_core.ppi import PPIEstimate
 from agent_core.proxy_eval import (
     MappingProxy,
     PassiveLabelProxy,
@@ -50,6 +50,21 @@ def _store(tmp_path, records) -> OutcomeStore:
     for r in records:
         store.append(r)
     return store
+
+
+def _partially_audited(tmp_path, audited_pairs, unaudited_confidences, domain: str = "core"):
+    """Audited pairs PLUS unaudited seeds, so the unlabeled pool PPI borrows from is real.
+
+    Without this every change carried an audit row, the pool was always empty, and every
+    `ppi` assertion in this module was silently checking a Wilson fallback.
+    """
+    records = []
+    for i, (conf, correct) in enumerate(audited_pairs):
+        records.append(_seed(f"c{i}", domain, conf))
+        records.append(_labeled(f"c{i}", domain, conf, correct, LabelSource.HUMAN_AUDIT))
+    for j, conf in enumerate(unaudited_confidences):
+        records.append(_seed(f"u{j}", domain, conf))
+    return _store(tmp_path, records)
 
 
 def _audited(tmp_path, pairs, domain: str = "core"):
@@ -411,16 +426,16 @@ def test_quantile_helper_is_within_the_sample(tmp_path) -> None:
 def test_a_perfect_correlation_is_reported_as_an_artifact(tmp_path) -> None:
     """|rho| == 1 on a handful of records is collinearity, not evidence.
 
-    Left unguarded this printed an effective-sample multiplier of ~1e12 from three
-    audited rows — the exact false precision this report exists to prevent.
+    The proxy here is an exact affine map of the outcome, so rho is identically 1 and the
+    guard must fire. An earlier version of this test used a fixture with rho = 0.866 --
+    it never reached the guard at all, and deleting the guard left it green.
     """
-    store = _audited(tmp_path, [(0.1, False), (0.5, True), (0.9, True)])
+    store = _audited(tmp_path, [(0.2, False), (0.2, False), (0.8, True), (0.8, True)])
     rep = analyze_dataset(build_dataset(store, RawConfidenceProxy(), domain_filter="all"), CFG)
-    perfect = [s for s in (rep.marginal, *rep.conditional) if s.n >= CFG.min_pairs]
-    for sl in perfect:
-        assert sl.effective_n < 1e6, f"{sl.label} advertises implausible precision"
-        if sl.degenerate and "perfect correlation" in sl.degenerate:
-            assert sl.rho is None and sl.effective_n == 1.0
+    assert rep.marginal.degenerate is not None
+    assert "perfect correlation" in rep.marginal.degenerate
+    assert rep.marginal.rho is None
+    assert rep.marginal.effective_n == 1.0
 
 
 def test_two_point_slices_are_never_scored(tmp_path) -> None:
@@ -430,3 +445,66 @@ def test_two_point_slices_are_never_scored(tmp_path) -> None:
     assert rep.marginal.rho is None
     assert "insufficient pairs" in (rep.marginal.degenerate or "")
     assert rep.marginal.effective_n == 1.0
+
+
+def test_ppi_is_computed_against_a_real_unlabeled_pool(tmp_path) -> None:
+    """The PPI path must be exercised, not just its Wilson fallback."""
+    audited = [(i / 20, i % 3 != 0) for i in range(14)]
+    store = _partially_audited(tmp_path, audited, [i / 40 for i in range(60)])
+    rep = analyze_dataset(build_dataset(store, RawConfidenceProxy(), domain_filter="all"), CFG)
+    assert rep.ppi is not None
+    assert rep.n_unlabeled == 60
+    assert rep.ppi.degenerate is None, "expected a live PPI estimate, not a fallback"
+    assert rep.ppi.n_unlabeled == 60
+    assert 0.0 <= rep.ppi.lo <= rep.ppi.point <= rep.ppi.hi <= 1.0
+
+
+def test_bins_span_the_observed_proxy_range_not_the_unit_interval(tmp_path) -> None:
+    """Regression: fixed [0,1] edges dropped every out-of-range score.
+
+    An external judge's scores carry no unit-interval contract, so scores below 0 landed
+    in no bin at all and everything above 1 was swept into a bin mislabelled "[0.9,1)".
+    """
+    audited = [(i / 20, i % 2 == 0) for i in range(12)]
+    store = _partially_audited(tmp_path, audited, [0.5] * 5)
+    scores = {f"c{i}": -3.0 + i for i in range(12)}  # spans -3 .. +8
+    scores.update({f"u{j}": 0.0 for j in range(5)})
+    rep = analyze_dataset(
+        build_dataset(store, MappingProxy("judge", scores), domain_filter="all"), CFG
+    )
+    binned = [s for s in rep.conditional if s.label.startswith("bin ")]
+    assert binned, "out-of-unit-range proxies must still be binned"
+    assert sum(s.n for s in binned) == rep.n_labeled, "every labelled pair must land in a bin"
+
+
+def test_passive_prediction_covers_every_passive_label_source() -> None:
+    """A new LabelSource must not be silently ignored (dropping the change entirely)."""
+    from agent_core.proxies import _PASSIVE_PREDICTION
+
+    assert set(_PASSIVE_PREDICTION) | {LabelSource.HUMAN_AUDIT.value} == {
+        s.value for s in LabelSource
+    }
+
+
+def test_authoritative_audit_wins_over_an_earlier_unlabelled_audit_row(tmp_path) -> None:
+    """Regression: `next(...)` took the FIRST audit row, disagreeing with resolved().
+
+    An early audit row carrying `label=None` demoted a genuinely audited change into the
+    unlabelled pool — losing a scarce label and breaking the labeled/unlabeled
+    disjointness the variance formula assumes.
+    """
+    store = _store(
+        tmp_path,
+        [
+            _seed("z1", "core", 0.8),
+            OutcomeRecord(
+                "z1", "core", 0.8, _TS, label=None, label_source=LabelSource.HUMAN_AUDIT.value
+            ),
+            _labeled("z1", "core", 0.8, True, LabelSource.HUMAN_AUDIT),
+        ],
+    )
+    ds = build_dataset(store, RawConfidenceProxy(), domain_filter="all")
+    assert [p.change_id for p in ds.labeled] == ["z1"]
+    assert ds.labeled[0].correct is True
+    assert ds.unlabeled == ()
+    assert store.resolved()["z1"].label is True  # agrees with the canonical resolution

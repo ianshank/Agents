@@ -28,91 +28,60 @@ Run as a module::
 from __future__ import annotations
 
 import argparse
-import json
-import math
 import sys
 from collections import Counter
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .calibration import (
-    PPIConfig,
-    PPIEstimate,
     auroc,
     brier_decomposition,
     brier_score,
     expected_calibration_error,
-    ppi_plus_interval,
     selective_risk_coverage,
     wilson_interval,
 )
+
+# Re-exported (mypy's explicit `X as X` form) so the rendering entry points stay
+# importable from here after the presentation split.
+from .calibration_report_render import render_json as render_json
+from .calibration_report_render import render_markdown as render_markdown
 from .config import ConfigError
-from .domains import is_agent_domain
+from .domains import DOMAIN_FILTERS, in_domain_scope, is_agent_domain
 from .logging_util import get_logger
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from .ppi import PPIConfig, ppi_plus_interval
+from .report_types import (
+    ESTIMATORS,
+    PPI_PLUS,
+    WILSON,
+    ReportConfig,
+    ReportDoc,
+    SliceReport,
+    View,
+)
 
 logger = get_logger(__name__)
 
-# Interval estimators this report can render. Single-sourced so the CLI choices, the
-# config validator, and the renderer cannot drift apart.
-WILSON = "wilson"
-PPI_PLUS = "ppi++"
-ESTIMATORS = (WILSON, PPI_PLUS)
-
-
-@dataclass(frozen=True)
-class ReportConfig:
-    """Calibration-report knobs — documented defaults, not magic numbers at call sites."""
-
-    n_bins: int = 10
-    risk_target: float = 0.05  # abstention risk target for the selective-risk summary
-    z: float = 1.96  # Wilson-interval z (95% by default)
-    # Interval estimator for the base rate. "wilson" is the default and the only estimator
-    # the *gate* uses; "ppi++" additionally reports a power-tuned prediction-powered
-    # interval that borrows strength from unaudited records. Both are always rendered when
-    # ppi++ is selected -- a single number would hide which estimator produced it.
-    estimator: str = "wilson"
-
-    def __post_init__(self) -> None:
-        # Messages name the offending value (repo convention: `require_exact_keys`/`parse_shas_file`
-        # both echo what they got). `math.isfinite` guards rule out NaN/inf, which would otherwise
-        # slip past the range checks (e.g. `z=inf` passes `z > 0`) and produce a maximally-wide CI.
-        if self.n_bins < 1:
-            raise ConfigError(f"calibration-report.n_bins must be >= 1 (got {self.n_bins!r})")
-        if not (math.isfinite(self.risk_target) and 0.0 <= self.risk_target <= 1.0):
-            raise ConfigError(
-                "calibration-report.risk_target must be a finite value in [0, 1] "
-                f"(got {self.risk_target!r})"
-            )
-        if not (math.isfinite(self.z) and self.z > 0):
-            raise ConfigError(f"calibration-report.z must be a finite value > 0 (got {self.z!r})")
-        if self.estimator not in ESTIMATORS:
-            raise ConfigError(
-                f"calibration-report.estimator must be one of {sorted(ESTIMATORS)} "
-                f"(got {self.estimator!r})"
-            )
-
-
-@dataclass(frozen=True)
-class SliceReport:
-    label: str
-    n: int
-    n_correct: int
-    base_rate: float | None
-    base_rate_ci: tuple[float, float] | None
-    ece: float | None
-    brier: float | None
-    reliability: float | None
-    resolution: float | None
-    uncertainty: float | None
-    auroc: float | None
-    abstention_at_target: float | None
-    risk_target: float
-    degenerate: str | None
-    # Populated only when ``ReportConfig.estimator == "ppi++"``. Defaulted so every
-    # existing construction and unpacking of this record keeps working unchanged.
-    ppi: PPIEstimate | None = None
+# This module was split into analysis (here), shared types (`report_types`) and
+# presentation (`calibration_report_render`) to stay inside the repo's file-size budget.
+# The split is internal: every name callers already imported from here still resolves
+# from here, and declaring them explicitly is what keeps that a promise (mypy treats an
+# `__all__` entry as an explicit re-export, and the public-surface guard freezes it).
+__all__ = [
+    "ESTIMATORS",
+    "PPI_PLUS",
+    "WILSON",
+    "ReportConfig",
+    "ReportDoc",
+    "SliceReport",
+    "View",
+    "analyze_slice",
+    "build_report",
+    "main",
+    "render_json",
+    "render_markdown",
+]
 
 
 def analyze_slice(
@@ -202,25 +171,6 @@ def analyze_slice(
     )
 
 
-@dataclass(frozen=True)
-class View:
-    name: str
-    tau_eligible: bool
-    slices: list[SliceReport]
-
-
-@dataclass(frozen=True)
-class ReportDoc:
-    domain_filter: str
-    total_records: int
-    resolved_records: int
-    by_label_source: dict[str, int]
-    views: list[View]
-    # Which interval estimator produced the intervals below. Defaulted so existing
-    # constructions of this document keep working.
-    estimator: str = WILSON
-
-
 def _agent_version_index(records: list[OutcomeRecord]) -> dict[str, str]:
     """change_id -> agent_version, from whichever record carries it (the seed)."""
     idx: dict[str, str] = {}
@@ -231,11 +181,8 @@ def _agent_version_index(records: list[OutcomeRecord]) -> dict[str, str]:
 
 
 def _in_scope(domain: str, domain_filter: str) -> bool:
-    if domain_filter == "agent":
-        return is_agent_domain(domain)
-    if domain_filter == "human":
-        return not is_agent_domain(domain)
-    return True
+    """Thin alias for the canonical predicate in :mod:`agent_core.domains`."""
+    return in_domain_scope(domain, domain_filter)
 
 
 def _build_view(
@@ -370,91 +317,10 @@ def build_report(
     )
 
 
-# --- rendering ---------------------------------------------------------------
-def _f(x: float | None) -> str:
-    return "—" if x is None else f"{x:.4f}"
-
-
-def _ci(ci: tuple[float, float] | None) -> str:
-    return "—" if ci is None else f"[{ci[0]:.3f}, {ci[1]:.3f}]"
-
-
-def render_markdown(doc: ReportDoc) -> str:
-    lines: list[str] = []
-    lines.append(f"# Agent-records calibration report (domain-filter: {doc.domain_filter})")
-    lines.append("")
-    lines.append(
-        "> These numbers calibrate a **deterministic proxy** (ADR 0023 §1), not an agent's "
-        "belief. The PRIMARY view (HUMAN_AUDIT) is the only tau-relevant one; the DIAGNOSTIC "
-        "view mixes in weak optimistic `timeout_clean` labels and is not tau-eligible. At low "
-        "N the Wilson CIs are wide — treat this as a proof the pipeline emits a real, "
-        "correctly-uncertain number, not a precise calibration."
-    )
-    lines.append("")
-    lines.append(
-        f"Store: {doc.total_records} records, {doc.resolved_records} resolved change_ids; "
-        f"by label_source: {doc.by_label_source}"
-    )
-    dual = doc.estimator == PPI_PLUS
-    if dual:
-        lines.append("")
-        lines.append(
-            "> **Dual estimator.** Both the Wilson interval and a power-tuned "
-            "prediction-powered (PPI++) interval are shown. PPI++ borrows strength from "
-            "unaudited records, so it tightens *aggregate* estimates; it does **not** change "
-            "any gate decision — the gate still uses Wilson. Where the proxy is uninformative "
-            "or the slice is degenerate, PPI++ falls back to Wilson and says so."
-        )
-    for view in doc.views:
-        lines.append("")
-        lines.append(f"## {view.name}")
-        lines.append("")
-        header = (
-            "| slice | N | correct | base rate [Wilson 95%] | ECE | Brier |"
-            " resolution | AUROC | abstain@risk | note |"
-        )
-        rule = "|---|--:|--:|---|--:|--:|--:|--:|--:|---|"
-        if dual:
-            header = header.replace("| ECE |", "| PPI++ 95% | var-reduction | ECE |")
-            rule = rule.replace("|--:|--:|--:|--:|--:|---|", "|---|--:|--:|--:|--:|--:|--:|---|")
-        lines.append(header)
-        lines.append(rule)
-        for s in view.slices:
-            auroc_cell = _f(s.auroc) if s.degenerate is None else "—"
-            note = s.degenerate or ""
-            abstain = (
-                "—"
-                if s.abstention_at_target is None
-                else f"{s.abstention_at_target:.2f}@{s.risk_target:g}"
-            )
-            ppi_cells = ""
-            if dual:
-                if s.ppi is None:
-                    ppi_cells = " — | — |"
-                else:
-                    ppi_cells = (
-                        f" {_ci((s.ppi.lo, s.ppi.hi))} | {s.ppi.variance_reduction * 100:.1f}% |"
-                    )
-                    if s.ppi.degenerate:
-                        note = f"{note}; PPI++→Wilson ({s.ppi.degenerate})".lstrip("; ")
-            lines.append(
-                f"| {s.label} | {s.n} | {s.n_correct} | "
-                f"{_f(s.base_rate)} {_ci(s.base_rate_ci)} |{ppi_cells} {_f(s.ece)} | "
-                f"{_f(s.brier)} | "
-                f"{_f(s.resolution)} | {auroc_cell} | {abstain} | {note} |"
-            )
-    lines.append("")
-    return "\n".join(lines)
-
-
-def render_json(doc: ReportDoc) -> str:
-    return json.dumps(asdict(doc), sort_keys=True, indent=2)
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Agent-records calibration report (F-043).")
     ap.add_argument("--store", required=True)
-    ap.add_argument("--domain-filter", choices=["agent", "human", "all"], default="agent")
+    ap.add_argument("--domain-filter", choices=list(DOMAIN_FILTERS), default="agent")
     ap.add_argument("--format", choices=["md", "json"], default="md")
     defaults = ReportConfig()
     ap.add_argument("--n-bins", type=int, default=defaults.n_bins)

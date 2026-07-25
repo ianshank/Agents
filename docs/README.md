@@ -39,6 +39,8 @@ See that index for the full list and the (intentional) numbering gap.
 
 - [phoenix-spike.md](phoenix-spike.md) — the SDK-optional Phoenix seam.
 - [braintrust-spike.md](braintrust-spike.md) — the BrainTrust experiment-export seam.
+- [openspec-spike.md](openspec-spike.md) — OpenSpec as a reversible coordination layer
+  over the enforced `features.yaml` / `F_*.py` / ADR system (`openspec/`).
 
 ## Baselines & audits
 
