@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Peer review of the "swap Wilson → PPI++" estimator critique + OpenSpec coordination spike
+  (planning only).** Added a committed objective peer review
+  (`openspec/changes/eval-proxy-and-estimator/review.md`) that verifies the critique's
+  arithmetic and citations but corrects it on target, magnitude, and mechanism: the merge
+  gate's real activation bar is a four-gate Wilson stack needing ~380 near-perfect audits per
+  domain (not one `N≥20` gate), and PPI++ on the calibrated-confidence proxy buys only
+  ~1.05–1.1× effective-N at the `min_auroc=0.65` floor — the leverage is in the *proxy* choice
+  (passive REVERT/CI labels or an independent LLM judge with conditional variance), not the
+  estimator swap. Introduced a reversible **OpenSpec** front-end (`openspec/`, `docs/openspec-spike.md`)
+  used as a thin coordination layer over the existing enforced spec system (`features.yaml` +
+  `scripts/validations/F_*.py` + ADRs), with a change proposal (proposal/design/tasks/spec
+  deltas) for proxy-correlation measurement, audit-selection-propensity logging, and a dual
+  `wilson`/`ppi++` report estimator. Planning/documentation-only — no evaluation logic, gate
+  threshold, `agent_core` source, or `features.yaml` change; the merge gate is untouched.
 - **Enterprise documentation, licensing & repository organization.** Added an Apache-2.0
   `LICENSE` (+ `NOTICE` and per-package copies) and declared PEP 639 packaging metadata
   (`license`/`license-files`/`readme`/`classifiers`/`[project.urls]`, setuptools `>=77`) across
