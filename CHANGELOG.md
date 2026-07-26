@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Security
+- **Credential scrub + fail-closed secret scanning (F-048).** A Langfuse secret/public key
+  pair sat unredacted in three tracked files (`HARNESS_SPEC.md`,
+  `docs/decisions/0003-langfuse-integration.md`, `progress.md`) while **no workflow ran any
+  secret scanning at all** — a gap opened by the 2026-07-03 Phase 0 plan and never landed.
+  The literals are now redacted, and `.gitleaks.toml` plus a `quality-gates.yml` `secret-scan`
+  job land the gate with a deliberate asymmetry: the working-tree scan (`--no-git`) is
+  fail-closed, while the history scan is report-only, because the keys are already public in
+  remote history and a rewrite would invalidate every clone, open-PR base, `implemented_in`
+  provenance SHA, and the `merge-gate-data` lineage for no real security gain (ADR 0027).
+  **Rotation is not asserted** — an earlier draft of this work claimed the keys were "revoked,
+  confirmed before this change merged," which was untrue for another three weeks; the
+  confirmation is a human checklist item that blocks the public-facing work.
+- **`SECURITY.md` and `README.md` claimed two controls that did not exist.** Both stated
+  secret scanning already ran in CI (it did not — this change is what makes it true) and that
+  Snyk "monitors dependencies continuously" (no workflow references Snyk; `docs/CHARTER.md` §5
+  lists it as future work). Snyk is now described accurately as a documented manual step.
+
+### Fixed
+- **`.gitignore`'s blanket `*.html` silently dropped deliverables.** Committed sample reports
+  and HTML golden fixtures under `docs/samples/`, `tests/fixtures/`, and
+  `agent-core/tests/fixtures/` are now tracked; previously they would have passed locally and
+  failed in CI on a missing file.
+
+### Security
 - **Argument injection in the `merge-gate verdict` workflow dispatch.** The optional
   `selection_propensity` input was interpolated into an *unquoted* shell scalar and then
   word-split into the `python` invocation, so an input of `0.5 --store /tmp/x` appended a

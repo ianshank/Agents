@@ -277,7 +277,7 @@
 **Structural changes:**
 - Added central `scripts/validate_skill.py` for tiered structural & behavioral validation.
 - Implemented first self-validating skill `skills/openai-judge/` conforming to structural rules and behavioral evals.
-- Integrated Langfuse tracing into CLI/engine with fallback default credentials (`LANGFUSE_SECRET_KEY="sk-lf-e220d788-d2e0-4e82-bbde-6d1a57ba149f"`, `LANGFUSE_PUBLIC_KEY="pk-lf-ad617cfc-ce1b-4c23-8c76-7868605ee6f1"`, `LANGFUSE_BASE_URL="https://us.cloud.langfuse.com"`).
+- Integrated Langfuse tracing into CLI/engine with fallback default credentials (`LANGFUSE_SECRET_KEY="<REDACTED — rotated, see incident record>"`, `LANGFUSE_PUBLIC_KEY="<REDACTED — rotated, see incident record>"`, `LANGFUSE_BASE_URL="https://us.cloud.langfuse.com"`).
 - Added automatic trace linking to dataset run items and fallback no-op decorators.
 - Added comprehensive unit tests for `validate_skill.py` and Langfuse client fallback logic.
 **ADRs:** Added ADR-0002 (Skill Framework) and ADR-0003 (Langfuse Integration).

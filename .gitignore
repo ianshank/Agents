@@ -62,6 +62,12 @@ regression_report.json
 *.html
 !README.html
 !demo/deck.html
+# Rendered calibration reports are deliverables, not build output: the committed sample
+# report and the HTML golden fixtures must be tracked, or tests pass locally and fail in
+# CI on a missing file.
+!docs/samples/**/*.html
+!agent-core/tests/fixtures/**/*.html
+!tests/fixtures/**/*.html
 
 # phoenix-live workflow — self-hosted Phoenix log (see .github/workflows/phoenix-live.yml).
 phoenix-server.log
