@@ -827,3 +827,21 @@ features:
     implemented_in: "local"
     depends_on: ["F-043", "F-034"]
     notes: "Follow-up to F-043 (calibration report) and F-034 (audit queue). Peer review, design and task breakdown in openspec/changes/eval-proxy-and-estimator/; decision recorded in ADR 0026. Six defects found by adversarial review AFTER the code was fully covered are pinned by regression tests here -- an inverted interval, a variance-reduction figure computed from clipped bounds (3% reported as 94%), unit-interval-only binning, a first-audit-row precedence bug, small-n coverage below nominal, and a residual-dof collapse at n=2."
+
+  - id: "F-048"
+    epic: "Quality Gate"
+    name: "Credential scrub + fail-closed secret-scan gate (gitleaks)"
+    description: "Closes the 2026-07-03 Phase 0 gap that was never landed: a Langfuse secret/public key pair sat unredacted in three tracked files (HARNESS_SPEC.md, docs/decisions/0003-langfuse-integration.md, progress.md) while NO workflow ran any secret scanning at all. The literals are replaced with a redaction placeholder and .gitleaks.toml + a quality-gates.yml secret-scan job land the gate, with a deliberate asymmetry: the working-tree scan (gitleaks detect --no-git) is FAIL-CLOSED so any secret in the current files fails CI, while the history scan is report-only (--exit-code 0) because the keys are already public in remote history and a rewrite would invalidate every clone, open-PR base, implemented_in provenance SHA and the merge-gate-data lineage for zero real security gain (ADR 0027). Rotation is the actual mitigation for the exposure that already happened and is deliberately NOT asserted here -- an earlier draft of this work on an unmerged branch claimed the keys were 'revoked, confirmed before this change merged', which was untrue for another three weeks; the confirmation is tracked as a human checklist item instead. SECURITY.md and README.md are corrected in the same change: both claimed secret scanning already ran in CI (it did not) and that Snyk monitors dependencies continuously (no workflow references it; CHARTER section 5 lists it as future work). .gitignore's blanket *.html rule is narrowed so committed sample reports and HTML golden fixtures are tracked rather than silently dropped."
+    category: "non-functional"
+    priority: "critical"
+    status: "in_progress"
+    tier: "fast"
+    verification:
+      - ".gitleaks.toml exists, extends the built-in ruleset (useDefault), and stores NO key literal of its own -- embedding the scrubbed key in the config would reintroduce the very string the working-tree gate exists to catch (F_048.py)"
+      - "quality-gates.yml runs both scans and the working-tree scan is fail-closed: the --no-git line must not carry --exit-code 0, asserted per-line rather than by whole-file substring so the report-only history flag cannot satisfy it (F_048.py)"
+      - "no Langfuse key literal survives in any tracked markdown -- checked repo-wide, not just in the three named files, so a key reintroduced in a NEW file fails too; truncated incident references (sk-lf-e220...) are deliberately not matched (F_048.py)"
+      - "ADR 0027 records the no-history-rewrite decision and explicitly does not assert rotation happened (F_048.py)"
+      - "canary: seeding a UUID-shaped key literal into a tracked markdown file turns the validation red, and removing it turns it green (manual, recorded in the PR)"
+    validation_command: "python scripts/validations/F_048.py"
+    depends_on: []
+    notes: "Salvaged by rebase from the stranded origin/feat/F-038-gitleaks (155 behind / 2 ahead; 5 conflicts, not the bulk reversion a two-dot diff suggests). That branch collided on BOTH ids it tried -- its F-038 is taken by the BrainTrust integration and its ADR 0020 by deterministic-generator-skills, after it had already renumbered around an 0019 collision -- which is the same ID-reservation drift openspec/project.md:34 forbids. Claimed at land as F-048; F-040 is NOT free (origin/feat/F-040-soak-stats holds it in flight). Peer review and the rewritten change are in openspec/changes/add-measurement-harness-wedge/."
