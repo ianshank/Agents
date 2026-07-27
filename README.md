@@ -6,7 +6,7 @@
 [![CI](https://github.com/ianshank/Agents/actions/workflows/eval-harness-ci.yml/badge.svg)](https://github.com/ianshank/Agents/actions/workflows/eval-harness-ci.yml)
 
 A dynamic, modular, backwards-compatible enterprise LLM evaluation harness with
-first-class Langfuse integration, Snyk dependency scanning, and a pluggable skill
+first-class Langfuse integration, CI secret scanning, and a pluggable skill
 framework.
 
 
@@ -73,7 +73,7 @@ Two artifacts with deliberately different edge semantics:
 | **Backwards compatible** | Configs carry a `schema_version`; the migration chain upgrades old configs to the current schema on load. Registry **aliases** keep renamed component names resolving. Component contracts are abstract base classes, so implementations can evolve. |
 | **Test coverage** | Offline pytest suite (no network/SDK) at ≥85% line coverage, using a deterministic mock judge and an in-memory Langfuse client. The quality-gate tooling has its own ≥85% coverage gate. |
 | **Langfuse integration** | Hidden behind a narrow `LangfuseClient` interface with a `NullLangfuseClient` (tests/offline) and a guarded `SDKLangfuseClient` (production). |
-| **Security** | Snyk monitors dependencies continuously. No credentials in source code. |
+| **Security** | gitleaks runs fail-closed in CI on every push and PR. No credentials in source code. Snyk is a documented manual step, not a CI gate. |
 | **Eval integrity** | A regression gate blocks *net-new* lint/test failures vs the base, and a CODEOWNERS + label guard prevents silent weakening of evaluation-defining files. See [Quality Gates](#quality-gates). |
 
 ## Install

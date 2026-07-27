@@ -45,10 +45,14 @@ any public disclosure. We aim to acknowledge reports within a few business days.
 
 Security is enforced continuously, not just on report:
 
-- **Dependency scanning** — Snyk monitors `requirements.txt`
+- **Secret scanning** — gitleaks runs in CI on every push and pull request
+  (`.github/workflows/quality-gates.yml`, job `secret-scan`), fail-closed on the
+  working tree and report-only over history (ADR 0027).
+- **Dependency scanning** — Snyk is available as a documented manual step
   (`snyk test` / `snyk monitor`; see the "Security Scanning" section of the
-  [README](README.md#security-scanning)).
-- **Secret scanning** runs in CI.
+  [README](README.md#security-scanning)). It is **not** wired into CI; automated
+  dependency and SAST scanning is planned, not active
+  (see `docs/CHARTER.md` §5).
 - **Eval-integrity guardrails** — evaluation-defining files are protected paths
   requiring reviewed approval, so the meaning of a gate cannot be silently
   weakened (see [CONTRIBUTING.md](CONTRIBUTING.md#protected-paths-require-a-labeled-approval)).
