@@ -92,7 +92,7 @@ def test_main_fails_and_lists_drift(
     _write(tmp_path, CANON, "good\n")
     _write(tmp_path, COPY, "bad\n")
     monkeypatch.setattr(drift, "_repo_root", lambda: tmp_path)
-    monkeypatch.setattr(drift, "TRACKED_DUPLICATES", TRACKED)
+    monkeypatch.setattr(drift, "_find_all_vendored_copies", lambda _: TRACKED)
     assert drift.main(["-v"]) == 1
     out = capsys.readouterr().out
     assert "FAIL" in out
@@ -100,6 +100,23 @@ def test_main_fails_and_lists_drift(
 
 
 def test_main_reports_no_tracked(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.setattr(drift, "TRACKED_DUPLICATES", {})
+    monkeypatch.setattr(drift, "_find_all_vendored_copies", lambda _: {})
     assert drift.main([]) == 0
     assert "no duplicated scripts tracked" in capsys.readouterr().out
+
+def test_find_all_vendored_copies(tmp_path: Path) -> None:
+    _write(tmp_path, "scripts/script1.py", "x = 1")
+    _write(tmp_path, "scripts/script2.py", "y = 2")
+    _write(tmp_path, "skills/skill_a/scripts/script1.py", "x = 1")
+    _write(tmp_path, "skills/skill_b/scripts/script1.py", "x = 1")
+    _write(tmp_path, "skills/skill_b/scripts/script3.py", "z = 3")
+
+    tracked = drift._find_all_vendored_copies(tmp_path)
+
+    assert "scripts/script1.py" in tracked
+    assert "scripts/script2.py" not in tracked
+    assert "scripts/script3.py" not in tracked
+    assert sorted(tracked["scripts/script1.py"]) == [
+        "skills/skill_a/scripts/script1.py",
+        "skills/skill_b/scripts/script1.py",
+    ]

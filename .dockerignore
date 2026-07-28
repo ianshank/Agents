@@ -75,3 +75,5 @@ docs/
 openspec/
 *.md
 !README.md
+*.openspec.md
+*_peer_review.md

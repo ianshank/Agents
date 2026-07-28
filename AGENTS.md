@@ -30,6 +30,17 @@ Before writing code, read in order:
 4. `CHANGELOG.md` `[1.3.0-dev]` — the section to add entries to for any user-visible change. Follow the existing `Hardening` / `Added` / `Changed` / `Fixed` structure.
 5. `docs/phoenix-spike.md` — reversible-adoption pattern the Phoenix seam demonstrates. Reference model for any future "SDK-optional" integration.
 
+## Reasoning & Planning Skills
+
+The `skills/` marketplace contains composable reasoning skills for conducting controlled research and producing OpenSpec packages that respect the Agents CHARTER. 
+
+To execute an end-to-end research pipeline, compose the following skills:
+1. `hierarchical-recursive-brainstorm` expands a research question into a pruned tree.
+2. `openspec-quality-plan` turns the strongest leaves into a full OpenSpec package.
+3. `openspec-peer-review` critiques and rewrites that package to the quality standards.
+
+The final peer-reviewed OpenSpec package will be ready to drop under `openspec/changes/`.
+
 ## Root documentation map
 
 These root-level docs answer different questions; check this table before guessing which one
@@ -57,6 +68,7 @@ enterprise-docs pass and point at the charter as the single source of truth:
 `docs/decisions/` ADR numbers are **not** contiguous by design — `0007` is an intentional
 gap in the sequence (see `docs/plans/agents-critical-path/REVIEW.md`); do not backfill it
 or renumber later ADRs to close it.
+>>>>>>> origin/main
 
 ## What is off-limits without a labeled approval
 

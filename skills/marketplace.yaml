@@ -41,9 +41,23 @@ skills:
     path: skills/deploy
     description: Generate a safety-railed deployment script (strict mode, dry-run, confirm gate, rollback, health check).
     compatibility: python>=3.10
+  - name: hierarchical-recursive-brainstorm
+    version: 1.0.0
+    path: skills/hierarchical-recursive-brainstorm
+    description: Decomposes a topic into a controlled hierarchy, recursively expands leaves, prunes the bottom quartile, and synthesizes upward into a self-explanatory Markdown tree. Use this whenever the user asks to research a complex topic, brainstorm agent evaluation patterns, or requires a rigorous structural breakdown of ideas.
+    compatibility: python>=3.10
+  - name: openspec-quality-plan
+    version: 1.0.0
+    path: skills/openspec-quality-plan
+    description: Generates a complete OpenSpec change package containing proposal, design, and task specs. Use this whenever the user asks to create an implementation plan, an OpenSpec package, or convert a research leaf node into a concrete project plan.
+    compatibility: python>=3.10
+  - name: openspec-peer-review
+    version: 1.0.0
+    path: skills/openspec-peer-review
+    description: Emits an objective Peer Review Findings section and rewrites an OpenSpec package to satisfy quality standards. Use this whenever the user asks to review, critique, or polish an existing plan, or as the final step in generating an OpenSpec package.
+    compatibility: python>=3.10
   - name: dataset-lint
     version: 1.0.0
     path: skills/dataset-lint
     description: Validate existing eval datasets for structural correctness, duplicate IDs, and encoding issues.
     compatibility: python>=3.10
-

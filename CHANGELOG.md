@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asserting the value reaches argparse as a single token.
 
 ### Added
+- **Reasoning & Planning Skills (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`):** added three composable reasoning skills to the marketplace for performing controlled hierarchical research, generating production-grade OpenSpec packages, and objectively peer-reviewing them. Validated purely structurally with no evaluation-defining paths modified. Configurable via documented defaults.
 - **A single-sourced propensity contract.** `is_valid_propensity` / `format_propensity`
   replace three independent restatements of `0.0 < p <= 1.0`, which had already drifted
   (only one also checked `math.isfinite`) and were equivalent only because `0.0 < nan` is
@@ -302,6 +303,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicit entries for all four; locked in by new parametrized cases in
   `tests/test_protected_paths.py` and asserted by F-039's validator.
 
+>>>>>>> origin/main
 - **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
   self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
   evidence for the eval-backend displacement decision by validating the claimed capabilities
@@ -325,6 +327,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quality-gate (196 tests, ≥95% branch coverage, mypy `--strict`).
 
 ### Changed
+- **Dynamic drift guard script tech-debt resolution:** resolved tech debt in the dynamic drift guard scripts to improve maintainability and performance.
 - **CI gate delegation — packages 2-4 of 5 (ADR 0021):** `agent-core-ci.yml`,
   `flow-corpus-ci.yml` (both its `flow-protocol` and `flow-corpus` jobs), and
   `behavioral-regression-ci.yml`'s `behavioral-regression` job now delegate to
@@ -342,6 +345,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `make -C <pkg> check` run end-to-end for all 4 packages, matching the coverage numbers
   their own CI reports (agent-core 98.67%, flow-protocol/flow-corpus/behavioral-regression
   100%, all ≥ their 95% floors).
+>>>>>>> origin/main
 - **CI gate delegation — phase-2 POC (ADR 0021):** `eval-harness-ci.yml` no longer duplicates the
   ruff/format/mypy/pytest steps inline — it delegates to the generated root gate through a new reusable
   composite action `.github/actions/run-quality-gate` (sets up Python, installs the package, runs

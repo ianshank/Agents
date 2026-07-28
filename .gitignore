@@ -92,6 +92,10 @@ context_human.json
 seed_context.json
 agent.json
 changed_files.z
+
+# Reasoning agent runtime artifacts
+*.openspec.md
+*_peer_review.md
 *.pre-backfill.bak
 
 # mkdocs site build output

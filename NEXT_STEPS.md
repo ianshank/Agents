@@ -2,6 +2,8 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Reasoning & Planning Skills** — added three composable reasoning skills to the marketplace (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`).
+- [x] **Dynamic drift guard script tech-debt resolution** — resolved tech debt in the dynamic drift guard scripts.
 - [x] **Proxy-correlation measurement, PPI++ report estimator & audit propensity (F-047,
   ADR 0026)** — an external critique proposed swapping the gate's Wilson interval for
   PPI++. The peer review
@@ -62,6 +64,7 @@
   A companion **plugin-registry surface guard** (freezing the config-selectable
   datasets/judges/scorers/sinks/targets keys + aliases — the compat surface `__all__`
   can't see) is in a separate PR.
+>>>>>>> origin/main
 - [x] **CI gate delegation phase-2 POC (ADR 0021) — `eval-harness-ci` → `make check`** — a new
   reusable composite action `.github/actions/run-quality-gate` (setup-python + install + run the gate)
   now backs `eval-harness-ci.yml`, which delegates to the root `make check` instead of duplicating
