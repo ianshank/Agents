@@ -19,8 +19,17 @@ MANIFEST = os.path.join(PROJECT_ROOT, "architecture.yaml")
 DIAGRAM = os.path.join(PROJECT_ROOT, "architecture.mmd")
 
 
+def _safe_print(text: str) -> None:
+    if not text:
+        return
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write((text + "\n").encode("utf-8", errors="replace"))
+
+
 def _run(cmd: list[str], *, cwd: str) -> bool:
-    print(f"Running: {' '.join(cmd)} (cwd={cwd})")
+    _safe_print(f"Running: {' '.join(cmd)} (cwd={cwd})")
     try:
         res = subprocess.run(
             cmd,
@@ -32,12 +41,12 @@ def _run(cmd: list[str], *, cwd: str) -> bool:
             timeout=180,
         )
     except Exception as exc:  # pragma: no cover - defensive
-        print(f"FAIL: command crashed: {exc}")
+        _safe_print(f"FAIL: command crashed: {exc}")
         return False
-    print(res.stdout)
+    _safe_print(res.stdout)
     if res.returncode != 0:
-        print(res.stderr)
-        print(f"FAIL: exited {res.returncode}")
+        _safe_print(res.stderr)
+        _safe_print(f"FAIL: exited {res.returncode}")
         return False
     return True
 

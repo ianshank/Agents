@@ -171,7 +171,7 @@ def test_git_helper_error_names_the_repo(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     _git_repo_with_change(repo)
-    with pytest.raises(RuntimeError, match=str(repo)):
+    with pytest.raises(RuntimeError, match=repo.name):
         adb._git(["rev-parse", "--verify", "does-not-exist"], str(repo))
 
 

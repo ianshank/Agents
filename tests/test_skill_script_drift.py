@@ -110,9 +110,9 @@ def test_find_all_vendored_copies(tmp_path: Path) -> None:
     _write(tmp_path, "skills/skill_a/scripts/script1.py", "x = 1")
     _write(tmp_path, "skills/skill_b/scripts/script1.py", "x = 1")
     _write(tmp_path, "skills/skill_b/scripts/script3.py", "z = 3")
-    
+
     tracked = drift._find_all_vendored_copies(tmp_path)
-    
+
     assert "scripts/script1.py" in tracked
     assert "scripts/script2.py" not in tracked
     assert "scripts/script3.py" not in tracked
