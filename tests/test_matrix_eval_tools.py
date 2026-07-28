@@ -929,14 +929,29 @@ class TestBedrockJudge:
 
 class TestPhoenixEvalJudge:
     def setup_class(self):
-        pytest.importorskip("phoenix_evals")
+        pass
 
     def test_m1_correctness(self) -> None:
-        try:
+        mock_px = MagicMock()
+        mock_llm = MagicMock()
+        mock_evaluator_cls = MagicMock()
+        mock_px.LLM = mock_llm
+        mock_px.ClassificationEvaluator = mock_evaluator_cls
+        
+        mock_evaluator = MagicMock()
+        mock_evaluator_cls.return_value = mock_evaluator
+        
+        mock_result = MagicMock()
+        mock_result.label = "pass"
+        mock_result.score = 1.0
+        mock_result.explanation = "pass"
+        mock_evaluator.evaluate.return_value = [mock_result]
+        
+        with patch.dict('sys.modules', {'phoenix.evals': mock_px}):
             j = JUDGES.create("phoenix_evals", {"model": MOCK_MODEL_ID_OPENAI})
-            assert j is not None
-        except Exception:
-            pass
+            v = j.evaluate("some prompt")
+            assert v.score == 1.0
+            assert v.reasoning == "pass"
 
 
 # ----------------------------------------------------------------------------
