@@ -73,8 +73,14 @@ from agent_core import evaluate_calibration, IsotonicCalibrator
 report = evaluate_calibration(
     probs, outcomes, n_bins=10,
     ece_target=0.05, mce_target=0.12, auroc_target=0.80,
+    # Opt-in guards; these defaults (1 / False) reproduce the pre-guard behaviour.
+    min_samples=30, require_discrimination=True,
 )
-# report.passes is False if calibrated-but-undiscriminating (the vanity-metric guard)
+# A calibrated-but-undiscriminating model fails on the AUROC target — but only when AUROC
+# is *defined*. A slice with one outcome class or a constant predictor cannot evidence
+# discrimination at all, so it is always named on report.degenerate (and logged); pass
+# require_discrimination=True to make that fail the gate rather than pass it vacuously.
+
 cal = IsotonicCalibrator().fit(train_probs, train_outcomes)   # fit on a held-out split
 recalibrated = [cal.predict(p) for p in test_probs]
 ```
@@ -89,6 +95,8 @@ agent_core/
   stop.py          4 stop conditions + Gate (first-true-wins)
   loop.py          LoopController (admission gate -> cycle -> outcome check)
   calibration.py   bins, ECE, MCE, Brier+Murphy, AUROC, Wilson, selective, isotonic
+  ppi.py           PPI++ interval (fail-closed to Wilson), pearson_r, effective-N multiplier
+  domains.py       HUMAN_NAMESPACE / is_agent_domain / in_domain_scope (canonical lane filter)
   logging_util.py  config-driven logging + debug_span
   sanitize.py      RuleSanitizer, Sanitizer protocol, build_sanitized_claims
   golden.py        GoldenSet, split (hash-bucket), cohen_kappa, evaluate_on_split
@@ -98,12 +106,47 @@ agent_core/
   merge_gate.py    GatePolicyConfig, decide() (REJECT->ESCALATE->AUTO_MERGE), threshold_for_risk
   outcome_store.py OutcomeStore (append-only JSONL), BinningCalibrator, build_domain_models
   outcome_labeller.py passive revert/CI-failure/timeout-clean labels (real detectors)
-  audit_sampler.py unbiased stratified sampling + HUMAN_AUDIT verdicts
-  merge_gate_ci.py CI entrypoint (exit 0/10/20), audit-logged decisions
+  audit_sampler.py unbiased stratified sampling (+ inclusion propensity) + HUMAN_AUDIT verdicts
+  proxies.py       pluggable proxy extractors (raw confidence / passive label / external)
+  proxy_eval.py    proxy-vs-audit correlation, marginal AND conditional on gated subsets
+  calibration_report.py  agent-records report (wilson | ppi++); analysis only
+  report_types.py  shared report config/records + estimator names (analysis <-> rendering)
+  calibration_report_render.py  markdown / JSON presentation for the report
+  merge_seed.py    seed one pending OutcomeRecord per merged change
+  store_sync/      sync the local JSONL store with the merge-gate-data branch
+  atomic_io.py     atomic write helpers    jsonl.py  strict JSONL reader
+  subprocess_util.py  timeout-bounded, fail-safe subprocess runner
+  merge_gate_ci.py CI entrypoint (exit 0/10/20; 2 = usage/bad input, 1 = internal), audit-logged
   detectors.py     GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo (fail-safe)
   timeutil.py      parse_iso8601 (Z-tolerant, UTC-default)
-tests/             330 tests across all modules
+tests/             708 tests across all modules
 ```
+
+## Reports & CLIs (read-only)
+
+```bash
+# Calibration of the agent-domain slice.
+python -m agent_core.calibration_report --store merge_outcomes.jsonl --domain-filter agent
+
+# `--estimator ppi++` additionally reports a prediction-powered interval and the classical
+# baseline it is measured against. `wilson` is the default and the only estimator the GATE
+# uses; this flag changes the REPORT only.
+python -m agent_core.calibration_report --store merge_outcomes.jsonl \
+    --domain-filter agent --estimator ppi++
+
+# Is a cheap proxy actually informative *where the gate operates*? Reports marginal AND
+# conditional correlation with the implied 1/(1-rho^2) effective-sample multiplier.
+python -m agent_core.proxy_eval --store merge_outcomes.jsonl --domain-filter agent
+
+# `--judge-scores` injects an external signal (e.g. an LLM judge) without a dependency.
+python -m agent_core.proxy_eval --store merge_outcomes.jsonl \
+    --domain-filter agent --judge-scores scores.json --format json
+```
+
+Both CLIs take `--format md` (default) or `--format json`, and `--output PATH` to write to a
+file instead of stdout.
+
+Neither writes to the store or influences a gate decision.
 
 ## Calibrated merge gate (F-010, default-off)
 A pure, deterministic merge-decision subsystem (ADR 0005). `merge_gate.decide()` is REJECT on

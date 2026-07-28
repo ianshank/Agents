@@ -56,13 +56,18 @@ pwsh scripts/run_all_e2e.ps1 -Tiers offline -FailFast           # stop at first 
   the operational-scripts coverage gate. Each runs from its own directory so its own coverage floor
   and markers apply, and each suite must collect **> 0** tests or it is failed.
 - **Tier B — functionality gates (offline, always).** `scripts/validate.py -v` runs every
-  `features.yaml` `validation_command` (the 36 `F_*` gates). Deferred features (e.g. **F-036**,
+  `features.yaml` `validation_command` (the `F_*` gates — one per done + fast feature). Deferred features (e.g. **F-036**,
   which has no `F_036.py`) are skipped by design — that is expected, not a gap. **F-006/F-007** are
   the slow ones (they materialize a git worktree baseline).
 - **Tier C — user-journey / CLI e2e (offline, always).** The three skill/hook `*e2e*`/
   `test_end_to_end.py` files, plus every package CLI: `eval-harness`
   (`list-plugins`/`run`/`compare`/`campaign`), `bregress` (`python -m behavioral_regression`),
-  `python -m agent_core.merge_gate_ci`, and `scripts/skill_marketplace.py`. The `compare`/`campaign`
+  `python -m agent_core.merge_gate_ci`, the read-only agent-core reporting CLIs
+  (`merge_seed` -> `audit_sampler select --with-propensity` -> `record
+  --selection-propensity` -> `calibration_report` under BOTH estimators -> `proxy_eval`
+  with a JSON parse check), and `scripts/skill_marketplace.py`. The reporting steps must
+  exit 0 — unlike the gate CLI, whose 0/10/20 are all valid decisions — because they are
+  read-only and never influence a merge. The `compare`/`campaign`
   fixtures are generated into `artifacts/e2e-report/fixtures/` at runtime (the `config/` dir is a
   protected path, so nothing is written there).
 - **Tier D — live integrations (credential-gated).** Langfuse + Phoenix smokes, a live judge run
@@ -119,7 +124,7 @@ docker run -p 6006:6006 arizephoenix/phoenix
 
 ## Test status on this checkout
 
-A clean `-Tiers offline` run reports **21 PASS / 0 FAIL**. Nine cross-platform root causes were
+A clean `-Tiers offline` run reports **28 PASS / 0 FAIL** (21 before the C5c reporting-CLI steps; each `Invoke-CmdStep` contributes one PASS, plus the `proxy_eval json-valid` guard, which now records an outcome whether the artifact is valid, invalid, or missing — previously a missing artifact recorded nothing, so the journey could pass without ever validating the JSON it exists to produce). Nine cross-platform root causes were
 found and fixed:
 
 | Area | Root cause | Fix |

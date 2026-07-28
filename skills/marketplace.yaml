@@ -56,3 +56,8 @@ skills:
     path: skills/openspec-peer-review
     description: Emits an objective Peer Review Findings section and rewrites an OpenSpec package to satisfy quality standards. Use this whenever the user asks to review, critique, or polish an existing plan, or as the final step in generating an OpenSpec package.
     compatibility: python>=3.10
+  - name: dataset-lint
+    version: 1.0.0
+    path: skills/dataset-lint
+    description: Validate existing eval datasets for structural correctness, duplicate IDs, and encoding issues.
+    compatibility: python>=3.10

@@ -1,0 +1,31 @@
+# Hand-verified agent-authored merge SHAs for the one-off agent-domain backfill
+# (F-044, ADR 0023). Format: "<change_id> <agent_version>" (# comments allowed).
+#
+# Provenance (Step 0, 2026-07-22): every change_id below is a merge of a `claude/*`
+# head branch on origin/merge-gate-data's merge_outcomes.jsonl, i.e. authored by
+# Claude Code. Classified from each merge commit's "Merge pull request #N from
+# ianshank/claude/..." subject; the PR author login is `ianshank` for all and is NOT
+# used (ADR 0023 Context). The 6 feat/*|fix/* merges and 1 direct push are human and
+# deliberately excluded — they correctly stay in the human/ namespace.
+#
+# The confidence for each is recomputed deterministically over the change's diff at
+# run time (the SAME proxy as live seeding); review it in the migration's dry-run
+# before --apply.
+6cbb48bc119217dd7e660c1ee4b5a6423d76a434 claude-code
+6f0c469852493b0fdbcb54deca75547196e083a7 claude-code
+607d3cb580857fc9f05d04dfd463cef9bf63f86d claude-code
+66a7d3537ea8525687bc10bcc81835fd7a034e01 claude-code
+0004c7b9f88d77a284d35fba4754701fb9f09627 claude-code
+f90766e976cd412ccdae5f50d323207e2f8186df claude-code
+b5a948c93339f70a4c7d7b02d0957c72f26bbb1d claude-code
+ccf99428c9c7f3bbb27787191c8d11fecef3f50a claude-code
+2537012c46824aeb2ed9c4bf4f69435540f2d237 claude-code
+bc5a2eb9e54dc05e69a1cc93127cb4a9ec84ee91 claude-code
+a7c2e6af852a2cd90ba5a425c2507b0812f4d1c0 claude-code
+20f5d8b566cd916efc27756516123bb6836b9bdf claude-code
+0fc8c2d48f1b9f55bb1893a6d43e1a46885ecf91 claude-code
+1dc380980f8964b74664af6fa0ba83b91d65d4a6 claude-code
+cbd68498628a90cda667468490683480221e095a claude-code
+3e83e7d8b4c21c5613bcff191424c91976111c3f claude-code
+bda218954ecd20f7bb1ab8344828c53881b9e4e1 claude-code
+34e86ccbde07d0d758d299bd9dde10a9fa7b5c35 claude-code

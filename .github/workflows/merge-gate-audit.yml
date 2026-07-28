@@ -47,9 +47,15 @@ jobs:
         run: python -m agent_core.store_sync pull --store "$STORE" --repo-dir .
       - name: Select records for audit (unbiased sample; knobs via repo vars)
         run: |
+          # --with-propensity appends the inclusion probability each change was
+          # sampled with. It cannot be reconstructed after the round, and a later
+          # 1/p (Horvitz-Thompson) reweighting needs it to correct the
+          # over-sampling the per-domain floor induces in low-volume domains.
+          # audit_issue_sync parses both the bare and tab-separated forms.
           python -m agent_core.audit_sampler --store "$STORE" select \
             --base-rate "${{ vars.MERGE_GATE_AUDIT_RATE || '0.05' }}" \
             --per-domain-floor "${{ vars.MERGE_GATE_AUDIT_FLOOR || '3' }}" \
+            --with-propensity \
             > selected.txt
           cat selected.txt
       - name: List existing audit issues (all states — closed means handled)

@@ -6,8 +6,304 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Security
+- **Credential scrub + fail-closed secret scanning (F-048).** A Langfuse secret/public key
+  pair sat unredacted in three tracked files (`HARNESS_SPEC.md`,
+  `docs/decisions/0003-langfuse-integration.md`, `progress.md`) while **no workflow ran any
+  secret scanning at all** — a gap opened by the 2026-07-03 Phase 0 plan and never landed.
+  The literals are now redacted, and `.gitleaks.toml` plus a `quality-gates.yml` `secret-scan`
+  job land the gate with a deliberate asymmetry: the working-tree scan (`--no-git`) is
+  fail-closed, while the history scan is report-only, because the keys are already public in
+  remote history and a rewrite would invalidate every clone, open-PR base, `implemented_in`
+  provenance SHA, and the `merge-gate-data` lineage for no real security gain (ADR 0027).
+  **Rotation is not asserted** — an earlier draft of this work claimed the keys were "revoked,
+  confirmed before this change merged," which was untrue for another three weeks; the
+  confirmation is a human checklist item that blocks the public-facing work.
+- **`SECURITY.md` and `README.md` claimed two controls that did not exist.** Both stated
+  secret scanning already ran in CI (it did not — this change is what makes it true) and that
+  Snyk "monitors dependencies continuously" (no workflow references Snyk; `docs/CHARTER.md` §5
+  lists it as future work). Snyk is now described accurately as a documented manual step.
+
+### Fixed
+- **`.gitignore`'s blanket `*.html` silently dropped deliverables.** Committed sample reports
+  and HTML golden fixtures under `docs/samples/`, `tests/fixtures/`, and
+  `agent-core/tests/fixtures/` are now tracked; previously they would have passed locally and
+  failed in CI on a missing file.
+
+### Security
+- **Argument injection in the `merge-gate verdict` workflow dispatch.** The optional
+  `selection_propensity` input was interpolated into an *unquoted* shell scalar and then
+  word-split into the `python` invocation, so an input of `0.5 --store /tmp/x` appended a
+  second `--store` that argparse resolves last-wins — redirecting where the verdict was
+  written. Routing the value through `env` (already done) stops *template* injection; only
+  a quoted bash-array expansion stops *argument* injection. Reachable by an authorized
+  auditor only, since the job gates on `MERGE_GATE_AUDITORS`. Pinned by `F_047.py`, which
+  now fails if the array expansion is ever replaced by a bare `$PROP_ARGS`, and by a test
+  asserting the value reaches argparse as a single token.
+
 ### Added
 - **Reasoning & Planning Skills (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`):** added three composable reasoning skills to the marketplace for performing controlled hierarchical research, generating production-grade OpenSpec packages, and objectively peer-reviewing them. Validated purely structurally with no evaluation-defining paths modified. Configurable via documented defaults.
+- **A single-sourced propensity contract.** `is_valid_propensity` / `format_propensity`
+  replace three independent restatements of `0.0 < p <= 1.0`, which had already drifted
+  (only one also checked `math.isfinite`) and were equivalent only because `0.0 < nan` is
+  incidentally `False`. `audit_issue_sync` now also validates at *ingestion*: `float()`
+  accepts `"nan"`, `"inf"` and any magnitude, so parsing was never validation — an
+  out-of-contract column used to render into the issue body and into a dispatch command
+  guaranteed to fail downstream. It is now logged and treated as unknown, so the change
+  still gets audited, it just cannot be reweighted.
+- **Follow-up hardening + end-to-end propensity wiring (F-047, ADR 0026).** Closes the
+  review findings on the merged proxy/PPI++ work and makes `selection_propensity` live.
+  Correctness: `proxy_eval` no longer reports a by-construction `AUROC = 0.5` for a
+  constant proxy (its sibling `calibration_report` had always withheld it); a tuned
+  `lambda` can no longer run out of residual degrees of freedom (`min_labeled >= 3` plus a
+  runtime guard — at `n = 2` the residual variance collapsed to `0.0` and the interval
+  reported a half-width of **0.06 from two observations**); the proxy-range check streams
+  instead of materialising two full copies of the unlabeled pool; and a stale docstring
+  pointed at the pre-split module. **Propensity is no longer dead data**: `merge-gate-audit`
+  selects `--with-propensity`, `audit_issue_sync` carries the value into the audit issue
+  *and* the dispatch command the human copies out, and `merge-gate-verdict` →
+  `record_audit_verdict` thread it to the write boundary — backwards compatible at every
+  seam (both `selected.txt` formats parse, bare ids still accepted, a blank input records
+  NULL rather than a fabricated probability). Also corrected: the spike's removal
+  instructions omitted the `mkdocs.yml` nav entry, which leaves a dangling-nav warning
+  (measured — the build is non-strict by design, so it is a warning today and a hard
+  failure under `--strict`). Docs refreshed to match: C4 merge-gate component diagram,
+  `NEXT_STEPS.md` (whose `N≥20` claim contradicted the peer review merged alongside it),
+  both READMEs, `AGENTS.md`, the e2e runbook, and the ADR index.
+- **Peer-review hardening of the proxy/PPI work (`agent-core`).** An adversarial
+  correctness review and a gap/hygiene audit of the change below found six real defects,
+  all fixed here: a prediction-powered interval could render **inverted** (`lo > hi`, a
+  negative half-width, the point outside its own interval) with no degeneracy flag;
+  `variance_reduction` was computed from `[0,1]`-clipped bounds and **over-reported a 3%
+  gain as 94%**, non-monotonically; per-bin slices assumed a unit-interval proxy and
+  silently dropped every out-of-range external judge score; `build_dataset` took the
+  *first* audit row rather than the authoritative one, disagreeing with
+  `OutcomeStore.resolved()`; small-n coverage sat below nominal because the fitted
+  `lambda` was not charged a degree of freedom; and three files had grown past the repo's
+  500-line budget (`scripts/check_size_budget.py`), which the `quality-gates.yml` path
+  filter would have left latent for an unrelated PR to inherit. `calibration.py` is
+  therefore split into `ppi.py`, and the report into `report_types.py` +
+  `calibration_report_render.py`, with every previously importable name still resolving
+  from its original module (`calibration_report.__all__` pins that). The report also now
+  renders the classical (λ=0) baseline the reduction is measured against, and states that
+  cross-domain aggregates are **unweighted** while no estimator applies the `1/p`
+  correction the per-domain audit floor calls for. Full workspace gate green: harness
+  97.55%, agent-core 98.45%, behavioral-regression 100%, flow-corpus 100%,
+  flow-protocol 100%, scripts 95.85%, foundation 96.03%; 43/43 feature validations pass.
+- **Proxy-correlation measurement, audit-selection propensity, and a dual `wilson`/`ppi++`
+  report estimator (`agent-core`).** Implements the minimal, reversible slice from the
+  2026-07-25 peer review. **The merge gate is untouched** — `merge_gate.decide()`, `tau`,
+  `wilson_floor`, `risk_target`, and `min_calibration_n` are unchanged, and auto-merge
+  remains off; every addition is report-side or additive data.
+  - **`agent_core.proxy_eval` (new).** Read-only CLI + library measuring how well a cheap
+    proxy predicts the authoritative `HUMAN_AUDIT` label, reported **marginally and
+    conditionally** on the subsets the gate operates over (`score >= tau`, per-bin), with
+    the implied effective-sample multiplier `1/(1-rho^2)`. Proxies are pluggable via a
+    `ProxyExtractor` Protocol — `RawConfidenceProxy`, `PassiveLabelProxy`, and
+    `MappingProxy` (the seam for externally-computed scores such as an LLM judge, keeping
+    `agent_core` dependency-free). Degenerate slices are named, never scored: a constant
+    proxy, a single outcome class, fewer than three pairs, or a perfect correlation (any
+    two points are collinear, so `n=2` yields `|rho|=1` and a nonsense multiplier).
+  - **`ppi_plus_interval` + `pearson_r` + `effective_n_multiplier` (`agent_core.calibration`).**
+    Power-tuned prediction-powered interval for a mean outcome rate; `lambda` is
+    variance-minimising and clamped, so `lambda = 0` recovers the classical estimator and
+    the tuned form is asymptotically never worse. **Fail-closed:** where the normal
+    approximation cannot be trusted — too few labels, a single outcome class (zero
+    variance would collapse the interval to a false-certainty point), a constant proxy, or
+    no unlabeled pool — it returns the **Wilson** interval and says why. Carries a
+    same-family `lambda = 0` baseline so a reported gain is attributable to the proxy
+    rather than to the interval type.
+  - **`OutcomeRecord.selection_propensity` + `audit_sampler.select_for_audit_detailed`.**
+    The sampler now reports each pick's marginal inclusion probability and `record_verdict`
+    stores it, enabling later Horvitz–Thompson / prediction-powered reweighting (which
+    cannot be reconstructed after the round). Nullable and additive: pre-existing rows load
+    with `None`, `select_for_audit` keeps its exact signature and selection (same RNG
+    order), and the CLI's default output is byte-identical (`--with-propensity` is opt-in).
+  - **`calibration_report --estimator {wilson,ppi++}`.** Dual-reports both intervals plus
+    the variance reduction; `wilson` remains the default and the only estimator the gate
+    uses.
+  - Hardening found by the property suite: `pearson_r` no longer raises `ZeroDivisionError`
+    when two tiny-but-positive variances underflow to zero in their product (roots are
+    taken before multiplying), the moment helpers report an unrepresentable spread as `inf`
+    instead of raising `OverflowError`, and `inclusion_probability` is written so
+    `p >= base_rate` and `p <= 1` hold exactly in floating point.
+- **Peer review of the "swap Wilson → PPI++" estimator critique + OpenSpec coordination spike
+  (planning only).** Added a committed objective peer review
+  (`openspec/changes/eval-proxy-and-estimator/review.md`) that verifies the critique's
+  arithmetic and citations but corrects it on target, magnitude, and mechanism: the merge
+  gate's real activation bar is a four-gate Wilson stack needing ~380 near-perfect audits per
+  domain (not one `N≥20` gate), and PPI++ on the calibrated-confidence proxy buys only
+  ~1.05–1.1× effective-N at the `min_auroc=0.65` floor — the leverage is in the *proxy* choice
+  (passive REVERT/CI labels or an independent LLM judge with conditional variance), not the
+  estimator swap. Introduced a reversible **OpenSpec** front-end (`openspec/`, `docs/openspec-spike.md`)
+  used as a thin coordination layer over the existing enforced spec system (`features.yaml` +
+  `scripts/validations/F_*.py` + ADRs), with a change proposal (proposal/design/tasks/spec
+  deltas) for proxy-correlation measurement, audit-selection-propensity logging, and a dual
+  `wilson`/`ppi++` report estimator. Planning/documentation-only — no evaluation logic, gate
+  threshold, `agent_core` source, or `features.yaml` change; the merge gate is untouched.
+- **Enterprise documentation, licensing & repository organization.** Added an Apache-2.0
+  `LICENSE` (+ `NOTICE` and per-package copies) and declared PEP 639 packaging metadata
+  (`license`/`license-files`/`readme`/`classifiers`/`[project.urls]`, setuptools `>=77`) across
+  every package; added the root community-health set (`CONTRIBUTING`, `SECURITY`,
+  `CODE_OF_CONDUCT`, `SUPPORT`, `GOVERNANCE`, `MAINTAINERS`); authored the missing component
+  READMEs (`flow-corpus`, `flow-protocol`, `skills`, `scripts`, `experiments`, `src/eval_harness`)
+  and `behavioral-regression/CHANGELOG.md`; added a `docs/` index, an ADR index, and a
+  `docs/STYLE.md` taxonomy; introduced a `mkdocs-material` site (`mkdocs.yml`, `.[docs]` extra);
+  and restructured the root README (badges, TOC, monorepo map). Documentation- and
+  metadata-only — no evaluation logic, gate threshold, or `features.yaml` change.
+- **Agent-record calibration: routing, proxy confidence & report (F-042/F-043/F-044, ADR 0023).**
+  Closes the agent-record calibration gap — the merge-gate outcome store had crossed its soak
+  target but every record was `agent_version:null` / `domain:human/*` / `raw_confidence:0.0`,
+  i.e. zero agent-authored signal, so the agent-domain predictor was degenerate by construction.
+  - **F-042 — seed routing + confidence proxy.** The seed-on-merge workflow now classifies each
+    merged change by its PR **head-ref prefix** (matched against `config/agent-authors.yaml`, e.g.
+    `claude/*`) rather than author login (uniform across this repo). An agent change is seeded in
+    the un-prefixed agent domain with the real `agent_version` and a **deterministic proxy
+    confidence** (`scripts/agent_confidence.py`) — a pure function of diff size, file count,
+    test-to-code ratio, and protected-path touches, mapped through a clamped sigmoid, no network
+    or model call. Human, PR-less, or any unclassifiable change keeps the reserved
+    `human/<domain>` namespace at confidence `0.0` (fail-safe: anything not positively classified
+    as an agent stays out of the agent pool, per REVIEW.md §6). This makes the agent-domain
+    calibration corpus non-degenerate for the first time.
+  - **F-043 — calibration report.** `agent_core.calibration_report`, a read-only CLI reporting
+    ECE / Brier (+ Murphy decomposition) / AUROC / selective-risk abstention with Wilson CIs over
+    the agent-domain slice, reusing the existing `agent_core.calibration` primitives (no new math).
+    The authoritative `HUMAN_AUDIT` view (the only one that may feed the auto-merge τ) is kept
+    separate from passive diagnostics, and a constant/single-class predictor is reported honestly
+    as `DEGENERATE` instead of the by-construction `0.5`. Emitted to the daily outcome-labeller run
+    summary (read-only, after the store push).
+  - **F-044 — one-off reversible backfill.** `scripts/migrations/agent_domain_backfill.py`
+    re-attributes historical agent SHAs from `human/*` to the agent domain with the same computed
+    proxy confidence, gated on an explicit committed `SHA→agent_version` list, writing a per-store
+    `*.pre-backfill.bak` safety copy so the migration is reversible.
+
+### Hardening
+- **Agent-seeding hardening & reuse (F-046, follow-up to F-042…F-044).** A review-driven pass
+  (self-audit + Copilot + CodeRabbit) resolving tech debt in the above without changing the trust
+  boundary:
+  - **Fail-safe seed routing** — a non-zero exit from the classifier now writes a human-lane
+    fallback `agent.json` and logs it to the run summary instead of aborting the whole seed job
+    under `set -e` (ADR 0023 §2); an undeterminable file set raises rather than scoring all-zero.
+  - **No hardcoded values** — the reserved namespace is single-sourced in
+    `agent_core.domains.HUMAN_NAMESPACE` (validated to equal `config/merge-gate-domains.yaml`),
+    and the report's `n_bins` / `risk_target` / `z` come from a validated `ReportConfig` dataclass.
+  - **Reuse / DRY** — new `scripts/_config.py` owns the shared changed-file / strict YAML-loader
+    idioms (previously duplicated across `agent_confidence.py` and `merge_gate_context.py`); the
+    backfill routes git through the sanctioned `agent_core.subprocess_util.run_failsafe`.
+  - **Robustness** — `read_nul_delimited` reads bytes + `surrogateescape` (non-UTF-8 `git -z`
+    output no longer crashes), the sigmoid clamps its exponent (no `OverflowError` on extreme
+    config), and the migration's SHA-list parse is strict (a bare SHA is rejected, not silently
+    defaulted).
+  - **Security / CI** — `github.actor` is routed through `env:` in both push steps (zizmor
+    template-injection), the calibration-report step is `continue-on-error`, and the migration is
+    no longer excluded from the scripts coverage gate.
+  - **Review-driven refinements** (independent 4-lens peer review + Copilot/CodeRabbit): the
+    reserved namespace is now single-authority — `merge_gate_context` validates the YAML
+    `human_namespace` equals the canonical `agent_core.domains.HUMAN_NAMESPACE` at load (fail-loud,
+    not just the static F-046 check); `ReportConfig` rejects non-finite `risk_target`/`z` and its
+    errors name the offending value; the migration gained a start/apply audit log and clean exit-2
+    error handling; the labeller's report step leaves a step-summary breadcrumb on failure; the
+    backfill reuses `agent_confidence.DEFAULT_PROXY_PATH`; and F-046 pins the seed fail-safe's
+    fallback JSON against the classifier's real output shape. New tests cover the binary-file diff
+    path, the missing-change_id warning, non-finite config, and the config-flag threading; an e2e
+    journey exercises the agent-confidence seed path. All coverage floors hold with margin.
+  Ledgered as **F-046**; `scripts/validations/F_046.py` pins the durable invariants.
+
+### Fixed
+- **Outcome-record forward compatibility: a newer writer's record crashed every reader
+  (ADR 0025).** `agent_core.store_sync` deliberately preserves a line it cannot parse so a
+  rolling upgrade never loses data; `agent_core.jsonl` is deliberately strict so a corrupt
+  line cannot pass unnoticed. Both are right, but `OutcomeRecord(**json.loads(line))` could
+  not tell an **unknown extra key** from a **missing required key** — both raise `TypeError` —
+  so the mechanism built to survive a rolling upgrade produced exactly the record that broke
+  every other consumer: `merge_gate_ci` exits 1 in both the gate and shadow jobs, failing
+  every PR, and `outcome_labeller` / `audit_sampler` / `merge_seed` have no handler at all.
+  `OutcomeRecord.from_json` now separates additive schema evolution from corruption — unknown
+  fields are dropped and logged by name; malformed JSON, a non-object payload, a missing
+  required field, and wrong types all still raise. `store_sync` is untouched and still
+  round-trips such a line verbatim, so the writer never rewrites a field it does not
+  understand while the reader no longer crashes on one. A test now crosses that seam in one
+  assertion, which neither module's suite previously did.
+- **Merge-gate fail-open on out-of-contract confidences, and a vacuous ship-gate pass.**
+  Found while peer-reviewing the agent-record calibration plan
+  (`docs/plans/agent-record-decontamination/`); each defect was reproduced before being fixed,
+  and the full sweep — three fixed, ten still open — is recorded in
+  `docs/gap-analysis-merge-gate-2026-07-24.md`.
+  - **Confidences outside `[0, 1]` could reach AUTO_MERGE.** `NaN` compares False against
+    every bin edge and `inf` exceeds them all, so both fell through
+    `BinningCalibrator.bin_index`'s scan to its `score >= top edge` return — the
+    *highest*-confidence bucket — as did any value above 1.0. Values below 0 escalated, so the
+    failure was one-sided toward unsafe: with a trustworthy calibrator, `decide()` returned
+    `AUTO_MERGE` for both `NaN` and `5.0`. Latent only because every domain is still
+    cold-start (zero `HUMAN_AUDIT` records ⇒ `tau is None`), so it would have activated exactly
+    when the gate went live. `ChangeContext` now enforces the `[0, 1]` contract its field
+    comment always claimed, and `bin_index` floors any non-finite or out-of-range score to
+    bin 0 for records arriving straight from the store, where `OutcomeRecord` applies no
+    validation. Exactly `1.0` stays in contract and still lands in the top bin.
+  - **`merge_gate_ci` reported bad input as an internal fault.** Invalid values, malformed
+    JSON, a missing context field, and a `null` where a value belongs now all exit **2**
+    (usage) rather than 1 — and never 0, which CI reads as proceed-to-merge. An unreadable
+    `--context` path stays exit 1: the environment failing, not the caller passing a bad value.
+  - **`evaluate_calibration` passed slices that cannot evidence discrimination.** An undefined
+    AUROC satisfied the resolution criterion vacuously, so a forecaster wrong 100% of the time
+    — perfectly calibrated against its own base rate — passed the ship gate, as did a single
+    record. Degeneracy is now always reported on `CalibrationReport.degenerate` and logged;
+    *enforcement* is opt-in via `CalibrationConfig.min_eval_samples` /
+    `require_discrimination`, both defaulting to the prior behaviour, so no existing caller's
+    verdict changes and configs persisted before the fields existed still load and round-trip.
+    An all-correct golden set is a legitimate shape, so it keeps passing until a caller opts in.
+  - **`build_domain_models` decided per-domain autonomy silently.** The `HUMAN_AUDIT`-only
+    filter dropped every other record with no count and no log, making an all-passive store
+    indistinguishable from an empty one — which is the live state today (43 records,
+    12 labelled, 0 audited). It now reports exclusions by reason and warns when no audit
+    records exist at all.
+- **`claude-foundation/tests/` protected-path gap (F-041):** an independent audit of the
+  merged F-039 work found that `claude-foundation/` — structurally identical to the four
+  packages F-039 protects — was missed by that sweep. Its `tests/test_eval_gate.py`
+  directly exercises an eval-integrity gate (`foundation_tools.eval_gate`) and was
+  modifiable in an unrelated PR with no `eval-change-approved` label or CODEOWNERS review
+  required. `claude-foundation/tests/**` is now in `PROTECTED_PATTERNS` and
+  `.github/CODEOWNERS`.
+
+### Added
+- **Skill Validation Assertion Registries & dataset-lint (F-045)**: Refactored `validate_skill.py` to use a dynamic registry pattern (`ASSERTION_GRADERS`) for grading structural assertions without monolithic conditionals (detailed in [ADR 0024](docs/decisions/0024-assertion-graders-registry.md)). Added the `dataset-lint` skill capable of deep-validating generic datasets against customizable rulesets via its own `FORMAT_PARSERS` registry pattern. Introduced full test matrices backing these registries with 100% test coverage.
+- **Plugin-registry surface guard:** `tests/test_plugin_registry_surface.py` freezes the
+  `eval_harness` plugin registry's config-selectable keys — the `dataset`/`judge`/
+  `scorer`/`sink`/`target` registries' primary names *and* their backwards-compat
+  aliases (`csv_file` → `csv`, `claude` → `anthropic`, …) — against a committed
+  `plugin_registry_baseline.json`, with exact equality: a dropped/renamed key fails CI as a
+  breaking change, a new key must be explicitly frozen. This is the compat surface the
+  `__all__` guard cannot see, since users select components by string in config rather than
+  importing them. The built-in surface is read in a fresh subprocess (the registries are
+  process-global and some tests register doubles into them, so an in-process read would be
+  order-dependent), keyed by each `Registry`'s own stable `.kind` field rather than its
+  Python variable name (immune to a purely internal rename). `--update` refuses to silently
+  rewrite the baseline if doing so would drop a key — `--allow-drops` is the explicit,
+  reviewed override for a deliberate breaking change.
+- **Public-surface backwards-compat guard (F-039):** `tests/test_public_surface.py` freezes
+  every package's public `__all__` exports (exact-equality against a committed
+  `public_surface_baseline.json`), so a removed or renamed export now fails CI instead of
+  silently breaking every config/import that used it — the exact gap that let a breaking
+  change land undetected before. Exact-equality by design: a drop or rename fails loudly as
+  a breaking change, and an addition must be explicitly frozen too (a reviewable diff) — CI
+  fails either way until the baseline is updated to match. Duplicated byte-identically into
+  `agent-core/`, `behavioral-regression/`, `flow-corpus/`, and `flow-protocol/`'s own
+  `tests/` dirs (each package runs its own isolated suite, so the guard must be
+  self-contained there) and drift-guarded against the root canonical via
+  `check_skill_script_drift.py`'s `TRACKED_DUPLICATES`. Ledgered as **F-039**;
+  `scripts/validations/F_039.py` guards the wiring itself.
+
+### Fixed
+- **Sibling packages' `tests/` directories had no protected-path coverage.**
+  `scripts/eval_protected_paths.py`'s `"tests/**"` pattern compiles to `^tests/.*$`, which
+  only anchors the root suite — `agent-core/tests/`, `behavioral-regression/tests/`,
+  `flow-corpus/tests/`, and `flow-protocol/tests/` (every test in those four packages, not
+  just their public-surface-guard copies) had no `eval-change-approved` label requirement
+  and no `.github/CODEOWNERS` review gate. `PROTECTED_PATTERNS` and `CODEOWNERS` now include
+  explicit entries for all four; locked in by new parametrized cases in
+  `tests/test_protected_paths.py` and asserted by F-039's validator.
+
+>>>>>>> origin/main
 - **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
   self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
   evidence for the eval-backend displacement decision by validating the claimed capabilities
@@ -32,6 +328,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Dynamic drift guard script tech-debt resolution:** resolved tech debt in the dynamic drift guard scripts to improve maintainability and performance.
+- **CI gate delegation — packages 2-4 of 5 (ADR 0021):** `agent-core-ci.yml`,
+  `flow-corpus-ci.yml` (both its `flow-protocol` and `flow-corpus` jobs), and
+  `behavioral-regression-ci.yml`'s `behavioral-regression` job now delegate to
+  `.github/actions/run-quality-gate` (`check: make check`) instead of duplicating
+  ruff/format/mypy/pytest inline — continuing the fan-out `eval-harness-ci.yml` started
+  (below) and unblocked by the `F_037` fix (also below): its new `_common.ci_enforces()`
+  accepts either inline or delegated wiring, so this rewire no longer breaks the validator
+  the way the first one did. Incidentally fixes a real drift bug while delegating: the
+  `flow-corpus` and `behavioral-regression` jobs installed an **unpinned**
+  `pip install ruff mypy` instead of their own package's pinned `[dev]` extra
+  (`ruff==0.15.20`, `mypy==2.1.0` — the same pin the rest of the fleet uses), which
+  delegation naturally closes since the package's own `[dev]` extra is what the new install
+  command pulls in. `claude-foundation-ci.yml` is deliberately left inline (a separate PR
+  deletes it entirely as part of the claude-foundation extraction). Verified locally:
+  `make -C <pkg> check` run end-to-end for all 4 packages, matching the coverage numbers
+  their own CI reports (agent-core 98.67%, flow-protocol/flow-corpus/behavioral-regression
+  100%, all ≥ their 95% floors).
+>>>>>>> origin/main
 - **CI gate delegation — phase-2 POC (ADR 0021):** `eval-harness-ci.yml` no longer duplicates the
   ruff/format/mypy/pytest steps inline — it delegates to the generated root gate through a new reusable
   composite action `.github/actions/run-quality-gate` (sets up Python, installs the package, runs

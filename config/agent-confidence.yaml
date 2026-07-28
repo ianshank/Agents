@@ -1,0 +1,38 @@
+# Deterministic agent-confidence proxy weights (ADR 0023, F-042).
+#
+# This is a TRANSPARENT HEURISTIC, not an agent's real confidence. It exists to
+# give agent-authored merges a *varying* raw_confidence so the calibration
+# machinery is non-degenerate; the honest expectation is weak discrimination
+# (AUROC ~ 0.5-0.65). See ADR 0023 and the F-043 report output.
+#
+#   size_norm  = min(lines_changed / size_scale,  size_cap)
+#   files_norm = min(files_touched / files_scale, files_cap)
+#   test_ratio = test_files / max(files_touched, 1)   # test_globs below
+#   protected  = 1.0 if the change touches an eval-protected path else 0.0
+#   z          = base - w_size*size_norm - w_files*files_norm
+#                     + w_tests*test_ratio - w_protected*protected
+#   confidence = clamp(1 / (1 + exp(-z)), clamp_lo, clamp_hi)   # strictly in (0,1)
+#
+# mech_pass is deliberately NOT an input: Layer 0 REJECTs !mech_pass and only
+# merged changes are seeded, so mech_pass ~ True everywhere (zero variance).
+schema_version: "1.0.0"
+proxy:
+  base: 1.5
+  w_size: 2.0
+  w_files: 1.0
+  w_tests: 1.0
+  w_protected: 2.0
+  size_scale: 400.0
+  size_cap: 3.0
+  files_scale: 20.0
+  files_cap: 3.0
+  clamp_lo: 0.02
+  clamp_hi: 0.98
+# A changed file counts as a test if it matches any of these globs
+# (eval_protected_paths._glob_to_regex semantics: `*` within a segment,
+# `**` across segments — the repo's single source of glob truth).
+test_globs:
+  - "tests/**"
+  - "**/tests/**"
+  - "**/test_*.py"
+  - "**/*_test.py"

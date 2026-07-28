@@ -1,0 +1,43 @@
+{
+  "skill": "dataset-lint",
+  "evals": [
+    {
+      "id": "clean-dataset",
+      "prompt": "Lint a well-formed evaluation dataset.",
+      "run": "python scripts/lint_dataset.py --in evals/fixtures/clean/data.jsonl --out .skill-validation/clean-report.json",
+      "assertions": [
+        { "type": "exit_zero", "text": "clean dataset passes" },
+        { "type": "file_contains", "path": ".skill-validation/clean-report.json", "contains": "\"passed\": true", "text": "report says passed" },
+        { "type": "file_contains", "path": ".skill-validation/clean-report.json", "contains": "\"total_records\": 5", "text": "counted all records" }
+      ]
+    },
+    {
+      "id": "duplicate-ids",
+      "prompt": "Lint a dataset with duplicate IDs and missing fields.",
+      "run": "python scripts/lint_dataset.py --in evals/fixtures/broken/data.jsonl --out .skill-validation/broken-report.json",
+      "assertions": [
+        { "type": "exit_nonzero", "text": "broken dataset exits non-zero" },
+        { "type": "file_contains", "path": ".skill-validation/broken-report.json", "contains": "\"passed\": false", "text": "report says failed" },
+        { "type": "file_contains", "path": ".skill-validation/broken-report.json", "contains": "Duplicate ID found", "text": "reports duplicate IDs" }
+      ]
+    },
+    {
+      "id": "missing-file-stops",
+      "prompt": "Nonexistent input stops with a precondition error.",
+      "run": "python scripts/lint_dataset.py --in nonexistent_file.jsonl --out .skill-validation/miss.json",
+      "assertions": [
+        { "type": "exit_nonzero", "text": "missing file exits non-zero" },
+        { "type": "output_contains", "contains": "does not exist", "text": "fails with a clear message" }
+      ]
+    },
+    {
+      "id": "idempotent-output",
+      "prompt": "Running the linter twice on the same input produces identical output.",
+      "run": "python scripts/lint_dataset.py --in evals/fixtures/clean/data.jsonl --out .skill-validation/idem.json",
+      "assertions": [
+        { "type": "exit_zero", "text": "first run succeeds" },
+        { "type": "idempotent", "text": "second run matches first run exactly" }
+      ]
+    }
+  ]
+}

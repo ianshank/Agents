@@ -58,3 +58,4 @@ jobs:
           python-version: "3.12"
       - run: pip install -e .
       - run: python -m foundation_tools.eval_gate --root . --require-grading
+      - run: python -m foundation_tools.backwards_compat --root .

@@ -4,6 +4,67 @@
 
 - [x] **Reasoning & Planning Skills** — added three composable reasoning skills to the marketplace (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`).
 - [x] **Dynamic drift guard script tech-debt resolution** — resolved tech debt in the dynamic drift guard scripts.
+- [x] **Proxy-correlation measurement, PPI++ report estimator & audit propensity (F-047,
+  ADR 0026)** — an external critique proposed swapping the gate's Wilson interval for
+  PPI++. The peer review
+  (`openspec/changes/eval-proxy-and-estimator/review.md`) verified its arithmetic and
+  citations but found it aimed at the wrong lever: PPI++ on the calibrated-confidence proxy
+  buys only ~1.05–1.1× effective-N at the system's own `min_auroc=0.65` floor, and ~0 on the
+  *conditional* subsets the gate operates over (restriction of range). Measured on a
+  synthetic soak, changing the **proxy** was worth 1.63× where changing the **estimator**
+  was worth 1.08×. So `agent_core.proxy_eval` now measures proxy↔audit correlation
+  marginally *and* conditionally, `agent_core.ppi` adds a fail-closed prediction-powered
+  interval (`--estimator ppi++`, report-only — the gate still uses Wilson), and
+  `selection_propensity` is recorded end-to-end so audits can later be reweighted by `1/p`.
+  Six defects found by adversarial review *after* the code was fully covered are pinned by
+  regression tests. **Still open:** nothing consumes the propensity yet (aggregates are
+  reported as unweighted), and the dated proxy-correlation snapshot waits on real data —
+  the live store still holds 0 `human_audit` rows.
+
+- [x] **Merge-gate fail-open fixes + peer review of the agent-record decontamination plan** —
+  a peer review of the 2026-07-24 draft plan (`docs/plans/agent-record-decontamination/`, whose
+  corrected v2 supersedes it) turned up three verified defects, each reproduced before being
+  fixed. A confidence of `NaN`, `inf`, or anything above 1.0 was routed to the *top* calibration
+  bin and scored as maximum confidence, so `decide()` returned `AUTO_MERGE` for garbage — latent
+  only because every domain is still cold-start, i.e. it would have activated exactly when the
+  gate went live. `evaluate_calibration` let an *undefined* AUROC satisfy the discrimination
+  criterion vacuously, so a forecaster wrong 100% of the time passed the ship gate. And
+  `build_domain_models` decided per-domain autonomy with no log at all, making an all-passive
+  store indistinguishable from an empty one. Guards are config-driven
+  (`CalibrationConfig.min_eval_samples` / `require_discrimination`) and default to the prior
+  behaviour, so no existing verdict changes. A fourth defect found in the same sweep is closed
+  by [ADR 0025](docs/decisions/0025-outcome-record-forward-compatibility.md): `store_sync`
+  preserved records from a newer writer that `OutcomeStore` then refused to parse, so an
+  ordinary version skew would have failed every PR. Nine further findings are ranked with
+  reproductions in `docs/gap-analysis-merge-gate-2026-07-24.md`.
+- [x] **Agent-record calibration: routing + proxy confidence + report (F-042/F-043/F-044, ADR 0023)**
+  — closed the agent-record calibration gap. Previously every merge-gate record was
+  `agent_version:null` / `domain:human/*` / `raw_confidence:0.0`, so the agent-domain predictor was
+  degenerate by construction. Now the seed-on-merge workflow routes agent changes (PR head-ref
+  prefix, `config/agent-authors.yaml`) into the agent domain with a **deterministic proxy
+  confidence** (`scripts/agent_confidence.py` — diff size / files / test-ratio / protected-path,
+  sigmoid-mapped, no network) and the real `agent_version`; `agent_core.calibration_report` reports
+  ECE/Brier/AUROC/abstention (Wilson CIs) over the agent slice, honest `DEGENERATE` guard, surfaced
+  to the daily labeller summary; and a one-off reversible backfill
+  (`scripts/migrations/agent_domain_backfill.py`) re-attributes historical agent SHAs. Hardening
+  follow-up ledgered as **F-046** (fail-safe routing, single-sourced `agent_core.domains`,
+  `ReportConfig`, shared `scripts/_config.py`, strict parse, migration coverage). This is the
+  agent-confidence artifact the merge-gate soak item was waiting on. Remaining: accumulate the
+  agent-domain HUMAN_AUDIT labels (the corpus now grows on every agent merge) before any agent
+  domain can leave cold-start ESCALATE.
+- [x] **Skill Validation Assertion Registries & dataset-lint (F-045)** — Re-architected `validate_skill.py` to decouple assertion grading from validation loops using the `ASSERTION_GRADERS` registry (detailed in [ADR 0024](docs/decisions/0024-assertion-graders-registry.md)). Introduced a standalone `dataset-lint` skill capable of format-agnostic deep validation. Brought both components up to 100% test coverage and captured comprehensive testing matrices into `eval_test_matrix.xlsx`.
+- [x] **Public-surface backwards-compat guard (F-039)** — `tests/test_public_surface.py`
+  freezes every package's public `__all__` exports (exact-equality vs a committed
+  baseline), so a removed/renamed export now fails CI instead of silently breaking every
+  config/import that used it. Duplicated byte-identically into all 5 packages'
+  `tests/` dirs, drift-guarded against the root canonical. Surfaced and closed a
+  pre-existing, independent gap while landing: `scripts/eval_protected_paths.py`'s
+  `"tests/**"` pattern only anchored the root suite, leaving all 4 sibling packages'
+  entire test suites without protected-path/CODEOWNERS coverage — both now fixed.
+  A companion **plugin-registry surface guard** (freezing the config-selectable
+  datasets/judges/scorers/sinks/targets keys + aliases — the compat surface `__all__`
+  can't see) is in a separate PR.
+>>>>>>> origin/main
 - [x] **CI gate delegation phase-2 POC (ADR 0021) — `eval-harness-ci` → `make check`** — a new
   reusable composite action `.github/actions/run-quality-gate` (setup-python + install + run the gate)
   now backs `eval-harness-ci.yml`, which delegates to the root `make check` instead of duplicating
@@ -104,20 +165,47 @@
   logs a decision on every PR plus a `human/<domain>` observability decision and
   seed-on-merge writes one pending record per push to main (F-035), and a weekly
   audit queue + human-triggered verdict dispatch is the only writer of HUMAN_AUDIT
-  labels (F-034). F-036 (real-transcript corpus bridge) recorded as deferred.
+  labels (F-034). The agent-confidence seam this left open is now filled by F-042
+  (see above); F-036 (real-transcript corpus bridge) stays recorded as deferred.
   Human checklist before the soak counts: add the `eval-change-approved` label to
   the activation PR (protected paths); exclude `merge-gate-data` from branch
   protection; enable required reviewers on the `merge-gate-verdict` environment;
   record the first verdict via the dispatch UI.
-- [ ] **Merge-gate soak** — accumulate N≥20 shadow decisions and weekly audits before
-  revisiting the ADR 0005 enablement checklist; agent domains stay cold-start until
-  an agent-confidence artifact exists (`merge_gate_context.py --confidence` is the
-  seam; F-036 territory).
+- [ ] **Merge-gate tech debt (`docs/gap-analysis-merge-gate-2026-07-24.md`)** — nine findings
+  remain, ranked by severity, each with the reproduction that established it. The former top
+  item (a forward-compatible record that `store_sync` preserved but `OutcomeStore` refused to
+  parse, which would have failed every PR) is resolved in [ADR 0025](docs/decisions/0025-outcome-record-forward-compatibility.md).
+  Now highest: `GatePolicyConfig` is unreachable from any config or CLI — the values governing
+  autonomy can only change by editing library source, and it has no validation, so it accepts
+  `risk_target=1.0`; then the four independent binning implementations (two of which disagree
+  out-of-range, which is what made the fail-open reachable); then `_upper_half_ci_width`
+  returning `0.0` for "no data", which passes a health floor vacuously.
+- [ ] **Merge-gate soak** — accumulate shadow decisions and weekly audits before
+  revisiting the ADR 0005 enablement checklist. **The "N≥20" this entry used to quote is a
+  soak *counter*, not the activation bar**: the peer review in
+  `openspec/changes/eval-proxy-and-estimator/review.md` establishes that `tau` is gated by
+  a four-gate Wilson stack whose binding term (`threshold_for_risk` at `risk_target=0.02`,
+  measured on a held-out fold) needs roughly **380 near-perfect audited records per
+  domain**. Treat N≥20 as "enough to publish an honest first report", never as "enough to
+  enable auto-merge". The agent-confidence artifact that
+  blocked agent domains now exists (F-042: `scripts/agent_confidence.py` feeds
+  `merge_gate_context.py --confidence`), so agent merges are seeded with a real varying
+  proxy confidence and the agent-domain corpus is non-degenerate; the remaining gate for
+  an agent domain leaving cold-start is accumulating its HUMAN_AUDIT labels, not the
+  predictor. (F-036, the real-transcript corpus bridge, stays deferred — it is an
+  independent enrichment, not a blocker.)
 - [x] **Operational-scripts quality gates (F-031)** — closed the 2026-07 gap analysis
   (`docs/gap-analysis-2026-07.md`): `scripts/` is now lint/type-enforced in `eval-harness-ci`
   with its own ≥85% coverage gate (`scripts/.coveragerc`); 46 new tests for `validate.py` /
   `select_next.py` / `init.py`; `resolve_repo` fixed to be immune to git `url.insteadOf`
   rewrites; `scripts/validations/F_031.py` guards the enforcement itself.
+  **2026-07-21 incident + fix:** ADR 0021's CI-delegation (PR #64) moved the enforced
+  commands from inline workflow YAML into `scripts/quality-gate.sh`, which broke `F_031`'s
+  (and `F_037`'s) inline-string assertions even though the underlying enforcement stayed
+  intact — undetected because `quality-gates.yml` didn't run on the `.github/`-only PR. PR
+  #65 repointed both validators at the delegated behavior (`_common.ci_enforces`) and
+  widened the trigger path filter so this class of regression can't hide again; both have
+  passed on `main` since PR #65 merged (2026-07-21).
 - [x] **`claude-foundation` plugin plan** — peer-reviewed, corrected execution plan for the
   reusable Claude Code plugin repository (`docs/plans/claude-foundation/`). Planning only;
   see follow-ups below.

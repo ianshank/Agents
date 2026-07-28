@@ -1,0 +1,18 @@
+# Agent identification for merge-gate seed routing (ADR 0023, F-042).
+#
+# A merged change is agent-authored if its PR head branch starts with any of an
+# agent's `branch_prefixes` OR its PR author login is in `author_logins`. The
+# FIRST agent (in file order) that matches wins; its `agent_version` is written
+# onto the OutcomeRecord as a keying axis — it changes no gate decision.
+#
+# Routing is on the head-branch prefix, NOT the author login: measured on
+# 2026-07-22 (ADR 0023 Context), the PR author login is `ianshank` for both a
+# Claude PR (head `claude/…`) and a human PR (head `fix/…`), so the login does
+# not distinguish them. Only `claude/` is evidenced in this repo; add other
+# agents (Devin/Codex/Copilot) when their real head-ref prefix or bot login is
+# first observed here — do not guess.
+schema_version: "1.0.0"
+agents:
+  - agent_version: "claude-code"
+    branch_prefixes: ["claude/"]
+    author_logins: []

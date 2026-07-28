@@ -1,0 +1,5 @@
+{"id": "item-1", "inputs": {"query": "hello"}}
+{"id": "item-1", "inputs": {"query": "duplicate ID"}}
+{"id": "item-2"}
+{"id": "", "inputs": {"query": "empty ID"}}
+{invalid json line}

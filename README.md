@@ -1,8 +1,57 @@
 # langfuse-eval-harness
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](pyproject.toml)
+[![Coverage](https://img.shields.io/badge/branch%20coverage-%E2%89%A595%25-brightgreen.svg)](#test)
+[![CI](https://github.com/ianshank/Agents/actions/workflows/eval-harness-ci.yml/badge.svg)](https://github.com/ianshank/Agents/actions/workflows/eval-harness-ci.yml)
+
 A dynamic, modular, backwards-compatible enterprise LLM evaluation harness with
-first-class Langfuse integration, Snyk dependency scanning, and a pluggable skill
+first-class Langfuse integration, CI secret scanning, and a pluggable skill
 framework.
+
+
+## Contents
+
+- [Monorepo map](#monorepo-map)
+- [Documentation](#documentation)
+- [Architecture](#architecture)
+- [Install](#install)
+- [Environment Variables](#environment-variables)
+- [Backends and integrations](#backends-and-integrations)
+- [Run](#run)
+- [Demo](#demo)
+- [Extend (no core changes)](#extend-no-core-changes)
+- [Test](#test)
+- [Quality Gates](#quality-gates)
+- [Security Scanning](#security-scanning)
+- [Layout](#layout)
+- [CI Integration](#ci-integration)
+- [Changelog](#changelog)
+
+## Monorepo map
+
+A monorepo of five installable Python packages plus a skills marketplace and
+operational tooling. Each package builds and tests **independently** with its own
+coverage floor. Full package table and version gates: [AGENTS.md](AGENTS.md).
+
+| Path | Package | Role |
+|---|---|---|
+| [`src/eval_harness/`](src/eval_harness/README.md) | `langfuse-eval-harness` | LLM evaluation harness (this package) |
+| [`agent-core/`](agent-core/README.md) | `agent-core` | Deterministic control & calibration core |
+| [`behavioral-regression/`](behavioral-regression/README.md) | `behavioral-regression` | Calibrated ship/hold/escalate regression gate |
+| [`flow-corpus/`](flow-corpus/README.md) | `flow-corpus` | Calibration corpus of agentic flow variants |
+| [`flow-protocol/`](flow-protocol/README.md) | `flow-protocol` | Versioned contract between corpus and harness |
+| [`claude-foundation/`](claude-foundation/README.md) | `claude-foundation-tools` | Foundation Claude Code plugin tooling |
+| [`skills/`](skills/README.md) | — | Vendored skills registered in `marketplace.yaml` |
+| [`scripts/`](scripts/README.md) | — | Feature validators + CI guards |
+
+## Documentation
+
+- **[docs/](docs/README.md)** — the documentation index (architecture, ADRs, runbooks, spikes, baselines).
+- **[AGENTS.md](AGENTS.md)** — orientation for coding agents and the root-documentation map.
+- **[docs/CHARTER.md](docs/CHARTER.md)** — north-star scope & invariants.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** · **[GOVERNANCE.md](GOVERNANCE.md)** · **[SECURITY.md](SECURITY.md)** · **[SUPPORT.md](SUPPORT.md)** · **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**
+- Docs also render as a site: `pip install -e '.[docs]' && mkdocs serve` (see [mkdocs.yml](mkdocs.yml)).
 
 ## Architecture
 
@@ -24,7 +73,7 @@ Two artifacts with deliberately different edge semantics:
 | **Backwards compatible** | Configs carry a `schema_version`; the migration chain upgrades old configs to the current schema on load. Registry **aliases** keep renamed component names resolving. Component contracts are abstract base classes, so implementations can evolve. |
 | **Test coverage** | Offline pytest suite (no network/SDK) at ≥85% line coverage, using a deterministic mock judge and an in-memory Langfuse client. The quality-gate tooling has its own ≥85% coverage gate. |
 | **Langfuse integration** | Hidden behind a narrow `LangfuseClient` interface with a `NullLangfuseClient` (tests/offline) and a guarded `SDKLangfuseClient` (production). |
-| **Security** | Snyk monitors dependencies continuously. No credentials in source code. |
+| **Security** | gitleaks runs fail-closed in CI on every push and PR. No credentials in source code. Snyk is a documented manual step, not a CI gate. |
 | **Eval integrity** | A regression gate blocks *net-new* lint/test failures vs the base, and a CODEOWNERS + label guard prevents silent weakening of evaluation-defining files. See [Quality Gates](#quality-gates). |
 
 ## Install
@@ -56,6 +105,56 @@ Create a `.env` file from the template:
 cp .env.example .env
 # Edit .env with your credentials
 ```
+
+## Backends and integrations
+
+The harness talks to observability, dataset, and model backends through registry
+components — `eval-harness list-plugins` prints the selectable names. Every external
+SDK is an **optional extra**, but the two kinds of integration behave differently
+when one is missing:
+
+- **Tracing / export clients** (`langfuse_client`, `phoenix_client`,
+  `braintrust_client`) sit behind a reversible seam — a `Null*` double for
+  offline/tests and a guarded SDK implementation for production, chosen by a
+  `build_*` factory. These **degrade to a no-op** when the SDK or credentials are
+  absent, which is why the default suite runs with zero network.
+- **Judges, targets, datasets and sinks are opt-in by config.** Selecting one
+  whose extra is not installed **raises a clear install error** (e.g. the `openai`
+  judge or the `model` target without `[openai]`) rather than silently degrading —
+  the run tells you what to install instead of quietly scoring nothing.
+
+Reversible-adoption pattern: [`docs/phoenix-spike.md`](docs/phoenix-spike.md) and
+[`docs/braintrust-spike.md`](docs/braintrust-spike.md); a live opt-in check runs in
+[`.github/workflows/phoenix-live.yml`](.github/workflows/phoenix-live.yml).
+
+| Backend | Dataset | Sink | Judge | Scorer | Client | Install extra | Status |
+|---|---|---|---|---|---|---|---|
+| **Langfuse** | `langfuse` | `langfuse` | — | — | `langfuse_client` (engine-injected) | `[langfuse]` | **Shipped — first-class** |
+| **Phoenix** | — | `phoenix` | `phoenix_evals` | — | `phoenix_client` (OTLP tracing + score export) | `[phoenix]`, `[phoenix-evals]` | **Shipped — SDK-optional** |
+| **BrainTrust** | `braintrust` | `braintrust` | — | `autoevals` | `braintrust_client` | `[braintrust]`, `[autoevals]` | **Shipped — SDK-optional** |
+| **Local** | `inline`, `jsonl`, `csv`, `parquet` | `console`, `json_file`, `html_file` | — | — | — | core (`[parquet]` for parquet) | **Shipped** |
+| **OpenAI-compatible** ¹ | — | — | `openai` | — | — | `[openai]` | **Shipped** |
+| **Anthropic** | — | — | `anthropic` | — | — | `[anthropic]` | **Shipped** |
+| **AWS Bedrock** | — | — | `bedrock` | — | — | `[bedrock]` | **Shipped** |
+| **Opik** | — | — | — | — | — | — | **Under evaluation** ² |
+
+¹ OpenAI, **NVIDIA Nemotron**, and a local **LM Studio** server are the *same* path —
+the `openai` judge (its `base_url` set inline in the YAML, e.g.
+`config/nemotron_eval.yaml` / `config/lm_studio_eval.yaml`) and the `model` (alias
+`llm`) target (its `base_url` from `EVAL_BASE_URL`, e.g. `config/model_target.yaml`)
+pointed at a different endpoint — not separate integrations.
+
+² **Opik** has no code under `src/eval_harness/`; it is a *candidate* eval backend
+probed alongside Langfuse in the isolated, unsigned
+[`experiments/backend-validation/`](experiments/backend-validation/README.md) sandbox
+(own gate; not in `make check-all`) — **not** a shipped integration.
+
+The `budgeted` judge budget wraps any of the above judges with a per-run cost cap
+(`agent_core_adapter`), applied by the engine when configured — it is not itself a
+selectable judge. Per-backend credentials live in [`.env.example`](.env.example) (the
+[Environment Variables](#environment-variables) table lists the common ones; Bedrock
+uses the standard AWS credential chain). For the component **file layout**, see
+[Layout](#layout).
 
 ## Run
 
@@ -179,6 +278,12 @@ python scripts/check_protected_changes.py --base-ref origin/main
   skill stays self-contained). Run `python scripts/check_skill_script_drift.py`. The
   rationale for the kept compatibility shims and the uniform 95% coverage floor is recorded
   in [`docs/decisions/0009-tech-debt-audit-and-compat-surface.md`](docs/decisions/0009-tech-debt-audit-and-compat-surface.md).
+- **Public-surface backwards-compat guard** (`F-039`) freezes every package's public
+  `__all__` exports — `tests/test_public_surface.py` + a committed
+  `public_surface_baseline.json`, exact-equality checked — so a removed or renamed export
+  fails CI instead of silently breaking every config/import that used it. Duplicated
+  byte-identically (drift-guarded) into each of the 5 packages' own `tests/` dirs, since
+  each runs its own isolated suite. `scripts/validations/F_039.py` guards the wiring.
 - **Structural size budget** (ADR 0019) enforces two of the project's structural limits:
   cyclomatic complexity `< 15` repo-wide via ruff `C901` (`max-complexity = 14`), and source
   file length `≤ 500` lines via `python scripts/check_size_budget.py` (wired into
@@ -189,6 +294,23 @@ python scripts/check_protected_changes.py --base-ref origin/main
   (`scripts/.coveragerc`) in `eval-harness-ci.yml`; `scripts/validations/F_031.py` asserts the
   enforcement itself cannot silently regress. Baseline and rationale:
   [docs/gap-analysis-2026-07.md](docs/gap-analysis-2026-07.md).
+- **Calibrated merge gate** (`F-010` / `F-032…F-035`, ADR 0005 + ADR 0018) is a pure
+  `agent_core` decision subsystem that **auto-merges nothing** unless
+  `ENABLE_CALIBRATED_AUTOMERGE` is set and a populated, human-audited outcome store has earned
+  it. Real outcomes persist on the dedicated `merge-gate-data` branch; a daily labeller applies
+  passive labels behind an anti-optimism guard, a weekly queue drives human `HUMAN_AUDIT`
+  verdicts, and an always-on **shadow** job logs a decision on every PR without blocking one.
+  **Agent-confidence seeding** (`F-042`, ADR 0023) routes each merged change by its PR head-ref
+  prefix (`config/agent-authors.yaml`): agent changes are seeded in the agent domain with a
+  deterministic proxy confidence (`scripts/agent_confidence.py` — diff shape only, no network),
+  while human or unclassifiable changes stay in the reserved `human/<domain>` namespace at 0.0
+  (fail-safe). The **calibration report** (`F-043`, `agent_core.calibration_report`) surfaces
+  agent-domain ECE / Brier / AUROC / abstention (Wilson CIs, honest `DEGENERATE` guard) to the
+  daily run summary, and can dual-report a prediction-powered interval under
+  `--estimator ppi++` (`F-047`, ADR 0026 — report-only; the gate's own estimator is
+  unchanged). `agent_core.proxy_eval` measures whether a proxy is informative *on the
+  subsets the gate operates over*, and each audit now records the probability it was
+  sampled with. `scripts/validations/F_046.py` and `F_047.py` pin the hardening invariants.
 - **Live Phoenix validation (opt-in)** — `.github/workflows/phoenix-live.yml`
   (`workflow_dispatch`, `timeout-minutes: 20`) validates the reversible Phoenix spike
   end-to-end on a networked runner: a `dep-resolve` dry-run job surfaces the
@@ -221,16 +343,18 @@ src/eval_harness/
   scorers/           exact_match, regex_match, contains, json_keys, llm_judge, weighted,
                      autoevals (bridges BrainTrust's autoevals scorer library)
   datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
-  targets/           echo, callable (dynamic import)
+  targets/           echo, callable (dynamic import), model (alias llm; calls an
+                     OpenAI-compatible / LM Studio / Nemotron endpoint)
   sinks/             console, json_file, html_file, langfuse, phoenix, braintrust
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
-                     phoenix_evals, budgeted (wraps another judge with a cost cap)
+                     phoenix_evals
   langfuse_client/   Langfuse tracing + score export (SDK-optional seam)
   phoenix_client/    Phoenix tracing + score export (SDK-optional seam; mirrors
                      langfuse_client — see docs/phoenix-spike.md)
   braintrust_client/ BrainTrust experiment export (SDK-optional seam; mirrors
                      phoenix_client — see docs/braintrust-spike.md)
-  agent_core_adapter/  agent_core bridge (BudgetLedger, calibration surface)
+  agent_core_adapter/  agent_core bridge (BudgetLedger, calibration surface, and the
+                       BudgetedJudge cost-cap wrapper applied around another judge)
   gating/            config-driven quality gate
   engine.py          orchestration
   cli.py             entry point
@@ -247,6 +371,10 @@ scripts/
   eval_protected_paths.py single source of truth for protected eval-defining paths
   check_protected_changes.py   CI guard: flags protected changes lacking approval
   check_skill_script_drift.py  CI guard: vendored skill scripts == canonical copy
+  _config.py              shared changed-file + strict-YAML-loader helpers (merge-gate seeding)
+  merge_gate_context.py   composes the merge-gate ChangeContext / seed (--confidence seam, F-042)
+  agent_confidence.py     deterministic agent-lane proxy confidence for seeding (F-042, no network)
+  migrations/             one-off reversible data migrations (agent_domain_backfill.py, F-044)
   fix_loop.py             auto-fix loop scaffolding (DESIGN-ONLY, disabled)
   run_all_e2e.ps1         one-command e2e/user-journey harness (all tiers -> artifacts/e2e-report/)
   e2e_shims/              sitecustomize.py: neutralizes the Windows platform-WMI hang for pytest
@@ -270,6 +398,8 @@ experiments/
                       harness as a dependency only; ships unsigned (probes gated behind human
                       sign-off). Not a package/skill; not in `make check-all`.
 
+openspec/            reversible OpenSpec coordination layer over features.yaml/ADRs (docs only)
+  changes/<id>/      in-flight change proposals (proposal/design/tasks/review + spec deltas)
 docs/
   c4_architecture.md  hand-maintained C4 diagrams (runtime/call semantics; the import-edge view is generated at the repo root)
   e2e-runbook.md      how to run and read the one-command e2e harness

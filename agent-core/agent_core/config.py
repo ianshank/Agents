@@ -54,6 +54,11 @@ class CalibrationConfig:
     mce_target: float = 0.12
     auroc_target: float = 0.80
     wilson_z: float = 1.96  # 95% interval by default
+    # Degeneracy guards for the ship gate. Defaults reproduce the pre-guard behaviour
+    # (any non-empty slice is scoreable, and an undefined AUROC cannot reject), so
+    # existing persisted configs migrate without a semantic change.
+    min_eval_samples: int = 1  # floor on slice size before a verdict means anything
+    require_discrimination: bool = False  # when True, a degenerate slice cannot pass
 
     def __post_init__(self) -> None:
         if self.n_bins < 1:
@@ -65,6 +70,10 @@ class CalibrationConfig:
             raise ConfigError("calibration.auroc_target must be in [0, 1]")
         if self.wilson_z <= 0:
             raise ConfigError("calibration.wilson_z must be > 0")
+        if self.min_eval_samples < 1:
+            raise ConfigError(
+                f"calibration.min_eval_samples must be >= 1 (got {self.min_eval_samples!r})"
+            )
 
 
 @dataclass(frozen=True)

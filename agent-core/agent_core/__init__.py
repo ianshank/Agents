@@ -59,6 +59,14 @@ from .persistence import (
     run_result_to_dict,
     save_run,
 )
+from .ppi import (
+    CorrelationConfig,
+    PPIConfig,
+    PPIEstimate,
+    effective_n_multiplier,
+    pearson_r,
+    ppi_plus_interval,
+)
 from .protocols import (
     AsyncCycleRunner,
     CostEstimator,
@@ -119,6 +127,7 @@ __all__ = [
     "CalibratorRegistry",
     "ConfigError",
     "ConvergenceCondition",
+    "CorrelationConfig",
     "CostEstimator",
     "CycleResult",
     "CycleRunner",
@@ -136,6 +145,8 @@ __all__ = [
     "LoopController",
     "MaxCyclesCondition",
     "NoProgressCondition",
+    "PPIConfig",
+    "PPIEstimate",
     "ParallelClaimRunner",
     "RecalibrationConfig",
     "RuleSanitizer",
@@ -160,6 +171,7 @@ __all__ = [
     "cycle_state_to_dict",
     "debug_span",
     "ece",
+    "effective_n_multiplier",
     "evaluate_calibration",
     "evaluate_on_split",
     "expected_calibration_error",
@@ -167,6 +179,8 @@ __all__ = [
     "load_run",
     "make_calibrator",
     "maximum_calibration_error",
+    "pearson_r",
+    "ppi_plus_interval",
     "reliability_bins",
     "run_result_from_dict",
     "run_result_to_dict",

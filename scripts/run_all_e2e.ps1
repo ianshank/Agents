@@ -288,8 +288,8 @@ Invoke-PytestStep 'A' 'suite:scripts-gate' `
 # TIER B - Functionality gates (offline, always)
 # ===========================================================================
 Write-Host "`n== Tier B: functionality gates (features.yaml) ==" -ForegroundColor Cyan
-# validate.py runs every done+fast feature's validation_command (all 36 are tier
-# fast); deferred features (e.g. F-036) are skipped by design.
+# validate.py runs every done+fast feature's validation_command (all done features
+# are tier fast); deferred features (e.g. F-036) are skipped by design.
 Invoke-CmdStep 'B' 'features:validate.py' @('scripts/validate.py', '-v') $RepoRoot -TimeoutSec 1800
 
 # ===========================================================================
@@ -415,6 +415,58 @@ $mgStore = Join-Path $Report 'merge_gate_store.jsonl'
 Invoke-CmdStep 'C' 'cli:merge_gate_ci' `
     @('-m', 'agent_core.merge_gate_ci', '--store', $mgStore, '--domain', 'human', '--raw-confidence', '0.9', '--mech-pass') `
     -PassCodes @(10, 20) -PassDetail 'decision'
+
+# C5b: agent-confidence seed path (F-042) — classify an agent change, then compose its seed
+# context. Exercises scripts/agent_confidence.py + merge_gate_context.py --confidence on the
+# host platform (Windows portability). Paths need not exist (classification is by path pattern +
+# head ref); config is read from the repo root (the default WorkDir). Both must exit 0.
+$acJson = Join-Path $Report 'agent_confidence.json'
+Invoke-CmdStep 'C' 'cli:agent_confidence (agent lane)' `
+    @('scripts/agent_confidence.py', '--files', 'src/eval_harness/x.py', 'tests/test_x.py',
+        '--lines-changed', '40', '--head-ref', 'claude/e2e-journey', '--output', $acJson)
+$agentSeedJson = Join-Path $Report 'agent_seed_context.json'
+Invoke-CmdStep 'C' 'cli:merge_gate_context (--confidence)' `
+    @('scripts/merge_gate_context.py', '--files', 'src/eval_harness/x.py', 'tests/test_x.py',
+        '--confidence', '0.5', '--output', $agentSeedJson)
+
+# C5c: agent-core read-only reporting CLIs over a seeded throwaway store. These never
+# write to the store and never influence a gate decision, so unlike C5 they must exit 0.
+# The store is built by the audit-sampler CLI so the journey also covers the propensity
+# round-trip (select --with-propensity -> record --selection-propensity).
+$reportStore = Join-Path $Report 'report_store.jsonl'
+Invoke-CmdStep 'C' 'cli:merge_seed (report store)' `
+    @('-m', 'agent_core.merge_seed', '--store', $reportStore, '--change-id', 'e2e0001',
+        '--domain', 'agent-core', '--raw-confidence', '0.7')
+Invoke-CmdStep 'C' 'cli:audit_sampler select --with-propensity' `
+    @('-m', 'agent_core.audit_sampler', '--store', $reportStore, 'select',
+        '--base-rate', '1.0', '--per-domain-floor', '0', '--with-propensity')
+Invoke-CmdStep 'C' 'cli:audit_sampler record --selection-propensity' `
+    @('-m', 'agent_core.audit_sampler', '--store', $reportStore, 'record',
+        '--change-id', 'e2e0001', '--correct', '--selection-propensity', '1.0')
+# Both estimators must render. `ppi++` is report-only: it never changes a gate decision,
+# and falls back to Wilson (saying so) whenever the proxy cannot support it.
+Invoke-CmdStep 'C' 'cli:calibration_report (wilson)' `
+    @('-m', 'agent_core.calibration_report', '--store', $reportStore, '--domain-filter', 'all')
+Invoke-CmdStep 'C' 'cli:calibration_report (--estimator ppi++)' `
+    @('-m', 'agent_core.calibration_report', '--store', $reportStore, '--domain-filter', 'all',
+        '--estimator', 'ppi++')
+$proxyJson = Join-Path $Report 'proxy_eval.json'
+Invoke-CmdStep 'C' 'cli:proxy_eval (json)' `
+    @('-m', 'agent_core.proxy_eval', '--store', $reportStore, '--domain-filter', 'all',
+        '--format', 'json', '--output', $proxyJson)
+# Records an outcome in ALL three cases. A missing artifact used to record nothing, so the
+# journey could pass while never validating the JSON it exists to produce; and a guard that
+# is invisible when it succeeds offers no evidence it ran at all.
+if ((Test-Path $proxyJson)) {
+    try {
+        Get-Content -Raw -Encoding UTF8 $proxyJson | ConvertFrom-Json | Out-Null
+        Add-Result 'C' 'cli:proxy_eval json-valid' 'PASS'
+    }
+    catch { Add-Result 'C' 'cli:proxy_eval json-valid' 'FAIL' 'proxy_eval.json is not valid JSON' }
+}
+else {
+    Add-Result 'C' 'cli:proxy_eval json-valid' 'FAIL' 'proxy_eval did not write proxy_eval.json'
+}
 
 # C6: skill-marketplace CLI journeys
 Invoke-CmdStep 'C' 'cli:skill_marketplace list' @('scripts/skill_marketplace.py', 'list')

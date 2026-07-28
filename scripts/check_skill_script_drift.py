@@ -62,6 +62,14 @@ def _find_all_vendored_copies(root: Path) -> dict[str, tuple[str, ...]]:
                     tracked[canonical_rel] = []
                 tracked[canonical_rel].append(skill_script.relative_to(root).as_posix())
                 
+    # Also include statically tracked non-skill duplicates
+    tracked["tests/test_public_surface.py"] = [
+        "agent-core/tests/test_public_surface.py",
+        "behavioral-regression/tests/test_public_surface.py",
+        "flow-corpus/tests/test_public_surface.py",
+        "flow-protocol/tests/test_public_surface.py",
+    ]
+                
     return {k: tuple(sorted(v)) for k, v in tracked.items()}
 
 
