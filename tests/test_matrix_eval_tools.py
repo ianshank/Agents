@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -464,7 +466,6 @@ class TestAutoevalsScorer:
             SCORERS.create("autoevals", {"name": "ae", "scorer": "NonExistentScorer"})
 
     def test_m6_error_missing_autoevals(self, monkeypatch) -> None:
-        import sys
 
         monkeypatch.setitem(sys.modules, "autoevals", None)
         with pytest.raises(RuntimeError, match="The 'autoevals' package is required"):
@@ -789,16 +790,9 @@ class TestM8Composability:
         assert result.aggregate["combo"].mean == 1.0
 
 
-
-
 # ============================================================================
 # NEW COMPONENT MATRIX TESTS (HARDENED)
 # ============================================================================
-
-from unittest.mock import patch, MagicMock
-import pytest
-import sys
-import json
 
 # Dynamic Test Data to replace hard-coded values
 MOCK_API_KEY = "test-api-key-12345"
@@ -814,6 +808,7 @@ MOCK_REGION = "us-west-2"
 # 1. JUDGES
 # ----------------------------------------------------------------------------
 
+
 class TestOpenAIJudge:
     def setup_class(self):
         pytest.importorskip("openai")
@@ -828,7 +823,7 @@ class TestOpenAIJudge:
         mock_chunk.choices[0].delta.reasoning_content = None
         mock_client.chat.completions.create.return_value = [mock_chunk]
 
-        with patch.dict('sys.modules', {'openai': mock_openai}):
+        with patch.dict("sys.modules", {"openai": mock_openai}):
             j = JUDGES.create("openai", {"model": MOCK_MODEL_ID_OPENAI, "api_key": MOCK_API_KEY})
             v = j.evaluate(MOCK_PROMPT)
             assert v.score == MOCK_SCORE
@@ -840,11 +835,11 @@ class TestOpenAIJudge:
         mock_openai.OpenAI.return_value = mock_client
         mock_chunk = MagicMock()
         mock_chunk.choices = [MagicMock()]
-        mock_chunk.choices[0].delta.content = 'invalid json {'
+        mock_chunk.choices[0].delta.content = "invalid json {"
         mock_chunk.choices[0].delta.reasoning_content = None
         mock_client.chat.completions.create.return_value = [mock_chunk]
 
-        with patch.dict('sys.modules', {'openai': mock_openai}):
+        with patch.dict("sys.modules", {"openai": mock_openai}):
             j = JUDGES.create("openai", {"model": MOCK_MODEL_ID_OPENAI, "api_key": MOCK_API_KEY})
             v = j.evaluate(MOCK_PROMPT)
             assert v.score == 0.0
@@ -852,6 +847,7 @@ class TestOpenAIJudge:
 
     def test_m6_error_rate_limit(self) -> None:
         import openai
+
         mock_openai = MagicMock()
         mock_client = MagicMock()
         mock_openai.OpenAI.return_value = mock_client
@@ -860,7 +856,7 @@ class TestOpenAIJudge:
         )
         mock_openai.RateLimitError = openai.RateLimitError
 
-        with patch.dict('sys.modules', {'openai': mock_openai}):
+        with patch.dict("sys.modules", {"openai": mock_openai}):
             j = JUDGES.create("openai", {"model": MOCK_MODEL_ID_OPENAI, "api_key": MOCK_API_KEY})
             with pytest.raises(openai.RateLimitError):
                 j.evaluate(MOCK_PROMPT)
@@ -881,7 +877,7 @@ class TestAnthropicJudge:
         mock_msg.content = [mock_block]
         mock_client.messages.create.return_value = mock_msg
 
-        with patch.dict('sys.modules', {'anthropic': mock_anthropic}):
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
             j = JUDGES.create("anthropic", {"model": MOCK_MODEL_ID_ANTHROPIC, "api_key": MOCK_API_KEY})
             v = j.evaluate(MOCK_PROMPT)
             assert v.score == MOCK_SCORE
@@ -889,15 +885,14 @@ class TestAnthropicJudge:
 
     def test_m6_error_api(self) -> None:
         import anthropic
+
         mock_anthropic = MagicMock()
         mock_client = MagicMock()
         mock_anthropic.Anthropic.return_value = mock_client
-        mock_client.messages.create.side_effect = anthropic.APIError(
-            "API error", request=MagicMock(), body=None
-        )
+        mock_client.messages.create.side_effect = anthropic.APIError("API error", request=MagicMock(), body=None)
         mock_anthropic.APIError = anthropic.APIError
 
-        with patch.dict('sys.modules', {'anthropic': mock_anthropic}):
+        with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
             j = JUDGES.create("anthropic", {"model": MOCK_MODEL_ID_ANTHROPIC, "api_key": MOCK_API_KEY})
             with pytest.raises(anthropic.APIError):
                 j.evaluate(MOCK_PROMPT)
@@ -911,16 +906,15 @@ class TestBedrockJudge:
         mock_boto3 = MagicMock()
         mock_client = MagicMock()
         mock_boto3.client.return_value = mock_client
-        
+
         import json
+
         inner_json = json.dumps({"score": MOCK_SCORE, "reasoning": MOCK_REASONING})
         payload = json.dumps({"content": [{"text": inner_json}]})
-        
-        mock_client.invoke_model.return_value = {
-            "body": MagicMock(read=lambda: payload.encode('utf-8'))
-        }
 
-        with patch.dict('sys.modules', {'boto3': mock_boto3}):
+        mock_client.invoke_model.return_value = {"body": MagicMock(read=lambda: payload.encode("utf-8"))}
+
+        with patch.dict("sys.modules", {"boto3": mock_boto3}):
             j = JUDGES.create("bedrock", {"model_id": MOCK_MODEL_ID_BEDROCK, "region": MOCK_REGION})
             v = j.evaluate(MOCK_PROMPT)
             assert v.score == MOCK_SCORE
@@ -937,17 +931,17 @@ class TestPhoenixEvalJudge:
         mock_evaluator_cls = MagicMock()
         mock_px.LLM = mock_llm
         mock_px.ClassificationEvaluator = mock_evaluator_cls
-        
+
         mock_evaluator = MagicMock()
         mock_evaluator_cls.return_value = mock_evaluator
-        
+
         mock_result = MagicMock()
         mock_result.label = "pass"
         mock_result.score = 1.0
         mock_result.explanation = "pass"
         mock_evaluator.evaluate.return_value = [mock_result]
-        
-        with patch.dict('sys.modules', {'phoenix.evals': mock_px}):
+
+        with patch.dict("sys.modules", {"phoenix.evals": mock_px}):
             j = JUDGES.create("phoenix_evals", {"model": MOCK_MODEL_ID_OPENAI})
             v = j.evaluate("some prompt")
             assert v.score == 1.0
@@ -958,12 +952,14 @@ class TestPhoenixEvalJudge:
 # 2. DATASETS
 # ----------------------------------------------------------------------------
 
+
 class TestParquetDataset:
     def setup_class(self):
         pytest.importorskip("pandas")
 
     def test_m1_correctness(self, tmp_path) -> None:
         import pandas as pd
+
         df = pd.DataFrame([{"id": "ds-1", "question": "q1", "expected": "a1"}])
         p = tmp_path / "test_data.parquet"
         df.to_parquet(p)
@@ -974,7 +970,7 @@ class TestParquetDataset:
 
     def test_m6_missing_file(self) -> None:
         ds = DATASETS.create("parquet", {"path": "invalid-path-123.parquet"})
-        with pytest.raises(Exception):
+        with pytest.raises(FileNotFoundError):
             list(ds.load())
 
 
@@ -988,10 +984,10 @@ class TestLangfuseDataset:
         mock_lf_mod.Langfuse.return_value = mock_client
         mock_item = {"id": "lf-1", "inputs": {"q": "test"}, "expected": "ans"}
         mock_client.get_dataset_items.return_value = [mock_item]
-        
-        with patch.dict('sys.modules', {'langfuse': mock_lf_mod}):
+
+        with patch.dict("sys.modules", {"langfuse": mock_lf_mod}):
             ds = DATASETS.create("langfuse", {"dataset_name": "test-langfuse-ds"})
-            ds.attach_client(mock_client)
+            ds.attach_client(mock_client)  # type: ignore[attr-defined]
             items = list(ds.load())
             assert len(items) == 1
             assert items[0].id == "lf-1"
@@ -1006,8 +1002,8 @@ class TestBraintrustDataset:
         mock_ds = MagicMock()
         mock_bt.init_dataset.return_value = mock_ds
         mock_ds.__iter__.return_value = [{"id": "bt-1", "input": {"q": "test"}, "expected": "ans"}]
-        
-        with patch.dict('sys.modules', {'braintrust': mock_bt}):
+
+        with patch.dict("sys.modules", {"braintrust": mock_bt}):
             ds = DATASETS.create("braintrust", {"name": "test-braintrust-ds"})
             items = list(ds.load())
             assert len(items) == 1
@@ -1018,6 +1014,7 @@ class TestBraintrustDataset:
 # 3. TARGETS
 # ----------------------------------------------------------------------------
 
+
 class TestCallableTarget:
     def test_m1_correctness(self) -> None:
         t = TARGETS.create("callable", {"path": "json:dumps"})
@@ -1027,7 +1024,7 @@ class TestCallableTarget:
 
     def test_m6_error(self) -> None:
         t = TARGETS.create("callable", {"path": "nonexistent.module_xyz:func_abc"})
-        with pytest.raises(Exception):
+        with pytest.raises(ImportError):
             t.run(ITEM_NORMAL)
 
 
@@ -1039,12 +1036,10 @@ class TestModelTarget:
         mock_chunk.choices[0].delta.content = "mock answer"
         mock_client.chat.completions.create.return_value = [mock_chunk]
 
-        t = TARGETS.create("model", {
-            "model": MOCK_MODEL_ID_OPENAI, 
-            "provider": "openai", 
-            "client": mock_client,
-            "prompt_template": "{q}"
-        })
+        t = TARGETS.create(
+            "model",
+            {"model": MOCK_MODEL_ID_OPENAI, "provider": "openai", "client": mock_client, "prompt_template": "{q}"},
+        )
         out = t.run(ITEM_NORMAL)
         assert out.output == "mock answer"
 
@@ -1052,6 +1047,7 @@ class TestModelTarget:
 # ----------------------------------------------------------------------------
 # 4. SINKS
 # ----------------------------------------------------------------------------
+
 
 class TestLangfuseSink:
     def setup_class(self):
@@ -1061,9 +1057,9 @@ class TestLangfuseSink:
         mock_lf_mod = MagicMock()
         mock_client = MagicMock()
         mock_lf_mod.Langfuse.return_value = mock_client
-        with patch.dict('sys.modules', {'langfuse': mock_lf_mod}):
+        with patch.dict("sys.modules", {"langfuse": mock_lf_mod}):
             s = SINKS.create("langfuse", {})
-            s.attach_client(mock_client)
+            s.attach_client(mock_client)  # type: ignore[attr-defined]
             s.emit(_make_run_result())
             mock_client.flush.assert_called()
 
@@ -1074,7 +1070,7 @@ class TestPhoenixSink:
 
     def test_m1_correctness(self) -> None:
         mock_px = MagicMock()
-        with patch.dict('sys.modules', {'phoenix': mock_px}):
+        with patch.dict("sys.modules", {"phoenix": mock_px}):
             s = SINKS.create("phoenix", {})
             s.emit(_make_run_result())
             # If it doesn't crash, we're good
@@ -1088,9 +1084,8 @@ class TestBraintrustSink:
         mock_bt = MagicMock()
         mock_logger = MagicMock()
         mock_bt.init_logger.return_value = mock_logger
-        with patch.dict('sys.modules', {'braintrust': mock_bt}):
+        with patch.dict("sys.modules", {"braintrust": mock_bt}):
             s = SINKS.create("braintrust", {})
             s.emit(_make_run_result())
-            s.close()
+            s.close()  # type: ignore[attr-defined]
             mock_logger.flush.assert_called()
-

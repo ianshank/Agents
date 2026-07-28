@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lists it as future work). Snyk is now described accurately as a documented manual step.
 
 ### Fixed
+- **Hardened matrix eval tools test suite.** Refactored `tests/test_matrix_eval_tools.py` to completely eliminate hard-coded return values and fragile `try...except pass` swallows in the evaluation plugin tests (Judges, Datasets, Scorers, Sinks). Replaced them with robust, dependency-injected mocks leveraging `patch.dict('sys.modules')` for true offline regression coverage regardless of local environment state.
 - **`.gitignore`'s blanket `*.html` silently dropped deliverables.** Committed sample reports
   and HTML golden fixtures under `docs/samples/`, `tests/fixtures/`, and
   `agent-core/tests/fixtures/` are now tracked; previously they would have passed locally and

@@ -2,6 +2,7 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Hardened matrix eval tools test suite** — eliminated fragile `try...except pass` swallows and hard-coded mocks in `tests/test_matrix_eval_tools.py`, replacing them with full offline dependency injection.
 - [x] **Reasoning & Planning Skills** — added three composable reasoning skills to the marketplace (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`).
 - [x] **Dynamic drift guard script tech-debt resolution** — resolved tech debt in the dynamic drift guard scripts.
 - [x] **Proxy-correlation measurement, PPI++ report estimator & audit propensity (F-047,

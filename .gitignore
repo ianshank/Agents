@@ -57,6 +57,7 @@ desktop.ini
 artifacts/
 out/
 results/
+pytest_out.txt
 regression_report.json
 .regression_gate_junit.xml
 *.html

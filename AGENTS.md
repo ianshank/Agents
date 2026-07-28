@@ -132,6 +132,7 @@ Test the "SDK absent" path via `sys.modules` injection, not `@patch(...)` — se
 ## Testing conventions
 
 - Every scorer, judge, sink, and dataset registers itself via `@REGISTRY.register("name")`. Tests should exercise the registered name path, not the class constructor path — that's how the real engine resolves them.
+- All evaluation components (Judges, Datasets, Scorers, Sinks) that interact with external dependencies must be fully mocked for offline testing using deterministic dependency injection as seen in `tests/test_matrix_eval_tools.py`. Do not use hardcoded `try...except` exception swallows or brittle magic mock returns.
 - Pytest markers: `integration` (live API tests, skipped by default), `slow` (>5s). Filter with `-m "not integration"` for the offline suite; only `test_phoenix_live.py` currently carries the `integration` marker for live-collector tests.
 - Hypothesis: run with `HYPOTHESIS_PROFILE=ci` when reproducing CI behaviour locally (matches `agent-core-ci.yml`).
 - Do NOT patch `os.environ.clear()` — replace with `monkeypatch.delenv` for surgical env manipulation. See `CHANGELOG.md` note under [1.2.0-dev] `Testing`.

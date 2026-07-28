@@ -39,7 +39,7 @@ broken** without an ADR:
 |---|-----------|-------------|
 | 1 | Dependency direction: `core` → `scorers/judges/datasets` → `sinks` | Import linter |
 | 2 | No raw `print()` in production paths | Lint rule (ruff) |
-| 3 | External API calls mocked in tests | Structural test |
+| 3 | External API calls mocked in tests | Full offline deterministic matrix coverage (`test_matrix_eval_tools.py`) |
 | 4 | All judges registered via `JUDGES` registry | Plugin pattern |
 
 ---

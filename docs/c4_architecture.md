@@ -56,7 +56,7 @@ C4Container
         Container(plugins, "Plugin Loader (plugins)", "Python", "Central registries (SCORERS, JUDGES, ...) — built-in self-registration + entry-point discovery via the eval_harness.plugins group (src/eval_harness/plugins.py)")
     }
 
-    Container_Boundary(components, "Pluggable Components") {
+    Container_Boundary(components, "Pluggable Components (Tested completely offline via deterministic mocks)") {
         Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, weighted, llm_judge, autoevals")
         Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible), anthropic, phoenix_evals")
         Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust")
