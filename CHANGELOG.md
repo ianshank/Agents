@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Reasoning & Planning Skills (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`):** added three composable reasoning skills to the marketplace for performing controlled hierarchical research, generating production-grade OpenSpec packages, and objectively peer-reviewing them. Validated purely structurally with no evaluation-defining paths modified. Configurable via documented defaults.
 - **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
   self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
   evidence for the eval-backend displacement decision by validating the claimed capabilities
@@ -30,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quality-gate (196 tests, ≥95% branch coverage, mypy `--strict`).
 
 ### Changed
+- **Dynamic drift guard script tech-debt resolution:** resolved tech debt in the dynamic drift guard scripts to improve maintainability and performance.
 - **CI gate delegation — phase-2 POC (ADR 0021):** `eval-harness-ci.yml` no longer duplicates the
   ruff/format/mypy/pytest steps inline — it delegates to the generated root gate through a new reusable
   composite action `.github/actions/run-quality-gate` (sets up Python, installs the package, runs

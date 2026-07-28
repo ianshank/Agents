@@ -34,20 +34,35 @@ from _cli import configure_logging
 
 logger = logging.getLogger(__name__)
 
-# Tracked duplications: canonical path -> the vendored skill copies, all relative to the
-# repo root. Add an entry here whenever a script is intentionally copied into a skill.
-# Keeping this declarative makes the guard reusable for any future duplicated tooling.
-TRACKED_DUPLICATES: dict[str, tuple[str, ...]] = {
-    "scripts/validate_skill.py": (
-        "skills/openai-judge/scripts/validate_skill.py",
-        "skills/architecture-drift-guard/scripts/validate_skill.py",
-        "skills/eval-corpus-forge/scripts/validate_skill.py",
-        "skills/model-bench/scripts/validate_skill.py",
-        "skills/project-setup/scripts/validate_skill.py",
-        "skills/quality-gate/scripts/validate_skill.py",
-        "skills/deploy/scripts/validate_skill.py",
-    ),
-}
+def _repo_root() -> Path:
+    """Return the repo root (parent of the ``scripts/`` directory holding this file)."""
+    return Path(__file__).resolve().parent.parent
+
+def _find_all_vendored_copies(root: Path) -> dict[str, tuple[str, ...]]:
+    """Dynamically find all canonical scripts in scripts/ that have vendored copies in skills/."""
+    canonical_dir = root / "scripts"
+    skill_dir = root / "skills"
+    tracked: dict[str, list[str]] = {}
+    
+    if not canonical_dir.is_dir() or not skill_dir.is_dir():
+        return {}
+        
+    for canonical_script in canonical_dir.iterdir():
+        if not canonical_script.is_file() or canonical_script.suffix != ".py":
+            continue
+            
+        canonical_rel = f"scripts/{canonical_script.name}"
+        
+        for skill in skill_dir.iterdir():
+            if not skill.is_dir():
+                continue
+            skill_script = skill / "scripts" / canonical_script.name
+            if skill_script.is_file():
+                if canonical_rel not in tracked:
+                    tracked[canonical_rel] = []
+                tracked[canonical_rel].append(skill_script.relative_to(root).as_posix())
+                
+    return {k: tuple(sorted(v)) for k, v in tracked.items()}
 
 
 @dataclass(frozen=True)
@@ -63,9 +78,7 @@ class DriftResult:
         return self.status == "ok"
 
 
-def _repo_root() -> Path:
-    """Return the repo root (parent of the ``scripts/`` directory holding this file)."""
-    return Path(__file__).resolve().parent.parent
+
 
 
 def _sha256(path: Path) -> str:
@@ -82,14 +95,14 @@ def check_drift(
 
     Args:
         tracked: Mapping of canonical path -> vendored copy paths (repo-relative).
-            Defaults to :data:`TRACKED_DUPLICATES` (resolved at call time).
+            Defaults to dynamically discovered vendored copies in skills/.
         root: Repo root to resolve paths against; defaults to this file's repo root.
 
     Returns:
         One :class:`DriftResult` per canonical/copy pair, in declaration order.
     """
-    tracked = TRACKED_DUPLICATES if tracked is None else tracked
     base = root if root is not None else _repo_root()
+    tracked = _find_all_vendored_copies(base) if tracked is None else tracked
     results: list[DriftResult] = []
     for canonical_rel, copies in tracked.items():
         canonical_path = base / canonical_rel

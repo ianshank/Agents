@@ -83,3 +83,7 @@ context.json
 context_human.json
 seed_context.json
 changed_files.z
+
+# Reasoning agent runtime artifacts
+*.openspec.md
+*_peer_review.md

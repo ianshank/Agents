@@ -261,6 +261,7 @@ skills/
   project-setup/            deterministic Makefile generator (from detected toolchain)
   quality-gate/             deterministic lint+type+test+coverage gate-script generator
   deploy/                   safety-railed deployment-script generator (dry-run/confirm/rollback)
+  reasoning-skills/         composable reasoning skills (hierarchical-recursive-brainstorm, openspec-quality-plan, openspec-peer-review)
 
 experiments/
   backend-validation/ isolated, temporary experiment (eval-backend-validation_v1): validates
