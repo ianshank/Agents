@@ -34,9 +34,11 @@ from _cli import configure_logging
 
 logger = logging.getLogger(__name__)
 
+
 def _repo_root() -> Path:
     """Return the repo root (parent of the ``scripts/`` directory holding this file)."""
     return Path(__file__).resolve().parent.parent
+
 
 # Tracked duplications: canonical path -> the vendored skill copies, all relative to the
 # repo root. Add an entry here whenever a script is intentionally copied into a skill.
@@ -66,6 +68,7 @@ TRACKED_DUPLICATES: dict[str, tuple[str, ...]] = {
         "flow-protocol/tests/test_public_surface.py",
     ),
 }
+
 
 def _find_all_vendored_copies(root: Path) -> dict[str, tuple[str, ...]]:
     """Dynamically find all canonical scripts in scripts/ that have vendored copies in skills/."""
@@ -107,9 +110,6 @@ class DriftResult:
     @property
     def ok(self) -> bool:
         return self.status == "ok"
-
-
-
 
 
 def _sha256(path: Path) -> str:

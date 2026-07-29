@@ -104,6 +104,7 @@ def test_main_reports_no_tracked(monkeypatch: pytest.MonkeyPatch, capsys: pytest
     assert drift.main([]) == 0
     assert "no duplicated scripts tracked" in capsys.readouterr().out
 
+
 def test_find_all_vendored_copies(tmp_path: Path) -> None:
     _write(tmp_path, "scripts/script1.py", "x = 1")
     _write(tmp_path, "scripts/script2.py", "y = 2")

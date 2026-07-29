@@ -210,6 +210,7 @@ skill; regenerate with the `# regenerate:` command in its header):
 ```bash
 ./scripts/quality-gate.sh all        # lint + format-check + 3 per-path mypy runs
                                      # + pytest --cov=eval_harness (>=96)
+                                     # + full offline matrix test suite (test_matrix_eval_tools.py)
                                      # + the F-031 scripts-coverage gate (hand extension)
 make check                           # same thing, via the generated Makefile
 make check-all                       # root gate + every sibling package's own gate
