@@ -963,7 +963,7 @@ class TestParquetDataset:
         df = pd.DataFrame([{"id": "ds-1", "question": "q1", "expected": "a1"}])
         p = tmp_path / "test_data.parquet"
         df.to_parquet(p)
-        ds = DATASETS.create("parquet", {"path": str(p), "input_columns": ["question"]})
+        ds = DATASETS.create("parquet", {"path": p.as_posix(), "input_columns": ["question"]})
         items = list(ds.load())
         assert len(items) == 1
         assert items[0].id == "ds-1"
