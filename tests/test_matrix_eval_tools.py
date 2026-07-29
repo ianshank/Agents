@@ -795,7 +795,7 @@ class TestM8Composability:
 # ============================================================================
 
 # Dynamic Test Data to replace hard-coded values
-MOCK_API_KEY = "test-api-key-12345"
+MOCK_API_KEY = "test-key"  # gitleaks:allow
 MOCK_MODEL_ID_OPENAI = "gpt-4-turbo"
 MOCK_MODEL_ID_ANTHROPIC = "claude-3-opus"
 MOCK_MODEL_ID_BEDROCK = "anthropic.claude-v2"
