@@ -845,3 +845,21 @@ features:
     validation_command: "python scripts/validations/F_048.py"
     depends_on: []
     notes: "Salvaged by rebase from the stranded origin/feat/F-038-gitleaks (155 behind / 2 ahead; 5 conflicts, not the bulk reversion a two-dot diff suggests). That branch collided on BOTH ids it tried -- its F-038 is taken by the BrainTrust integration and its ADR 0020 by deterministic-generator-skills, after it had already renumbered around an 0019 collision -- which is the same ID-reservation drift openspec/project.md:34 forbids. Claimed at land as F-048; F-040 is NOT free (origin/feat/F-040-soak-stats holds it in flight). Peer review and the rewritten change are in openspec/changes/add-measurement-harness-wedge/."
+
+  - id: "F-040"
+    epic: "Quality Gate"
+    name: "Merge-gate soak-stats (store_sync.soak_progress + stats --soak-target)"
+    description: "Adds a pure agent_core.store_sync.soak_progress(records, target) summary over raw outcome records: total/pending/labeled, the HUMAN_AUDIT count (the only label source that feeds tau/health, called out separately), per-domain cold-start flags keyed on AuditConfig.per_domain_floor (a config field, not a literal), n-vs-target with shortfall, merge velocity (records/day across the merged_at span; None under two dated records or a sub-day span), and days-to-target (None at zero/None velocity). The stats CLI gains an opt-in --soak-target N that adds a reserved _soak block to the JSON; without the flag the bare-stats output is byte-identical. No new module, no TCB edit, no store mutation (property-tested), no SCHEMA_VERSION bump."
+    category: "non-functional"
+    priority: "medium"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "agent_core.store_sync.soak_progress is a pure read over already-parsed OutcomeRecords: it never mutates its input (hypothesis property test) and touches no git or TCB state"
+      - "per-domain cold-start flags use AuditConfig.per_domain_floor (the audit sampler's config field), not a hardcoded floor; velocity is None for <2 dated records or a span under one day; days_to_target is None at zero/None velocity"
+      - "stats CLI --soak-target adds a reserved '_soak' block (no domain-name collision, matching the _unparsed convention); absent the flag, the stats JSON is byte-identical to the prior contract"
+      - "store.py stays at 100% branch coverage under the agent-core 95 floor; ruff (incl. C901<15) + ruff format + strict mypy clean; store_sync stays under the 500-line file budget"
+    validation_command: "python scripts/validations/F_040.py"
+    implemented_in: "0f19ecaa81639f8afbf66fcad54869186b02f5c4"
+    depends_on: ["F-032"]
+    notes: "Extends the existing store_sync package (F-032 / ADR 0018): soak_progress lives beside store_stats in store.py, the CLI flag beside the stats subparser. Soak enablement itself stays time-gated (N>=20 + >=1 human verdict + weekly audits per ADR 0005) — this feature only makes progress observable. F-036 (real-transcript corpus bridge) remains deferred."

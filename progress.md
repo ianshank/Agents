@@ -29,6 +29,36 @@
 - All suite coverage floors met
 
 ---
+## Session 012 — 2026-07-07
+
+### Features
+- F-040 (merge-gate soak-stats): pure `store_sync.soak_progress(records, target)` + opt-in
+  `stats --soak-target` reserved `_soak` block; status todo → done
+
+### Changes (F-040)
+- agent-core `store_sync/store.py`: new pure `soak_progress` (total/pending/labeled, HUMAN_AUDIT
+  count, per-domain cold-start via `AuditConfig.per_domain_floor`, n-vs-target, velocity/day over
+  the `merged_at` span, days-to-target) + `_velocity_per_day`/`_parse_ts` helpers. No TCB edit, no
+  store mutation, no new module.
+- agent-core `store_sync/__init__.py`: `--soak-target N` on the `stats` subparser adds a reserved
+  `_soak` block (matches the `_unparsed` convention); an `_emit_stats` helper keeps `main()` under
+  the complexity budget; bare-stats output byte-identical (default-off).
+- `scripts/validations/F_040.py` (offline structural gate, reuses `_common`); `features.yaml` F-040
+  entry (depends_on F-032). Coverage floors unchanged (agent-core 95).
+
+### Validation evidence
+- `python scripts/validations/F_040.py` exits 0 (offline)
+- store_sync soak/stats tests pass; `store.py` 100% branch coverage; ruff (incl. C901<15) + ruff
+  format + strict mypy clean (61 source files); default `stats` JSON byte-identical without the flag
+- Pre-existing/unrelated: 4 real-git push tests in `test_store_sync.py` fail in this sandbox
+  (local bare-remote push rejected), not touched by F-040
+
+### Next
+- Soak stays time-gated (N>=20 + >=1 human verdict + weekly audits, ADR 0005); F-040 only makes
+  progress observable. Remaining near-term plan items: `src/eval_harness/py.typed` fix; Phase 0
+  credential scrub + gitleaks (F-038)
+
+---
 ## Session 011 — 2026-06-30
 
 ### Features

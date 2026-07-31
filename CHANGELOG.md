@@ -43,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asserting the value reaches argparse as a single token.
 
 ### Added
+- **Merge-gate soak-stats (F-040)**: `agent_core.store_sync.soak_progress(records, target)` — a
+  pure, read-only summary (total/pending/labeled, HUMAN_AUDIT count, per-domain cold-start keyed on
+  `AuditConfig.per_domain_floor`, n-vs-target, merge velocity/day, days-to-target) — plus an opt-in
+  `store_sync stats --soak-target N` that adds a reserved `_soak` block. Default `stats` output is
+  byte-identical; no store mutation (property-tested), no TCB change, no schema bump. Soak
+  enablement stays time-gated (ADR 0005); this only makes progress observable.
 - **Reasoning & Planning Skills (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`):** added three composable reasoning skills to the marketplace for performing controlled hierarchical research, generating production-grade OpenSpec packages, and objectively peer-reviewing them. Validated purely structurally with no evaluation-defining paths modified. Configurable via documented defaults.
 - **A single-sourced propensity contract.** `is_valid_propensity` / `format_propensity`
   replace three independent restatements of `0.0 < p <= 1.0`, which had already drifted
@@ -304,7 +310,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicit entries for all four; locked in by new parametrized cases in
   `tests/test_protected_paths.py` and asserted by F-039's validator.
 
->>>>>>> origin/main
 - **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
   self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
   evidence for the eval-backend displacement decision by validating the claimed capabilities
@@ -346,7 +351,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `make -C <pkg> check` run end-to-end for all 4 packages, matching the coverage numbers
   their own CI reports (agent-core 98.67%, flow-protocol/flow-corpus/behavioral-regression
   100%, all ≥ their 95% floors).
->>>>>>> origin/main
+
 - **CI gate delegation — phase-2 POC (ADR 0021):** `eval-harness-ci.yml` no longer duplicates the
   ruff/format/mypy/pytest steps inline — it delegates to the generated root gate through a new reusable
   composite action `.github/actions/run-quality-gate` (sets up Python, installs the package, runs
