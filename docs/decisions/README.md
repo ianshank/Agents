@@ -44,3 +44,5 @@ changes course is a *new* ADR that supersedes the old one, not an edit.
 | [0024](0024-assertion-graders-registry.md) | Assertion graders registry and skill-validation alignment |
 | [0025](0025-outcome-record-forward-compatibility.md) | Outcome-record forward compatibility: unknown fields are not corruption |
 | [0026](0026-proxy-correlation-and-ppi-estimator.md) | Proxy-correlation measurement, the PPI++ report estimator, and audit-selection propensity |
+| [0027](0027-no-history-rewrite.md) | No git-history rewrite for the leaked Langfuse keys |
+| [0028](0028-claude-foundation-staging.md) | `claude-foundation` staging directory is the sanctioned interim state |

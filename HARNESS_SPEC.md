@@ -1,46 +1,68 @@
-# HARNESS_SPEC.md — langfuse-eval-harness
+# HARNESS_SPEC.md — root `eval_harness` package feature/validation process
 
-> **Canonical source of truth** for the spec-driven development harness.
-> Every feature, validation gate, and progress checkpoint lives here or in the
-> files this spec references.
+> **Canonical source of truth for the feature/validation process** described
+> below (the `features.yaml` registry, the `F_XXX.py` validation-script
+> contract, ADR conventions, progress tracking). For repo-wide scope, the
+> 5-package mission, and the CI-enforced invariants, the charter at
+> [docs/CHARTER.md](docs/CHARTER.md) is canonical — this spec describes how
+> the root `eval_harness` package applies that process day to day, not the
+> other packages' scope or invariants.
 
 ---
 
 ## 1. Executive Intent
 
-**langfuse-eval-harness** is a dynamic, modular, backwards-compatible enterprise LLM evaluation harness with first-class Langfuse integration. It provides a pluggable architecture for scoring LLM outputs across multiple judge backends (AWS Bedrock, OpenAI-compatible, local models), datasets, and evaluation rubrics — with full traceability piped into Langfuse for observability, analytics, and regression tracking.
+**langfuse-eval-harness** (root `eval_harness`, one of five packages in this
+monorepo — see [docs/CHARTER.md](docs/CHARTER.md) §2 for the full mission and
+the other four: `agent-core`, `behavioral-regression`, `flow-corpus`,
+`flow-protocol`) is the LLM evaluation harness itself: a pluggable engine for
+scoring LLM outputs across multiple judge backends (AWS Bedrock,
+OpenAI-compatible, Anthropic), datasets, and evaluation rubrics, with
+first-class Langfuse and Phoenix integration for observability, analytics, and
+regression tracking.
 
-The harness is designed to be local-first, test-driven, and extensible: new judges, scorers, and data sources slot in via registry patterns without touching core orchestration code.
+The harness is offline-first, test-driven, and extensible: new judges,
+scorers, sinks, datasets, and targets slot in via registry patterns without
+touching core orchestration code.
 
 ---
 
 ## 2. Scope
 
+This section describes the root `eval_harness` package specifically. For the
+repo-wide scope (all 5 packages) and the ratified, additive scope amendments,
+see [docs/CHARTER.md](docs/CHARTER.md) §3.
+
 ### In-scope
 - LLM-as-judge evaluation pipelines (multi-provider)
-- Langfuse trace/score/dataset integration
-- Pluggable scorer and judge registries
+- Langfuse and Phoenix trace/score/dataset integration (SDK-optional seams)
+- Pluggable scorer, judge, sink, dataset, and target registries
 - Automated validation of every feature via harness scripts
 - Config-driven evaluation runs (YAML/env)
 - CLI and programmatic API
 
 ### Non-goals
-- Cloud deployment (local-first)
-- Mobile frontend
+See [docs/CHARTER.md](docs/CHARTER.md) §3 for the full, current list (not a
+training/fine-tuning pipeline, gates never run live evaluations, no
+permissive config parsing, the offline suite depends on nothing external,
+and more) — that list is charter-governed and the canonical one.
 
 ---
 
 ## 3. Architectural Invariants
 
-These rules are enforced by lint, test, or validation scripts and **must never be
-broken** without an ADR:
+The 7 CI-enforced, repo-wide invariants are defined in
+[docs/CHARTER.md](docs/CHARTER.md) §4 (open/closed extensibility via
+registries, versioned/backward-compatible config, Protocol-based DI, narrow
+I/O seams, config-driven values, non-negotiable quality gates, no secrets).
+This package applies them via the specific mechanisms below:
 
-| # | Invariant | Enforcement |
-|---|-----------|-------------|
-| 1 | Dependency direction: `core` → `scorers/judges/datasets` → `sinks` | Import linter |
-| 2 | No raw `print()` in production paths | Lint rule (ruff) |
-| 3 | External API calls mocked in tests | Full offline deterministic matrix coverage (`test_matrix_eval_tools.py`) |
-| 4 | All judges registered via `JUDGES` registry | Plugin pattern |
+| Charter invariant | How `eval_harness` enforces it |
+|---|-----------|
+| Open/closed extensibility | Judges, scorers, sinks, datasets, and targets register via `eval_harness.plugins`' `SCORERS`/`JUDGES`/`SINKS`/`DATASETS`/`TARGETS` registries — never by editing the engine |
+| No raw `print()` in production paths | Lint rule (ruff) |
+| External API calls mocked in tests | Full offline deterministic matrix coverage (`tests/test_matrix_eval_tools.py`) |
+| Dependency-direction discipline | `architecture.yaml` + `skills/architecture-drift-guard` (grimp-based import-graph diff, CI-enforced) |
 
 ---
 
@@ -194,43 +216,44 @@ Each ADR contains:
 
 ## 9. Repository Structure
 
+The root `eval_harness` package's own layout (the piece this spec's
+feature/validation process governs). This monorepo has 4 sibling packages
+alongside it — `agent-core/`, `behavioral-regression/`, `flow-corpus/`,
+`flow-protocol/` — plus `claude-foundation/` and top-level `docs/`, `skills/`,
+`scripts/`; see [docs/CHARTER.md](docs/CHARTER.md) §2 and the repo root for
+those:
+
 ```
-langfuse-eval-harness/
-├── HARNESS_SPEC.md              # This file
-├── features.yaml                # Feature registry
+Agents/                          # repo root
+├── HARNESS_SPEC.md              # This file (eval_harness feature/validation process)
+├── docs/CHARTER.md              # Canonical: mission, scope, invariants (all 5 packages)
+├── features.yaml                # Feature registry (eval_harness)
 ├── features.schema.json         # JSON Schema for features.yaml
 ├── progress.md                  # Append-only session log
 ├── progress-archive/            # Rotated progress logs
 │   └── .gitkeep
 ├── docs/
-│   ├── decisions/               # ADRs
-│   │   ├── 0001-openai-compatible-judge.md
-│   │   ├── 0002-skill-framework.md
-│   │   └── 0003-langfuse-integration.md
-│   ├── SKILL_TEMPLATE.md        # Reference template for skills
+│   ├── decisions/                # ADRs (0001 onward — see the index there)
+│   ├── SKILL_TEMPLATE.md         # Reference template for skills
 │   └── SKILL_VALIDATION_TEMPLATE.md # Reference validator details
 ├── config/                      # Evaluation configs (YAML)
 ├── src/
-│   └── langfuse_eval_harness/   # Main package
-│       ├── core/                # Orchestration, registry
-│       ├── judges/              # Judge implementations
-│       ├── scorers/             # Scoring functions
-│       ├── datasets/            # Dataset loaders (inline, jsonl, csv, parquet, langfuse, braintrust)
-│       ├── langfuse_client/     # Langfuse integration (SDK-optional seam)
-│       ├── phoenix_client/      # Arize Phoenix integration (SDK-optional seam)
-│       ├── braintrust_client/   # BrainTrust integration (SDK-optional seam)
-│       └── sinks/               # Output sinks (console, json, html, langfuse, phoenix, braintrust)
+│   └── eval_harness/            # Root package
+│       ├── core/                 # Orchestration, registry, interfaces
+│       ├── judges/               # Judge implementations
+│       ├── scorers/              # Scoring functions
+│       ├── datasets/             # Dataset loaders (inline, jsonl, csv, parquet, langfuse, braintrust)
+│       ├── targets/              # System-under-test adapters (echo, callable, model-backed)
+│       ├── langfuse_client/      # Langfuse integration (SDK-optional seam)
+│       ├── phoenix_client/       # Arize Phoenix integration (SDK-optional seam)
+│       ├── braintrust_client/    # BrainTrust integration (SDK-optional seam)
+│       └── sinks/                # Output sinks (console, json, html, langfuse, phoenix, braintrust)
 ├── scripts/
 │   ├── validate.py              # Harness validation runner
 │   ├── validate_skill.py        # Skill validator runner
-│   └── validations/             # Per-feature validation scripts
-│       ├── F_001.py
-│       ├── F_002.py
-│       ├── F_003.py
-│       ├── F_004.py
-│       └── F_005.py
-├── skills/                      # Registered skill modules
-│   └── openai-judge/            # OpenAI LLM judge skill
+│   ├── validations/             # Per-feature validation scripts (F_001.py onward)
+│   └── check_*.py               # Quality gates (charter drift/invariants, size budget, protected paths, ...)
+├── skills/                      # Registered skill modules (marketplace.yaml)
 ├── tests/                       # pytest test suite
 ├── examples/                    # Usage examples
 ├── pyproject.toml               # Project metadata and deps
@@ -307,12 +330,16 @@ python scripts/validate_skill.py --skill skills/openai-judge --tier structural,b
 ```
 
 ### Langfuse Tracing & Credentials
-By default, the harness instruments all runs with `@observe()` decorators and links dataset run items. When run without the `--offline` flag, it defaults to using the following cloud environment credentials if not overridden:
-- `LANGFUSE_SECRET_KEY`: `<REDACTED — rotated, see incident record>`
-- `LANGFUSE_PUBLIC_KEY`: `<REDACTED — rotated, see incident record>`
-- `LANGFUSE_BASE_URL`: `https://us.cloud.langfuse.com`
-
-When the `langfuse` library is not installed, tracing gracefully falls back to a no-op mode without interrupting harness execution.
+When Langfuse tracing is enabled, the harness instruments runs with
+`@observe()` decorators and links dataset run items. Per charter §4 invariant
+7, credentials are sourced from environment variables only, with no hardcoded
+default values anywhere in source — see [.env.example](.env.example) for the
+canonical set (`LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`,
+`LANGFUSE_BASE_URL`, the last defaulting to the public
+`https://us.cloud.langfuse.com` endpoint, which is not a secret). When the
+`langfuse` library is not installed, or the secret/public keys are unset,
+tracing gracefully falls back to a no-op mode without interrupting harness
+execution.
 
 ---
 

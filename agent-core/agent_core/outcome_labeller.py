@@ -21,11 +21,12 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Protocol, runtime_checkable
 
 from .detectors import GitHubChecksFailureAttributor, GitRevertDetector, resolve_repo
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from .protocols import Clock, SystemClock
 from .timeutil import parse_iso8601
 
 
@@ -44,19 +45,19 @@ class LabellerConfig:
     maturity_days: int = 7  # window after merge before TIMEOUT_CLEAN may be assigned
 
 
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 def label_matured(
     store: OutcomeStore,
     reverts: RevertDetector,
     failures: FailureAttributor,
     cfg: LabellerConfig,
-    now: datetime | None = None,
+    clock: Clock | None = None,
 ) -> list[OutcomeRecord]:
-    """Emit passive labels for unlabelled, matured changes. Returns new records."""
-    now = now or _now()
+    """Emit passive labels for unlabelled, matured changes. Returns new records.
+
+    ``clock`` is the DI seam for "now" (see :class:`agent_core.protocols.Clock`);
+    tests inject a :class:`~agent_core.protocols.FixedClock` for determinism.
+    """
+    now = (clock or SystemClock()).now()
     resolved = store.resolved()
     emitted: list[OutcomeRecord] = []
     for change_id, rec in resolved.items():

@@ -10,6 +10,7 @@ add or swap an implementation, never edit the loop.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -17,6 +18,34 @@ if TYPE_CHECKING:  # avoid runtime import cycle; restores static typing
     from .config import FrameworkConfig
 
 ClaimId = str
+
+
+@runtime_checkable
+class Clock(Protocol):
+    """The DI seam for "now." Consolidates the ad hoc ``now: datetime | None``
+    parameters previously scattered across audit_sampler/merge_seed/outcome_labeller/
+    merge_gate_ci into one structural seam, per the charter's Protocol-based-DI
+    invariant."""
+
+    def now(self) -> datetime: ...
+
+
+class SystemClock:
+    """Default ``Clock``, backed by the real wall clock (UTC)."""
+
+    def now(self) -> datetime:
+        return datetime.now(timezone.utc)
+
+
+@dataclass(frozen=True)
+class FixedClock:
+    """Test double: always returns the same instant. Injected in place of
+    ``SystemClock`` so time-dependent logic stays deterministic under test."""
+
+    instant: datetime
+
+    def now(self) -> datetime:
+        return self.instant
 
 
 @dataclass(frozen=True)

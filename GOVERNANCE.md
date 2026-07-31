@@ -31,8 +31,11 @@ drift-checked by `scripts/check_charter_drift.py`.
   decision, and its consequences. ADR numbers are not contiguous by design (the
   `0007` gap is intentional).
 - **User-visible changes** are recorded in the relevant `CHANGELOG.md`.
-- **Roadmap / intent** lives in `NEXT_STEPS.md`; the canonical spec is
-  `HARNESS_SPEC.md`.
+- **Roadmap / intent** lives in `NEXT_STEPS.md`; the canonical spec for the
+  root `eval_harness` package's feature/validation process (the `features.yaml`
+  registry, `F_XXX.py` validation contract, ADR conventions) is
+  `HARNESS_SPEC.md` — for repo-wide scope, mission, and invariants across all
+  5 packages, the charter above remains canonical.
 
 ## Protected evaluation surface
 

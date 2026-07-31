@@ -69,7 +69,7 @@ def test_select_excludes_already_audited(tmp_path):
 
 def test_record_verdict_writes_human_audit(tmp_path):
     store = _store(tmp_path, _pending("c1"))
-    rec = record_verdict(store, "c1", correct=False, now=None)
+    rec = record_verdict(store, "c1", correct=False, clock=None)
     assert rec.label is False and rec.label_source == LabelSource.HUMAN_AUDIT.value
     assert store.resolved()["c1"].label_source == LabelSource.HUMAN_AUDIT.value
 

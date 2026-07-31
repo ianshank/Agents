@@ -19,10 +19,10 @@ import math
 import random
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 from .logging_util import get_logger
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from .protocols import Clock, SystemClock
 
 logger = get_logger(__name__)
 
@@ -193,7 +193,7 @@ def record_verdict(
     store: OutcomeStore,
     change_id: str,
     correct: bool,
-    now: datetime | None = None,
+    clock: Clock | None = None,
     *,
     selection_propensity: float | None = None,
 ) -> OutcomeRecord:
@@ -204,12 +204,15 @@ def record_verdict(
     later be reweighted. It is validated here rather than on ``OutcomeRecord`` because
     that record is a deliberately dumb, load-tolerant holder (ADR 0025) — this is the
     write boundary, and a propensity we cannot interpret must not enter the store.
+
+    ``clock`` is the DI seam for "now" (see :class:`agent_core.protocols.Clock`);
+    tests inject a :class:`~agent_core.protocols.FixedClock` for determinism.
     """
     if not is_valid_propensity(selection_propensity):
         raise ValueError(
             f"selection_propensity must be a finite number in (0, 1] (got {selection_propensity!r})"
         )
-    now = now or datetime.now(timezone.utc)
+    now = (clock or SystemClock()).now()
     src = store.resolved().get(change_id)
     if src is None:
         raise KeyError(f"unknown change_id: {change_id}")

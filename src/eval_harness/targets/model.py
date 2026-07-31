@@ -25,6 +25,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from ..core.interfaces import TargetRunner
 from ..core.types import EvalItem, TargetOutput
 from ..plugins import TARGETS
@@ -32,6 +34,37 @@ from ..plugins import TARGETS
 # Default system prompt is intentionally empty for a *target* — unlike a judge we
 # do not coerce a JSON shape; the model answers the user prompt as-is.
 _PROVIDERS = ("openai", "bedrock", "anthropic")
+
+
+class ModelTargetConfig(BaseModel):
+    """Single source of truth for :class:`ModelTarget`'s operational defaults
+    (charter §4 invariant 5: every operational value is a ``*Config`` field with
+    a documented default, never a bare literal at the call site).
+
+    Declared here rather than in ``eval_harness.config.models``: the architecture
+    manifest keeps the ``targets`` component dependent on ``core``/``plugins``
+    only (see this module's docstring), so a typed config that ``targets`` owns
+    stays local rather than crossing into ``config``.
+    """
+
+    max_tokens: int = Field(default=1024, gt=0, description="Max tokens in the model's completion.")
+    max_retries: int = Field(
+        default=5, ge=0, description="Retry attempts on a rate-limit error (openai provider only)."
+    )
+    retry_min_seconds: float = Field(
+        default=2.0, gt=0, description="Minimum exponential-backoff wait between retries, in seconds."
+    )
+    retry_max_seconds: float = Field(
+        default=30.0, gt=0, description="Maximum exponential-backoff wait between retries, in seconds."
+    )
+    temperature: float | None = Field(
+        default=0.0, description="Sampling temperature; omitted entirely if None (some models reject it)."
+    )
+    top_p: float = Field(default=1.0, gt=0, le=1.0, description="Nucleus sampling parameter.")
+    prompt_template: str = Field(default="{prompt}", description="str.format template rendered over item.inputs.")
+
+
+_DEFAULTS = ModelTargetConfig()
 
 
 @TARGETS.register("model", aliases=("llm",))
@@ -64,15 +97,15 @@ class ModelTarget(TargetRunner):
         base_url: str | None = None,
         api_key: str | None = None,
         region: str | None = None,
-        prompt_template: str = "{prompt}",
+        prompt_template: str = _DEFAULTS.prompt_template,
         system: str | None = None,
-        max_tokens: int = 1024,
-        temperature: float | None = 0.0,
-        top_p: float = 1.0,
+        max_tokens: int = _DEFAULTS.max_tokens,
+        temperature: float | None = _DEFAULTS.temperature,
+        top_p: float = _DEFAULTS.top_p,
         extra_body: dict[str, Any] | None = None,
-        max_retries: int = 5,
-        retry_min_seconds: float = 2.0,
-        retry_max_seconds: float = 30.0,
+        max_retries: int = _DEFAULTS.max_retries,
+        retry_min_seconds: float = _DEFAULTS.retry_min_seconds,
+        retry_max_seconds: float = _DEFAULTS.retry_max_seconds,
         client: Any | None = None,
     ) -> None:
         if provider not in _PROVIDERS:
