@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lists it as future work). Snyk is now described accurately as a documented manual step.
 
 ### Fixed
+- **`quality-gates.yml`'s `pull_request` trigger dropped its `paths:` filter.** The three jobs
+  (`feature-validate + regression-gate`, `protected-path guard`, `secret scan (gitleaks)`) are
+  the intended branch-protection required checks, and a required check that never runs on a
+  given PR (because its diff didn't match the old filter list) sits "Waiting for status"
+  forever — the PR becomes permanently un-mergeable with no way to satisfy it short of an
+  admin override. The `push` trigger keeps its filter unchanged; only PR-time behavior
+  changes. Prerequisite for actually enabling branch protection (`main` has none today).
 - **Hardened matrix eval tools test suite.** Refactored `tests/test_matrix_eval_tools.py` to completely eliminate hard-coded return values and fragile `try...except pass` swallows in the evaluation plugin tests (Judges, Datasets, Scorers, Sinks). Replaced them with robust, dependency-injected mocks leveraging `patch.dict('sys.modules')` for true offline regression coverage regardless of local environment state.
 - **`.gitignore`'s blanket `*.html` silently dropped deliverables.** Committed sample reports
   and HTML golden fixtures under `docs/samples/`, `tests/fixtures/`, and

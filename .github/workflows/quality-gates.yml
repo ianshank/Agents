@@ -20,18 +20,15 @@ on:
   pull_request:
     # 'labeled'/'unlabeled' so adding the eval-change-approved label re-runs the
     # protected-path guard and clears the check (default types don't fire on labels).
+    #
+    # Deliberately NO `paths:` filter here (unlike the push trigger above), even though
+    # every job's real work is scoped to the same surface. These three jobs are GitHub
+    # branch-protection required checks: a required check that never runs on a given PR
+    # (because its diff didn't match a paths filter) sits "Expected — Waiting for status
+    # to be reported" forever and blocks merge with no way to satisfy it short of an admin
+    # override. A docs-only or README-only PR costs this workflow a few idle minutes; that
+    # is cheap next to a permanently un-mergeable PR.
     types: [opened, synchronize, reopened, labeled, unlabeled]
-    paths:
-      - "features.yaml"
-      - "scripts/validations/**"
-      - "scripts/**"
-      - "src/**"
-      - "tests/**"
-      - "pyproject.toml"
-      # See the push filter above: `.github/**` is protected, so workflow/action edits must
-      # run the guard and the validators rather than bypassing both.
-      - ".github/workflows/**"
-      - ".github/actions/**"
   workflow_dispatch:
 
 permissions:

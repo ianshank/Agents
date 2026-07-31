@@ -245,7 +245,34 @@
   `merge_gate_ci`) with real git/GitHub outcome detectors (`detectors.py`); ADR 0005.
   Auto-merges nothing unless `ENABLE_CALIBRATED_AUTOMERGE` is set.
 - [ ] **Make gates required** — add `quality-gates` jobs to branch-protection required
-  checks once they have soaked.
+  checks. Prerequisite landed: the `pull_request` trigger's `paths:` filter is removed (all
+  three jobs now run on every PR; a required check that never runs on a given PR sits
+  "Waiting for status" forever and blocks merge with no way to satisfy it). Apply the rule
+  only *after* that change reaches `main` — not before, or any in-flight PR whose diff
+  didn't match the old filter list gets stranded the same way:
+  ```
+  gh api -X PUT repos/ianshank/Agents/branches/main/protection --input - <<'JSON'
+  {
+    "required_status_checks": {
+      "strict": true,
+      "contexts": [
+        "feature-validate + regression-gate",
+        "protected-path guard",
+        "secret scan (gitleaks)"
+      ]
+    },
+    "enforce_admins": true,
+    "required_pull_request_reviews": null,
+    "restrictions": null
+  }
+  JSON
+  ```
+  Escape hatch if a required check ever breaks CI-wide (Actions outage, a yanked gitleaks
+  release): `gh api -X DELETE repos/ianshank/Agents/branches/main/protection/enforce_admins`.
+  Residual gap even once applied: the per-package CIs (`agent-core-ci` etc.) stay
+  path-filtered and can't be required the same way — a red package suite won't mechanically
+  block a merge; keep reading them by hand. `strict: true` means every merge to `main` forces
+  the next open PR to update its branch before it can merge — accepted, not a bug.
 - [ ] **Enable auto-fix loop** — only after the ADR 0004 human checklist is complete.
 - [x] **Seed merge-gate records (F-010 seam)** — `agent_core/merge_seed.py` writes the initial
   pending `OutcomeRecord` (`change_id` / `domain` / `raw_confidence` / `merged_at`) at merge
