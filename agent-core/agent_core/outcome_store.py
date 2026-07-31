@@ -327,7 +327,10 @@ def build_domain_models(store: OutcomeStore, cfg: GatePolicyConfig) -> dict[str,
         ev_auroc = auroc(ev_raw, ev_outcomes) if both_classes else 0.5
 
         health = CalibratorHealth(
-            n=len(recs),
+            # The fold the metrics beside it were actually measured on. Floor the
+            # gating field, not the flattering one.
+            n=len(eval_recs),
+            n_total=len(recs),
             ece=expected_calibration_error(ev_cal, ev_outcomes, cfg.n_bins),
             auroc=ev_auroc,
             # Group by RAW-score bin INDEX, not by the discrete calibrated value, so

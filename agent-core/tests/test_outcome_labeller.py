@@ -99,3 +99,29 @@ def test_main_offline_yields_timeout_clean(tmp_path):
     rc = main(["--store", str(store.path), "--maturity-days", "7", "--repo-dir", str(tmp_path)])
     assert rc == 0
     assert any(r.label_source == LabelSource.TIMEOUT_CLEAN.value for r in store.all())
+
+
+def test_revert_wins_over_ci_failure_when_both_fire(tmp_path):
+    """Pins the precedence order, which no test previously exercised.
+
+    Each branch was tested in isolation, so the if/elif could be reordered -- making a
+    reverted change record CI_FAILURE instead of REVERT -- with the suite still green.
+    Both signals firing at once is the common real case: a change that broke CI and was
+    then reverted. REVERT is the more specific and more reliable evidence, so it wins.
+    """
+    store = _store(tmp_path, _pending("c1", "2026-05-01T00:00:00+00:00"))
+    out = label_matured(store, _Reverts({"c1"}), _Failures({"c1"}), CFG, clock=CLOCK)
+    assert len(out) == 1
+    assert out[0].label_source == LabelSource.REVERT.value
+    assert out[0].label is False
+
+
+def test_revert_wins_over_maturity_timeout(tmp_path):
+    """A matured change that was also reverted must not be labelled TIMEOUT_CLEAN.
+
+    TIMEOUT_CLEAN is a deliberately WEAK optimistic positive; letting it outrank hard
+    negative evidence would feed the calibrator a label that is simply wrong.
+    """
+    store = _store(tmp_path, _pending("c1", "2026-05-01T00:00:00+00:00"))  # >7 days old
+    out = label_matured(store, _Reverts({"c1"}), _Failures(set()), CFG, clock=CLOCK)
+    assert out[0].label_source == LabelSource.REVERT.value

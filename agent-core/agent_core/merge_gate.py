@@ -140,6 +140,10 @@ class GatePolicyConfig:
 
 @dataclass(frozen=True)
 class CalibratorHealth:
+    # Held-out records the metrics below were measured on -- this is what
+    # ``min_calibration_n`` floors. NOT the domain's total audit count: ``n`` used to be
+    # ``len(recs)`` (both folds) while ece/auroc/bin_ci_width were eval-fold only, so a
+    # 200-record floor was satisfied by ~100 records of actual evidence.
     n: int
     ece: float
     auroc: float
@@ -149,6 +153,9 @@ class CalibratorHealth:
     # bitten by twice, and ``inf`` would conflate "not measured" with "measured as
     # maximally wide". ``None`` is checked by mypy at every use site.
     bin_ci_width: float | None
+    # The domain's total audit count across both folds. Diagnostics only -- it gates
+    # nothing. Defaulted so existing constructions keep working.
+    n_total: int | None = None
 
     def is_trustworthy(self, cfg: GatePolicyConfig) -> bool:
         return (

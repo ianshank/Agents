@@ -240,7 +240,10 @@ def test_build_models_healthy_domain_gets_tau(tmp_path):
     models = build_domain_models(store, CFG)
     assert "core" in models
     m = models["core"]
-    assert m.health.n == 1000
+    # `n` is the HELD-OUT count -- the fold the metrics beside it were measured on --
+    # not the domain total. Stated as the contract rather than the hash-derived number.
+    assert m.health.n == len([i for i in range(1000) if _fold(f"c{i}") == 1])
+    assert m.health.n_total == 1000
     assert m.health.is_trustworthy(CFG)
     assert m.tau is not None
 
@@ -250,7 +253,8 @@ def test_build_models_thin_domain_has_no_tau(tmp_path):
     for i in range(5):
         store.append(_rec(f"u{i}", "ui", 0.9, True, LabelSource.HUMAN_AUDIT))
     m = build_domain_models(store, CFG)["ui"]
-    assert m.health.n == 5
+    assert m.health.n == len([i for i in range(5) if _fold(f"u{i}") == 1])
+    assert m.health.n_total == 5
     assert m.tau is None  # untrustworthy => not eligible
 
 
@@ -474,3 +478,43 @@ def test_unmeasurable_region_blocks_a_domain_that_looks_perfect(tmp_path):
     assert m.health.bin_ci_width is None
     assert not m.health.is_trustworthy(CFG)
     assert m.tau is None
+
+
+def test_health_and_tau_are_measured_on_the_held_out_fold(tmp_path):
+    """Pins the docstring's central promise: "the risk threshold is not overfit".
+
+    Previously unpinned. The healthy-domain test used perfectly separable data drawn
+    identically in both folds, so swapping ``eval_recs`` for ``fit_recs`` -- i.e. fitting
+    and scoring the calibrator on the same records -- passed green. The contract had no
+    test at all.
+
+    Here the two folds disagree by construction. The fit fold is cleanly separable; the
+    held-out fold carries the SAME scores with ANTI-correlated labels. Measured held-out,
+    the calibrator is exposed and cannot earn a tau. Measured on the fit fold it would look
+    flawless. Three distinct mutants die here:
+
+      * ``eval_recs -> fit_recs``  : health would be perfect and tau non-None
+      * ``fit_recs -> eval_recs``  : the calibrator would predict the anti-correlated table
+      * ``n -> len(recs)``         : n would be the both-fold total
+    """
+    store = OutcomeStore(tmp_path / "s.jsonl")
+    fit_ids = _ids_for_fold(0, 400, "ff")
+    eval_ids = _ids_for_fold(1, 400, "ee")
+    for n, cid in enumerate(fit_ids):  # high => correct, low => incorrect
+        store.append(
+            _rec(cid, "core", 0.95 if n % 2 else 0.05, n % 2 == 1, LabelSource.HUMAN_AUDIT)
+        )
+    for n, cid in enumerate(eval_ids):  # same scores, labels inverted
+        store.append(
+            _rec(cid, "core", 0.95 if n % 2 else 0.05, n % 2 == 0, LabelSource.HUMAN_AUDIT)
+        )
+
+    m = build_domain_models(store, CFG)["core"]
+
+    # The calibrator came from the FIT fold: high confidence still maps to high accuracy.
+    assert m.calibrator.predict(0.95) == 1.0
+    # But health was measured HELD-OUT, where that calibrator is wrong every time.
+    assert not m.health.is_trustworthy(CFG)
+    assert m.tau is None
+    assert m.health.n == len(eval_ids)
+    assert m.health.n_total == len(fit_ids) + len(eval_ids)

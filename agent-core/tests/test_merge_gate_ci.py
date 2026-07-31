@@ -11,7 +11,7 @@ import pytest
 from agent_core import merge_gate_ci
 from agent_core.merge_gate import ChangeContext, GateDecision, GatePolicyConfig
 from agent_core.merge_gate_ci import main, run
-from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore, _fold
 from agent_core.protocols import FixedClock
 
 CFG = GatePolicyConfig()
@@ -72,10 +72,17 @@ def test_run_auto_merge_on_healthy_high_confidence(tmp_path):
 def test_run_bin_conflation_avoided(tmp_path):
     # A lone audit in a different high bin (0.85) must not piggyback on the
     # well-populated 0.96 bin: grouping by bin index keeps it thin -> ESCALATE.
+    #
+    # The change_id is pinned to fold 0 deliberately. With a fold-1 id this test passed
+    # for the wrong reason: the lone record landed in the HELD-OUT fold, made the domain
+    # untrustworthy, and escalated at the health layer -- never reaching the Wilson floor
+    # it exists to exercise. Fold 0 puts it in the calibrator but not in the health
+    # measurement, so the escalation must come from the thin operating bin.
     store = _healthy_store(tmp_path / "s.jsonl")
+    assert _fold("lone0") == 0, "this test requires the lone record in the FIT fold"
     store.append(
         OutcomeRecord(
-            change_id="lone",
+            change_id="lone0",
             domain="core",
             raw_confidence=0.85,
             merged_at="2026-01-01T00:00:00+00:00",
@@ -84,8 +91,10 @@ def test_run_bin_conflation_avoided(tmp_path):
             labeled_at="2026-01-02T00:00:00+00:00",
         )
     )
-    d, _ = run(_ctx(raw_confidence=0.85), store, CFG)
+    d, why = run(_ctx(raw_confidence=0.85), store, CFG)
     assert d == GateDecision.ESCALATE
+    # Prove it reached the Wilson floor rather than short-circuiting at health.
+    assert "healthy=True" in why and "bin=1/1" in why
 
 
 def test_main_exit_codes_via_argv(tmp_path):
