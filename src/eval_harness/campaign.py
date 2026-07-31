@@ -108,14 +108,24 @@ def pass_counts(result: RunResult, score: str) -> tuple[int, int]:
     return successes, n
 
 
-def _run_arm(config: EvalConfig, arm: ModelSpec, *, langfuse_client: LangfuseClient | None) -> RunResult:
+def _run_arm(
+    config: EvalConfig,
+    arm: ModelSpec,
+    *,
+    langfuse_client: LangfuseClient | None = None,
+    opik_client: Any | None = None,
+) -> RunResult:
     from .engine import EvalEngine
 
     per_run = config.run.model_copy(update={"name": f"{config.run.name}::{arm.name}", "run_id": None})
     per_model = config.model_copy(
         update={"target": arm.target, "run": per_run, "comparison": None, "ab_campaign": None}
     )
-    result: RunResult = EvalEngine.from_config(per_model, langfuse_client=langfuse_client).run()
+    result: RunResult = EvalEngine.from_config(
+        per_model,
+        langfuse_client=langfuse_client,
+        opik_client=opik_client,
+    ).run()
     return result
 
 
@@ -125,6 +135,7 @@ def record_run(
     ab: ABCampaignConfig | None = None,
     *,
     langfuse_client: LangfuseClient | None = None,
+    opik_client: Any | None = None,
     now: datetime | None = None,
 ) -> list[CampaignRecord]:
     """Run both arms once and append a per-arm count record. Returns the new records."""
@@ -134,7 +145,7 @@ def record_run(
     ts = (now or datetime.now(timezone.utc)).isoformat()
     records: list[CampaignRecord] = []
     for arm in (spec.arm_a, spec.arm_b):
-        result = _run_arm(config, arm, langfuse_client=langfuse_client)
+        result = _run_arm(config, arm, langfuse_client=langfuse_client, opik_client=opik_client)
         successes, n = pass_counts(result, spec.score)
         rec = CampaignRecord(
             campaign_id=spec.campaign_id,

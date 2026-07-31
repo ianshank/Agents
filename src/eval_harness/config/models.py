@@ -262,6 +262,26 @@ class PhoenixConfig(BaseModel):
     batch: bool = True
 
 
+class OpikConfig(BaseModel):
+    """Opik Comet observability configuration.
+
+    Controls Opik tracing, dataset fetching, and evaluation feedback score logging.
+    Hidden behind a narrow, SDK-optional seam (SDKOpikClient). When ``enabled=False``
+    (the default), nothing is imported and no network calls are made.
+    """
+
+    enabled: bool = False
+    project_name: str = Field(
+        default="eval-harness",
+        description="Opik project name for traces and experiments.",
+    )
+    workspace: str | None = Field(
+        default=None,
+        description="Opik workspace. If None, reads from OPIK_WORKSPACE environment variable.",
+    )
+    track_targets: bool = True
+
+
 class EvalConfig(BaseModel):
     schema_version: str
     run: RunSettings = Field(default_factory=RunSettings)
@@ -276,6 +296,7 @@ class EvalConfig(BaseModel):
     comparison: ComparisonConfig | None = None
     ab_campaign: ABCampaignConfig | None = None
     phoenix: PhoenixConfig | None = None
+    opik: OpikConfig | None = None
 
     @field_validator("schema_version")
     @classmethod

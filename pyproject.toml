@@ -47,6 +47,7 @@ braintrust = ["braintrust>=0.27,<1"]
 # — this extra IS installed in the offline test job (see eval-harness-ci.yml) for real
 # coverage of the bridge's happy path. Pinned <1 (pre-1.0).
 autoevals = ["autoevals>=0.3,<1"]
+opik = ["opik>=1.0.0", "dspy-ai>=2.5.0"]
 # ruff/mypy are pinned (not `>=`) so local and CI format/lint identically — unpinned
 # ruff drifted (0.8.0 local vs 0.15.20 CI) and broke `ruff format --check`. Same
 # reproducibility rationale as the grimp==3.14 pin above. Bump deliberately, in lockstep.
@@ -74,6 +75,7 @@ testpaths = ["tests"]
 markers = [
     "integration: live API tests",
     "slow: tests taking >5s",
+    "opik: tests requiring Opik SDK and credentials",
 ]
 
 [tool.ruff]

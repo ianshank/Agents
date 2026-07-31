@@ -12,6 +12,7 @@ from ..core._serialize import as_text as _as_text
 from ..core.interfaces import ResultSink
 from ..core.types import RunResult
 from ..langfuse_client import LangfuseClient
+from ..opik_client import NullOpikClient as NullOpikClientImpl, OpikClient, build_client as build_opik_client
 from ..phoenix_client import PhoenixScoreClient, build_score_client
 from ..plugins import SINKS
 
@@ -273,3 +274,48 @@ class BrainTrustSink(ResultSink):
             logger.debug("BrainTrust sink no-op; %d item(s) not exported", len(run.items))
         else:
             logger.info("BrainTrust sink: exported %d item(s) to experiment %s", len(run.items), run.run_id)
+
+
+@SINKS.register("opik")
+class OpikSink(ResultSink):
+    """Exports each eval item and scores to Opik Cloud / Comet via OpikClient.
+
+    Additive and reversible: like ``BrainTrustSink`` it self-constructs its own narrow client
+    (a no-op unless ``enabled`` *and* the ``opik`` SDK is installed).
+    """
+
+    def __init__(
+        self,
+        enabled: bool = True,
+        project_name: str = "eval-harness",
+        min_value_to_log: float | None = None,
+    ):
+        self.enabled = enabled
+        self.project_name = project_name
+        self.min_value_to_log = min_value_to_log
+        self._client: OpikClient = NullOpikClientImpl()
+
+    def emit(self, run: RunResult) -> None:
+        self._client = build_opik_client(
+            enabled=self.enabled,
+            project_name=self.project_name,
+        )
+        for ir in run.items:
+            scores = {
+                s.name: s.value for s in ir.scores if self.min_value_to_log is None or s.value >= self.min_value_to_log
+            }
+            self._client.log_item(
+                run_id=run.run_id,
+                item_id=ir.item.id,
+                input=ir.item.inputs,
+                output=ir.output.output,
+                expected=ir.item.expected,
+                scores=scores,
+                metadata={"config_name": run.config_name},
+            )
+        self._client.flush()
+        if isinstance(self._client, NullOpikClientImpl):
+            logger.debug("Opik sink no-op; %d item(s) not exported", len(run.items))
+        else:
+            logger.info("Opik sink: exported %d item(s) to project %s", len(run.items), self.project_name)
+

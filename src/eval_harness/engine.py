@@ -7,6 +7,12 @@ injectable so runs are fully deterministic under test.
 
 from __future__ import annotations
 
+try:
+    import opik as _opik  # Opik observability — additive, never required
+except ImportError:  # pragma: no cover
+    _opik = None  # type: ignore[assignment]
+
+
 import logging
 import random
 import statistics
@@ -17,7 +23,7 @@ from datetime import datetime, timezone
 from importlib import import_module
 from typing import Any, cast
 
-from .config.models import EvalConfig
+from .config.models import ComponentSpec, EvalConfig
 from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
 from .core.types import (
     EvalItem,
@@ -76,6 +82,7 @@ class EvalEngine:
         self.rng = rng or random.Random(config.run.seed)
         self.clock = clock
         self.langfuse_client: LangfuseClient | None = None
+        self.opik_client: Any | None = None
 
     @classmethod
     def from_config(
@@ -83,11 +90,12 @@ class EvalEngine:
         config: EvalConfig,
         *,
         langfuse_client: LangfuseClient | None = None,
+        opik_client: Any | None = None,
     ) -> EvalEngine:
         """Build an engine from a validated ``EvalConfig``.
 
         Bootstraps the plugin registry, instantiates every component by its
-        registered ``type`` name, and optionally wires a Langfuse client into
+        registered ``type`` name, and optionally wires Langfuse/Opik clients into
         client-aware components.
         """
         bootstrap()
@@ -97,9 +105,7 @@ class EvalEngine:
         judge = None
         if config.judge is not None:
             judge_params = config.judge.params
-            # F-026: resolve the judge system prompt from Langfuse (or YAML fallback)
-            # and inject it as the judge's `system` param. Additive — absent
-            # judge_prompt leaves params untouched.
+            # F-026: resolve the judge system prompt from Langfuse/Opik (or YAML fallback)
             judge_prompt = getattr(config, "judge_prompt", None)
             if judge_prompt is not None:
                 from .prompts import resolve_prompt
@@ -108,16 +114,36 @@ class EvalEngine:
                 if resolved is not None:
                     judge_params = {**judge_params, "system": resolved}
             judge = JUDGES.create(config.judge.type, judge_params)
-        sinks = [SINKS.create(s.type, s.params) for s in config.sinks]
 
-        # Inject the Langfuse client into any client-aware component.
-        if langfuse_client is not None:
-            for component in [dataset, judge, *sinks]:
-                if component is not None and hasattr(component, "attach_client"):
-                    component.attach_client(langfuse_client)
+        # Automatically instantiate OpikSink if config.opik is enabled and not in sinks list
+        sink_specs = list(config.sinks)
+        if getattr(config, "opik", None) and config.opik.enabled:
+            if not any(s.type == "opik" for s in sink_specs):
+                sink_specs.append(
+                    ComponentSpec(
+                        type="opik",
+                        params={"enabled": True, "project_name": config.opik.project_name},
+                    )
+                )
 
-        # Wrap the judge with a cost cap when enabled (F-022). Imported lazily so
-        # the offline path never pulls in agent_core unless budgeting is on.
+        sinks = [SINKS.create(s.type, s.params) for s in sink_specs]
+
+        # Auto-build Opik client if enabled in config and not passed in
+        if opik_client is None and getattr(config, "opik", None) and config.opik.enabled:
+            from .opik_client import build_client as build_opik_client
+            opik_client = build_opik_client(enabled=True, project_name=config.opik.project_name)
+
+        # Inject clients into any client-aware component.
+        for client_obj in (langfuse_client, opik_client):
+            if client_obj is not None:
+                for component in [dataset, judge, *sinks]:
+                    if component is not None and hasattr(component, "attach_client"):
+                        try:
+                            component.attach_client(client_obj)
+                        except Exception:
+                            pass
+
+        # Wrap the judge with a cost cap when enabled (F-022).
         judge_budget = getattr(config, "judge_budget", None)
         if judge is not None and judge_budget is not None and judge_budget.enabled:
             adapter = import_module("eval_harness.agent_core_adapter")
@@ -135,6 +161,7 @@ class EvalEngine:
             judge=judge,
         )
         engine.langfuse_client = langfuse_client
+        engine.opik_client = opik_client
         return engine
 
     def _sample(self, items: list[EvalItem]) -> list[EvalItem]:
@@ -166,7 +193,7 @@ class EvalEngine:
                 if self.config.run.fail_fast:
                     raise
 
-        # Link trace to dataset item if client is available
+        # Link trace to dataset item if langfuse client is available
         client = getattr(self, "langfuse_client", None)
         if client is not None:
             trace_id = langfuse_context.get_current_trace_id()
@@ -177,6 +204,20 @@ class EvalEngine:
                     trace_id=trace_id,
                     run_name=run_name,
                 )
+
+        # Deep item tracing for Opik client if available
+        opik_cli = getattr(self, "opik_client", None)
+        if opik_cli is not None and hasattr(opik_cli, "log_item"):
+            score_dict = {s.name: s.value for s in scores}
+            opik_cli.log_item(
+                run_id=self.config.run.run_id or self.config.run.name,
+                item_id=item.id,
+                input=item.inputs,
+                output=output.output,
+                expected=item.expected,
+                scores=score_dict,
+                metadata={"dataset": self.config.dataset.type},
+            )
 
         return ItemResult(item=item, output=output, scores=scores)
 
@@ -266,7 +307,7 @@ class EvalEngine:
         return [result for _, result in collected]
 
     @observe()
-    def run(self) -> RunResult:
+    def run(self) -> RunResult:  # noqa: C901 — orchestration entry point
         """Execute the full evaluation pipeline.
 
         When ``max_workers == 1``, items are processed sequentially (identical
@@ -311,4 +352,10 @@ class EvalEngine:
         )
         for sink in self.sinks:
             sink.emit(run)
+        # Flush Opik traces so nothing is lost on script exit
+        if _opik is not None:
+            try:
+                _opik.flush_tracker()
+            except Exception as e:
+                logger.warning("Opik flush failed: %s", e)
         return run
