@@ -9,13 +9,15 @@ import pytest
 from agent_core.audit_sampler import record_verdict
 from agent_core.merge_seed import already_seeded, main, seed_pending
 from agent_core.outcome_store import LabelSource, OutcomeStore
+from agent_core.protocols import FixedClock
 
 FIXED = datetime(2026, 6, 30, 12, 0, 0, tzinfo=timezone.utc)
+CLOCK = FixedClock(FIXED)
 
 
 def test_seed_pending_writes_pending_record(tmp_path):
     store = OutcomeStore(tmp_path / "s.jsonl")
-    rec = seed_pending(store, "c1", "core", 0.91, now=FIXED)
+    rec = seed_pending(store, "c1", "core", 0.91, clock=CLOCK)
     assert rec is not None
     assert rec.change_id == "c1"
     assert rec.domain == "core"
@@ -30,8 +32,8 @@ def test_seed_pending_writes_pending_record(tmp_path):
 
 def test_seed_pending_is_idempotent(tmp_path):
     store = OutcomeStore(tmp_path / "s.jsonl")
-    first = seed_pending(store, "c1", "core", 0.91, now=FIXED)
-    second = seed_pending(store, "c1", "core", 0.91, now=FIXED)
+    first = seed_pending(store, "c1", "core", 0.91, clock=CLOCK)
+    second = seed_pending(store, "c1", "core", 0.91, clock=CLOCK)
     assert first is not None
     assert second is None  # already seeded -> no-op
     assert len(store.all()) == 1
@@ -40,7 +42,7 @@ def test_seed_pending_is_idempotent(tmp_path):
 def test_already_seeded_predicate(tmp_path):
     store = OutcomeStore(tmp_path / "s.jsonl")
     assert already_seeded(store, "c1") is False
-    seed_pending(store, "c1", "core", 0.5, now=FIXED)
+    seed_pending(store, "c1", "core", 0.5, clock=CLOCK)
     assert already_seeded(store, "c1") is True
     assert already_seeded(store, "other") is False
 
@@ -75,8 +77,8 @@ def test_seeded_record_is_resolvable_by_audit_sampler(tmp_path):
     with pytest.raises(KeyError):
         record_verdict(store, "c1", correct=True)
 
-    seed_pending(store, "c1", "core", 0.91, now=FIXED)
-    rec = record_verdict(store, "c1", correct=True, now=FIXED)
+    seed_pending(store, "c1", "core", 0.91, clock=CLOCK)
+    rec = record_verdict(store, "c1", correct=True, clock=CLOCK)
     assert rec.label is True
     assert rec.label_source == LabelSource.HUMAN_AUDIT.value
     # resolved() now yields the authoritative audit record

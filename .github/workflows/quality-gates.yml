@@ -111,6 +111,13 @@ jobs:
       # gate signal, mirroring the sibling guards above).
       - name: Charter drift guard
         run: python scripts/check_charter_drift.py
+      # Charter-invariants guard: re-checks the charter's claims (package roles, zero-dep
+      # agent-core, SCHEMA_VERSION single-sourcing, coverage floors, Protocol-based DI,
+      # default-off flags, ...) against the actual code — a mechanical superset of the
+      # link-only drift guard above, added after docs/CHARTER_ALIGNMENT_AUDIT.md found
+      # drift that check_charter_drift.py could not have caught.
+      - name: Charter invariants guard
+        run: python scripts/check_charter_invariants.py
       # Coverage gate for the quality-gate tooling itself (separate from the library's
       # eval_harness coverage, since scripts/ is omitted from that config).
       - name: Quality-gate tooling coverage (>=85%)
@@ -121,12 +128,12 @@ jobs:
           tests/test_skill_marketplace.py tests/test_validation_scripts.py
           tests/test_merge_gate_context.py tests/test_record_audit_verdict.py
           tests/test_audit_issue_sync.py tests/test_check_size_budget.py
-          tests/test_check_charter_drift.py
+          tests/test_check_charter_drift.py tests/test_check_charter_invariants.py
           --override-ini addopts=""
           --cov=regression_gate --cov=eval_protected_paths
           --cov=check_protected_changes --cov=fix_loop
           --cov=check_skill_script_drift --cov=_cli --cov=check_size_budget
-          --cov=check_charter_drift
+          --cov=check_charter_drift --cov=check_charter_invariants
           --cov=skill_marketplace --cov=_common
           --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023
           --cov=merge_gate_context --cov=record_audit_verdict --cov=audit_issue_sync

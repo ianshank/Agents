@@ -68,7 +68,11 @@ here so it is not re-litigated per change.
   [ADR 0005](decisions/0005-calibrated-merge-gate.md)).
 - **`claude-foundation` is consumed as a pinned plugin, never vendored.** The generic
   foundation layer is installed at a pinned tag, not copied into this tree (see
-  [ADR 0017](decisions/0017-claude-foundation-reconciliation.md)).
+  [ADR 0017](decisions/0017-claude-foundation-reconciliation.md)). Until it is extracted
+  to its own repository (§5 roadmap), it is built and CI-verified in-tree as a
+  self-contained, self-terminating staging directory — the sanctioned interim mechanism
+  for reaching that end state, not an exception to it (see
+  [ADR 0028](decisions/0028-claude-foundation-staging.md)).
 - **`SCHEMA_VERSION` bumps are out of scope for feature branches.** They happen only in
   dedicated release commits with migration code (see [AGENTS.md](../AGENTS.md)).
 - **No permissive config parsing.** `from_dict` is strict; unknown keys raise, no fallbacks
@@ -133,6 +137,12 @@ restated here.**
    pytest suites stay green at their per-package coverage floors (defined in each package's
    [pyproject.toml](../pyproject.toml) and [scripts/.coveragerc](../scripts/.coveragerc), not
    copied here); the regression, protected-path, drift, and size-budget gates stay green.
+   [scripts/check_charter_invariants.py](../scripts/check_charter_invariants.py)
+   mechanically re-checks this charter's own claims (package roles, zero-dep agent-core,
+   `SCHEMA_VERSION` single-sourcing, coverage floors, Protocol-based DI, default-off flags)
+   against the code on every change, so drift like the kind
+   [CHARTER_ALIGNMENT_AUDIT.md](CHARTER_ALIGNMENT_AUDIT.md) found does not require
+   another manual audit to catch.
 
 7. **No secrets, no machine fingerprints in the repo.** Credentials come from environment
    variables only; the canonical set is [.env.example](../.env.example). Nothing host-specific
@@ -149,8 +159,9 @@ Forward-looking themes only; concrete, changeable to-dos live in
 [NEXT_STEPS.md](../NEXT_STEPS.md).
 
 - **Merge-gate maturation → enablement.** Soak shadow decisions and accumulate human-audit
-  labels before enabling the calibrated auto-merge gate; agent domains stay cold-start until
-  an agent-confidence artifact exists.
+  labels before enabling the calibrated auto-merge gate. The agent-confidence artifact this
+  once waited on now exists (`scripts/agent_confidence.py`, F-042/ADR 0023); the remaining
+  precondition is accumulating each agent domain's HUMAN_AUDIT labels past cold-start.
 - **Extract `claude-foundation` to its own repo.** Stand up the generic foundation layer as a
   pinned, installable plugin, then dogfood it config-only per
   [ADR 0017](decisions/0017-claude-foundation-reconciliation.md).

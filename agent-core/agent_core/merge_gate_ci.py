@@ -23,13 +23,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 from .logging_util import configure_logging, get_logger
 from .merge_gate import ChangeContext, GateDecision, GatePolicyConfig, decide
 from .merge_seed import seed_pending
 from .outcome_store import LabelSource, OutcomeStore, build_domain_models
+from .protocols import Clock, SystemClock
 
 logger = get_logger(__name__)
 
@@ -91,10 +91,12 @@ def run(ctx: ChangeContext, store: OutcomeStore, cfg: GatePolicyConfig) -> tuple
     return d, why
 
 
-def _append_audit(path: str, ctx: ChangeContext, decision: GateDecision, why: str) -> None:
+def _append_audit(
+    path: str, ctx: ChangeContext, decision: GateDecision, why: str, clock: Clock | None = None
+) -> None:
     """Persist the decision so every auto-merge call is auditable after the fact."""
     record = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": (clock or SystemClock()).now().isoformat(),
         "domain": ctx.domain,
         "raw_confidence": ctx.raw_confidence,
         "mech_pass": ctx.mech_pass,

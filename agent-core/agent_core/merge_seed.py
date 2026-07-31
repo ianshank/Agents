@@ -37,10 +37,10 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
 
 from .logging_util import get_logger
 from .outcome_store import OutcomeRecord, OutcomeStore
+from .protocols import Clock, SystemClock
 
 logger = get_logger(__name__)
 
@@ -57,19 +57,20 @@ def seed_pending(
     raw_confidence: float,
     merged_at: str | None = None,
     agent_version: str | None = None,
-    now: datetime | None = None,
+    clock: Clock | None = None,
 ) -> OutcomeRecord | None:
     """Append the initial pending ``OutcomeRecord`` for a freshly merged change.
 
     Returns the new record, or ``None`` if ``change_id`` is already in the store
     (idempotent — safe to call repeatedly for the same merge). ``merged_at``
-    defaults to ``now`` (UTC) when omitted; ``now`` is injectable for
-    deterministic tests.
+    defaults to the current time (UTC) when omitted, via ``clock`` — the DI seam
+    for "now" (see :class:`agent_core.protocols.Clock`); tests inject a
+    :class:`~agent_core.protocols.FixedClock` for determinism.
     """
     if already_seeded(store, change_id):
         return None
     if merged_at is None:
-        merged_at = (now or datetime.now(timezone.utc)).isoformat()
+        merged_at = (clock or SystemClock()).now().isoformat()
     rec = OutcomeRecord(
         change_id=change_id,
         domain=domain,

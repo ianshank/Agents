@@ -6,8 +6,10 @@ from datetime import datetime, timezone
 
 from agent_core.outcome_labeller import LabellerConfig, label_matured, main
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from agent_core.protocols import FixedClock
 
 NOW = datetime(2026, 6, 1, tzinfo=timezone.utc)
+CLOCK = FixedClock(NOW)
 CFG = LabellerConfig(maturity_days=7)
 
 
@@ -40,25 +42,25 @@ def _store(tmp_path, *recs):
 
 def test_revert_labels_incorrect(tmp_path):
     store = _store(tmp_path, _pending("c1", "2026-05-01T00:00:00+00:00"))
-    out = label_matured(store, _Reverts({"c1"}), _Failures(set()), CFG, now=NOW)
+    out = label_matured(store, _Reverts({"c1"}), _Failures(set()), CFG, clock=CLOCK)
     assert out[0].label is False and out[0].label_source == LabelSource.REVERT.value
 
 
 def test_failure_labels_incorrect(tmp_path):
     store = _store(tmp_path, _pending("c1", "2026-05-01T00:00:00+00:00"))
-    out = label_matured(store, _Reverts(set()), _Failures({"c1"}), CFG, now=NOW)
+    out = label_matured(store, _Reverts(set()), _Failures({"c1"}), CFG, clock=CLOCK)
     assert out[0].label_source == LabelSource.CI_FAILURE.value
 
 
 def test_timeout_clean_labels_correct(tmp_path):
     store = _store(tmp_path, _pending("c1", "2026-05-01T00:00:00+00:00"))  # >7 days old
-    out = label_matured(store, _Reverts(set()), _Failures(set()), CFG, now=NOW)
+    out = label_matured(store, _Reverts(set()), _Failures(set()), CFG, clock=CLOCK)
     assert out[0].label is True and out[0].label_source == LabelSource.TIMEOUT_CLEAN.value
 
 
 def test_not_yet_matured_is_skipped(tmp_path):
     store = _store(tmp_path, _pending("c1", "2026-05-30T00:00:00+00:00"))  # 2 days old
-    assert label_matured(store, _Reverts(set()), _Failures(set()), CFG, now=NOW) == []
+    assert label_matured(store, _Reverts(set()), _Failures(set()), CFG, clock=CLOCK) == []
 
 
 def test_already_labelled_is_skipped(tmp_path):
@@ -72,11 +74,11 @@ def test_already_labelled_is_skipped(tmp_path):
         labeled_at="2026-05-02T00:00:00+00:00",
     )
     store = _store(tmp_path, labelled)
-    assert label_matured(store, _Reverts(set()), _Failures(set()), CFG, now=NOW) == []
+    assert label_matured(store, _Reverts(set()), _Failures(set()), CFG, clock=CLOCK) == []
 
 
 def test_label_matured_default_now(tmp_path):
-    # Exercise the now=None default branch (record far in the past matures).
+    # Exercise the clock=None default branch (record far in the past matures).
     store = _store(tmp_path, _pending("c1", "2000-01-01T00:00:00+00:00"))
     out = label_matured(store, _Reverts(set()), _Failures(set()), CFG)
     assert out and out[0].label_source == LabelSource.TIMEOUT_CLEAN.value
@@ -85,7 +87,7 @@ def test_label_matured_default_now(tmp_path):
 def test_z_suffix_timestamp_is_parsed(tmp_path):
     # 'Z'-suffixed merged_at must parse (datetime.fromisoformat rejects it < 3.11).
     store = _store(tmp_path, _pending("c1", "2000-01-01T00:00:00Z"))
-    out = label_matured(store, _Reverts(set()), _Failures(set()), CFG, now=NOW)
+    out = label_matured(store, _Reverts(set()), _Failures(set()), CFG, clock=CLOCK)
     assert out and out[0].label_source == LabelSource.TIMEOUT_CLEAN.value
 
 

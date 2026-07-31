@@ -25,6 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lists it as future work). Snyk is now described accurately as a documented manual step.
 
 ### Fixed
+- **Charter-alignment audit findings.** A governance-drift audit (`docs/CHARTER_ALIGNMENT_AUDIT.md`)
+  found the charter's `Protocol`-based-DI claim didn't hold for `Judge`/`Scorer`/`Sink` (they
+  were `abc.ABC`, and no `Clock` seam existed), `ModelTarget` hardcoded operational defaults
+  outside a typed `*Config`, `HARNESS_SPEC.md` described a stale single-package project that
+  contradicted the current 5-package charter while `GOVERNANCE.md` still called it canonical,
+  the `claude-foundation` staging directory's rationale was undocumented against ADR 0017's
+  literal "never vendored" wording, and a roadmap precondition (the agent-confidence artifact)
+  was stale. All five fixed: `core/interfaces.py`'s five interfaces are now `typing.Protocol`;
+  added `agent_core.protocols.Clock`/`SystemClock`/`FixedClock` and wired it through
+  `audit_sampler`/`merge_seed`/`outcome_labeller`/`merge_gate_ci`; added `ModelTargetConfig`;
+  rescoped `HARNESS_SPEC.md`/`GOVERNANCE.md`; added [ADR 0028](docs/decisions/0028-claude-foundation-staging.md);
+  updated the charter's roadmap wording. See the audit report's "Resolution" section for detail.
 - **Four committed merge-conflict markers, undetected because nothing checked for them.**
   An orphan `>>>>>>> origin/main` trailer (no matching `<<<<<<<`/`=======` — a clean merge that
   dropped the wrong side) sat in `NEXT_STEPS.md`, `AGENTS.md`, and `CHANGELOG.md` (×2). Removed,
@@ -54,6 +66,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asserting the value reaches argparse as a single token.
 
 ### Added
+- **`scripts/check_charter_invariants.py`, a mechanical charter-conformance gate.**
+  `scripts/check_charter_drift.py` only checks that the charter's markdown links resolve;
+  this new gate re-checks a battery of the charter's actual *claims* — package existence,
+  agent-core's zero-runtime-dependency claim, `SCHEMA_VERSION` single-sourcing, per-package
+  coverage-floor declarations, the eval-integrity approval-label string, the named quality
+  gates staying wired into CI, the Protocol-based interfaces, and the auto-fix/auto-merge
+  default-off flags — plus a non-blocking heuristic warning for likely magic-number
+  defaults. Wired into `quality-gates.yml` alongside the drift guard. Added after
+  `docs/CHARTER_ALIGNMENT_AUDIT.md` found drift the link-only guard could not have caught.
 - **Merge-gate soak-stats (F-040)**: `agent_core.store_sync.soak_progress(records, target)` — a
   pure, read-only summary (total/pending/labeled, HUMAN_AUDIT count, per-domain cold-start keyed on
   `AuditConfig.per_domain_floor`, n-vs-target, merge velocity/day, days-to-target) — plus an opt-in
