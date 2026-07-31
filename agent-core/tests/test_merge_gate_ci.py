@@ -291,3 +291,79 @@ def test_main_unreadable_context_path_stays_an_internal_error(tmp_path):
     """A missing --context file is the environment failing, not a bad caller value."""
     rc = main(["--store", str(tmp_path / "s.jsonl"), "--context", str(tmp_path / "nope.json")])
     assert rc == 1
+
+
+# --- gate-policy CLI seam ----------------------------------------------------
+def _ctx_file(tmp_path, **over: Any) -> str:
+    payload = {
+        "mech_pass": True,
+        "touches_protected": False,
+        "raw_confidence": 0.96,
+        "domain": "core",
+    }
+    payload.update(over)
+    p = tmp_path / "ctx.json"
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    return str(p)
+
+
+@pytest.mark.parametrize(
+    ("flag", "value"),
+    [
+        ("--risk-target", "1.0"),
+        ("--min-calibration-n", "0"),
+        ("--min-auroc", "0.5"),
+        ("--n-bins", "1"),
+        ("--wilson-z", "nan"),
+        ("--wilson-floor", "0.0"),
+    ],
+)
+def test_main_rejects_out_of_range_policy_as_usage_error(tmp_path, capsys, flag, value) -> None:
+    """An out-of-range policy is exit 2 (usage), never 1 (internal), never 0 (merge).
+
+    The construction sits inside main()'s outer `except Exception -> return 1`, so a
+    ConfigError raised there would be reported as an internal fault -- contradicting the
+    module docstring's exit contract and telling CI "the gate broke" instead of "fix your
+    inputs". argparse's type=float also accepts "nan"/"inf" happily; the config's isfinite
+    guards are the only thing that stops them.
+    """
+    store = _healthy_store(tmp_path / "s.jsonl")
+    rc = main(["--store", str(store.path), "--context", _ctx_file(tmp_path), flag, value])
+    assert rc == 2
+    assert "merge-gate invalid policy" in capsys.readouterr().err
+
+
+def test_policy_flags_reach_the_decision(tmp_path) -> None:
+    """Proves the flags are THREADED, not merely parsed.
+
+    A test that only asserts exit 2 on bad input would pass even if _policy_from_args
+    built a config that main() then dropped on the floor.
+    """
+    store = _healthy_store(tmp_path / "s.jsonl")
+    argv = ["--store", str(store.path), "--context", _ctx_file(tmp_path)]
+    assert main(argv) == 0  # AUTO_MERGE at the documented defaults
+    assert main([*argv, "--min-calibration-n", "100000"]) == 10  # ESCALATE: floor unreachable
+
+
+def test_no_protected_auto_merge_flag(tmp_path) -> None:
+    """The one tunable deliberately withheld from operators.
+
+    ADR 0005 makes never-auto-merging protected paths a design invariant, not a knob.
+    The field stays reachable in-process (the suite exercises it) but a CI job must not
+    be able to switch off the protected-path layer from a workflow file.
+    """
+    store = _healthy_store(tmp_path / "s.jsonl")
+    with pytest.raises(SystemExit) as exc:
+        main(
+            ["--store", str(store.path), "--context", _ctx_file(tmp_path), "--protected-auto-merge"]
+        )
+    assert exc.value.code == 2
+
+
+def test_protected_auto_merge_is_logged_when_enabled(tmp_path, caplog) -> None:
+    """If it is ever set in-process, the audit trail must show the layer was disabled."""
+    store = _healthy_store(tmp_path / "s.jsonl")
+    ctx = ChangeContext(mech_pass=True, touches_protected=False, raw_confidence=0.96, domain="core")
+    with caplog.at_level("WARNING"):
+        run(ctx, store, GatePolicyConfig(protected_auto_merge=True))
+    assert "protected_auto_merge is ENABLED" in caplog.text

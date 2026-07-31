@@ -14,8 +14,8 @@ Exit codes (stable contract for CI):
   0  AUTO_MERGE  -> CI proceeds to merge
   10 ESCALATE    -> CI applies a needs-human-review label, leaves PR open
   20 REJECT      -> CI fails the check (mechanical ground-truth failure)
-  2  usage error (argparse, or an out-of-contract input value such as a
-     raw_confidence outside [0, 1]);  1 unexpected internal error
+  2  usage error (argparse; an out-of-contract input value such as a raw_confidence
+     outside [0, 1]; or an out-of-range gate-policy flag);  1 unexpected internal error
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ import json
 import sys
 from pathlib import Path
 
+from .config import ConfigError
 from .logging_util import configure_logging, get_logger
 from .merge_gate import ChangeContext, GateDecision, GatePolicyConfig, decide
 from .merge_seed import seed_pending
@@ -57,7 +58,51 @@ def _load_context(args: argparse.Namespace) -> ChangeContext:
     )
 
 
+def _add_policy_args(ap: argparse.ArgumentParser, policy: GatePolicyConfig) -> None:
+    """Expose every gate tunable as a flag, defaulted from the dataclass itself.
+
+    Defaults are read off ``policy`` rather than re-typed, so ``--help`` cannot drift from
+    the documented field defaults. ADR 0005 SS3 calls tuning ``risk_target`` /
+    ``min_calibration_n`` "a human decision"; until now there was no seam through which a
+    human could make it without editing library source.
+
+    ``--protected-auto-merge`` is deliberately absent -- see ``GatePolicyConfig``.
+    """
+    g = ap.add_argument_group("gate policy (see GatePolicyConfig / ADR 0005)")
+    g.add_argument("--risk-target", type=float, default=policy.risk_target)
+    g.add_argument("--risk-ci-z", type=float, default=policy.risk_ci_z)
+    g.add_argument("--min-calibration-n", type=int, default=policy.min_calibration_n)
+    g.add_argument("--max-ece", type=float, default=policy.max_ece)
+    g.add_argument("--min-auroc", type=float, default=policy.min_auroc)
+    g.add_argument("--max-bin-ci-width", type=float, default=policy.max_bin_ci_width)
+    g.add_argument("--n-bins", type=int, default=policy.n_bins)
+    g.add_argument("--wilson-floor", type=float, default=policy.wilson_floor)
+    g.add_argument("--wilson-z", type=float, default=policy.wilson_z)
+
+
+def _policy_from_args(args: argparse.Namespace) -> GatePolicyConfig:
+    """Map parsed flags onto the frozen policy. Raises ``ConfigError`` on a bad value."""
+    return GatePolicyConfig(
+        risk_target=args.risk_target,
+        risk_ci_z=args.risk_ci_z,
+        min_calibration_n=args.min_calibration_n,
+        max_ece=args.max_ece,
+        min_auroc=args.min_auroc,
+        max_bin_ci_width=args.max_bin_ci_width,
+        n_bins=args.n_bins,
+        wilson_floor=args.wilson_floor,
+        wilson_z=args.wilson_z,
+    )
+
+
 def run(ctx: ChangeContext, store: OutcomeStore, cfg: GatePolicyConfig) -> tuple[GateDecision, str]:
+    if cfg.protected_auto_merge:
+        # Not reachable from the CLI by construction; log loudly if it is ever set in-process
+        # so the audit trail shows that the protected-path layer was disabled for this run.
+        logger.warning(
+            "merge-gate: protected_auto_merge is ENABLED -- changes touching eval-defining "
+            "paths can auto-merge, which ADR 0005 says they never should"
+        )
     models = build_domain_models(store, cfg)
     m = models.get(ctx.domain)
     if m is None:
@@ -128,11 +173,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--change-id", dest="change_id", help="change id for --seed-store")
     ap.add_argument("--merged-at", dest="merged_at", help="ISO-8601 merge time for --seed-store")
     ap.add_argument("--agent-version", dest="agent_version", help="keying hash for --seed-store")
+    _add_policy_args(ap, GatePolicyConfig())
     ap.set_defaults(mech_pass=False, touches_protected=False)
     args = ap.parse_args(argv)
 
     configure_logging(level="INFO")
     try:
+        try:
+            # Built BEFORE the outer handler can see it: an out-of-range policy is the
+            # operator's error, so it must exit 2 (usage), never 1 (internal) and never 0
+            # (which CI reads as proceed-to-merge). argparse's `type=float` accepts "nan"
+            # and "inf" happily -- GatePolicyConfig's isfinite guards are what stop them.
+            cfg = _policy_from_args(args)
+        except ConfigError as exc:
+            print(f"merge-gate invalid policy: {exc!s}", file=sys.stderr)
+            return 2
         try:
             ctx = _load_context(args)
         except (ValueError, KeyError, TypeError) as exc:
@@ -145,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
             # environment failing, not the caller passing a bad value.
             print(f"merge-gate invalid input: {exc!s} ({type(exc).__name__})", file=sys.stderr)
             return 2
-        decision, why = run(ctx, OutcomeStore(args.store), GatePolicyConfig())
+        decision, why = run(ctx, OutcomeStore(args.store), cfg)
         if args.audit_log:
             _append_audit(args.audit_log, ctx, decision, why)
         if args.seed_store and args.change_id and decision == GateDecision.AUTO_MERGE:

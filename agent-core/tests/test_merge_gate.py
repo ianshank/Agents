@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 import pytest
 
+from agent_core.calibration import (
+    DEFAULT_N_BINS,
+    expected_calibration_error,
+    reliability_bins,
+)
+from agent_core.config import ConfigError
 from agent_core.merge_gate import (
     CalibratorHealth,
     ChangeContext,
@@ -15,6 +22,7 @@ from agent_core.merge_gate import (
     decide,
     threshold_for_risk,
 )
+from agent_core.outcome_store import BinningCalibrator
 
 CFG = GatePolicyConfig()
 
@@ -158,3 +166,92 @@ def test_change_context_rejects_out_of_contract_confidence(bad: float) -> None:
 def test_change_context_accepts_the_documented_range(ok: float) -> None:
     ctx = ChangeContext(mech_pass=True, touches_protected=False, raw_confidence=ok, domain="core")
     assert ctx.raw_confidence == ok
+
+
+# --- GatePolicyConfig validation ---------------------------------------------
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        # Vacuous endpoints: a floor that can never reject is a lie about the check.
+        ("risk_target", 1.0),
+        ("max_ece", 1.0),
+        ("max_bin_ci_width", 1.0),
+        ("wilson_floor", 0.0),
+        ("min_calibration_n", 0),
+        # `min_auroc <= 0.5` silently readmits single-class domains: build_domain_models
+        # substitutes the sentinel 0.5 when only one class is present, and its comment
+        # claims that "fails the health floor" -- true only while this bound holds.
+        ("min_auroc", 0.5),
+        ("min_auroc", 0.0),
+        # A single bin makes predict() constant, tau equal to it, and every change clear.
+        ("n_bins", 1),
+        ("n_bins", 0),
+        # Out of range on the other side.
+        ("risk_target", -0.1),
+        ("max_ece", -0.1),
+        ("min_auroc", 1.1),
+        ("wilson_floor", 1.1),
+        ("min_calibration_n", -1),
+        ("risk_ci_z", 0.0),
+        ("wilson_z", 0.0),
+        ("wilson_z", -1.0),
+        # Non-finite. NaN compares False against every bound, so an unguarded range
+        # test would PASS it -- the one-sided fail-open this subsystem keeps hitting.
+        ("risk_target", float("nan")),
+        ("max_ece", float("nan")),
+        ("min_auroc", float("nan")),
+        ("wilson_z", float("nan")),
+        ("wilson_z", float("inf")),
+        ("max_bin_ci_width", float("inf")),
+    ],
+)
+def test_gate_policy_rejects_out_of_range(field: str, value: Any) -> None:
+    """Every tunable that governs autonomy is bounded, and says what it got.
+
+    Before this, GatePolicyConfig was the only agent-core config without a
+    __post_init__ -- it accepted risk_target=1.0 (which collapses tau to the smallest
+    observed score, auto-merging everything) and min_calibration_n=0.
+    """
+    with pytest.raises(ConfigError, match=field) as exc:
+        GatePolicyConfig(**{field: value})
+    assert repr(value) in str(exc.value), "the message must echo the offending value"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        # The maximally-STRICT endpoint of each range is legal: it is a kill switch,
+        # not a fail-open, and an operator may legitimately want one.
+        ("risk_target", 0.0),
+        ("max_ece", 0.0),
+        ("max_bin_ci_width", 0.0),
+        ("min_auroc", 1.0),
+        ("wilson_floor", 1.0),
+        ("min_calibration_n", 1),
+        ("n_bins", 2),
+    ],
+)
+def test_gate_policy_accepts_the_strict_endpoints(field: str, value: Any) -> None:
+    assert getattr(GatePolicyConfig(**{field: value}), field) == value
+
+
+def test_gate_policy_defaults_are_valid() -> None:
+    """Guards against a future default drifting outside its own documented bound."""
+    assert GatePolicyConfig().n_bins == DEFAULT_N_BINS
+
+
+def test_bin_count_defaults_are_single_sourced() -> None:
+    """The three histogram implementations must not re-type the bin count.
+
+    They agreed only by coincidence before: `10` was written independently in
+    BinningCalibrator.fit, the gate's CI-width scan, and expected_calibration_error,
+    and build_domain_models passed none of them. Changing one would silently desync
+    the calibrator from the ECE that measures it.
+    """
+    defaults = {
+        inspect.signature(reliability_bins).parameters["n_bins"].default,
+        inspect.signature(expected_calibration_error).parameters["n_bins"].default,
+        inspect.signature(BinningCalibrator.fit).parameters["bins"].default,
+        GatePolicyConfig().n_bins,
+    }
+    assert defaults == {DEFAULT_N_BINS}

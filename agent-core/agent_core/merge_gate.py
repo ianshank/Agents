@@ -28,7 +28,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol, runtime_checkable
 
-from .calibration import wilson_interval
+from .calibration import DEFAULT_N_BINS, wilson_interval
+from .config import ConfigError
 
 
 class GateDecision(str, Enum):
@@ -37,9 +38,47 @@ class GateDecision(str, Enum):
     REJECT = "reject"  # mechanical ground-truth failure
 
 
+def _require_finite_in(
+    name: str,
+    value: float,
+    lo: float,
+    hi: float,
+    *,
+    lo_inclusive: bool = True,
+    hi_inclusive: bool = True,
+    why: str = "",
+) -> None:
+    """Reject ``value`` unless finite and within the (in/ex)clusive ``lo``/``hi`` bounds.
+
+    Kept as a helper rather than nine inline ``if``s so ``__post_init__`` stays a flat, low
+    -complexity sequence (the mccabe budget is 14) and the interval notation in the message
+    is generated rather than hand-duplicated per field. The ``math.isfinite`` guard is not
+    redundant: ``NaN`` compares False against every bound, so an unguarded range test would
+    *pass* it -- the exact one-sided fail-open this subsystem has already been bitten by in
+    ``ChangeContext`` and ``BinningCalibrator.bin_index``.
+    """
+    ok = math.isfinite(value)
+    ok = ok and (lo <= value if lo_inclusive else lo < value)
+    ok = ok and (value <= hi if hi_inclusive else value < hi)
+    if not ok:
+        left, right = ("[" if lo_inclusive else "("), ("]" if hi_inclusive else ")")
+        detail = f" -- {why}" if why else ""
+        raise ConfigError(
+            f"merge-gate.{name} must be a finite value in {left}{lo}, {hi}{right}"
+            f"{detail} (got {value!r})"
+        )
+
+
 @dataclass(frozen=True)
 class GatePolicyConfig:
-    """All tunables. No literal appears in decision logic."""
+    """All tunables. No literal appears in decision logic.
+
+    Every bound below follows one rule: **reject the vacuous endpoint, allow the maximally
+    strict one.** A threshold that can never reject anything is a lie about the presence of a
+    check -- worse than no field at all, because the audit log then reports a floor that did
+    no work. A threshold that can never *accept* anything is merely a kill switch, which is
+    safe and occasionally what an operator wants.
+    """
 
     risk_target: float = 0.02  # max tolerated error rate among auto-merges
     risk_ci_z: float = 1.96  # z for the upper risk bound (conservative tau)
@@ -48,10 +87,53 @@ class GatePolicyConfig:
     max_ece: float = 0.05
     min_auroc: float = 0.65  # < this: confidence doesn't rank correctness
     max_bin_ci_width: float = 0.20
+    # Bin count for the calibrator, its ECE, and the operating-region CI. On the policy
+    # (not just as a library default) so the three cannot drift apart, and so retuning it
+    # is an operator decision rather than a source edit -- ADR 0005 SS3.
+    n_bins: int = DEFAULT_N_BINS
     # per-decision conservatism
     wilson_floor: float = 0.90  # Wilson-lower of the bin accuracy must clear this
     wilson_z: float = 1.96
-    protected_auto_merge: bool = False  # keep False; True reopens the Goodhart hole
+    # Keep False; True reopens the Goodhart hole. Deliberately NOT validated and deliberately
+    # NOT exposed as a CLI flag: rejecting True would delete an escape hatch ADR 0005 documents
+    # and the suite exercises, while a flag would hand CI a knob that disables the protected
+    # -path layer. Reachable in-process, unreachable from an operator; `merge_gate_ci.run`
+    # logs a warning if it is ever set.
+    protected_auto_merge: bool = False
+
+    def __post_init__(self) -> None:
+        _require_finite_in(
+            "risk_target",
+            self.risk_target,
+            0.0,
+            1.0,
+            hi_inclusive=False,
+            why="1.0 tolerates every error, collapsing tau to the smallest observed score",
+        )
+        _require_finite_in("risk_ci_z", self.risk_ci_z, 0.0, math.inf, lo_inclusive=False)
+        if self.min_calibration_n < 1:
+            raise ConfigError(
+                "merge-gate.min_calibration_n must be >= 1 -- 0 is not a floor but the "
+                f"absence of one (got {self.min_calibration_n!r})"
+            )
+        _require_finite_in("max_ece", self.max_ece, 0.0, 1.0, hi_inclusive=False)
+        _require_finite_in(
+            "min_auroc",
+            self.min_auroc,
+            0.5,
+            1.0,
+            lo_inclusive=False,
+            why="at or below 0.5 the single-class AUROC sentinel would pass the health floor",
+        )
+        _require_finite_in("max_bin_ci_width", self.max_bin_ci_width, 0.0, 1.0, hi_inclusive=False)
+        _require_finite_in("wilson_floor", self.wilson_floor, 0.0, 1.0, lo_inclusive=False)
+        _require_finite_in("wilson_z", self.wilson_z, 0.0, math.inf, lo_inclusive=False)
+        if self.n_bins < 2:
+            raise ConfigError(
+                "merge-gate.n_bins must be >= 2 -- a single bin makes predict() a constant, "
+                "tau equal to that constant, and every change clear the threshold "
+                f"(got {self.n_bins!r})"
+            )
 
 
 @dataclass(frozen=True)

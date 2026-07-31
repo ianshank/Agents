@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
 
-from .calibration import auroc, expected_calibration_error, wilson_interval
+from .calibration import DEFAULT_N_BINS, auroc, expected_calibration_error, wilson_interval
 from .jsonl import read_jsonl
 from .logging_util import get_logger
 from .merge_gate import CalibratorHealth, GatePolicyConfig, threshold_for_risk
@@ -164,7 +164,9 @@ class BinningCalibrator:
         return len(self.bin_acc) - 1  # score >= top edge (e.g. exactly 1.0)
 
     @staticmethod
-    def fit(scores: list[float], labels: list[bool], bins: int = 10) -> BinningCalibrator:
+    def fit(
+        scores: list[float], labels: list[bool], bins: int = DEFAULT_N_BINS
+    ) -> BinningCalibrator:
         edges = tuple(b / bins for b in range(bins + 1))
         acc: list[float] = []
         for b in range(bins):
@@ -250,7 +252,9 @@ def build_domain_models(store: OutcomeStore, cfg: GatePolicyConfig) -> dict[str,
         eval_recs = [r for r in recs if _fold(r.change_id) == 1] or recs
 
         cal = BinningCalibrator.fit(
-            [r.raw_confidence for r in fit_recs], [bool(r.label) for r in fit_recs]
+            [r.raw_confidence for r in fit_recs],
+            [bool(r.label) for r in fit_recs],
+            cfg.n_bins,
         )
         ev_raw = [r.raw_confidence for r in eval_recs]
         ev_labels = [bool(r.label) for r in eval_recs]
@@ -264,7 +268,7 @@ def build_domain_models(store: OutcomeStore, cfg: GatePolicyConfig) -> dict[str,
 
         health = CalibratorHealth(
             n=len(recs),
-            ece=expected_calibration_error(ev_cal, ev_outcomes),
+            ece=expected_calibration_error(ev_cal, ev_outcomes, cfg.n_bins),
             auroc=ev_auroc,
             # Bin by RAW (continuous) scores, not the discrete calibrated values,
             # so equal-accuracy bins aren't conflated into an over-narrow CI.
