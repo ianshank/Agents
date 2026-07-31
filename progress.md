@@ -1,6 +1,47 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 013 — 2026-07-30 (rebased from the original 2026-07-07 F-040 branch)
+
+### Features
+- F-040 (merge-gate soak-stats): pure `store_sync.soak_progress(records, target)` + opt-in
+  `stats --soak-target` reserved `_soak` block; status todo → done
+
+### Changes (F-040)
+- agent-core `store_sync/store.py`: new pure `soak_progress` (total/pending/labeled, HUMAN_AUDIT
+  count, per-domain cold-start via `AuditConfig.per_domain_floor`, n-vs-target, velocity/day over
+  the `merged_at` span, days-to-target) + `_velocity_per_day`/`_parse_ts` helpers. `_parse_ts`
+  delegates to `timeutil.parse_iso8601` (not a bare `datetime.fromisoformat`) so Z-suffixed and
+  naive `merged_at` values parse consistently with the rest of the codebase instead of silently
+  dropping records or crashing the velocity sort on a mixed batch. No TCB edit, no store mutation,
+  no new module.
+- agent-core `store_sync/__init__.py`: `--soak-target N` on the `stats` subparser adds a reserved
+  `_soak` block (matches the `_unparsed` convention); `--audit-floor N` (default
+  `AuditConfig.per_domain_floor`) lets the report match the live `merge-gate-audit.yml`
+  workflow's lower operational floor (`vars.MERGE_GATE_AUDIT_FLOOR`, typically 3) instead of
+  only the library default (30); an `_emit_stats` helper keeps `main()` under the complexity
+  budget; bare-stats output byte-identical (default-off).
+- `scripts/validations/F_040.py` (offline structural gate, reuses `_common`); `features.yaml` F-040
+  entry (depends_on F-032). Coverage floors unchanged (agent-core 95).
+
+### Validation evidence
+- `python scripts/validations/F_040.py` exits 0 (offline)
+- store_sync soak/stats tests pass (12, incl. Z-suffix + mixed naive/aware regression tests and
+  the `--audit-floor` CLI override); `store.py` 100% branch coverage; ruff (incl. C901<15) + ruff
+  format + strict mypy clean; default `stats` JSON byte-identical without the flag
+- Full `test_store_sync.py` (51 tests, incl. real-git push/pull) green post-rebase onto main —
+  the CRLF git-runner fix already on main resolved the sandbox push failures this branch
+  originally hit; no longer a caveat
+- Smoke-tested against the live `merge-gate-data` store (64 records, 0 human_audit): `stats
+  --soak-target 380` reports `shortfall=316`, `velocity_per_day≈2.4`, `days_to_target≈131.5`
+
+### Next
+- Soak stays time-gated (~380 near-perfect audited records per domain reached + >=1 human
+  verdict + weekly audits, ADR 0005 — `N>=20` is a publish threshold, not the activation bar);
+  F-040 only makes progress observable. Remaining near-term plan items: `src/eval_harness/py.typed`
+  fix; Phase 0 credential scrub + gitleaks (F-038)
+
+---
 ## Session 012 — 2026-07-20
 
 ### E2E Windows Cross-Platform Hardening

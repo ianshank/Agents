@@ -60,6 +60,15 @@
   agent-domain HUMAN_AUDIT labels (the corpus now grows on every agent merge) before any agent
   domain can leave cold-start ESCALATE.
 - [x] **Skill Validation Assertion Registries & dataset-lint (F-045)** — Re-architected `validate_skill.py` to decouple assertion grading from validation loops using the `ASSERTION_GRADERS` registry (detailed in [ADR 0024](docs/decisions/0024-assertion-graders-registry.md)). Introduced a standalone `dataset-lint` skill capable of format-agnostic deep validation. Brought both components up to 100% test coverage and captured comprehensive testing matrices into `eval_test_matrix.xlsx`.
+- [x] **Merge-gate soak-stats (F-040)** — `agent_core.store_sync.soak_progress(records, target)`
+  makes progress toward the ADR 0005 enablement threshold observable: a pure, read-only summary
+  (total/pending/labeled, HUMAN_AUDIT count, per-domain cold-start keyed on
+  `AuditConfig.per_domain_floor`, n-vs-target, merge velocity/day, days-to-target) plus an opt-in
+  `store_sync stats --soak-target N` that adds a reserved `_soak` block (bare-stats output
+  byte-identical). No TCB edit, no store mutation (property-tested), no schema bump. `target` is
+  a caller-supplied counter, not a claim about the real activation bar — per the corrected soak
+  framing below, that bar is ~380 near-perfect audited records per domain, not `N≥20`. Soak
+  enablement itself stays time-gated (real bar reached + ≥1 human verdict + weekly audits).
 - [x] **Public-surface backwards-compat guard (F-039)** — `tests/test_public_surface.py`
   freezes every package's public `__all__` exports (exact-equality vs a committed
   baseline), so a removed/renamed export now fails CI instead of silently breaking every
