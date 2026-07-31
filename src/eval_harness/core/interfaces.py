@@ -2,34 +2,38 @@
 
 Implementations are free to evolve as long as these method signatures hold,
 which is the contract that lets new component versions stay drop-in compatible.
-Declared as ``typing.Protocol`` (not ``abc.ABC``) so DI seams are structural: a
-fake used in tests satisfies the interface by shape alone and need not inherit
-from it, while existing implementations that do explicitly subclass these
-classes keep working unchanged (explicit inheritance from a ``Protocol`` is
-ordinary nominal inheritance, including any concrete methods it defines).
+Four of five are declared as ``typing.Protocol`` (not ``abc.ABC``) so those DI
+seams are structural: a fake used in tests satisfies the interface by shape
+alone and need not inherit from it, while existing implementations that do
+explicitly subclass these classes keep working unchanged (explicit inheritance
+from a ``Protocol`` is ordinary nominal inheritance, including any concrete
+methods it defines).
+
+``Scorer`` is the one exception, and stays ``abc.ABC``: it is the only one of
+the five with a concrete, inherited ``__init__`` (the shared ``name``/
+``default_name`` bookkeeping every built-in scorer relies on without
+redefining its own constructor). ``typing.Protocol.__init__`` does not
+reliably propagate a Protocol base's own ``__init__`` to subclasses that don't
+define their own on Python 3.10 (this repo's CI matrix includes 3.10; fixed in
+3.11+) — confirmed by a concrete regression: converting ``Scorer`` to
+``Protocol`` silently left every built-in scorer's ``.name`` unset under 3.10.
+See ``docs/CHARTER.md`` §4 invariant 3 for how the charter documents this
+exception.
 """
 
 from __future__ import annotations
 
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import Protocol, runtime_checkable
 
 from .types import EvalItem, JudgeVerdict, RunContext, RunResult, ScoreResult, TargetOutput
 
 
-class Scorer(Protocol):
-    """Scores a single (item, output) pair. ``name`` labels the emitted score.
-
-    Not ``@runtime_checkable``: it carries a non-method member (``default_name``),
-    and ``typing.Protocol`` only supports ``isinstance``/``issubclass`` checks for
-    protocols whose members are all methods. Structural conformance here is
-    enforced by explicit nominal inheritance (every built-in scorer subclasses
-    this directly) rather than a runtime structural check.
-    """
+class Scorer(ABC):
+    """Scores a single (item, output) pair. ``name`` labels the emitted score."""
 
     default_name: str = "score"
-    name: str
 
     def __init__(self, name: str | None = None) -> None:
         self.name = name or self.default_name

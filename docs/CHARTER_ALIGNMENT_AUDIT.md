@@ -181,14 +181,22 @@ All 5 escalation items were addressed in the same PR as this report:
    pinned-plugin end state, and reworded `docs/CHARTER.md` §3's claude-foundation bullet
    to reference it. No code change — the staging state was already correct; only the
    charter/ADR wording was drifted.
-2. **Protocol-based DI + missing `Clock`** — fixed in code. `src/eval_harness/core/interfaces.py`'s
-   `Scorer`, `DatasetSource`, `TargetRunner`, `ResultSink`, and `Judge` are now
-   `typing.Protocol` (confirmed non-breaking: no code depended on `isinstance`/`issubclass`
-   against them in production, and all existing subclasses/fakes still satisfy them via
-   ordinary nominal inheritance). Added a `Clock` Protocol (`agent_core.protocols.Clock`,
-   with `SystemClock`/`FixedClock` implementations) and refactored the four ad hoc
-   `now: datetime | None` injection points (`audit_sampler.record_verdict`,
-   `merge_seed.seed_pending`, `outcome_labeller.label_matured`,
+2. **Protocol-based DI + missing `Clock`** — fixed in code, with one deliberate, documented
+   exception found during verification. `src/eval_harness/core/interfaces.py`'s
+   `DatasetSource`, `TargetRunner`, `ResultSink`, and `Judge` are now `typing.Protocol`
+   (confirmed non-breaking: no code depended on `isinstance`/`issubclass` against them in
+   production, and all existing subclasses/fakes still satisfy them via ordinary nominal
+   inheritance). `Scorer` was converted the same way initially, but the repo's own py3.10 CI
+   job caught a real regression: `typing.Protocol.__init__` does not reliably propagate a
+   Protocol base's own `__init__` to subclasses that don't redefine their own on Python 3.10
+   (fixed in 3.11+), which silently left every built-in scorer's `.name` unset under 3.10.
+   `Scorer` was reverted to `abc.ABC` — the one interface with a concrete, inherited
+   `__init__` — and the charter's invariant 3 wording now documents this exception rather
+   than overclaiming full Protocol coverage. Added a `Clock` Protocol
+   (`agent_core.protocols.Clock`, with `SystemClock`/`FixedClock` implementations, neither of
+   which subclasses `Clock` — so this specific `__init__`-propagation issue doesn't apply to
+   them) and refactored the four ad hoc `now: datetime | None` injection points
+   (`audit_sampler.record_verdict`, `merge_seed.seed_pending`, `outcome_labeller.label_matured`,
    `merge_gate_ci._append_audit`) onto it.
 3. **`ModelTarget` hardcoded defaults** — fixed in code. Added `ModelTargetConfig` (a
    `pydantic.BaseModel` with `Field(default=..., description=...)` per operational value)

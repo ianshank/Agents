@@ -32,7 +32,6 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-import tomllib
 from _cli import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -74,8 +73,13 @@ _EXPECTED_GATE_SCRIPTS = (
     "regression_gate.py",
 )
 
-# Interfaces that must be typing.Protocol (charter §4 invariant 3), by class name.
-_PROTOCOL_INTERFACES = ("Scorer", "DatasetSource", "TargetRunner", "ResultSink", "Judge")
+# Interfaces that must be typing.Protocol (charter §4 invariant 3), by class name. Scorer
+# is deliberately excluded: it carries a concrete, inherited __init__ that
+# typing.Protocol does not reliably propagate to subclasses on Python 3.10 (this repo's
+# CI matrix includes 3.10), so it stays abc.ABC — see core/interfaces.py's module
+# docstring for the confirmed regression.
+_PROTOCOL_INTERFACES = ("DatasetSource", "TargetRunner", "ResultSink", "Judge")
+_ABC_INTERFACES = ("Scorer",)
 
 # Numeric literals excluded from the magic-number heuristic: common non-"operational-value"
 # constants (identity/sentinel numbers), not charter violations to flag. int/float equality
@@ -97,6 +101,21 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _extract_toml_section(text: str, section: str) -> str:
+    """Return the raw body of a top-level TOML ``[section]`` (up to the next
+    top-level header or EOF), or ``""`` if the section is absent.
+
+    Deliberately not a full TOML parser: this repo's CI matrix runs Python 3.10,
+    where the stdlib ``tomllib`` (3.11+) is unavailable, and adding a backport
+    dependency (``tomli``) for two existence checks would itself be new drift
+    surface. The pyproject.toml files this reads are simple and well-formed, so a
+    section-scoped regex is sufficient.
+    """
+    pattern = re.compile(rf"^\[{re.escape(section)}\]\s*$(.*?)(?=^\[|\Z)", re.MULTILINE | re.DOTALL)
+    match = pattern.search(text)
+    return match.group(1) if match else ""
+
+
 # --------------------------------------------------------------------- individual checks
 
 
@@ -114,10 +133,10 @@ def check_agent_core_zero_deps(root: Path) -> list[Finding]:
     path = root / "agent-core" / "pyproject.toml"
     if not path.is_file():
         return [Finding("agent_core_pyproject_missing", str(path), hard=True)]
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
-    deps = data.get("project", {}).get("dependencies", [])
-    if deps:
-        return [Finding("agent_core_has_runtime_deps", f"dependencies={deps!r}", hard=True)]
+    project_section = _extract_toml_section(path.read_text(encoding="utf-8"), "project")
+    match = re.search(r"^\s*dependencies\s*=\s*\[(.*?)\]", project_section, re.MULTILINE | re.DOTALL)
+    if match and match.group(1).strip():
+        return [Finding("agent_core_has_runtime_deps", f"dependencies=[{match.group(1).strip()}]", hard=True)]
     return []
 
 
@@ -157,9 +176,8 @@ def check_coverage_floors_declared(root: Path) -> list[Finding]:
         if not path.is_file():
             findings.append(Finding("pyproject_missing", f"{name}: {rel}", hard=True))
             continue
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-        floor = data.get("tool", {}).get("coverage", {}).get("report", {}).get("fail_under")
-        if floor is None:
+        section = _extract_toml_section(path.read_text(encoding="utf-8"), "tool.coverage.report")
+        if "fail_under" not in section:
             findings.append(Finding("coverage_floor_missing", f"{name}: {rel}", hard=True))
 
     coveragerc = root / "scripts/.coveragerc"
@@ -206,9 +224,11 @@ def check_quality_gates_wired(root: Path) -> list[Finding]:
 
 
 def check_protocol_interfaces(root: Path) -> list[Finding]:
-    """Charter §4 invariant 3: Judge/Scorer/Sink/Dataset/Target are typing.Protocol.
+    """Charter §4 invariant 3: Judge/Sink/Dataset/Target are typing.Protocol; Scorer
+    stays abc.ABC (see core/interfaces.py's module docstring for why).
 
-    Guards against regressing the ABC -> Protocol fix back to abc.ABC.
+    Guards against regressing the ABC -> Protocol fix, and against Scorer drifting
+    to Protocol again (the confirmed-broken pattern on Python 3.10).
     """
     path = root / "src/eval_harness/core/interfaces.py"
     if not path.is_file():
@@ -216,7 +236,7 @@ def check_protocol_interfaces(root: Path) -> list[Finding]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     seen = {}
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name in _PROTOCOL_INTERFACES:
+        if isinstance(node, ast.ClassDef) and node.name in (*_PROTOCOL_INTERFACES, *_ABC_INTERFACES):
             base_names = [b.id for b in node.bases if isinstance(b, ast.Name)]
             seen[node.name] = base_names
     findings = []
@@ -226,6 +246,12 @@ def check_protocol_interfaces(root: Path) -> list[Finding]:
             findings.append(Finding("interface_class_missing", name, hard=True))
         elif "Protocol" not in bases:
             findings.append(Finding("interface_not_protocol", f"{name}(bases={bases})", hard=True))
+    for name in _ABC_INTERFACES:
+        bases = seen.get(name)
+        if bases is None:
+            findings.append(Finding("interface_class_missing", name, hard=True))
+        elif "ABC" not in bases:
+            findings.append(Finding("interface_not_abc", f"{name}(bases={bases})", hard=True))
     return findings
 
 
@@ -349,7 +375,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     root = _repo_root()
     try:
         findings = run_all(root)
-    except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         logger.error("cannot run charter-invariants checks: %s", exc)
         print(f"charter-invariants: usage error — {exc}", file=sys.stderr)
         return EXIT_USAGE_ERROR

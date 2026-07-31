@@ -123,9 +123,15 @@ restated here.**
    registry aliases keep renamed components resolving. Documented compat shims are removed
    only via a deprecation ADR.
 
-3. **Dependency injection via Protocol.** Judge/Scorer/Sink/Clock and the SDK-optional client
-   seams are structural; unit tests use fakes needing no network, SDKs, or live servers (see
-   [AGENTS.md](../AGENTS.md)).
+3. **Dependency injection via Protocol.** Judge/Sink/DatasetSource/TargetRunner/Clock and
+   the SDK-optional client seams are structural; unit tests use fakes needing no network,
+   SDKs, or live servers (see [AGENTS.md](../AGENTS.md)). `Scorer` is the one documented
+   exception and stays `abc.ABC`: it is the only one of the five with a concrete, inherited
+   `__init__` (the shared `name`/`default_name` bookkeeping every built-in scorer relies on),
+   and `typing.Protocol.__init__` does not reliably propagate a Protocol base's own
+   `__init__` to subclasses that don't redefine their own on Python 3.10 — this repo's CI
+   matrix includes 3.10 (see
+   [src/eval_harness/core/interfaces.py](../src/eval_harness/core/interfaces.py)).
 
 4. **Stateful I/O lives in the narrow seams, not the pure components.** SDK/network I/O is
    confined to the client seams; scorers and codecs stay pure per-item maps.

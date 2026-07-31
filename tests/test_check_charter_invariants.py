@@ -168,27 +168,36 @@ def test_all_gates_wired_is_clean(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _interfaces_body(base: str) -> str:
-    return "\n".join(f"class {name}({base}): ...\n" for name in guard._PROTOCOL_INTERFACES)
+def _interfaces_body(protocol_base: str = "Protocol", scorer_base: str = "ABC") -> str:
+    lines = [f"class {name}({protocol_base}): ...\n" for name in guard._PROTOCOL_INTERFACES]
+    lines += [f"class {name}({scorer_base}): ...\n" for name in guard._ABC_INTERFACES]
+    return "\n".join(lines)
 
 
 def test_abc_interfaces_are_hard_findings(tmp_path: Path) -> None:
-    _write(tmp_path, "src/eval_harness/core/interfaces.py", _interfaces_body("ABC"))
+    _write(tmp_path, "src/eval_harness/core/interfaces.py", _interfaces_body(protocol_base="ABC"))
     findings = guard.check_protocol_interfaces(tmp_path)
     assert len(findings) == len(guard._PROTOCOL_INTERFACES)
     assert all(f.hard and f.kind == "interface_not_protocol" for f in findings)
 
 
+def test_scorer_as_protocol_is_hard_finding(tmp_path: Path) -> None:
+    _write(tmp_path, "src/eval_harness/core/interfaces.py", _interfaces_body(scorer_base="Protocol"))
+    findings = guard.check_protocol_interfaces(tmp_path)
+    assert findings == [guard.Finding("interface_not_abc", "Scorer(bases=['Protocol'])", hard=True)]
+
+
 def test_protocol_interfaces_are_clean(tmp_path: Path) -> None:
-    _write(tmp_path, "src/eval_harness/core/interfaces.py", _interfaces_body("Protocol"))
+    _write(tmp_path, "src/eval_harness/core/interfaces.py", _interfaces_body())
     assert guard.check_protocol_interfaces(tmp_path) == []
 
 
 def test_missing_interface_class_is_hard_finding(tmp_path: Path) -> None:
-    _write(tmp_path, "src/eval_harness/core/interfaces.py", "class Scorer(Protocol): ...\n")
+    _write(tmp_path, "src/eval_harness/core/interfaces.py", "class Unrelated: ...\n")
     findings = guard.check_protocol_interfaces(tmp_path)
     assert {f.detail for f in findings if f.kind == "interface_class_missing"} == {
-        n for n in guard._PROTOCOL_INTERFACES if n != "Scorer"
+        *guard._PROTOCOL_INTERFACES,
+        *guard._ABC_INTERFACES,
     }
 
 

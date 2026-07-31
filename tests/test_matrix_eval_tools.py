@@ -140,10 +140,7 @@ class TestM4Interface:
 
     @pytest.mark.parametrize("name", SCORERS.names())
     def test_scorer_is_scorer(self, name: str) -> None:
-        # Scorer isn't @runtime_checkable (it has a non-method member, `default_name`,
-        # and Protocol only supports issubclass() for method-only protocols), so
-        # conformance is checked via nominal inheritance directly instead.
-        assert Scorer in SCORERS.get(name).__mro__
+        assert issubclass(SCORERS.get(name), Scorer)
 
     @pytest.mark.parametrize("name", DATASETS.names())
     def test_dataset_is_dataset_source(self, name: str) -> None:

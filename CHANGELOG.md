@@ -32,7 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contradicted the current 5-package charter while `GOVERNANCE.md` still called it canonical,
   the `claude-foundation` staging directory's rationale was undocumented against ADR 0017's
   literal "never vendored" wording, and a roadmap precondition (the agent-confidence artifact)
-  was stale. All five fixed: `core/interfaces.py`'s five interfaces are now `typing.Protocol`;
+  was stale. All five fixed: `core/interfaces.py`'s `DatasetSource`/`TargetRunner`/
+  `ResultSink`/`Judge` are now `typing.Protocol`; `Scorer` stays `abc.ABC` — a py3.10 CI
+  regression (Protocol's `__init__` doesn't reliably propagate to subclasses that don't
+  redefine it on 3.10) caught it before merge, and the charter's invariant 3 wording now
+  documents that exception rather than overclaiming full Protocol coverage;
   added `agent_core.protocols.Clock`/`SystemClock`/`FixedClock` and wired it through
   `audit_sampler`/`merge_seed`/`outcome_labeller`/`merge_gate_ci`; added `ModelTargetConfig`;
   rescoped `HARNESS_SPEC.md`/`GOVERNANCE.md`; added [ADR 0028](docs/decisions/0028-claude-foundation-staging.md);
