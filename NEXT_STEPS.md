@@ -2,6 +2,27 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Merge-gate calibrator-health integrity (F-049, ADR 0029)** — an independent
+  re-verification of `docs/gap-analysis-merge-gate-2026-07-24.md`
+  (`openspec/changes/merge-gate-health-integrity/review.md`) confirmed its G1/G2/G3 but found
+  G3's stated mechanism wrong, its severity understated, and three defects it never named.
+  The gate's fourth health floor could pass having measured nothing: `_upper_half_ci_width`
+  accumulated into a `0.0` initialiser over bins above raw 0.5, so a domain whose audits all
+  sat below that returned the identity of a `max`-reduction and satisfied `max_bin_ci_width`
+  vacuously — **reproduced to `AUTO_MERGE` under stock config**. It also measured the raw
+  score while `decide()` gates on the calibrated `p`. `_operating_bin_ci_width` now defines
+  the region by the per-decision Wilson floor (tau-free, since `tau` is derived *from*
+  health) and returns `None` when nothing qualifies, which `is_trustworthy` rejects.
+  `GatePolicyConfig` gains bounds on all nine tunables plus CLI flags, supplying the seam
+  behind ADR 0005 §3's long-standing promise of a human-set `risk_target`; the bin count and
+  score→bin routing are each single-sourced; and `min_calibration_n` now floors the held-out
+  fold rather than the both-fold total that overstated it 2×. Decision-neutral on the live
+  store (0 `HUMAN_AUDIT` records ⇒ permanent cold-start `ESCALATE`), which is why it landed
+  before activation rather than after. **Still open:** wiring the workflow to the new flags
+  (decision-changing the moment a repo variable is set), and the risk-appetite decision on
+  `max_bin_ci_width` — under honest measurement it may keep the gate closed until every
+  eligible bin holds ~50+ high-accuracy audits.
+
 - [x] **Charter alignment audit + fixes + `check_charter_invariants.py` gate (PR #114)** —
   a multi-agent audit (`docs/CHARTER_ALIGNMENT_AUDIT.md`) mechanically re-verified every
   claim in `docs/CHARTER.md` against the code and found 5 real drift items: `Judge`/
@@ -198,15 +219,23 @@
   the activation PR (protected paths); exclude `merge-gate-data` from branch
   protection; enable required reviewers on the `merge-gate-verdict` environment;
   record the first verdict via the dispatch UI.
-- [ ] **Merge-gate tech debt (`docs/gap-analysis-merge-gate-2026-07-24.md`)** — nine findings
-  remain, ranked by severity, each with the reproduction that established it. The former top
-  item (a forward-compatible record that `store_sync` preserved but `OutcomeStore` refused to
-  parse, which would have failed every PR) is resolved in [ADR 0025](docs/decisions/0025-outcome-record-forward-compatibility.md).
-  Now highest: `GatePolicyConfig` is unreachable from any config or CLI — the values governing
-  autonomy can only change by editing library source, and it has no validation, so it accepts
-  `risk_target=1.0`; then the four independent binning implementations (two of which disagree
-  out-of-range, which is what made the fail-open reachable); then `_upper_half_ci_width`
-  returning `0.0` for "no data", which passes a health floor vacuously.
+- [ ] **Merge-gate tech debt (`docs/gap-analysis-merge-gate-2026-07-24.md`)** — the three
+  HIGH findings (G1 `GatePolicyConfig` unreachable/unvalidated, G2 the duplicated binning
+  implementations, G3 `_upper_half_ci_width` returning `0.0` for "no data") are **closed by
+  F-049/ADR 0029** above, along with three defects the analysis never named. Re-verification
+  also **refuted G5**'s headline claim — `outcome_labeller` and `audit_sampler` both gained
+  real logging since the doc was written — leaving its `record_verdict` non-idempotency
+  sub-claim, which the library docstring says is deliberate.
+  Remaining, none of which can change a gate decision: **G4**, widened by that
+  re-verification from 2 CLIs to 4 (`calibration_report`, `merge_seed`, `outcome_labeller`
+  and `audit_sampler` all log at INFO but never call `configure_logging`, so every structured
+  run record is discarded at the root default WARNING); **G6** `load_yaml_mapping -> dict`
+  erasing types at three call sites; **G7** two `configure_logging` implementations with
+  different signatures and formats, of which `scripts/_cli` is the one `AGENTS.md` names as
+  canonical; **G8** two provably dead lines in `IsotonicCalibrator.predict` counted against
+  the coverage budget; **G9** `agent_confidence.py` missing from `quality-gates.yml`'s
+  explicit `--cov=` allowlist, so the module computing every `raw_confidence` is gated in one
+  job and not the other.
 - [ ] **Merge-gate soak** — accumulate shadow decisions and weekly audits before
   revisiting the ADR 0005 enablement checklist. **The "N≥20" this entry used to quote is a
   soak *counter*, not the activation bar**: the peer review in
