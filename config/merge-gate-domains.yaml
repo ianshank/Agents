@@ -10,6 +10,11 @@
 # `human/` namespace (human_namespace) is applied ONLY by the seed path for
 # human-authored merges; no rule or default may emit it — human outcomes must
 # never enter an agent domain's calibration (ADR 0018 §5, REVIEW.md §6).
+#
+# human_namespace below MIRRORS the canonical agent_core.domains.HUMAN_NAMESPACE
+# (that module classifies agent-vs-human against the literal, and stays config-free).
+# It is NOT an independent override: DomainMapping.load rejects any value that differs
+# from the canonical constant, so changing it here alone fails the load, not silently.
 schema_version: "1.0.0"
 default_domain: "repo-misc"
 human_namespace: "human/"

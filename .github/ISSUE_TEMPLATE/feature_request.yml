@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest an additive, opt-in capability.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The project favors **additive, opt-in** changes that keep the offline suite
+        dependency-free and never weaken the evaluation. Please read
+        [docs/CHARTER.md](https://github.com/ianshank/Agents/blob/main/docs/CHARTER.md)
+        (scope & invariants) before proposing large changes.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do that you can't today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How might it work? Which component/registry seam would it slot into?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This is additive/opt-in and keeps the offline suite runnable with zero external dependencies.
+        - label: This does not weaken any existing evaluation gate.

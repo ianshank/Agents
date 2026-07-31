@@ -38,11 +38,36 @@ def test_round_trip_to_from_dict():
         lambda: CalibrationConfig(n_bins=0),
         lambda: CalibrationConfig(auroc_target=1.5),
         lambda: CalibrationConfig(wilson_z=0),
+        lambda: CalibrationConfig(min_eval_samples=0),
+        lambda: CalibrationConfig(min_eval_samples=-1),
     ],
 )
 def test_invalid_values_raise(factory):
     with pytest.raises(ConfigError):
         factory()
+
+
+def test_calibration_guard_defaults_are_a_no_op():
+    """Defaults must reproduce the pre-guard gate semantics, so adding the fields
+    cannot change any existing caller's verdict."""
+    cfg = CalibrationConfig()
+    assert cfg.min_eval_samples == 1  # `_check_pairs` already rejects empty input
+    assert cfg.require_discrimination is False
+
+
+def test_calibration_config_predating_guards_still_loads():
+    """A config persisted before the guard fields existed must migrate to the defaults."""
+    legacy = {
+        "n_bins": 10,
+        "ece_target": 0.05,
+        "mce_target": 0.12,
+        "auroc_target": 0.80,
+        "wilson_z": 1.96,
+    }
+    cfg = FrameworkConfig.from_dict({"calibration": legacy})
+    assert cfg.calibration.min_eval_samples == 1
+    assert cfg.calibration.require_discrimination is False
+    assert FrameworkConfig.from_dict(cfg.to_dict()).calibration == cfg.calibration
 
 
 def test_unknown_key_rejected():

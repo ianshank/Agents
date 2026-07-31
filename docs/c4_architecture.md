@@ -56,7 +56,7 @@ C4Container
         Container(plugins, "Plugin Loader (plugins)", "Python", "Central registries (SCORERS, JUDGES, ...) — built-in self-registration + entry-point discovery via the eval_harness.plugins group (src/eval_harness/plugins.py)")
     }
 
-    Container_Boundary(components, "Pluggable Components") {
+    Container_Boundary(components, "Pluggable Components (Tested completely offline via deterministic mocks)") {
         Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, weighted, llm_judge, autoevals")
         Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible), anthropic, phoenix_evals")
         Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust")
@@ -69,7 +69,7 @@ C4Container
         Container(lf_client, "LangfuseClient", "Python", "Interface + NullClient + SDKClient adapter")
         Container(px_client, "PhoenixClient", "Python", "OTel span export (SDK-optional seam; mirrors LangfuseClient)")
         Container(bt_client, "BrainTrustClient", "Python", "Experiment export + dataset read (SDK-optional seam)")
-        Container(skill_fw, "Skill Framework", "Python", "validate_skill.py validation + marketplace (eval + deterministic generator skills)")
+        Container(skill_fw, "Skill Framework", "Python", "validate_skill.py validation (w/ Assertion Registries) + marketplace (eval + deterministic generator + reasoning skills)")
     }
 
     Container_Boundary(siblings, "Sibling Packages (offline, deterministic)") {
@@ -155,25 +155,51 @@ timeout-bounded and failing safe.
 Real data flows through the subsystem via the F-032…F-035 activation (ADR 0018): the store
 persists on the dedicated `merge-gate-data` branch (`store_sync` — canonical deterministic
 merge because `resolved()` is file-order dependent; plumbing commits; retry-with-backoff for
-concurrent writers; unparseable lines preserved verbatim), seeded on every push to `main`
-under the reserved `human/<domain>` namespace (confidence 0.0 — human outcomes never enter
-agent-domain calibration), passively labelled daily, audited weekly through GitHub issues,
-and observed by an always-on **shadow** job that logs a decision on every PR without ever
-blocking one.
+concurrent writers; unparseable lines preserved verbatim), seeded on every push to `main`,
+passively labelled daily, audited weekly through GitHub issues, and observed by an always-on
+**shadow** job that logs a decision on every PR without ever blocking one.
+
+Seed routing (F-042, ADR 0023) decides each record's lane by the merged change's **PR
+head-ref prefix** (`config/agent-authors.yaml`, e.g. `claude/*`): an agent change is seeded in
+the un-prefixed **agent domain** with the real `agent_version` and a deterministic proxy
+confidence (`scripts/agent_confidence.py`), while every human, PR-less, or unclassifiable
+change — and any classifier failure, fail-safe — keeps the reserved `human/<domain>` namespace
+at confidence 0.0 (human outcomes never enter agent-domain calibration). This is what makes the
+agent-domain corpus non-degenerate; `agent_core.calibration_report` (F-043) reports its
+calibration (ECE/Brier/AUROC/abstention, Wilson CIs, honest `DEGENERATE` guard) to the daily
+labeller summary — and since F-047 can dual-report a prediction-powered interval under
+`--estimator ppi++`, while `agent_core.proxy_eval` measures whether any proxy is actually
+informative *on the subsets the gate operates over* (the marginal correlation is not the
+operative number). Both are read-only: the gate's own estimator is unchanged, and a one-off reversible backfill
+(`scripts/migrations/agent_domain_backfill.py`, F-044) re-attributed the historical agent SHAs.
+
+The confidence path is fail-closed end to end. `ChangeContext` rejects a `raw_confidence` that
+is non-finite or outside `[0, 1]` at construction, and `BinningCalibrator.bin_index` floors any
+such score to bin 0 for records arriving straight from the store, where `OutcomeRecord` applies
+no validation — a score the gate cannot interpret is never read as maximum confidence. The CLI
+maps every out-of-contract input to exit 2 (usage), never 0, which CI reads as proceed-to-merge.
+See `docs/gap-analysis-merge-gate-2026-07-24.md` for the reproductions behind these guards and
+the subsystem's open findings.
 
 ```mermaid
 C4Component
     title Component Diagram: Calibrated Merge Gate (agent_core)
 
     Container_Boundary(gate, "agent_core merge-gate subsystem") {
-        Component(ci, "merge_gate_ci", "CLI entrypoint", "exit 0/10/20 (+1 internal, +2 usage); --audit-log JSONL")
-        Component(decide, "merge_gate.decide()", "pure function", "REJECT mech-fail -> ESCALATE protected -> calibrated trust + Wilson bin floor -> AUTO_MERGE")
-        Component(store, "outcome_store", "append-only JSONL", "OutcomeStore, BinningCalibrator, build_domain_models (held-out fold)")
+        Component(ci, "merge_gate_ci", "CLI entrypoint", "exit 0/10/20 (+1 internal, +2 usage — incl. any out-of-contract input value; never 0 on bad input); --audit-log JSONL")
+        Component(decide, "merge_gate.decide()", "pure function", "ChangeContext enforces raw_confidence in [0,1] at construction; REJECT mech-fail -> ESCALATE protected -> calibrated trust + Wilson bin floor -> AUTO_MERGE")
+        Component(store, "outcome_store", "append-only JSONL", "OutcomeStore, BinningCalibrator (fail-closed: non-finite / out-of-[0,1] scores floor to bin 0, never the top bin), build_domain_models (held-out fold; logs why records are excluded from the fit)")
         Component(sync, "store_sync", "package + CLI (F-032)", "models/serialization/store/git_sync submodules; pull/push/stats vs merge-gate-data branch; canonical merge, opaque-line preservation, retry-backoff; byte-oriented git-plumbing runner (shared subprocess_util); exit 0/4/5")
         Component(labeller, "outcome_labeller", "module", "passive revert / CI-failure / timeout-clean labels (alerting only)")
-        Component(sampler, "audit_sampler", "module", "unbiased stratified sampling + HUMAN_AUDIT verdicts")
+        Component(sampler, "audit_sampler", "module", "unbiased stratified sampling + HUMAN_AUDIT verdicts; records each pick's marginal inclusion probability (selection_propensity) so audits can later be reweighted by 1/p -- unreconstructable after the round. Owns the propensity CONTRACT (is_valid_propensity / format_propensity): one predicate and one renderer shared by the write boundary, the issue planner and the recorder, so the layers cannot drift")
         Component(detectors, "detectors", "module", "GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo; DetectorConfig timeouts, fail-safe")
-        Component(calib, "calibration", "module", "Wilson interval, AUROC, ECE (reused, not re-implemented)")
+        Component(calib, "calibration", "module", "Wilson interval, AUROC, ECE (reused, not re-implemented); reports degenerate slices (constant predictor / single outcome class / undersized) — enforcement opt-in via CalibrationConfig, defaults preserve prior verdicts")
+        Component(report, "calibration_report", "read-only CLI (F-043)", "agent-domain ECE/Brier/AUROC/abstention; --estimator {wilson,ppi++} dual-reports Wilson + the prediction-powered interval + the classical lambda=0 baseline the reduction is measured against (wilson stays the default and the GATE's estimator); HUMAN_AUDIT vs passive views tagged; honest DEGENERATE guard; ReportConfig knobs")
+        Component(domains, "domains", "module", "single-source HUMAN_NAMESPACE / is_agent_domain / strip_human_namespace + in_domain_scope + DOMAIN_FILTERS (canonical --domain-filter predicate; agent vs reserved-human lane; yaml/config-free)")
+        Component(ppi, "ppi", "module (F-047)", "power-tuned prediction-powered interval + pearson_r / effective_n_multiplier; FAIL-CLOSED -- too few labels, single outcome class, constant or out-of-range proxy, or no residual dof all return the WILSON interval with a stated reason; lambda=0 reproduces the classical estimator exactly; variance_reduction derives from the standard errors, never the clipped bounds")
+        Component(proxies, "proxies", "module (F-047)", "pluggable ProxyExtractor Protocol: RawConfidenceProxy, PassiveLabelProxy, MappingProxy (the seam for an external LLM-judge score, so agent_core takes no dependency)")
+        Component(proxyeval, "proxy_eval", "read-only CLI (F-047)", "proxy-vs-HUMAN_AUDIT correlation, marginal AND conditional on the gated subsets (score >= candidate tau, per bin) + implied 1/(1-rho^2) effective-sample multiplier; degenerate slices withhold rho AND auroc rather than printing a by-construction 0.5")
+        Component(rtypes, "report_types + calibration_report_render", "modules", "shared report config/records + estimator names, and the markdown/JSON presentation; split from calibration_report to stay inside the 500-line file budget (every previously importable name still resolves from its original module, pinned by __all__)")
     }
 
     System_Ext(git, "git", "Local history — revert footer detection")
@@ -188,20 +214,43 @@ C4Component
     Rel(sync, store, "canonical merged JSONL")
     Rel(labeller, detectors, "was_reverted() / caused_failure()")
     Rel(labeller, store, "append passive labels")
-    Rel(sampler, store, "select + record HUMAN_AUDIT")
+    Rel(sampler, store, "select + record HUMAN_AUDIT, with the round's selection_propensity")
     Rel(detectors, git, "git log (-z, revert footer)")
     Rel(detectors, gha, "gh api check-runs")
+    Rel(report, store, "read agent-domain slice")
+    Rel(report, calib, "auroc / brier / wilson / selective-risk")
+    Rel(report, domains, "is_agent_domain() lane filter")
+    Rel(report, ppi, "ppi_plus_interval() when --estimator ppi++ (report-only)")
+    Rel(report, rtypes, "ReportConfig / SliceReport / rendering")
+    Rel(proxyeval, store, "join proxy value to the authoritative HUMAN_AUDIT label by change_id")
+    Rel(proxyeval, proxies, "ProxyExtractor.value()")
+    Rel(proxyeval, calib, "auroc() — withheld on a degenerate slice")
+    Rel(proxyeval, ppi, "pearson_r / effective_n_multiplier / ppi_plus_interval")
+    Rel(proxyeval, domains, "in_domain_scope() lane filter")
 ```
+
+`selection_propensity` is captured but **not yet consumed**: no estimator applies the `1/p`
+correction today, so cross-domain aggregates remain unweighted (ADR 0026). It is recorded
+now only because the inclusion probability is knowable during the round that produced it
+and unreconstructable afterwards — there is deliberately no edge into `ppi` for it.
 
 The CI surfaces around the subsystem (scripts layer + workflows): `merge_gate_context.py`
 composes the ChangeContext (path→domain from `config/merge-gate-domains.yaml`,
-`touches_protected` from `eval_protected_paths`, mech_pass from the regression gate);
+`touches_protected` from `eval_protected_paths`, mech_pass from the regression gate) and
+carries the F-042 `--confidence` seam that stamps the seed's `raw_confidence`; it validates
+the YAML `human_namespace` against the canonical `agent_core.domains.HUMAN_NAMESPACE` at load,
+so a drifted reserved namespace fails loud instead of silently poisoning the agent pool;
+`agent_confidence.py` (F-042) is the deterministic proxy scorer — a pure function of diff
+size / file count / test-ratio / protected-path touches through a clamped sigmoid (no network,
+no model) that classifies the agent lane and emits its `agent_version` + confidence;
+`scripts/_config.py` is the shared changed-file / strict-YAML-loader helper both reuse;
+`scripts/migrations/agent_domain_backfill.py` (F-044) is the one-off reversible re-attribution;
 `record_audit_verdict.py` is the idempotent, SHA-validated verdict wrapper (the only
 HUMAN_AUDIT writer, dispatch-triggered); `audit_issue_sync.py` plans deduped audit issues.
-Workflows: `merge-gate-seed.yml` (push:main), `outcome-labeller.yml` (daily, checks:read
-precondition guard), `merge-gate-audit.yml` (weekly reader), `merge-gate-verdict.yml`
-(workflow_dispatch only, environment-gated), and the always-on `shadow` job in
-`calibrated-merge-gate.yml`.
+Workflows: `merge-gate-seed.yml` (push:main — F-042 head-ref routing, fail-safe to the human
+lane), `outcome-labeller.yml` (daily, checks:read precondition guard, F-043 calibration-report
+summary), `merge-gate-audit.yml` (weekly reader), `merge-gate-verdict.yml` (workflow_dispatch
+only, environment-gated), and the always-on `shadow` job in `calibrated-merge-gate.yml`.
 
 ## Level 3 — Component: Flow Calibration Corpus (F-011…F-015, airgap seam)
 
@@ -300,9 +349,9 @@ flowchart TB
     subgraph Real-Data Activation F-032…F-035 — ADR 0018
         SHADOW -->|store_sync pull, read-only| DATA[(merge-gate-data branch<br/>merge_outcomes.jsonl)]
         SHADOW --> SUMMARY[step summary:<br/>agent + human/ decisions, store stats]
-        MAIN[push: main] --> SEED[merge-gate-seed.yml<br/>human/domain @ 0.0]
+        MAIN[push: main] --> SEED[merge-gate-seed.yml<br/>F-042 head-ref routing:<br/>agent domain @ proxy conf / human/ @ 0.0]
         SEED -->|store_sync push| DATA
-        CRON1[daily cron] --> LAB[outcome-labeller.yml<br/>checks:read guard]
+        CRON1[daily cron] --> LAB[outcome-labeller.yml<br/>checks:read guard<br/>+ F-043 calibration report]
         LAB -->|passive labels, push| DATA
         CRON2[weekly cron] --> AUD[merge-gate-audit.yml<br/>reader: deduped issues]
         AUD -->|store_sync pull| DATA

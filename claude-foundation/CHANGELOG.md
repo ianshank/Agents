@@ -8,6 +8,15 @@ Component names (skills, subagents, hooks) are append-only within a major versio
 
 ## [Unreleased]
 
+### Added
+
+- `foundation_tools.backwards_compat`: implements ADR 0001 pt. 4's append-only
+  component-name contract (ADR 0004). Diffs live skill/agent/hook names against a
+  checked-in `tests/backwards_compat_baseline.json`; fails the release gate on a
+  removal without a corresponding major version bump, never on additions. `--update`
+  regenerates the baseline pre-release. Wired into the `release-gate` CI job
+  alongside `eval_gate`.
+
 ### Changed
 
 - `foundation:plan`, `foundation:test-first`, `foundation:code-review`: contract

@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+import math
+from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
 
@@ -49,13 +50,48 @@ class OutcomeRecord:
     # Defaults to None so pre-1.3.0 JSONL lines (no field) still load via from_json.
     # The merge gate's per-domain models ignore this; corpus tooling groups by it.
     agent_version: str | None = None
+    # Marginal probability with which the audit sampler selected this change, when known.
+    # Defaults to None so records written before the field existed -- and every passively
+    # labelled or pending record, which was never sampled -- still load unchanged.
+    # Nothing in the gate reads it: it exists so a later estimator can weight audits by
+    # 1/p (Horvitz-Thompson / prediction-powered), which is impossible to reconstruct after
+    # the fact. Validation lives at the write boundary (``audit_sampler.record_verdict``),
+    # not here, because this record is a deliberately dumb, load-tolerant holder (ADR 0025).
+    selection_propensity: float | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), sort_keys=True)
 
     @staticmethod
     def from_json(line: str) -> OutcomeRecord:
-        return OutcomeRecord(**json.loads(line))
+        """Parse one store line, tolerating fields a newer writer added (ADR 0025).
+
+        Corruption still raises: malformed JSON, a non-object payload, a missing required
+        field, or a wrong type all propagate, because an append-only audit store with a
+        corrupt line has already lost its integrity guarantee and hiding that would be
+        worse. An *unknown extra* field is a different thing — it is additive schema
+        evolution, and `OutcomeRecord(**payload)` could not tell the two apart, since both
+        raise ``TypeError``. Since ``store_sync`` deliberately preserves such a line
+        verbatim so a pull/push never rewrites history it does not own, this reader used to
+        be guaranteed to meet a record it would crash on during any rolling upgrade.
+
+        Unknown fields are dropped from the in-memory record and logged, never written
+        back: ``store_sync`` remains the writer and still round-trips the original line.
+        """
+        payload = json.loads(line)
+        if not isinstance(payload, dict):
+            raise TypeError(f"outcome record must be a JSON object, got {type(payload).__name__}")
+        known = {f.name for f in fields(OutcomeRecord)}
+        unknown = sorted(set(payload) - known)
+        if unknown:
+            logger.warning(
+                "outcome record %s carries unknown field(s) %s -- ignoring them; a newer "
+                "writer is active against this reader (store_sync preserves the line as-is)",
+                payload.get("change_id", "<no change_id>"),
+                ", ".join(unknown),
+            )
+            payload = {k: v for k, v in payload.items() if k in known}
+        return OutcomeRecord(**payload)
 
 
 class OutcomeStore:
@@ -104,7 +140,24 @@ class BinningCalibrator:
 
     def bin_index(self, raw_score: float) -> int:
         """Index of the score's bin. Distinct bins never conflate even when they
-        share the same empirical accuracy (unlike grouping by ``predict``)."""
+        share the same empirical accuracy (unlike grouping by ``predict``).
+
+        Any score outside the ``[0, 1]`` contract -- including ``NaN`` and ``±inf`` -- is
+        floored to bin 0 rather than left to fall through the scan. ``NaN < edge`` is False
+        for every edge and ``inf`` exceeds them all, so both reached the ``score >= top
+        edge`` return and were scored as the *highest*-confidence bucket; anything above
+        1.0 did the same. Records reach this method straight from the store, where
+        ``OutcomeRecord`` applies no validation and ``ChangeContext``'s check is bypassed,
+        so the fail-closed choice is made here too: a score we cannot interpret is treated
+        as no confidence, never as maximum confidence. ``1.0`` exactly is in contract and
+        still lands in the top bin.
+        """
+        if not math.isfinite(raw_score) or not 0.0 <= raw_score <= 1.0:
+            logger.warning(
+                "out-of-contract raw_score %r in bin_index; scoring as bin 0 (fail-closed)",
+                raw_score,
+            )
+            return 0
         for i in range(len(self.bin_acc)):
             if raw_score < self.edges[i + 1]:
                 return i
@@ -164,9 +217,32 @@ def build_domain_models(store: OutcomeStore, cfg: GatePolicyConfig) -> dict[str,
     is earned per domain as unbiased audit labels accumulate.
     """
     by_domain: dict[str, list[OutcomeRecord]] = {}
+    # Everything that is not an authoritative, labelled audit record is excluded from the
+    # fit. That exclusion is correct but invisible: an all-passive store yields no models
+    # and therefore no tau, which is indistinguishable from "no records at all" unless we
+    # say so. Tally the reasons and report them.
+    excluded: dict[str, int] = {}
     for r in store.resolved().values():
         if r.label_source == LabelSource.HUMAN_AUDIT.value and r.label is not None:
             by_domain.setdefault(r.domain, []).append(r)
+        else:
+            reason = "unlabelled" if r.label is None else f"passive:{r.label_source}"
+            excluded[reason] = excluded.get(reason, 0) + 1
+
+    if excluded:
+        logger.info(
+            "build_domain_models: fitting on %d HUMAN_AUDIT record(s) across %d domain(s); "
+            "excluded %d record(s) ineligible for the fit (%s)",
+            sum(len(v) for v in by_domain.values()),
+            len(by_domain),
+            sum(excluded.values()),
+            ", ".join(f"{k}={v}" for k, v in sorted(excluded.items())),
+        )
+    if not by_domain:
+        logger.warning(
+            "build_domain_models: no HUMAN_AUDIT records available -- every domain stays "
+            "cold-start (tau=None) regardless of how many passive labels exist"
+        )
 
     models: dict[str, DomainModel] = {}
     for domain, recs in by_domain.items():

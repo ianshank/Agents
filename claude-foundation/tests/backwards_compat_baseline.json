@@ -1,0 +1,21 @@
+{
+  "components": {
+    "agents": [
+      "explorer",
+      "test-runner"
+    ],
+    "hooks": [
+      "post_edit_verify.py",
+      "pre_tool_guard.py",
+      "session_logger.py"
+    ],
+    "skills": [
+      "c4-docs",
+      "code-review",
+      "plan",
+      "test-first"
+    ]
+  },
+  "plugin_name": "foundation",
+  "recorded_major_version": 1
+}

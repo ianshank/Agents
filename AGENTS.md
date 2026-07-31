@@ -30,6 +30,46 @@ Before writing code, read in order:
 4. `CHANGELOG.md` `[1.3.0-dev]` — the section to add entries to for any user-visible change. Follow the existing `Hardening` / `Added` / `Changed` / `Fixed` structure.
 5. `docs/phoenix-spike.md` — reversible-adoption pattern the Phoenix seam demonstrates. Reference model for any future "SDK-optional" integration.
 
+## Reasoning & Planning Skills
+
+The `skills/` marketplace contains composable reasoning skills for conducting controlled research and producing OpenSpec packages that respect the Agents CHARTER. 
+
+To execute an end-to-end research pipeline, compose the following skills:
+1. `hierarchical-recursive-brainstorm` expands a research question into a pruned tree.
+2. `openspec-quality-plan` turns the strongest leaves into a full OpenSpec package.
+3. `openspec-peer-review` critiques and rewrites that package to the quality standards.
+
+The final peer-reviewed OpenSpec package will be ready to drop under `openspec/changes/`.
+
+## Root documentation map
+
+These root-level docs answer different questions; check this table before guessing which one
+to read or update. Governance and community-health files (bottom rows) were added in the
+enterprise-docs pass and point at the charter as the single source of truth:
+
+| File | Answers | Currency |
+|---|---|---|
+| `README.md` | How do I install / run / test this? | Kept current with each release |
+| `AGENTS.md` (this file) | What must an agent read or avoid before editing? | Manually maintained — see "Rebuilding this file" below |
+| `HARNESS_SPEC.md` | What is the canonical spec (features, gates, checkpoints)? | Canonical source of truth (see its own header) |
+| `NEXT_STEPS.md` | What shipped recently, what's next? | A rolling log of intent — an entry's `[x]` reflects the state *when written*, not necessarily now. Cross-check `features.yaml` / `scripts/validations/F_*.py` (run `python scripts/validate.py --tier fast`) for a feature's current enforced state rather than trusting the checkbox alone |
+| `CHANGELOG.md` | What changed, release by release? | Keep-a-changelog format; append to the `[Unreleased]`/dev section |
+| `progress.md` | What happened in each work session? | Rotates to `progress-archive/YYYY-MM.md` once large (see `HARNESS_SPEC.md`'s "progress-archive/" section) |
+| `docs/README.md` | Where is every doc, by category? | The documentation index (mirrors this table) |
+| `openspec/` | What in-flight change proposals exist, and which agent owns each phase? | A reversible coordination layer over `features.yaml`/ADRs; see `openspec/README.md` and `docs/openspec-spike.md`. Delete-safe |
+| `CONTRIBUTING.md` | How do I set up, test, and submit a change? | Generalizes `agent-core/CONTRIBUTING.md` to the monorepo |
+| `GOVERNANCE.md` | Who decides, and how? | Defers to `docs/CHARTER.md` §3/§6 |
+| `SECURITY.md` | How do I report a vulnerability? | Private GitHub advisories; reuses the Snyk/secret-scan posture |
+| `SUPPORT.md` | Where do I ask for help? | Points at docs + issue templates |
+| `CODE_OF_CONDUCT.md` | What behavior is expected? | Contributor Covenant 2.1 |
+| `MAINTAINERS.md` | Who maintains this? | Derived from `.github/CODEOWNERS` |
+| `LICENSE` / `NOTICE` | Under what terms is this licensed? | Apache-2.0 |
+
+`docs/decisions/` ADR numbers are **not** contiguous by design — `0007` is an intentional
+gap in the sequence (see `docs/plans/agents-critical-path/REVIEW.md`); do not backfill it
+or renumber later ADRs to close it.
+>>>>>>> origin/main
+
 ## What is off-limits without a labeled approval
 
 The repo enforces protected paths via `scripts/check_protected_changes.py` and the `eval-change-approved` GitHub label. Do NOT modify these paths without asking:
@@ -56,7 +96,9 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 - **`from_dict` is strict.** Unknown keys raise `ConfigError`. Do not add permissive fallbacks.
 - **`ClaimId` is opaque `str`.** Never sanitize `CycleState.unresolved`.
 - **Ruff and mypy are pinned** in the `dev` extra (`ruff==0.15.20`, `mypy==2.1.0`). Do not bump them casually — CI/local skew broke `ruff format --check` before.
-- **Backwards-compat shims are documented.** `ece`/`expected_calibration_error` alias in `agent-core/agent_core/__init__.py` is deliberate. Do not remove without a separate deprecation ADR.
+- **Never word-split an externally-supplied value into a command.** Routing a workflow input through `env` stops *template* injection, but an unquoted `$VAR` in the `run:` block still splits on whitespace — and an appended duplicate flag wins, because argparse is last-wins. Build optional flags as a bash **array** and expand `"${ARR[@]}"`; an empty array vanishes, which is the only reason the unquoted form was ever tempting. This was a real vulnerability in `merge-gate-verdict.yml` (see the CHANGELOG "Security" entry); `F_047.py` now fails if the array expansion is replaced.
+- **A probability is validated through `agent_core.audit_sampler.is_valid_propensity` and rendered through `format_propensity`, never a restated comparison or a local format spec.** `float()` parses `"nan"` and `"inf"` happily, so parsing is not validation, and the naive `0.0 < p <= 1.0` form is correct only by the accident of NaN comparing false. **Rendering is serialisation, not decoration:** the output is pasted into a `gh workflow run` command, so it must parse back to the *same usable value* — fixed-point `.6f` collapsed `1e-7` to `"0.000000"`, which the contract then rejects. Use significant figures and property-test the round trip over the whole domain; hand-picked examples will miss it. Defining a shared helper is not the same as using it — `F_047` fails on a local `.6f` because two sites, including the `selected.txt` writer, had bypassed the helper.
+- **Backwards-compat shims are documented.** `ece`/`expected_calibration_error` alias in `agent-core/agent_core/__init__.py` is deliberate. Do not remove without a separate deprecation ADR. The same applies to the re-exports left by the 500-line file split (ADR 0026): PPI moved to `agent_core/ppi.py` and the calibration report to `report_types.py` + `calibration_report_render.py`, but every previously importable name still resolves from its original module — `calibration_report.__all__` pins that promise and the public-surface guard freezes it.
 
 ## Entry points
 
@@ -82,6 +124,7 @@ The following files implement "SDK-optional" seams: the real dependency is impor
 - `src/eval_harness/braintrust_client/__init__.py` — BrainTrust experiment export (`build_client`) + dataset read (`fetch_dataset_items`); mirrors `phoenix_client`, `docs/braintrust-spike.md`.
 - `src/eval_harness/judges/*.py` — `MockJudge` (offline default), `OpenAIJudge`, `AnthropicJudge`, `BedrockJudge`, `PhoenixEvalJudge`.
 - `src/eval_harness/sinks/__init__.py` — `console`, `json_file`, `html_file`, `langfuse`, `phoenix`, `braintrust`.
+- `agent-core/agent_core/proxies.py` — `ProxyExtractor` Protocol + `MappingProxy`. Same shape, different direction: an external score (an LLM judge, a static analyser) is *injected* rather than a client being lazily imported, so `agent_core` measures a judge's signal while staying dependency-free and pure stdlib. Add a proxy here, never a dependency there.
 - `src/eval_harness/scorers/__init__.py` — `autoevals` bridges BrainTrust's `autoevals` scorer library (heuristic offline-safe; LLM/Embedding need a provider key). `src/eval_harness/datasets/__init__.py` — `braintrust` pulls a dataset via `init_dataset` (fail-fast when the SDK is absent).
 
 Test the "SDK absent" path via `sys.modules` injection, not `@patch(...)` — see `feedback_agents_offline_optional_dep_testing` behaviour documented in existing tests. `@patch("phoenix.otel.register")` raises `ModuleNotFoundError` at patch time when the SDK isn't installed. The concrete idiom is `monkeypatch.setitem(sys.modules, "phoenix.otel", None)`, which forces the lazy import to `ImportError` even when the extra *is* installed (this venv installs all extras).
@@ -89,6 +132,7 @@ Test the "SDK absent" path via `sys.modules` injection, not `@patch(...)` — se
 ## Testing conventions
 
 - Every scorer, judge, sink, and dataset registers itself via `@REGISTRY.register("name")`. Tests should exercise the registered name path, not the class constructor path — that's how the real engine resolves them.
+- All evaluation components (Judges, Datasets, Scorers, Sinks) that interact with external dependencies must be fully mocked for offline testing using deterministic dependency injection as seen in `tests/test_matrix_eval_tools.py`. Do not use hardcoded `try...except` exception swallows or brittle magic mock returns.
 - Pytest markers: `integration` (live API tests, skipped by default), `slow` (>5s). Filter with `-m "not integration"` for the offline suite; only `test_phoenix_live.py` currently carries the `integration` marker for live-collector tests.
 - Hypothesis: run with `HYPOTHESIS_PROFILE=ci` when reproducing CI behaviour locally (matches `agent-core-ci.yml`).
 - Do NOT patch `os.environ.clear()` — replace with `monkeypatch.delenv` for surgical env manipulation. See `CHANGELOG.md` note under [1.2.0-dev] `Testing`.

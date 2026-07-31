@@ -200,3 +200,76 @@ def test_seed_store_ignored_without_change_id(tmp_path):
     )
     assert rc == 0
     assert not seed_path.exists()
+
+
+@pytest.mark.parametrize(
+    "bad", ["nan", "inf", "1.5", "-0.2"], ids=["nan", "inf", "above-1", "below-0"]
+)
+def test_main_rejects_out_of_contract_confidence_as_usage_error(tmp_path, bad, capsys):
+    """Bad input exits 2 (usage), not 0 (AUTO_MERGE) and not 1 (internal error).
+
+    Exit 0 is the dangerous outcome here: CI treats it as "proceed to merge".
+    """
+    rc = main(
+        [
+            "--store",
+            str(tmp_path / "s.jsonl"),
+            "--mech-pass",
+            "--raw-confidence",
+            bad,
+            "--domain",
+            "core",
+        ]
+    )
+    assert rc == 2
+    assert "invalid input" in capsys.readouterr().err
+
+
+def test_main_rejects_out_of_contract_confidence_from_context_file(tmp_path, capsys):
+    ctx_file = tmp_path / "ctx.json"
+    ctx_file.write_text(
+        json.dumps(
+            {
+                "mech_pass": True,
+                "touches_protected": False,
+                "raw_confidence": float("nan"),
+                "domain": "core",
+            }
+        ),
+        encoding="utf-8",
+    )
+    rc = main(["--store", str(tmp_path / "s.jsonl"), "--context", str(ctx_file)])
+    assert rc == 2
+    assert "invalid input" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("payload", "why"),
+    [
+        ('{"mech_pass": true, "touches_protected": false, "domain": "core"}', "missing field"),
+        (
+            '{"mech_pass": true, "touches_protected": false, '
+            '"raw_confidence": null, "domain": "core"}',
+            "null where a value belongs",
+        ),
+        ("{not json at all", "malformed JSON"),
+    ],
+    ids=["missing-key", "null-value", "malformed-json"],
+)
+def test_main_malformed_context_is_a_usage_error(tmp_path, payload, why, capsys):
+    """Every way a caller can hand over a bad context maps to exit 2, not exit 1.
+
+    KeyError (missing field) and TypeError (null) are as much "your input is wrong" as a
+    ValueError is; reporting them as internal faults sent CI chasing a gate bug instead.
+    """
+    ctx_file = tmp_path / "ctx.json"
+    ctx_file.write_text(payload, encoding="utf-8")
+    rc = main(["--store", str(tmp_path / "s.jsonl"), "--context", str(ctx_file)])
+    assert rc == 2, why
+    assert "invalid input" in capsys.readouterr().err
+
+
+def test_main_unreadable_context_path_stays_an_internal_error(tmp_path):
+    """A missing --context file is the environment failing, not a bad caller value."""
+    rc = main(["--store", str(tmp_path / "s.jsonl"), "--context", str(tmp_path / "nope.json")])
+    assert rc == 1

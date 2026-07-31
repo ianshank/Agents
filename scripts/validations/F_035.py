@@ -99,8 +99,8 @@ def _validate_seed(errors: list[str]) -> None:
         errors,
     )
     _check(
-        doc.get("permissions") == {"contents": "write"},
-        "seed permissions are exactly contents: write",
+        doc.get("permissions") == {"contents": "write", "pull-requests": "read"},
+        "seed permissions are contents: write + pull-requests: read (F-042 head-ref routing lookup)",
         errors,
     )
     _check("concurrency" not in doc, "no concurrency group (queued-seed drop hazard)", errors)

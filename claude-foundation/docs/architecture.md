@@ -56,10 +56,13 @@ C4Component
   Component(scan, "scan.py", "Python, __main__ entry", "No-hardcode scanner. Allowlist policy: full model IDs banned everywhere; aliases only in frontmatter model: fields; paths via ${CLAUDE_PLUGIN_ROOT}-style vars only")
   Component(evalgate, "eval_gate.py", "Python, __main__ entry", "Thin wrapper: invokes skill-creator evals headlessly, parses grading.json, gates release tags on 100% assertion pass")
   Component(jsonlog, "jsonlog.py", "Python stdlib logging", "Shared JSONL structured-log emitter for tools; hooks mirror it via dependency-free hooks/_lib.py")
+  Component(compat, "backwards_compat.py", "Python, __main__ entry", "Diffs live skill/agent/hook names against tests/backwards_compat_baseline.json; fails release gate on removal without a major version bump (ADR 0004); --update regenerates the baseline pre-release")
   Rel(validate, schemas, "Uses")
   Rel(scan, jsonlog, "Emits findings")
   Rel(evalgate, jsonlog, "Emits run logs")
   Rel(validate, jsonlog, "Emits results")
+  Rel(compat, schemas, "Uses")
+  Rel(compat, jsonlog, "Emits results")
 ```
 
 ### Hook scripts (companion to Level 3)

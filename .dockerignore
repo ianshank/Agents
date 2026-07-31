@@ -55,15 +55,26 @@ desktop.ini
 out/
 results/
 artifacts/
+pytest_out.txt
 regression_report.json
 .regression_gate_junit.xml
 *.html
 !README.html
 merge_outcomes.jsonl
 merge_decisions.jsonl
+agent.json
+seed_context.json
+changed_files.z
+*.pre-backfill.bak
 phoenix-server.log
 
 # Docs (not needed in container)
 docs/
+# Change proposals + the agent-coordination contract: markdown only, no runtime role.
+# `*.md` below already covers its contents; the directory entry keeps it explicit and
+# consistent with `docs/` above.
+openspec/
 *.md
 !README.md
+*.openspec.md
+*_peer_review.md

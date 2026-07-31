@@ -1,0 +1,76 @@
+{
+  "packages": [
+    "flow_corpus"
+  ],
+  "surface": {
+    "flow_corpus": [
+      "HARNESS_VERSION_PIN",
+      "PROTOCOL_VERSION_PIN",
+      "PinMismatchError",
+      "PinReport",
+      "__version__",
+      "check_pins",
+      "verify_pins"
+    ],
+    "flow_corpus.canary": [
+      "GoldSpecimen",
+      "NoOpSpecimen",
+      "RandomSpecimen",
+      "SeparationReport",
+      "canary_separation"
+    ],
+    "flow_corpus.crosscheck": [
+      "CrossCheckReport",
+      "CrossCheckRow",
+      "confidence_cross_check"
+    ],
+    "flow_corpus.holdout": [
+      "HoldoutManager",
+      "HoldoutReport",
+      "RotationManager",
+      "RotationReport",
+      "Sample",
+      "samples_from_run"
+    ],
+    "flow_corpus.keying": [
+      "version_key"
+    ],
+    "flow_corpus.mutation": [
+      "MutationEngine"
+    ],
+    "flow_corpus.oracles": [
+      "KappaReport",
+      "Oracle",
+      "PropertyOracle",
+      "validate_oracle"
+    ],
+    "flow_corpus.policy": [
+      "MockPolicy",
+      "Policy",
+      "PolicyDecision"
+    ],
+    "flow_corpus.specimens": [
+      "BaselineSpecimen",
+      "MCTSSpecimen",
+      "ReActSpecimen",
+      "Registry",
+      "SPECIMENS",
+      "Specimen",
+      "SpecimenBase"
+    ],
+    "flow_corpus.suites": [
+      "TaskInstance",
+      "TaskSuite"
+    ],
+    "flow_corpus.validation": [
+      "BootstrapCI",
+      "ReliabilityReport",
+      "RunResult",
+      "aurc",
+      "bootstrap_delta_ci",
+      "brier_reliability",
+      "is_directional_only",
+      "run_suite"
+    ]
+  }
+}

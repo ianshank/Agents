@@ -10,7 +10,15 @@ Asserts the 2026-07-03 branch-sweep remediation stays enforced:
     3. The instrumented modules keep their loggers (silent-degrade regression
        guard for the paths the sweep made observable).
     4. The shared strict JSONL reader stays the single read path for
-       OutcomeStore.
+       OutcomeStore, and tests/ stay type-checked in every suite's CI.
+
+Checks 1 and 4 assert the *guarantee* (the step runs in that suite's CI), not one wiring
+of it -- see ``_common.ci_enforces``. They pass whether the step is inline in the workflow
+or delegated to that suite's generated ``scripts/quality-gate.sh`` (ADR 0021). Pinning the
+inline spelling made this gate fail the moment the eval-harness delegation landed (PR #64)
+even though tests/ were still fully type-checked; because the protected-path guard does not
+fire on ``.github/``-only PRs, that failure went undetected on ``main``. Check 2 is
+deliberately still inline-matched (no skill has a generated gate yet).
 
 Deterministic and offline: reads config/workflow/source files only, runs
 nothing.
@@ -34,7 +42,7 @@ for _p in (_HERE, _SCRIPTS):
         sys.path.insert(0, _p)
 
 from _common import check as _check
-from _common import configure_logging, report
+from _common import ci_enforces, configure_logging, report
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +50,52 @@ _ROOT = os.path.dirname(_SCRIPTS)
 
 _FOUNDATION_DIR = "claude-foundation"
 _FOUNDATION_WORKFLOW = os.path.join(".github", "workflows", "claude-foundation-ci.yml")
+
+_WORKFLOWS = os.path.join(".github", "workflows")
+
+
+def _gate(package: str = "") -> str:
+    """Path to a suite's generated quality gate (repo root when ``package`` is empty)."""
+    return (
+        os.path.join(package, "scripts", "quality-gate.sh") if package else os.path.join("scripts", "quality-gate.sh")
+    )
+
+
+# (workflow, that suite's generated gate, inline spelling, tokens the delegated gate needs).
+# Every package gate type-checks both its module and ``tests``, so the delegated form
+# asserts both -- matching what the inline "mypy <module> tests" spelling guaranteed.
+_TYPECHECK_SUITES = (
+    (
+        os.path.join(_WORKFLOWS, "eval-harness-ci.yml"),
+        _gate(),
+        "mypy tests",
+        ('mypy "tests"',),
+    ),
+    (
+        os.path.join(_WORKFLOWS, "agent-core-ci.yml"),
+        _gate("agent-core"),
+        "mypy agent_core tests",
+        ('mypy "agent_core"', 'mypy "tests"'),
+    ),
+    (
+        os.path.join(_WORKFLOWS, "flow-corpus-ci.yml"),
+        _gate("flow-protocol"),
+        "mypy flow_protocol tests",
+        ('mypy "flow_protocol"', 'mypy "tests"'),
+    ),
+    (
+        os.path.join(_WORKFLOWS, "flow-corpus-ci.yml"),
+        _gate("flow-corpus"),
+        "mypy flow_corpus tests",
+        ('mypy "flow_corpus"', 'mypy "tests"'),
+    ),
+    (
+        os.path.join(_WORKFLOWS, "behavioral-regression-ci.yml"),
+        _gate("behavioral-regression"),
+        "mypy behavioral_regression tests",
+        ('mypy "behavioral_regression"', 'mypy "tests"'),
+    ),
+)
 # Module -> logger-defining line that must survive (the sweep's observability contract).
 _INSTRUMENTED = {
     os.path.join("agent-core", "agent_core", "detectors.py"): "get_logger(__name__)",
@@ -72,17 +126,37 @@ def main() -> int:
     )
     if staging_exists and workflow_exists:
         wf = _read(_FOUNDATION_WORKFLOW)
-        for needle, label in (
-            ('paths: ["claude-foundation/**"', "workflow is path-filtered on the staging dir"),
-            ("ruff check tools tests hooks", "workflow lints the foundation"),
-            ("ruff format --check tools tests hooks", "workflow format-checks the foundation"),
-            ("mypy tools", "workflow type-checks foundation tools"),
-            ("mypy hooks", "workflow type-checks foundation hooks"),
-            ("python -m pytest --cov", "workflow runs the foundation suite with coverage"),
+        _check(
+            'paths: ["claude-foundation/**"' in wf,
+            "workflow is path-filtered on the staging dir",
+            errors,
+        )
+        # Lint/type/coverage may be inline or delegated to the foundation's own gate.
+        foundation_gate_rel = _gate(_FOUNDATION_DIR)
+        foundation_gate = _read(foundation_gate_rel) if os.path.exists(os.path.join(_ROOT, foundation_gate_rel)) else ""
+        for inline, in_gate, label in (
+            ("ruff check tools tests hooks", 'ruff check "."', "workflow lints the foundation"),
+            (
+                "ruff format --check tools tests hooks",
+                'ruff format --check "."',
+                "workflow format-checks the foundation",
+            ),
+            ("mypy tools", 'mypy "tools"', "workflow type-checks foundation tools"),
+            ("mypy hooks", 'mypy "hooks"', "workflow type-checks foundation hooks"),
+            (
+                "python -m pytest --cov",
+                "pytest --cov",
+                "workflow runs the foundation suite with coverage",
+            ),
         ):
-            _check(needle in wf, label, errors)
+            _check(ci_enforces(wf, foundation_gate, inline=inline, in_gate=in_gate), label, errors)
 
     # 2. Skills typing + formatting gates, pinned tools.
+    # Deliberately still matched inline: unlike the five packages, no skill has a generated
+    # scripts/quality-gate.sh, so there is no delegated form to assert against yet. When the
+    # skills half of ADR 0021 lands (it needs a gategen coverage-contract flag first, since
+    # skills ship no pyproject.toml and would otherwise generate a gate with no floor),
+    # these three checks must move to ci_enforces() the same way checks 1/4 did.
     skills_ci = _read(os.path.join(".github", "workflows", "skills-ci.yml"))
     _check(
         skills_ci.count("mypy --config-file ../../pyproject.toml") >= 4,
@@ -106,20 +180,18 @@ def main() -> int:
 
     # 4. tests/ stay type-checked in every suite's CI, and the package configs keep
     # explicit_package_bases (without it the tests.* overrides silently never match).
-    for wf, needle in (
-        (os.path.join(".github", "workflows", "eval-harness-ci.yml"), "mypy tests"),
-        (os.path.join(".github", "workflows", "agent-core-ci.yml"), "mypy agent_core tests"),
-        (os.path.join(".github", "workflows", "flow-corpus-ci.yml"), "mypy flow_protocol tests"),
-        (os.path.join(".github", "workflows", "flow-corpus-ci.yml"), "mypy flow_corpus tests"),
-        (
-            os.path.join(".github", "workflows", "behavioral-regression-ci.yml"),
-            "mypy behavioral_regression tests",
-        ),
-    ):
-        _check(needle in _read(wf), f"{wf} type-checks tests ({needle})", errors)
+    # Each entry names the workflow, that suite's generated gate, the inline spelling, and
+    # the tokens the delegated gate must contain. ci_enforces() accepts either wiring, so
+    # the ADR 0021 fan-out does not re-break this gate the way it broke it on PR #64.
+    for wf, gate_rel, inline, in_gate_tokens in _TYPECHECK_SUITES:
+        gate = _read(gate_rel) if os.path.exists(os.path.join(_ROOT, gate_rel)) else ""
+        ok = all(ci_enforces(_read(wf), gate, inline=inline, in_gate=token) for token in in_gate_tokens)
+        _check(ok, f"{wf} type-checks tests ({inline})", errors)
     if workflow_exists:
+        foundation_gate = os.path.join(_FOUNDATION_DIR, "scripts", "quality-gate.sh")
+        gate = _read(foundation_gate) if os.path.exists(os.path.join(_ROOT, foundation_gate)) else ""
         _check(
-            "mypy tests" in _read(_FOUNDATION_WORKFLOW),
+            ci_enforces(_read(_FOUNDATION_WORKFLOW), gate, inline="mypy tests", in_gate='mypy "tests"'),
             "claude-foundation staging CI type-checks tests",
             errors,
         )

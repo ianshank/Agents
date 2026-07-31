@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,10 +7,28 @@ name = "claude-foundation-tools"
 version = "1.0.0"
 description = "Validation, scanning, and eval-gate tooling for the foundation Claude Code plugin."
 requires-python = ">=3.11"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2",
     "pyyaml>=6",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ianshank/Agents"
+Repository = "https://github.com/ianshank/Agents"
+Documentation = "https://github.com/ianshank/Agents/tree/main/docs"
+Issues = "https://github.com/ianshank/Agents/issues"
+Changelog = "https://github.com/ianshank/Agents/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # ruff/mypy pinned (not >=) so local and CI lint/format identically; bump deliberately,
