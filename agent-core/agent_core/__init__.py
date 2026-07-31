@@ -69,12 +69,15 @@ from .ppi import (
 )
 from .protocols import (
     AsyncCycleRunner,
+    Clock,
     CostEstimator,
     CycleResult,
     CycleRunner,
     CycleState,
+    FixedClock,
     StopOutcome,
     StopReason,
+    SystemClock,
 )
 from .recalibration import (
     CALIBRATOR_FACTORIES,
@@ -125,6 +128,7 @@ __all__ = [
     "CalibrationReport",
     "Calibrator",
     "CalibratorRegistry",
+    "Clock",
     "ConfigError",
     "ConvergenceCondition",
     "CorrelationConfig",
@@ -133,6 +137,7 @@ __all__ = [
     "CycleRunner",
     "CycleState",
     "Finding",
+    "FixedClock",
     "FrameworkConfig",
     "Gate",
     "GoldenConfig",
@@ -157,6 +162,7 @@ __all__ = [
     "SanitizerConfig",
     "StopOutcome",
     "StopReason",
+    "SystemClock",
     "TemperatureScaler",
     "__version__",
     "auroc",

@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import ast
 import configparser
+import importlib.util
 import json
 import logging
 import re
@@ -81,10 +82,12 @@ _EXPECTED_GATE_SCRIPTS = (
 _PROTOCOL_INTERFACES = ("DatasetSource", "TargetRunner", "ResultSink", "Judge")
 _ABC_INTERFACES = ("Scorer",)
 
-# Numeric literals excluded from the magic-number heuristic: common non-"operational-value"
-# constants (identity/sentinel numbers), not charter violations to flag. int/float equality
-# (0 == 0.0) means each value here also excludes its float/int counterpart.
-_MAGIC_NUMBER_ALLOWLIST = {0, 1, -1, 2, 100}
+# Numeric literals excluded from the magic-number heuristic: pure identity/sentinel values
+# (0, empty/singular counts, sign flip). Deliberately does NOT include round operational
+# numbers like 100 (a plausible batch size / timeout / retry count) — that's exactly the
+# class of value this heuristic exists to catch, so allowlisting it would undermine the
+# check. int/float equality (0 == 0.0) means each entry also excludes its float counterpart.
+_MAGIC_NUMBER_ALLOWLIST = {0, 1, -1, 2}
 
 
 @dataclass(frozen=True)
@@ -145,7 +148,10 @@ def check_schema_version_single_source(root: Path) -> list[Finding]:
     path = root / "src/eval_harness/version.py"
     if not path.is_file():
         return [Finding("version_py_missing", str(path), hard=True)]
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except SyntaxError as exc:
+        return [Finding("version_py_unparseable", f"{path}: {exc}", hard=True)]
     assignments = [
         target.id
         for node in ast.walk(tree)
@@ -192,18 +198,32 @@ def check_coverage_floors_declared(root: Path) -> list[Finding]:
 
 
 def check_protected_path_label(root: Path) -> list[Finding]:
-    """Charter §4 'Eval integrity': the approval label matches the charter's documented one."""
-    sys.path.insert(0, str(root / "scripts"))
+    """Charter §4 'Eval integrity': the approval label matches the charter's documented one.
+
+    Loads ``check_protected_changes.py`` as an isolated module via
+    ``importlib.util.spec_from_file_location`` rather than mutating ``sys.path`` /
+    ``sys.modules`` (the previous approach): the test suite's ``conftest.py`` already
+    puts the real ``scripts/`` on ``sys.path``, so a plain ``import`` would hit
+    Python's module cache and silently ignore a ``tmp_path``-based synthetic root,
+    making the failure branches below untestable.
+    """
+    path = root / "scripts" / "check_protected_changes.py"
+    if not path.is_file():
+        return [Finding("protected_changes_missing", str(path), hard=True)]
+    spec = importlib.util.spec_from_file_location("_check_protected_changes_probe", path)
+    if spec is None or spec.loader is None:
+        return [Finding("protected_changes_import_failed", f"cannot load spec for {path}", hard=True)]
+    module = importlib.util.module_from_spec(spec)
     try:
-        import check_protected_changes as guard
-    except ImportError as exc:
-        return [Finding("protected_changes_import_failed", str(exc), hard=True)]
-    if guard.DEFAULT_APPROVAL_LABEL != CHARTER_APPROVAL_LABEL:
+        spec.loader.exec_module(module)
+    except Exception as exc:  # any load failure (syntax error, missing import, ...) is itself the finding
+        return [Finding("protected_changes_import_failed", f"{path}: {exc}", hard=True)]
+    label = getattr(module, "DEFAULT_APPROVAL_LABEL", None)
+    if label != CHARTER_APPROVAL_LABEL:
         return [
             Finding(
                 "approval_label_mismatch",
-                f"check_protected_changes.DEFAULT_APPROVAL_LABEL={guard.DEFAULT_APPROVAL_LABEL!r} "
-                f"!= charter's {CHARTER_APPROVAL_LABEL!r}",
+                f"check_protected_changes.DEFAULT_APPROVAL_LABEL={label!r} != charter's {CHARTER_APPROVAL_LABEL!r}",
                 hard=True,
             )
         ]
@@ -233,7 +253,10 @@ def check_protocol_interfaces(root: Path) -> list[Finding]:
     path = root / "src/eval_harness/core/interfaces.py"
     if not path.is_file():
         return [Finding("interfaces_py_missing", str(path), hard=True)]
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except SyntaxError as exc:
+        return [Finding("interfaces_py_unparseable", f"{path}: {exc}", hard=True)]
     seen = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name in (*_PROTOCOL_INTERFACES, *_ABC_INTERFACES):
@@ -285,10 +308,12 @@ def check_magic_number_defaults(root: Path) -> list[Finding]:
     reasonable proxy is the best that's mechanically checkable here.
     """
     findings: list[Finding] = []
-    roots = [root / "src" / "eval_harness", root / "agent-core" / "agent_core"]
+    # Reuse _MISSION_DIRS (the module's single source of truth for "packages the charter
+    # applies to") rather than a second, independently-maintained list -- a prior version
+    # of this scan hardcoded only 2 of the 7 mission dirs here, silently exempting
+    # behavioral-regression/flow-corpus/flow-protocol/scripts from this heuristic.
+    roots = [root / d for d in _MISSION_DIRS if (root / d).is_dir()]
     for scan_root in roots:
-        if not scan_root.is_dir():
-            continue
         for path in sorted(scan_root.rglob("*.py")):
             if "tests" in path.parts or path.name.startswith("test_"):
                 continue

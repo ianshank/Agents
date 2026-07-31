@@ -13,6 +13,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from eval_harness.core.types import EvalItem
 from eval_harness.plugins import TARGETS, bootstrap
@@ -49,6 +50,26 @@ def test_create_via_registry_returns_target_runner():
 def test_invalid_provider_raises():
     with pytest.raises(ValueError, match="provider must be one of"):
         ModelTarget(provider="nope", model="m", client=MagicMock())
+
+
+def test_out_of_range_top_p_raises_validation_error():
+    """A config-supplied value outside ModelTargetConfig's bounds is rejected at
+    construction time, not silently accepted (Registry.create splats an arbitrary
+    dict straight into __init__, so this is the only validation point)."""
+    with pytest.raises(ValidationError, match="top_p"):
+        ModelTarget(provider="openai", model="m", top_p=5.0, client=MagicMock())
+
+
+def test_retry_max_less_than_min_raises_validation_error():
+    with pytest.raises(ValidationError, match="retry_max_seconds"):
+        ModelTarget(provider="openai", model="m", retry_min_seconds=10, retry_max_seconds=1, client=MagicMock())
+
+
+def test_zero_retry_bounds_are_still_accepted():
+    """ge=0 (not gt=0): zero backoff is legitimate, not just permissively allowed."""
+    target = ModelTarget(provider="openai", model="m", retry_min_seconds=0, retry_max_seconds=0, client=MagicMock())
+    assert target.retry_min_seconds == 0
+    assert target.retry_max_seconds == 0
 
 
 # ----------------------------------------------------------------------- openai

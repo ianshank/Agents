@@ -25,7 +25,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from ..core.interfaces import TargetRunner
 from ..core.types import EvalItem, TargetOutput
@@ -37,9 +37,15 @@ _PROVIDERS = ("openai", "bedrock", "anthropic")
 
 
 class ModelTargetConfig(BaseModel):
-    """Single source of truth for :class:`ModelTarget`'s operational defaults
-    (charter §4 invariant 5: every operational value is a ``*Config`` field with
-    a documented default, never a bare literal at the call site).
+    """Single source of truth for :class:`ModelTarget`'s operational defaults AND
+    validation (charter §4 invariant 5: every operational value is a ``*Config``
+    field with a documented default, never a bare literal at the call site).
+    ``ModelTarget.__init__`` constructs and validates one of these from its actual
+    arguments — not just its own class-level defaults — so an out-of-range value
+    (e.g. ``top_p=5.0``, ``retry_max_seconds &lt; retry_min_seconds``) raises
+    ``pydantic.ValidationError`` at construction time instead of being silently
+    accepted (``Registry.create`` passes an arbitrary config dict straight through
+    to the constructor, with nothing else validating it).
 
     Declared here rather than in ``eval_harness.config.models``: the architecture
     manifest keeps the ``targets`` component dependent on ``core``/``plugins``
@@ -51,17 +57,28 @@ class ModelTargetConfig(BaseModel):
     max_retries: int = Field(
         default=5, ge=0, description="Retry attempts on a rate-limit error (openai provider only)."
     )
+    # ge=0 (not gt=0): zero backoff is a legitimate choice (e.g. fast-failing tests),
+    # not just a permissive default — see tests/test_model_target.py's rate-limit-retry
+    # test, which passes retry_min_seconds=retry_max_seconds=0 deliberately.
     retry_min_seconds: float = Field(
-        default=2.0, gt=0, description="Minimum exponential-backoff wait between retries, in seconds."
+        default=2.0, ge=0, description="Minimum exponential-backoff wait between retries, in seconds."
     )
     retry_max_seconds: float = Field(
-        default=30.0, gt=0, description="Maximum exponential-backoff wait between retries, in seconds."
+        default=30.0, ge=0, description="Maximum exponential-backoff wait between retries, in seconds."
     )
     temperature: float | None = Field(
         default=0.0, description="Sampling temperature; omitted entirely if None (some models reject it)."
     )
     top_p: float = Field(default=1.0, gt=0, le=1.0, description="Nucleus sampling parameter.")
     prompt_template: str = Field(default="{prompt}", description="str.format template rendered over item.inputs.")
+
+    @model_validator(mode="after")
+    def _check_retry_bounds(self) -> ModelTargetConfig:
+        if self.retry_max_seconds < self.retry_min_seconds:
+            raise ValueError(
+                f"retry_max_seconds ({self.retry_max_seconds}) must be >= retry_min_seconds ({self.retry_min_seconds})"
+            )
+        return self
 
 
 _DEFAULTS = ModelTargetConfig()
@@ -110,20 +127,32 @@ class ModelTarget(TargetRunner):
     ) -> None:
         if provider not in _PROVIDERS:
             raise ValueError(f"provider must be one of {_PROVIDERS}, got {provider!r}")
+        # Validates the actual arguments (not just ModelTargetConfig's own class-level
+        # defaults) — raises pydantic.ValidationError on an out-of-range value instead
+        # of silently accepting it. See ModelTargetConfig's docstring.
+        config = ModelTargetConfig(
+            max_tokens=max_tokens,
+            max_retries=max_retries,
+            retry_min_seconds=retry_min_seconds,
+            retry_max_seconds=retry_max_seconds,
+            temperature=temperature,
+            top_p=top_p,
+            prompt_template=prompt_template,
+        )
         self.provider = provider
         self.model = model
         self.base_url = base_url
         self.api_key = api_key
         self.region = region
-        self.prompt_template = prompt_template
+        self.prompt_template = config.prompt_template
         self.system = system
-        self.max_tokens = max_tokens
-        self.temperature = temperature
-        self.top_p = top_p
+        self.max_tokens = config.max_tokens
+        self.temperature = config.temperature
+        self.top_p = config.top_p
         self.extra_body = extra_body or {}
-        self.max_retries = max_retries
-        self.retry_min_seconds = retry_min_seconds
-        self.retry_max_seconds = retry_max_seconds
+        self.max_retries = config.max_retries
+        self.retry_min_seconds = config.retry_min_seconds
+        self.retry_max_seconds = config.retry_max_seconds
         # DI seam: tests inject a stub; production builds the real SDK client.
         self.client = client if client is not None else self._build_client()
 
