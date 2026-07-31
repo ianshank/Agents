@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Fixed
+- **Skills CI coverage floor (F-050, ADR 0030).** `skills-ci.yml`'s `paths:` filter listed 7
+  of 8 skills with a dedicated job (`dataset-lint` was omitted), and no workflow at all
+  triggered on the 3 skills with no dedicated job. A PR touching only one of those 4 skills
+  ran no lint, no mypy, no pytest, no `validate_skill.py`, no marketplace validation, and —
+  the sharpest edge — no `check_skill_script_drift.py`, so editing a vendored
+  `skills/*/scripts/validate_skill.py` copy (the exact drift that guard exists to catch)
+  triggered nothing. The `paths:` filter is now a single `skills/**` glob. A new `all-skills`
+  job discovers every `skills/*/` directory dynamically and runs `validate_skill.py --tier
+  structural`, `skill_marketplace.py validate`, and `check_skill_script_drift.py` over all of
+  them, plus an inline guard asserting every skill is registered in `marketplace.yaml` and
+  either has a dedicated job or a documented `EXEMPT` entry — each entry re-checked against
+  `evals/evals.json` so a stale exemption fails loudly instead of drifting silently. ADR 0030
+  codifies the three exempted skills (`hierarchical-recursive-brainstorm`,
+  `openspec-quality-plan`, `openspec-peer-review`) as `docs/SKILL_TEMPLATE.md` §5.B's existing
+  "Subjective skills" class — a classification those skills already self-declare in their own
+  `SKILL.md`, now enforced at the CI layer. `F_050.py` is wired into
+  `tests/test_validation_scripts.py` and `quality-gates.yml`'s coverage step, not merely
+  smoke-tested by `scripts/validate.py`. Decision-changing: a skill added without
+  registration or CI coverage now fails closed, where it previously passed silently. No
+  existing skill's own job, `SCHEMA_VERSION`, or registry alias changes.
 - **Merge-gate calibrator-health integrity (F-049, ADR 0029).** The calibrated merge gate's
   fourth health floor could report a pass having measured nothing, and reaching `AUTO_MERGE`
   that way is reproducible under stock `GatePolicyConfig()`: 6600 `HUMAN_AUDIT` records with

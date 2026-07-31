@@ -2,8 +2,10 @@
 """Skill Marketplace CLI (F-023).
 
 A centralized, schema-validated registry of community-contributed skills with
-versioned ``SKILL.md`` validation. This tool *reuses* ``validate_skill.py``
-(structural + behavioral checks) read-only and adds the marketplace-specific
+versioned ``SKILL.md`` validation. This tool *reuses* ``validate_skill.py``'s
+structural checks (``check_structural`` -- frontmatter, name/dir match, description
+quality; never the behavioral tier, which runs a skill's evals and is intentionally
+out of scope for a registry-wide pass) read-only and adds the marketplace-specific
 rules on top: a semver ``version`` is required in each skill's frontmatter and
 must match the registry entry, names must match and be unique, and every entry
 must point at a real skill directory.

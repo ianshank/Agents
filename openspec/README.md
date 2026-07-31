@@ -28,6 +28,11 @@ registry).
   measurement, audit-selection-propensity logging, and a dual `wilson`/`ppi++` report
   estimator, from the 2026-07-25 peer review of the "swap Wilson → PPI++" critique. Gate
   untouched.
+- [`changes/skills-ci-coverage-floor/`](changes/skills-ci-coverage-floor/) — closes a
+  reproducible CI gap where 4 of 11 registered skills ran no CI on their own changes
+  (including the vendored-script drift guard); adds an `all-skills` structural/registry/drift
+  job and a registration + job-coverage guard, from a 2026-07-31 ROI review of `skills/` CI
+  coverage. See ADR 0030.
 
 ## Removing this spike
 
