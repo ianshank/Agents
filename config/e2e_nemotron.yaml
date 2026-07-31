@@ -1,0 +1,51 @@
+schema_version: "1.0"
+
+run:
+  name: "e2e-nemotron-validation"
+  seed: 42
+
+dataset:
+  type: inline
+  params:
+    items:
+      - id: math-1
+        inputs: { question: "What is 2+2?" }
+        expected: "4"
+      - id: capital-1
+        inputs: { question: "What is the capital of France?" }
+        expected: "Paris"
+      - id: reasoning-1
+        inputs: { question: "If all roses are flowers and some flowers fade quickly, can we conclude all roses fade quickly?" }
+        expected: "No, this is a logical fallacy."
+
+target:
+  type: echo
+  params:
+    output_key: question
+
+scorers:
+  - type: llm_judge
+    params:
+      name: accuracy
+      threshold: 0.5
+
+judge:
+  type: openai
+  params:
+    model: "${NVIDIA_MODEL:-nvidia/nemotron-3-ultra-550b-a55b}"
+    base_url: "${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}"
+    api_key: "${NVIDIA_API_KEY}"
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 4096
+    system: "You are a fair judge. Respond ONLY with JSON: {\"score\": <0.0..1.0>, \"reasoning\": \"<brief>\"}."
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: true
+      reasoning_budget: 8192
+
+sinks:
+  - type: console
+    params: { verbose: true }
+  - type: json_file
+    params: { path: "${E2E_OUTPUT_DIR:-./out}/e2e-nemotron-results.json" }
