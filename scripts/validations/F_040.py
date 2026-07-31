@@ -72,11 +72,23 @@ def validate_f040() -> int:
         ("AuditConfig.per_domain_floor", "cold-start floor is the audit-config field, not a literal"),
         ("velocity_per_day", "soak report includes a merge-velocity signal"),
         ("days_to_target", "soak report includes an ETA-to-target signal"),
+        (
+            "parse_iso8601",
+            "merged_at parsing reuses timeutil.parse_iso8601 (Z-suffix + naive/aware "
+            "normalization), not a bare datetime.fromisoformat that reintroduces "
+            "already-fixed bugs on this field",
+        ),
     ]:
         _check(needle in pkg, f"store_sync: {why}", errors)
 
     _check('"soak_progress"' in init, "soak_progress is on the package public surface (__all__)", errors)
     _check("--soak-target" in init, "stats CLI exposes the opt-in --soak-target flag", errors)
+    _check(
+        "--audit-floor" in init,
+        "stats CLI exposes --audit-floor so the report can match the live "
+        "merge-gate-audit.yml operational floor, not just the library default",
+        errors,
+    )
     _check('"_soak"' in init, "soak block uses the reserved _soak key (no domain collision)", errors)
     _check(
         "soak_target is not None" in init,
@@ -88,6 +100,9 @@ def validate_f040() -> int:
         ("def test_soak_progress", "soak summary is unit-tested"),
         ("never_mutates", "no-mutation property is tested (I-2 TCB carve-out)"),
         ("default_unchanged", "byte-identical default CLI output is tested"),
+        ("z_suffix", "Z-suffix merged_at parsing is regression-tested"),
+        ("mixed_naive_and_aware", "mixed naive/aware merged_at no longer crashes velocity calc"),
+        ("audit_floor_overrides", "--audit-floor CLI override is tested"),
     ]:
         _check(needle in tests, f"tests: {why}", errors)
 

@@ -567,6 +567,32 @@ def test_soak_progress_ignores_unparseable_merged_at_for_velocity():
     assert p["total"] == 2
 
 
+def test_soak_progress_z_suffix_merged_at_is_parsed():
+    # Regression: a bare datetime.fromisoformat rejects 'Z' before Python 3.11
+    # (agent-core CI runs 3.10); _parse_ts must delegate to timeutil.parse_iso8601
+    # rather than reintroduce this already-fixed gap on the same field.
+    recs = [
+        _rec(change_id="c1", merged_at="2026-01-01T00:00:00Z"),
+        _rec(change_id="c2", merged_at="2026-01-03T00:00:00Z"),
+    ]
+    p = soak_progress(recs, target=20)
+    assert p["velocity_per_day"] == pytest.approx(0.5)
+
+
+def test_soak_progress_mixed_naive_and_aware_merged_at_does_not_crash():
+    # Regression: sorting naive and timezone-aware datetimes together raises
+    # TypeError. A bare datetime.fromisoformat parse of a naive stamp stays naive;
+    # parse_iso8601 normalizes it to UTC so the sort in _velocity_per_day never sees
+    # a mixed batch. merged_at is an unvalidated free-form string end-to-end
+    # (OutcomeRecord.from_json does no normalization), so this input is realistic.
+    recs = [
+        _rec(change_id="c1", merged_at="2026-01-01T00:00:00+00:00"),  # aware
+        _rec(change_id="c2", merged_at="2026-01-02T00:00:00"),  # naive
+    ]
+    p = soak_progress(recs, target=20)
+    assert p["velocity_per_day"] == pytest.approx(1.0)
+
+
 def test_soak_progress_cold_start_keyed_on_audit_floor_not_a_literal():
     audited = [
         _rec(
@@ -619,3 +645,33 @@ def test_cli_stats_soak_target_adds_reserved_block_default_unchanged(tmp_path, c
     assert out["human/agent-core"] == {"pending": 1}
     assert out["_soak"]["n_vs_target"] == {"n": 1, "target": 20, "shortfall": 19}
     assert out["_soak"]["velocity_per_day"] is None
+
+
+def test_cli_stats_audit_floor_overrides_the_config_default(tmp_path, capsys):
+    # The live merge-gate-audit.yml workflow runs with a lower operational floor
+    # (vars.MERGE_GATE_AUDIT_FLOOR, typically 3) than AuditConfig.per_domain_floor's
+    # library default (30) — --audit-floor lets the CLI report match what audit
+    # selection is actually enforcing instead of silently over-reporting cold-start.
+    store = tmp_path / "s.jsonl"
+    audited = [
+        _rec(
+            change_id=f"c{i}",
+            domain="human/x",
+            label=True,
+            label_source="human_audit",
+            labeled_at="2026-01-02T00:00:00+00:00",
+        )
+        for i in range(3)
+    ]
+    write_store(store, audited)
+    base = ["stats", "--store", str(store), "--soak-target", "20"]
+    # Default floor (AuditConfig.per_domain_floor, 30) still reports cold-start at 3 audits.
+    assert main(base) == EXIT_OK
+    assert json.loads(capsys.readouterr().out.strip())["_soak"]["per_domain_cold_start"] == {
+        "human/x": True
+    }
+    # --audit-floor 3 matches the live workflow's floor: 3 audits clears it.
+    assert main([*base, "--audit-floor", "3"]) == EXIT_OK
+    assert json.loads(capsys.readouterr().out.strip())["_soak"]["per_domain_cold_start"] == {
+        "human/x": False
+    }

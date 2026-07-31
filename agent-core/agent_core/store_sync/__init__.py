@@ -43,6 +43,7 @@ import argparse
 import json
 import sys
 
+from ..audit_sampler import AuditConfig
 from ..logging_util import configure_logging
 
 # The ``X as X`` redundant-alias form marks these as explicit re-exports (mypy
@@ -130,14 +131,14 @@ def _config_from_args(args: argparse.Namespace) -> StoreSyncConfig:
     )
 
 
-def _emit_stats(store_path: str, soak_target: int | None) -> None:
+def _emit_stats(store_path: str, soak_target: int | None, audit_floor: int) -> None:
     """Print per-domain stats as JSON. ``--soak-target`` adds a reserved ``_soak``
     block; absent, the output stays byte-identical to the historical stats contract."""
     records, opaque = read_store_lines(store_path)
     out: dict[str, object] = {}
     out.update(store_stats(records, opaque))
     if soak_target is not None:
-        out["_soak"] = soak_progress(records, soak_target)
+        out["_soak"] = soak_progress(records, soak_target, audit_floor=audit_floor)
     print(json.dumps(out, sort_keys=True))
 
 
@@ -169,12 +170,24 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="if set, add a reserved '_soak' progress block toward N target records",
     )
+    p_stats.add_argument(
+        "--audit-floor",
+        type=int,
+        default=AuditConfig.per_domain_floor,
+        help=(
+            "HUMAN_AUDIT records a domain needs before it leaves the soak report's "
+            "cold-start flag (default: AuditConfig.per_domain_floor). The live "
+            "merge-gate-audit.yml workflow runs with a lower operational floor via "
+            "vars.MERGE_GATE_AUDIT_FLOOR -- pass the same value here to match what "
+            "audit selection is actually enforcing, e.g. --audit-floor 3"
+        ),
+    )
     args = ap.parse_args(argv)
 
     configure_logging(level="INFO")
     try:
         if args.cmd == "stats":
-            _emit_stats(args.store, args.soak_target)
+            _emit_stats(args.store, args.soak_target, args.audit_floor)
             return EXIT_OK
         cfg = _config_from_args(args)
         # Resolve the runner at call time (module attribute) so the seam stays

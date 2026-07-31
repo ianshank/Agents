@@ -13,6 +13,7 @@ from pathlib import Path
 from ..atomic_io import atomic_write_text
 from ..audit_sampler import AuditConfig
 from ..outcome_store import LabelSource, OutcomeRecord
+from ..timeutil import parse_iso8601
 from .serialization import _split_lines, serialize_store
 
 # Reserved stats key for lines this reader could not parse (observability —
@@ -61,9 +62,17 @@ _SECONDS_PER_DAY = 86_400.0
 
 
 def _parse_ts(value: str) -> datetime | None:
-    """Parse an ISO-8601 ``merged_at``; an unparseable stamp is ignored for velocity."""
+    """Parse an ISO-8601 ``merged_at``; an unparseable stamp is ignored for velocity.
+
+    Delegates to ``timeutil.parse_iso8601`` (the single-sourced parser already used
+    by ``outcome_labeller.py`` for this same field) rather than calling
+    ``datetime.fromisoformat`` directly: a bare call rejects the ``Z`` suffix before
+    Python 3.11 (agent-core CI runs 3.10) and returns naive datetimes that raise
+    ``TypeError`` when sorted against aware ones — both silently break velocity for
+    a subset of otherwise-valid timestamps rather than surfacing a clear error.
+    """
     try:
-        return datetime.fromisoformat(value)
+        return parse_iso8601(value)
     except (TypeError, ValueError):
         return None
 
