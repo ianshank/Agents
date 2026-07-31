@@ -25,6 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lists it as future work). Snyk is now described accurately as a documented manual step.
 
 ### Fixed
+- **Four committed merge-conflict markers, undetected because nothing checked for them.**
+  An orphan `>>>>>>> origin/main` trailer (no matching `<<<<<<<`/`=======` — a clean merge that
+  dropped the wrong side) sat in `NEXT_STEPS.md`, `AGENTS.md`, and `CHANGELOG.md` (×2). Removed,
+  and `quality-gates.yml`'s `gates` job gained an inline, dependency-free sweep of every
+  git-tracked file for all four 2-way/diff3 marker forms (including the bare/orphan trailer
+  shape that slipped through here) so this class of defect fails CI going forward instead of
+  landing silently.
+- **F-048 (credential scrub + gitleaks) was still `status: in_progress` after landing via #83.**
+  `features.yaml` now reads `status: done` with `implemented_in` pointing at the merge commit;
+  `validate.py --tier fast` (which only runs `done`-status validators) now actually enforces
+  `F_048.py` in CI, closing a gap where the gate existed but wasn't wired into the ledger.
 - **Hardened matrix eval tools test suite.** Refactored `tests/test_matrix_eval_tools.py` to completely eliminate hard-coded return values and fragile `try...except pass` swallows in the evaluation plugin tests (Judges, Datasets, Scorers, Sinks). Replaced them with robust, dependency-injected mocks leveraging `patch.dict('sys.modules')` for true offline regression coverage regardless of local environment state.
 - **`.gitignore`'s blanket `*.html` silently dropped deliverables.** Committed sample reports
   and HTML golden fixtures under `docs/samples/`, `tests/fixtures/`, and
@@ -304,7 +315,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicit entries for all four; locked in by new parametrized cases in
   `tests/test_protected_paths.py` and asserted by F-039's validator.
 
->>>>>>> origin/main
 - **Eval-backend validation experiment (`experiments/backend-validation/`):** an isolated,
   self-contained subtree implementing `eval-backend-validation_v1` — decision-grade empirical
   evidence for the eval-backend displacement decision by validating the claimed capabilities
@@ -346,7 +356,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `make -C <pkg> check` run end-to-end for all 4 packages, matching the coverage numbers
   their own CI reports (agent-core 98.67%, flow-protocol/flow-corpus/behavioral-regression
   100%, all ≥ their 95% floors).
->>>>>>> origin/main
 - **CI gate delegation — phase-2 POC (ADR 0021):** `eval-harness-ci.yml` no longer duplicates the
   ruff/format/mypy/pytest steps inline — it delegates to the generated root gate through a new reusable
   composite action `.github/actions/run-quality-gate` (sets up Python, installs the package, runs

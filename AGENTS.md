@@ -68,7 +68,6 @@ enterprise-docs pass and point at the charter as the single source of truth:
 `docs/decisions/` ADR numbers are **not** contiguous by design — `0007` is an intentional
 gap in the sequence (see `docs/plans/agents-critical-path/REVIEW.md`); do not backfill it
 or renumber later ADRs to close it.
->>>>>>> origin/main
 
 ## What is off-limits without a labeled approval
 
