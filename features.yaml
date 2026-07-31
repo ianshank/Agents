@@ -862,4 +862,4 @@ features:
     validation_command: "python scripts/validations/F_040.py"
     implemented_in: "0f19ecaa81639f8afbf66fcad54869186b02f5c4"
     depends_on: ["F-032"]
-    notes: "Extends the existing store_sync package (F-032 / ADR 0018): soak_progress lives beside store_stats in store.py, the CLI flag beside the stats subparser. Soak enablement itself stays time-gated (N>=20 + >=1 human verdict + weekly audits per ADR 0005) — this feature only makes progress observable. F-036 (real-transcript corpus bridge) remains deferred."
+    notes: "Extends the existing store_sync package (F-032 / ADR 0018): soak_progress lives beside store_stats in store.py, the CLI flag beside the stats subparser. `target` is a caller-supplied counter, not a claim about the real activation bar (~380 near-perfect audited records per domain, per NEXT_STEPS.md's corrected soak framing and openspec/changes/eval-proxy-and-estimator/review.md) -- N>=20 is a publish threshold only. Soak enablement itself stays time-gated (real bar reached + >=1 human verdict + weekly audits per ADR 0005) — this feature only makes progress observable. F-036 (real-transcript corpus bridge) remains deferred."
