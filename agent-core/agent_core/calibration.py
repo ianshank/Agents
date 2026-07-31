@@ -65,10 +65,19 @@ def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     return (max(0.0, centre - half), min(1.0, centre + half))
 
 
+# Single source for the reliability-bin count. Every histogram signature below defaults to
+# it so the implementations that must agree -- these bins, ``BinningCalibrator.fit``, and the
+# merge gate's operating-region CI -- cannot silently drift apart the way three independently
+# re-typed ``10``s did. Call sites still pass a ``*Config`` field rather than relying on the
+# default (AGENTS.md: no hard-coded numeric defaults at call sites); this constant exists so
+# the *library* default has one home, not so callers can skip the config.
+DEFAULT_N_BINS = 10
+
+
 def reliability_bins(
     probs: Sequence[float],
     outcomes: Sequence[int],
-    n_bins: int = 10,
+    n_bins: int = DEFAULT_N_BINS,
     z: float = 1.96,
 ) -> list[Bin]:
     _check_pairs(probs, outcomes)
@@ -96,7 +105,7 @@ def reliability_bins(
 
 
 def expected_calibration_error(
-    probs: Sequence[float], outcomes: Sequence[int], n_bins: int = 10
+    probs: Sequence[float], outcomes: Sequence[int], n_bins: int = DEFAULT_N_BINS
 ) -> float:
     total = len(probs)
     ece = 0.0

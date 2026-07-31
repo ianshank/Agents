@@ -48,6 +48,21 @@ hundred audited changes in the operating band before it can auto-merge at all. T
 intentional conservatism: the default is to escalate, and the data requirement is the price
 of the risk guarantee. Tuning `min_calibration_n` / `risk_target` is a human decision.
 
+## Correction — calibrator health (2026-07-31, ADR 0029)
+
+Point 5 above ("Trust requires calibrator health ... a tight upper-bin CI") was enforced by a
+measurement that could pass having inspected nothing: an empty upper-half region returned the
+`0.0` initialiser of a max-reduction and satisfied the width floor vacuously, reaching
+AUTO_MERGE under stock config. It also measured the raw-score range while `decide()` gates on
+the calibrated `p`. [ADR 0029](0029-operating-region-calibrator-health.md) re-defines the
+region via the per-decision Wilson floor and makes an unmeasurable region untrustworthy.
+
+Point 3's promise of a "human-set `risk_target`", and the sample-size note's remark that
+tuning `min_calibration_n` / `risk_target` is a human decision, had no mechanism behind them:
+`GatePolicyConfig` was unvalidated and constructed bare. ADR 0029 adds the bounds and the CLI
+seam. Note the sample-size note's arithmetic is now applied to the *held-out* count, so a
+domain needs roughly twice the total audits it previously appeared to.
+
 ## Seam — CLOSED (2026-06-30, Session 006)
 
 The passive **detectors are wired** (`agent_core/detectors.py`): reverts come from `git log`

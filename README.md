@@ -306,8 +306,8 @@ python scripts/check_protected_changes.py --base-ref origin/main
   (`scripts/.coveragerc`) in `eval-harness-ci.yml`; `scripts/validations/F_031.py` asserts the
   enforcement itself cannot silently regress. Baseline and rationale:
   [docs/gap-analysis-2026-07.md](docs/gap-analysis-2026-07.md).
-- **Calibrated merge gate** (`F-010` / `F-032…F-035`, ADR 0005 + ADR 0018) is a pure
-  `agent_core` decision subsystem that **auto-merges nothing** unless
+- **Calibrated merge gate** (`F-010` / `F-032…F-035` / `F-049`, ADR 0005 + ADR 0018 + ADR 0029)
+  is a pure `agent_core` decision subsystem that **auto-merges nothing** unless
   `ENABLE_CALIBRATED_AUTOMERGE` is set and a populated, human-audited outcome store has earned
   it. Real outcomes persist on the dedicated `merge-gate-data` branch; a daily labeller applies
   passive labels behind an anti-optimism guard, a weekly queue drives human `HUMAN_AUDIT`
@@ -323,6 +323,13 @@ python scripts/check_protected_changes.py --base-ref origin/main
   unchanged). `agent_core.proxy_eval` measures whether a proxy is informative *on the
   subsets the gate operates over*, and each audit now records the probability it was
   sampled with. `scripts/validations/F_046.py` and `F_047.py` pin the hardening invariants.
+  **Calibrator-health integrity** (`F-049`, ADR 0029) closed a reproducible fail-open in the
+  fourth health floor: the bin-CI width check could pass having measured nothing (an empty
+  raw-score region vacuously satisfied `max_bin_ci_width` via a `0.0`-initialised
+  max-reduction). It is now measured on the calibrated-`p` operating region the gate actually
+  decides on, reports `None` (untrustworthy) when unmeasurable, and every `GatePolicyConfig`
+  tunable is bounded and CLI-reachable (`--risk-target`, `--min-calibration-n`, `--n-bins`,
+  etc.) rather than editable only in library source. `scripts/validations/F_049.py` pins it.
 - **Live Phoenix validation (opt-in)** — `.github/workflows/phoenix-live.yml`
   (`workflow_dispatch`, `timeout-minutes: 20`) validates the reversible Phoenix spike
   end-to-end on a networked runner: a `dep-resolve` dry-run job surfaces the

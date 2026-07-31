@@ -12,8 +12,10 @@ Design invariants (do not relax without a design review — see ADR 0005):
     product code, not to the apparatus that measures it.
   * The merge threshold is *derived from an acceptable-risk target*, never a
     hardcoded probability. ``tau`` is computed from the selective-risk curve.
-  * Calibration is only trusted when the calibrator is healthy (enough samples,
-    low ECE, AUROC that actually rank-orders correctness, tight CI).
+  * Calibration is only trusted when the calibrator is healthy: enough held-out
+    samples, low ECE, AUROC that actually rank-orders correctness, and a tight CI
+    *in the region that can actually auto-merge* -- or, if that region holds no
+    evidence at all, no auto-merge. An unmeasurable floor is not a satisfied one.
 
 Pure and deterministic: every tunable lives on :class:`GatePolicyConfig`; no
 literal appears in decision logic. The Wilson math is reused from
@@ -28,7 +30,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol, runtime_checkable
 
-from .calibration import wilson_interval
+from .calibration import DEFAULT_N_BINS, wilson_interval
+from .config import ConfigError
+
+# Upper bound on GatePolicyConfig.n_bins -- see the __post_init__ check for the rationale.
+# 1000 is a generous ceiling: it is never a legitimate operating point (no domain's audit
+# volume approaches populating 1000 bins usefully) but costs no real configuration room.
+MAX_N_BINS = 1000
 
 
 class GateDecision(str, Enum):
@@ -37,9 +45,54 @@ class GateDecision(str, Enum):
     REJECT = "reject"  # mechanical ground-truth failure
 
 
+def _require_finite_in(
+    name: str,
+    value: float,
+    lo: float,
+    hi: float,
+    *,
+    lo_inclusive: bool = True,
+    hi_inclusive: bool = True,
+    why: str = "",
+) -> None:
+    """Reject ``value`` unless finite and within the (in/ex)clusive ``lo``/``hi`` bounds.
+
+    Kept as a helper rather than nine inline ``if``s so ``__post_init__`` stays a flat, low
+    -complexity sequence (the mccabe budget is 14) and the interval notation in the message
+    is generated rather than hand-duplicated per field. The ``math.isfinite`` guard is not
+    redundant even though every call here already ANDs a lower- and an upper-bound test:
+    two of these fields (``risk_ci_z``, ``wilson_z``) have ``hi=math.inf``, and
+    ``float("inf") <= math.inf`` is True, so without this guard those two would silently
+    accept infinity -- a z-score of infinity collapses the Wilson bound it is meant to widen
+    to a single point. For every OTHER field, finite bounds on both sides already reject NaN
+    on their own (``NaN <= x`` and ``x <= NaN`` are both False), so the guard's necessity here
+    is specifically the open-upper-bound fields, not a restatement of the NaN-comparison bug
+    this subsystem has separately been bitten by in ``ChangeContext`` and
+    ``BinningCalibrator.bin_index`` (whose checks are single-direction scans, not this
+    function's AND of two bounds).
+    """
+    ok = math.isfinite(value)
+    ok = ok and (lo <= value if lo_inclusive else lo < value)
+    ok = ok and (value <= hi if hi_inclusive else value < hi)
+    if not ok:
+        left, right = ("[" if lo_inclusive else "("), ("]" if hi_inclusive else ")")
+        detail = f" -- {why}" if why else ""
+        raise ConfigError(
+            f"merge-gate.{name} must be a finite value in {left}{lo}, {hi}{right}"
+            f"{detail} (got {value!r})"
+        )
+
+
 @dataclass(frozen=True)
 class GatePolicyConfig:
-    """All tunables. No literal appears in decision logic."""
+    """All tunables. No literal appears in decision logic.
+
+    Every bound below follows one rule: **reject the vacuous endpoint, allow the maximally
+    strict one.** A threshold that can never reject anything is a lie about the presence of a
+    check -- worse than no field at all, because the audit log then reports a floor that did
+    no work. A threshold that can never *accept* anything is merely a kill switch, which is
+    safe and occasionally what an operator wants.
+    """
 
     risk_target: float = 0.02  # max tolerated error rate among auto-merges
     risk_ci_z: float = 1.96  # z for the upper risk bound (conservative tau)
@@ -48,24 +101,94 @@ class GatePolicyConfig:
     max_ece: float = 0.05
     min_auroc: float = 0.65  # < this: confidence doesn't rank correctness
     max_bin_ci_width: float = 0.20
+    # Bin count for the calibrator, its ECE, and the operating-region CI. On the policy
+    # (not just as a library default) so the three cannot drift apart, and so retuning it
+    # is an operator decision rather than a source edit -- ADR 0005 SS3.
+    n_bins: int = DEFAULT_N_BINS
     # per-decision conservatism
     wilson_floor: float = 0.90  # Wilson-lower of the bin accuracy must clear this
     wilson_z: float = 1.96
-    protected_auto_merge: bool = False  # keep False; True reopens the Goodhart hole
+    # Keep False; True reopens the Goodhart hole. Deliberately NOT validated and deliberately
+    # NOT exposed as a CLI flag: rejecting True would delete an escape hatch ADR 0005 documents
+    # and the suite exercises, while a flag would hand CI a knob that disables the protected
+    # -path layer. Reachable in-process, unreachable from an operator; `merge_gate_ci.run`
+    # logs a warning if it is ever set.
+    protected_auto_merge: bool = False
+
+    def __post_init__(self) -> None:
+        _require_finite_in(
+            "risk_target",
+            self.risk_target,
+            0.0,
+            1.0,
+            hi_inclusive=False,
+            why="1.0 tolerates every error, collapsing tau to the smallest observed score",
+        )
+        _require_finite_in("risk_ci_z", self.risk_ci_z, 0.0, math.inf, lo_inclusive=False)
+        if self.min_calibration_n < 1:
+            raise ConfigError(
+                "merge-gate.min_calibration_n must be >= 1 -- 0 is not a floor but the "
+                f"absence of one (got {self.min_calibration_n!r})"
+            )
+        _require_finite_in("max_ece", self.max_ece, 0.0, 1.0, hi_inclusive=False)
+        _require_finite_in(
+            "min_auroc",
+            self.min_auroc,
+            0.5,
+            1.0,
+            lo_inclusive=False,
+            why="at or below 0.5 the single-class AUROC sentinel would pass the health floor",
+        )
+        _require_finite_in("max_bin_ci_width", self.max_bin_ci_width, 0.0, 1.0, hi_inclusive=False)
+        _require_finite_in("wilson_floor", self.wilson_floor, 0.0, 1.0, lo_inclusive=False)
+        _require_finite_in("wilson_z", self.wilson_z, 0.0, math.inf, lo_inclusive=False)
+        if self.n_bins < 2:
+            raise ConfigError(
+                "merge-gate.n_bins must be >= 2 -- a single bin makes predict() a constant, "
+                "tau equal to that constant, and every change clear the threshold "
+                f"(got {self.n_bins!r})"
+            )
+        if self.n_bins > MAX_N_BINS:
+            # A resource-safety guard, not a "vacuous endpoint" per the class docstring's
+            # rule -- an arbitrarily large bin count isn't unsafe in the way a vacuous
+            # risk_target is, it is merely expensive, and it is now operator-reachable via
+            # --n-bins (previously the bin count was a hardcoded 10). build_domain_models
+            # allocates O(n_bins) buckets and does O(n * n_bins) work per domain per CI run;
+            # MAX_N_BINS is far beyond what any realistic per-domain audit volume (ADR 0005's
+            # own ~380-per-domain target) could populate usefully, so it costs no legitimate
+            # configuration while bounding worst-case CI wall-clock.
+            raise ConfigError(
+                f"merge-gate.n_bins must be <= {MAX_N_BINS} -- larger values cost real CI "
+                f"time (O(n * n_bins) per domain) for resolution no realistic audit volume "
+                f"could populate (got {self.n_bins!r})"
+            )
 
 
 @dataclass(frozen=True)
 class CalibratorHealth:
+    # Held-out records the metrics below were measured on -- this is what
+    # ``min_calibration_n`` floors. NOT the domain's total audit count: ``n`` used to be
+    # ``len(recs)`` (both folds) while ece/auroc/bin_ci_width were eval-fold only, so a
+    # 200-record floor was satisfied by ~100 records of actual evidence.
     n: int
     ece: float
     auroc: float
-    bin_ci_width: float
+    # ``None`` means UNMEASURABLE: no calibrator bin could ever be an operating point, so
+    # there is no interval to be tight. Deliberately not NaN or ``inf``: NaN compares False
+    # against every bound, which is the one-sided fail-open this subsystem has already been
+    # bitten by twice, and ``inf`` would conflate "not measured" with "measured as
+    # maximally wide". ``None`` is checked by mypy at every use site.
+    bin_ci_width: float | None
+    # The domain's total audit count across both folds. Diagnostics only -- it gates
+    # nothing. Defaulted so existing constructions keep working.
+    n_total: int | None = None
 
     def is_trustworthy(self, cfg: GatePolicyConfig) -> bool:
         return (
             self.n >= cfg.min_calibration_n
             and self.ece <= cfg.max_ece
             and self.auroc >= cfg.min_auroc
+            and self.bin_ci_width is not None  # unmeasurable is not tight
             and self.bin_ci_width <= cfg.max_bin_ci_width
         )
 

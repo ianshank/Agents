@@ -6,6 +6,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed
+- **Merge-gate calibrator-health integrity (F-049, ADR 0029).** The calibrated merge gate's
+  fourth health floor could report a pass having measured nothing, and reaching `AUTO_MERGE`
+  that way is reproducible under stock `GatePolicyConfig()`: 6600 `HUMAN_AUDIT` records with
+  every `raw_confidence` in `{0.05, 0.45}` gave `bin_ci_width=0.0`, `is_trustworthy=True`,
+  `tau=1.0`, and auto-merged a change at `raw_confidence=0.45`. `_upper_half_ci_width`
+  scanned only bins above raw 0.5 and accumulated into a `0.0` initialiser, so an empty
+  region returned the identity of a `max`-reduction and satisfied `max_bin_ci_width`
+  vacuously. It was also on the wrong axis — `decide()` gates on the *calibrated* `p`, so
+  the raw-score range was never "where auto-merges actually happen", and `tau` cannot define
+  the region because `tau` is derived *from* health. `_operating_bin_ci_width` now defines
+  eligibility by the per-decision Wilson floor (a bin whose Wilson **upper** bound cannot
+  reach `wilson_floor` can never be an operating point, whatever `tau` becomes), returns
+  `None` when nothing qualifies, and `is_trustworthy` rejects `None`. On the regression
+  fixture the same input moves from `0.0` to `0.7935`.
+  `GatePolicyConfig` gains a `__post_init__` bounding all nine tunables — rejecting the
+  vacuous endpoint, allowing the maximally-strict one — plus a CLI flag per tunable on
+  `merge_gate_ci` with an exit-2 usage path, finally supplying the seam behind ADR 0005 §3's
+  standing promise of a *human-set* `risk_target`. `min_auroc` is bounded strictly above 0.5
+  so the single-class AUROC sentinel cannot pass the floor it is documented to fail;
+  `--protected-auto-merge` is deliberately not exposed. The bin count is single-sourced
+  (`calibration.DEFAULT_N_BINS` + `GatePolicyConfig.n_bins`, threaded explicitly), routing is
+  unified in `_bin_of` so `fit` no longer sweeps out-of-contract scores into the top bin
+  while `bin_index` floors them to bin 0, and `min_calibration_n` now floors the held-out
+  fold the other metrics are measured on rather than the both-fold total that overstated it
+  2×.
+  **Decision-neutral today** — the live store holds 71 records and zero `HUMAN_AUDIT`
+  labels, so every domain cold-starts to `ESCALATE` and none of these paths execute.
+  **Decision-changing when the gate goes live:** the sample floor counts held-out records,
+  an unmeasurable region blocks a domain, and out-of-contract scores move from the top bin to
+  bin 0 — all strictly fail-closed. The re-axis is looser in exactly one direction: mediocre
+  mid bins that inflate today's width but can never be operating points no longer block a
+  domain, which was collateral rejection rather than protection. Operators should note that
+  under honest measurement `max_bin_ci_width=0.20` may require ~50+ high-accuracy audits in
+  every eligible bin and could keep the gate closed — the correct default per ADR 0005, and
+  now a visible constraint rather than one bypassed by a vacuous `0.0`.
+  No `SCHEMA_VERSION` bump, no store migration (`bin_ci_width` is computed per run and never
+  persisted), auto-merge stays default-off.
+  **Peer-review hardening pass (same change):** an objective self-review found the fix above
+  had itself regressed `fit`'s and `_operating_bin_ci_width`'s complexity from O(n_bins·n) to
+  O(n_bins²·n) — routing per-bin membership through `_bin_of`'s own O(n_bins) scan, once per
+  bin, turned one O(n_bins) scan per score into O(n_bins) of them. Measured at ~3.8s for
+  `n_bins=200` on 5000 scores, a real hang/timeout risk once the bin count became an
+  operator-facing CLI flag. Fixed with a shared `_bucket_by_bin` helper that assigns each
+  score to a bin exactly once and groups — verified bit-for-bit identical to the
+  pre-regression output across every `n_bins` tested, ~190× faster at `n_bins=200`. Also adds
+  `GatePolicyConfig.n_bins`'s upper bound (`MAX_N_BINS=1000`, a resource-safety ceiling, not
+  a vacuous-endpoint rejection); a direct unit test for `_policy_from_args`'s CLI-flag-to
+  -field mapping (no prior test would have caught a `wilson_floor`/`wilson_z` swap, since
+  both fields reject the same invalid probe values for different reasons); a fold-collapse
+  test at N=8 rather than only the N=1 case where the sample floor masks the effect; and a
+  docstring correction on `_require_finite_in` (its `math.isfinite` guard is load-bearing for
+  the two `hi=math.inf` fields, not primarily the NaN-comparison precedent it cited).
+
 ### Security
 - **Credential scrub + fail-closed secret scanning (F-048).** A Langfuse secret/public key
   pair sat unredacted in three tracked files (`HARNESS_SPEC.md`,
