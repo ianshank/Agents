@@ -25,9 +25,12 @@ from datetime import datetime, timedelta
 from typing import Protocol, runtime_checkable
 
 from .detectors import GitHubChecksFailureAttributor, GitRevertDetector, resolve_repo
+from .logging_util import get_logger
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 from .protocols import Clock, SystemClock
 from .timeutil import parse_iso8601
+
+logger = get_logger(__name__)
 
 
 @runtime_checkable
@@ -71,7 +74,17 @@ def label_matured(
         elif now - merged >= timedelta(days=cfg.maturity_days):
             src, lbl = LabelSource.TIMEOUT_CLEAN, True  # WEAK positive
         else:
+            logger.debug(
+                "outcome-labeller: %s not yet matured (merged=%s)", change_id, rec.merged_at
+            )
             continue  # not matured yet
+        logger.debug(
+            "outcome-labeller: %s -> %s (correct=%s, domain=%s)",
+            change_id,
+            src.value,
+            lbl,
+            rec.domain,
+        )
         new = OutcomeRecord(
             change_id=change_id,
             domain=rec.domain,
@@ -83,6 +96,13 @@ def label_matured(
         )
         store.append(new)
         emitted.append(new)
+    logger.info(
+        "outcome-labeller emitted %d new label(s) (revert=%d, ci_failure=%d, timeout_clean=%d)",
+        len(emitted),
+        sum(1 for r in emitted if r.label_source == LabelSource.REVERT.value),
+        sum(1 for r in emitted if r.label_source == LabelSource.CI_FAILURE.value),
+        sum(1 for r in emitted if r.label_source == LabelSource.TIMEOUT_CLEAN.value),
+    )
     return emitted
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 import pytest
@@ -11,6 +12,7 @@ from agent_core import merge_gate_ci
 from agent_core.merge_gate import ChangeContext, GateDecision, GatePolicyConfig
 from agent_core.merge_gate_ci import main, run
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from agent_core.protocols import FixedClock
 
 CFG = GatePolicyConfig()
 
@@ -121,6 +123,22 @@ def test_main_internal_error_returns_one(tmp_path):
     # --context points at a missing file -> read raises -> caught -> exit 1.
     rc = main(["--store", str(tmp_path / "s.jsonl"), "--context", str(tmp_path / "missing.json")])
     assert rc == 1
+
+
+def test_append_audit_uses_injected_clock(tmp_path):
+    """Direct unit test of the private _append_audit DI seam: a broken
+    `clock or SystemClock()` fallback would go undetected via main() alone, since
+    no existing test asserts anything about the written `ts` field."""
+    fixed = datetime(2026, 3, 4, 5, 6, 7, tzinfo=timezone.utc)
+    audit = tmp_path / "audit.jsonl"
+    ctx = _ctx()
+    merge_gate_ci._append_audit(
+        str(audit), ctx, GateDecision.AUTO_MERGE, "why", clock=FixedClock(fixed)
+    )
+
+    line = json.loads(audit.read_text(encoding="utf-8").strip())
+    assert line["ts"] == fixed.isoformat()
+    assert line["decision"] == "auto_merge"
 
 
 def test_main_missing_store_is_usage_error(tmp_path):

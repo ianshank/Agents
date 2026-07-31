@@ -62,6 +62,7 @@ def run(ctx: ChangeContext, store: OutcomeStore, cfg: GatePolicyConfig) -> tuple
     m = models.get(ctx.domain)
     if m is None:
         # cold start: no audit data for this domain -> safe default
+        logger.debug("merge-gate: domain=%s has no audit data (cold start)", ctx.domain)
         d = decide(ctx, None, None, None, 0, 0, cfg)
         return d, f"no audit data for domain '{ctx.domain}' (cold start)"
 
@@ -88,6 +89,7 @@ def run(ctx: ChangeContext, store: OutcomeStore, cfg: GatePolicyConfig) -> tuple
         f"n={m.health.n} ece={m.health.ece:.3f} auroc={m.health.auroc:.3f} "
         f"bin={bin_succ}/{bin_n}"
     )
+    logger.debug("merge-gate: domain=%s decision=%s (%s)", ctx.domain, d.value, why)
     return d, why
 
 
@@ -106,6 +108,7 @@ def _append_audit(
     }
     with Path(path).open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, sort_keys=True) + "\n")
+    logger.debug("merge-gate: appended audit record to %s (decision=%s)", path, decision.value)
 
 
 def main(argv: list[str] | None = None) -> int:

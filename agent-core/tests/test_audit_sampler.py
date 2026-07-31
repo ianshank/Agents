@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+from datetime import datetime, timezone
 
 import hypothesis.strategies as st
 import pytest
@@ -21,6 +22,7 @@ from agent_core.audit_sampler import (
     select_for_audit_detailed,
 )
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
+from agent_core.protocols import FixedClock
 
 
 def _pending(cid: str, domain: str = "core") -> OutcomeRecord:
@@ -72,6 +74,16 @@ def test_record_verdict_writes_human_audit(tmp_path):
     rec = record_verdict(store, "c1", correct=False, clock=None)
     assert rec.label is False and rec.label_source == LabelSource.HUMAN_AUDIT.value
     assert store.resolved()["c1"].label_source == LabelSource.HUMAN_AUDIT.value
+
+
+def test_record_verdict_uses_injected_clock(tmp_path):
+    """A broken `clock or SystemClock()` fallback (e.g. ignoring `clock` entirely)
+    would go undetected without this: every other record_verdict test exercises
+    only the SystemClock default path."""
+    fixed = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+    store = _store(tmp_path, _pending("c1"))
+    rec = record_verdict(store, "c1", correct=True, clock=FixedClock(fixed))
+    assert rec.labeled_at == fixed.isoformat()
 
 
 def test_record_verdict_unknown_id_raises(tmp_path):

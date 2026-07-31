@@ -290,6 +290,17 @@ python scripts/check_protected_changes.py --base-ref origin/main
   file length `≤ 500` lines via `python scripts/check_size_budget.py` (wired into
   `quality-gates.yml`). Function length (`≤ 50`) and public-method count (`≤ 15`) print as
   non-blocking warnings — run the gate locally to see the backlog.
+- **Charter drift + invariants guards** keep [`docs/CHARTER.md`](docs/CHARTER.md) — the
+  north-star reference for the project's vision, mission, scope, and CI-enforced
+  invariants — from silently drifting away from the code. `python
+  scripts/check_charter_drift.py` verifies every markdown link the charter makes resolves
+  to a real file; `python scripts/check_charter_invariants.py` mechanically re-checks a
+  battery of the charter's actual *claims* (package roles, `agent-core`'s zero-dependency
+  claim, `SCHEMA_VERSION` single-sourcing, per-package coverage floors, the eval-integrity
+  approval label, Protocol-based interfaces, default-off flags), plus a non-blocking
+  magic-number heuristic. Both run in `quality-gates.yml`. See
+  [`docs/CHARTER_ALIGNMENT_AUDIT.md`](docs/CHARTER_ALIGNMENT_AUDIT.md) for the audit that
+  motivated the second gate.
 - **Operational-scripts quality gates** (`F-031`) keep `scripts/` lint-clean (`ruff check` +
   `ruff format --check`), type-clean (`mypy scripts`), and coverage-gated at ≥85%
   (`scripts/.coveragerc`) in `eval-harness-ci.yml`; `scripts/validations/F_031.py` asserts the
@@ -372,6 +383,8 @@ scripts/
   eval_protected_paths.py single source of truth for protected eval-defining paths
   check_protected_changes.py   CI guard: flags protected changes lacking approval
   check_skill_script_drift.py  CI guard: vendored skill scripts == canonical copy
+  check_charter_drift.py       CI guard: every docs/CHARTER.md markdown link resolves
+  check_charter_invariants.py  CI guard: docs/CHARTER.md's claims still hold in the code
   _config.py              shared changed-file + strict-YAML-loader helpers (merge-gate seeding)
   merge_gate_context.py   composes the merge-gate ChangeContext / seed (--confidence seam, F-042)
   agent_confidence.py     deterministic agent-lane proxy confidence for seeding (F-042, no network)

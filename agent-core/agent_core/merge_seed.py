@@ -68,6 +68,7 @@ def seed_pending(
     :class:`~agent_core.protocols.FixedClock` for determinism.
     """
     if already_seeded(store, change_id):
+        logger.debug("merge-seed: change_id=%s already seeded (no-op)", change_id)
         return None
     if merged_at is None:
         merged_at = (clock or SystemClock()).now().isoformat()
@@ -82,6 +83,7 @@ def seed_pending(
         agent_version=agent_version,
     )
     store.append(rec)
+    logger.info("merge-seed pending change_id=%s domain=%s", rec.change_id, rec.domain)
     return rec
 
 
@@ -111,10 +113,8 @@ def main(argv: list[str] | None = None) -> int:
         agent_version=args.agent_version,
     )
     if rec is None:
-        logger.info("merge-seed already seeded change_id=%s (no-op)", args.change_id)
         print(f"already seeded: {args.change_id} (no-op)")
         return 0
-    logger.info("merge-seed pending change_id=%s domain=%s", rec.change_id, rec.domain)
     print(
         f"seeded pending outcome {rec.change_id} "
         f"domain={rec.domain} raw_confidence={rec.raw_confidence}"

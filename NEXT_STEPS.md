@@ -2,6 +2,18 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Charter alignment audit + fixes + `check_charter_invariants.py` gate (PR #114)** —
+  a multi-agent audit (`docs/CHARTER_ALIGNMENT_AUDIT.md`) mechanically re-verified every
+  claim in `docs/CHARTER.md` against the code and found 5 real drift items: `Judge`/
+  `DatasetSource`/`TargetRunner`/`ResultSink` were `abc.ABC` (now `typing.Protocol`; `Scorer`
+  stays `ABC` — see below), no `Clock` DI seam existed (added
+  `agent_core.protocols.Clock`/`SystemClock`/`FixedClock`, wired through `audit_sampler`/
+  `merge_seed`/`outcome_labeller`/`merge_gate_ci`), `ModelTarget` hardcoded operational
+  defaults (added `ModelTargetConfig`, now validated at construction time), `HARNESS_SPEC.md`
+  described a stale single-package project, and the `claude-foundation` staging directory's
+  rationale was undocumented (added [ADR 0028](docs/decisions/0028-claude-foundation-staging.md)).
+  Added `scripts/check_charter_invariants.py` — a new CI gate that mechanically re-checks
+  these claims going forward — so this class of drift doesn't require another manual audit.
 - [x] **Merge-conflict marker guard + F-048 ledger correction** — removed four orphan
   `>>>>>>> origin/main` markers (`NEXT_STEPS.md`, `AGENTS.md`, `CHANGELOG.md` ×2) left by a
   clean merge that had silently discarded content; added an inline sweep to
@@ -261,6 +273,13 @@
 - [ ] **Make gates required** — add `quality-gates` jobs to branch-protection required
   checks once they have soaked.
 - [ ] **Enable auto-fix loop** — only after the ADR 0004 human checklist is complete.
+- [ ] **Consider migrating `Scorer` to `Protocol`** — the other four core interfaces
+  (`Judge`/`DatasetSource`/`TargetRunner`/`ResultSink`) are `typing.Protocol`; `Scorer`
+  stays `abc.ABC` because `typing.Protocol.__init__` doesn't reliably propagate a Protocol
+  base's own `__init__` to subclasses that don't redefine their own on Python 3.10 (fixed in
+  3.11+), and `pyproject.toml`/`agent-core/pyproject.toml` both pin `requires-python >= 3.10`.
+  Revisit once the floor moves past 3.10 (see `src/eval_harness/core/interfaces.py`'s module
+  docstring for the confirmed regression).
 - [x] **Seed merge-gate records (F-010 seam)** — `agent_core/merge_seed.py` writes the initial
   pending `OutcomeRecord` (`change_id` / `domain` / `raw_confidence` / `merged_at`) at merge
   time (idempotent, default-off integration in `merge_gate_ci`); closes the only seam ADR 0005
