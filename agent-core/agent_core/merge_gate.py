@@ -12,8 +12,10 @@ Design invariants (do not relax without a design review — see ADR 0005):
     product code, not to the apparatus that measures it.
   * The merge threshold is *derived from an acceptable-risk target*, never a
     hardcoded probability. ``tau`` is computed from the selective-risk curve.
-  * Calibration is only trusted when the calibrator is healthy (enough samples,
-    low ECE, AUROC that actually rank-orders correctness, tight CI).
+  * Calibration is only trusted when the calibrator is healthy: enough held-out
+    samples, low ECE, AUROC that actually rank-orders correctness, and a tight CI
+    *in the region that can actually auto-merge* -- or, if that region holds no
+    evidence at all, no auto-merge. An unmeasurable floor is not a satisfied one.
 
 Pure and deterministic: every tunable lives on :class:`GatePolicyConfig`; no
 literal appears in decision logic. The Wilson math is reused from
@@ -141,13 +143,19 @@ class CalibratorHealth:
     n: int
     ece: float
     auroc: float
-    bin_ci_width: float
+    # ``None`` means UNMEASURABLE: no calibrator bin could ever be an operating point, so
+    # there is no interval to be tight. Deliberately not NaN or ``inf``: NaN compares False
+    # against every bound, which is the one-sided fail-open this subsystem has already been
+    # bitten by twice, and ``inf`` would conflate "not measured" with "measured as
+    # maximally wide". ``None`` is checked by mypy at every use site.
+    bin_ci_width: float | None
 
     def is_trustworthy(self, cfg: GatePolicyConfig) -> bool:
         return (
             self.n >= cfg.min_calibration_n
             and self.ece <= cfg.max_ece
             and self.auroc >= cfg.min_auroc
+            and self.bin_ci_width is not None  # unmeasurable is not tight
             and self.bin_ci_width <= cfg.max_bin_ci_width
         )
 

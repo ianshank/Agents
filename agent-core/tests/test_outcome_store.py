@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import pytest
 
+from agent_core.calibration import expected_calibration_error
 from agent_core.merge_gate import GatePolicyConfig
 from agent_core.outcome_store import (
     BinningCalibrator,
     LabelSource,
     OutcomeRecord,
     OutcomeStore,
+    _bin_of,
     _fold,
-    _upper_half_ci_width,
+    _operating_bin_ci_width,
     build_domain_models,
 )
 
@@ -130,10 +132,78 @@ def test_binning_calibrator_bin_index_distinguishes_equal_accuracy_bins():
     assert cal.bin_index(1.0) == len(cal.bin_acc) - 1
 
 
-def test_upper_half_ci_width_empty_and_nonempty():
-    assert _upper_half_ci_width([], [], 1.96) == 0.0
-    width = _upper_half_ci_width([0.95, 0.96, 0.97], [True, True, False], 1.96)
-    assert 0.0 < width <= 1.0
+def test_operating_bin_ci_width_is_none_when_no_bin_can_merge():
+    """ "No evidence" must not score identically to "strongest possible evidence".
+
+    Replaces an assertion that pinned the defect as correct
+    (``_upper_half_ci_width([], [], 1.96) == 0.0``): the old accumulator started at 0.0,
+    so an empty region reduced to the identity of ``max`` and vacuously satisfied
+    ``max_bin_ci_width``.
+    """
+    assert _operating_bin_ci_width([], [], CFG) is None
+    # Populated but confidently below the per-decision Wilson floor: it can never be an
+    # operating point, so it is excluded rather than counted -- still nothing measurable.
+    assert _operating_bin_ci_width([0.95] * 40, [False] * 40, CFG) is None
+
+
+def test_operating_bin_ci_width_measures_eligible_bins():
+    width = _operating_bin_ci_width([0.95, 0.96, 0.97], [True, True, True], CFG)
+    assert width is not None and 0.0 < width <= 1.0
+
+
+def test_thin_eligible_bin_is_reported_as_wide():
+    """A 1/1 bin clears the floor on its upper bound but carries almost no information."""
+    width = _operating_bin_ci_width([0.35], [True], CFG)
+    assert width is not None and width > CFG.max_bin_ci_width
+
+
+def test_confidently_bad_bin_does_not_drag_the_width():
+    """A 0/30 bin is wide, but excluded -- ``decide`` could never operate there."""
+    scores = [0.15] * 30 + [0.95] * 40
+    labels = [False] * 30 + [True] * 40
+    width = _operating_bin_ci_width(scores, labels, CFG)
+    eligible_only = _operating_bin_ci_width([0.95] * 40, [True] * 40, CFG)
+    assert width == eligible_only
+
+
+@pytest.mark.parametrize("bad", [1.5, -0.1, float("nan"), float("inf"), float("-inf")])
+def test_fit_floors_out_of_contract_scores_like_bin_index(bad):
+    """``fit`` and ``bin_index`` must agree on where a score belongs.
+
+    ``fit`` used to sweep anything above 1.0 into the TOP bin (via its ``or b == bins - 1``
+    clause) and silently drop anything below 0.0, while ``bin_index`` floored both to bin 0.
+    A fitted table could therefore carry a top-bin accuracy inflated by a score that
+    ``bin_index`` would never route a query to. ``OutcomeRecord`` applies no validation
+    (ADR 0025), so such a score reaches ``fit`` straight off the store.
+    """
+    cal = BinningCalibrator.fit([bad, 0.95], [True, True])
+    assert _bin_of(bad, 10) == 0
+    assert cal.bin_index(bad) == 0
+    assert cal.bin_acc[0] == 1.0  # the bad score landed here, not in the top bin
+    assert cal.bin_acc[-2] == 0.0  # ... and did not inflate any upper bin
+
+
+def test_bin_of_matches_the_stored_edges():
+    """Pins the edge-comparison scan against the tempting ``int(raw * bins)`` rewrite.
+
+    ``0.7 * 10 == 6.999999999999999``, so the arithmetic form would route 0.7 to bin 6
+    while the calibrator's stored ``b / bins`` edges put it in bin 7.
+    """
+    cal = BinningCalibrator.fit([0.05], [True])
+    for raw in (0.0, 0.1, 0.3, 0.7, 0.8, 0.95, 1.0):
+        assert _bin_of(raw, 10) == cal.bin_index(raw)
+    assert _bin_of(0.7, 10) == 7
+    assert _bin_of(1.0, 10) == 9
+
+
+def test_reliability_bins_still_raises_out_of_range():
+    """The deliberate asymmetry: the metrics layer raises where the store floors.
+
+    Its inputs are computed by this module, so an out-of-range probability there is a bug,
+    not bad data. Pinned so nobody "unifies" the layers by weakening this side.
+    """
+    with pytest.raises(ValueError):
+        expected_calibration_error([1.5], [1])
 
 
 def test_fold_is_deterministic():
@@ -348,3 +418,59 @@ def test_propensity_absent_records_still_build_domain_models(tmp_path) -> None:
     for i in range(4):
         store.append(_rec(f"c{i}", "core", 0.1 + 0.2 * i, i % 2 == 0, LabelSource.HUMAN_AUDIT))
     assert set(build_domain_models(store, CFG)) == {"core"}
+
+
+def _ids_for_fold(fold: int, count: int, prefix: str = "f") -> list[str]:
+    """`count` deterministic change_ids that all land in `fold`."""
+    out: list[str] = []
+    i = 0
+    while len(out) < count:
+        cid = f"{prefix}{i}"
+        if _fold(cid) == fold:
+            out.append(cid)
+        i += 1
+    return out
+
+
+def test_thin_low_confidence_bin_no_longer_passes_health_vacuously(tmp_path):
+    """Regression for the reproduced fail-open: a health floor that did no work.
+
+    The old ``_upper_half_ci_width`` scanned only bins above raw 0.5. A domain whose
+    audits all sit BELOW that -- which can still calibrate to p == 1.0 and auto-merge --
+    left every scanned bin empty, so the widest-CI accumulator stayed at its ``0.0``
+    initialiser and satisfied ``max_bin_ci_width`` vacuously. Three health floors did real
+    work; the fourth reported a pass having measured nothing.
+
+    Here the eval fold's only eligible bin holds a single record, so the honest width is
+    ~0.79 -- far outside the 0.20 ceiling. Measured on the old axis it was 0.0.
+    """
+    store = OutcomeStore(tmp_path / "s.jsonl")
+    for cid in _ids_for_fold(0, 600, "fit"):  # fit fold: clean separation, low bins only
+        store.append(_rec(cid, "core", 0.45, True, LabelSource.HUMAN_AUDIT))
+    for cid in _ids_for_fold(0, 600, "fitlo"):
+        store.append(_rec(cid, "core", 0.05, False, LabelSource.HUMAN_AUDIT))
+    for cid in _ids_for_fold(1, 600, "evlo"):  # eval fold: bin 0 is confidently bad
+        store.append(_rec(cid, "core", 0.05, False, LabelSource.HUMAN_AUDIT))
+    store.append(_rec(_ids_for_fold(1, 1, "thin")[0], "core", 0.45, True, LabelSource.HUMAN_AUDIT))
+
+    m = build_domain_models(store, CFG)["core"]
+    assert m.health.bin_ci_width is not None, "the region is populated, so it is measurable"
+    assert m.health.bin_ci_width > CFG.max_bin_ci_width
+    assert not m.health.is_trustworthy(CFG)
+    assert m.tau is None
+
+
+def test_unmeasurable_region_blocks_a_domain_that_looks_perfect(tmp_path):
+    """Every other floor passes; the region holds no evidence, so autonomy is refused."""
+    store = OutcomeStore(tmp_path / "s.jsonl")
+    for i, cid in enumerate(_ids_for_fold(0, 600, "g")):
+        store.append(
+            _rec(cid, "core", 0.45 if i % 2 else 0.05, i % 2 == 1, LabelSource.HUMAN_AUDIT)
+        )
+    for i, cid in enumerate(_ids_for_fold(1, 600, "h")):
+        # Eval fold: every record is WRONG, so no bin's upper bound reaches wilson_floor.
+        store.append(_rec(cid, "core", 0.45 if i % 2 else 0.05, False, LabelSource.HUMAN_AUDIT))
+    m = build_domain_models(store, CFG)["core"]
+    assert m.health.bin_ci_width is None
+    assert not m.health.is_trustworthy(CFG)
+    assert m.tau is None

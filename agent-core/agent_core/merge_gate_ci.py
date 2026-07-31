@@ -129,10 +129,14 @@ def run(ctx: ChangeContext, store: OutcomeStore, cfg: GatePolicyConfig) -> tuple
     bin_succ = sum(1 for r in same_bin if r.label)
 
     d = decide(ctx, m.calibrator, m.health, m.tau, bin_succ, bin_n, cfg)
+    # bin_ci was previously omitted entirely, so an operator seeing healthy=False could not
+    # tell which of the four floors tripped -- and the "unmeasurable" state would be
+    # invisible. The workflow greps only `^DECISION=`, so extending this tail is safe.
+    ci = "unmeasurable" if m.health.bin_ci_width is None else f"{m.health.bin_ci_width:.3f}"
     why = (
         f"p={p:.3f} tau={m.tau} healthy={m.health.is_trustworthy(cfg)} "
         f"n={m.health.n} ece={m.health.ece:.3f} auroc={m.health.auroc:.3f} "
-        f"bin={bin_succ}/{bin_n}"
+        f"bin_ci={ci} bin={bin_succ}/{bin_n}"
     )
     logger.debug("merge-gate: domain=%s decision=%s (%s)", ctx.domain, d.value, why)
     return d, why

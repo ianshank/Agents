@@ -128,6 +128,34 @@ class OutcomeStore:
         return out
 
 
+def _bin_of(raw_score: float, bins: int) -> int:
+    """Single source of truth for score -> bin routing.
+
+    Out-of-contract scores (non-finite, or outside ``[0, 1]``) floor to bin 0. Scores are
+    *loaded*, not computed: ``OutcomeRecord`` is a deliberately dumb, load-tolerant holder
+    (ADR 0025) whose validation lives at the write boundary, so this layer fails **closed**
+    -- a score we cannot interpret is treated as no confidence, never as maximum confidence
+    -- and never raises, because one malformed historical line must not fail the gate on
+    every PR. ``agent_core.calibration`` raises on the same input, correctly: its inputs are
+    computed by this module, so an out-of-range probability there is a bug, not bad data.
+
+    Routing was previously written out three times with two different out-of-range policies:
+    ``fit`` swept anything above 1.0 into the *top* bin and silently dropped anything below
+    0.0, while ``bin_index`` floored both to bin 0. A fitted table could therefore hold a top
+    -bin accuracy inflated by a score that ``bin_index`` would never route a query to.
+
+    The edge-comparison scan is deliberate -- ``min(int(raw * bins), bins - 1)`` is NOT
+    equivalent. ``0.7 * 10 == 6.999999999999999`` would route 0.7 to bin 6, whereas the scan
+    matches the ``b / bins`` edges the calibrator actually stores.
+    """
+    if not math.isfinite(raw_score) or not 0.0 <= raw_score <= 1.0:
+        return 0
+    for i in range(bins):
+        if raw_score < (i + 1) / bins:
+            return i
+    return bins - 1  # score >= top edge (e.g. exactly 1.0)
+
+
 @dataclass(frozen=True)
 class BinningCalibrator:
     """Histogram calibrator: predict = empirical accuracy of the score's bin."""
@@ -151,48 +179,80 @@ class BinningCalibrator:
         so the fail-closed choice is made here too: a score we cannot interpret is treated
         as no confidence, never as maximum confidence. ``1.0`` exactly is in contract and
         still lands in the top bin.
+
+        Routing itself is delegated to :func:`_bin_of` so this method and ``fit`` cannot
+        disagree about where a score belongs; only the per-query log line lives here.
         """
         if not math.isfinite(raw_score) or not 0.0 <= raw_score <= 1.0:
             logger.warning(
                 "out-of-contract raw_score %r in bin_index; scoring as bin 0 (fail-closed)",
                 raw_score,
             )
-            return 0
-        for i in range(len(self.bin_acc)):
-            if raw_score < self.edges[i + 1]:
-                return i
-        return len(self.bin_acc) - 1  # score >= top edge (e.g. exactly 1.0)
+        return _bin_of(raw_score, len(self.bin_acc))
 
     @staticmethod
     def fit(
         scores: list[float], labels: list[bool], bins: int = DEFAULT_N_BINS
     ) -> BinningCalibrator:
+        bad = sum(1 for s in scores if not (math.isfinite(s) and 0.0 <= s <= 1.0))
+        if bad:
+            # Aggregate, not per-record: one line per fit, however dirty the store is.
+            logger.warning(
+                "BinningCalibrator.fit: %d of %d score(s) outside the [0, 1] contract; "
+                "binned as bin 0 (fail-closed, matching bin_index)",
+                bad,
+                len(scores),
+            )
         edges = tuple(b / bins for b in range(bins + 1))
         acc: list[float] = []
         for b in range(bins):
-            idx = [
-                k
-                for k, s in enumerate(scores)
-                if s >= edges[b] and (s < edges[b + 1] or b == bins - 1)
-            ]
+            idx = [k for k, s in enumerate(scores) if _bin_of(s, bins) == b]
             acc.append(sum(1 for k in idx if labels[k]) / len(idx) if idx else 0.0)
         return BinningCalibrator(edges=edges, bin_acc=tuple(acc))
 
 
-def _upper_half_ci_width(
-    scores: list[float], labels: list[bool], z: float, bins: int = 10
-) -> float:
-    """Widest Wilson CI among bins in the upper score half — the region where
-    auto-merges actually happen, so the relevant thinness signal."""
-    widest = 0.0
-    for b in range(bins // 2, bins):
-        lo, hi = b / bins, (b + 1) / bins
-        idx = [k for k, s in enumerate(scores) if s >= lo and (s < hi or b == bins - 1)]
+def _operating_bin_ci_width(
+    scores: list[float], labels: list[bool], cfg: GatePolicyConfig
+) -> float | None:
+    """Widest Wilson CI among the bins that could plausibly reach AUTO_MERGE.
+
+    Returns ``None`` when no bin qualifies -- the region is unmeasurable, not perfect.
+
+    ``decide`` compares the CALIBRATED ``p`` against ``tau`` and then requires the operating
+    bin's Wilson LOWER bound to clear ``wilson_floor``. So a bin whose Wilson UPPER bound
+    cannot even reach that floor can never be an operating point, whatever ``tau`` turns out
+    to be -- and ``tau`` is not knowable here, since it is derived *from* health. The floor,
+    not ``tau``, therefore defines the region, and it defines it on the calibrator's own
+    bins: the axis the decision is actually made on.
+
+    This replaces a scan of the upper half of the *raw* score range, which was wrong twice
+    over. It measured the wrong axis -- a domain whose audits all sit below raw 0.5 can
+    still calibrate to ``p == 1.0`` and auto-merge, in a region that scan could not inspect,
+    so its docstring's claim to cover "where auto-merges actually happen" was false. And it
+    accumulated into a ``0.0`` initialiser, so an EMPTY region reduced to the identity of
+    ``max`` and read as a perfectly tight one, vacuously satisfying ``max_bin_ci_width``:
+    the one health floor that did no work while reporting a pass. No evidence is not
+    evidence of no risk, so it is now ``None`` and ``is_trustworthy`` rejects it.
+
+    Grouping is by bin INDEX, never by predicted value: two distinct bins can share an
+    accuracy, and collapsing them would pool their counts into an over-narrow interval --
+    a fail-open of exactly the kind being removed.
+
+    Note this makes ``wilson_floor`` influence health: lowering it (weakening the
+    per-decision check) admits more bins into the region and so makes health stricter. The
+    two knobs balance rather than compound.
+    """
+    widest: float | None = None
+    for b in range(cfg.n_bins):
+        idx = [k for k, s in enumerate(scores) if _bin_of(s, cfg.n_bins) == b]
         if not idx:
             continue
         succ = sum(1 for k in idx if labels[k])
-        low, high = wilson_interval(succ, len(idx), z)
-        widest = max(widest, high - low)
+        low, high = wilson_interval(succ, len(idx), cfg.wilson_z)
+        if high < cfg.wilson_floor:
+            continue  # confidently below the per-decision floor: never an operating point
+        width = high - low
+        widest = width if widest is None else max(widest, width)
     return widest
 
 
@@ -270,9 +330,10 @@ def build_domain_models(store: OutcomeStore, cfg: GatePolicyConfig) -> dict[str,
             n=len(recs),
             ece=expected_calibration_error(ev_cal, ev_outcomes, cfg.n_bins),
             auroc=ev_auroc,
-            # Bin by RAW (continuous) scores, not the discrete calibrated values,
-            # so equal-accuracy bins aren't conflated into an over-narrow CI.
-            bin_ci_width=_upper_half_ci_width(ev_raw, ev_labels, cfg.wilson_z),
+            # Group by RAW-score bin INDEX, not by the discrete calibrated value, so
+            # equal-accuracy bins aren't conflated into an over-narrow CI. Which bins
+            # count is decided on the decision axis (see _operating_bin_ci_width).
+            bin_ci_width=_operating_bin_ci_width(ev_raw, ev_labels, cfg),
         )
         tau = threshold_for_risk(ev_cal, ev_labels, cfg) if health.is_trustworthy(cfg) else None
         models[domain] = DomainModel(calibrator=cal, health=health, tau=tau)
