@@ -22,8 +22,11 @@ the marketplace itself doesn't provide.
 | [`quality-gate`](quality-gate/) | 1.1.0 | Generate a deterministic lint + type + test + coverage gate script |
 | [`deploy`](deploy/) | 1.0.0 | Generate a safety-railed deployment script (dry-run / confirm / rollback) |
 | [`dataset-lint`](dataset-lint/) | 1.0.0 | Validate eval datasets for structure, duplicate IDs, and encoding |
+| [`hierarchical-recursive-brainstorm`](hierarchical-recursive-brainstorm/) | 1.0.0 | Decompose a topic into a pruned, recursively-expanded hierarchy and synthesize upward |
+| [`openspec-quality-plan`](openspec-quality-plan/) | 1.0.0 | Generate a complete OpenSpec change package (proposal, design, tasks, spec deltas) |
+| [`openspec-peer-review`](openspec-peer-review/) | 1.0.0 | Emit objective peer-review findings and rewrite an OpenSpec package to meet quality standards |
 
-## Two kinds of skill
+## Three kinds of skill
 
 - **Inference skills** consume a model (e.g. `openai-judge`, `model-bench`).
 - **Deterministic generator skills** (`project-setup`, `quality-gate`, `deploy`)
@@ -31,12 +34,18 @@ the marketplace itself doesn't provide.
   model-backed logic — see [ADR 0020](../docs/decisions/0020-deterministic-generator-skills.md)
   and [ADR 0022](../docs/decisions/0022-determinism-boundary-for-inference-skills.md)
   for the determinism boundary.
+- **Subjective skills** (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`,
+  `openspec-peer-review`) produce outputs needing human judgment (research trees, plans,
+  reviews) rather than a gradeable artifact — [`docs/SKILL_TEMPLATE.md`](../docs/SKILL_TEMPLATE.md)
+  §5.B. Structural validation + marketplace registration + the drift guard is their complete
+  CI contract; no behavioral evals, no coverage floor — see
+  [ADR 0030](../docs/decisions/0030-skill-ci-tiers.md).
 
 ## Working with skills
 
 ```bash
 # Validate the whole registry (versions match SKILL.md frontmatter; each skill
-# passes structural + behavioral validation):
+# passes structural validation -- see scripts/skill_marketplace.py's validate_entry):
 python scripts/skill_marketplace.py validate
 python scripts/skill_marketplace.py list
 
@@ -57,5 +66,11 @@ copy, re-sync the vendored copies.
    `SKILL.md` frontmatter.
 3. Run `python scripts/skill_marketplace.py validate`.
 
-Skills are exercised in CI by `.github/workflows/skills-ci.yml` (pinned
-`ruff`/`mypy` + `pytest --cov-fail-under=95`).
+Every skill directory gets a structural + registry + drift-guard floor automatically, via
+`.github/workflows/skills-ci.yml`'s `all-skills` job — it discovers `skills/*/` dynamically,
+so a new skill is covered from its first commit with no CI file to edit. Skills that ship
+real library code additionally get a dedicated job (pinned `ruff`/`mypy` +
+`pytest --cov-fail-under=95` + `validate_skill.py --tier structural,behavioral`); add one by
+copying an existing job block in `skills-ci.yml`. A skill with no library code (a "subjective"
+skill, see above) instead needs an `EXEMPT` entry in the `all-skills` job's registration
+guard, or CI fails closed.

@@ -3,24 +3,17 @@ name: skills CI
 on:
   push:
     branches: [main]
+    # A single glob, not one entry per skill: `paths:` is workflow-scoped (no job carries
+    # its own `if:`), so any listed skill already fans out every job in this file -- the
+    # per-skill entries bought no selectivity, only the risk of omission. `dataset-lint` was
+    # omitted this way for a full skills-ci.yml revision and its dedicated job silently never
+    # ran on its own changes (fixed alongside the `all-skills` job below, F-050).
     paths:
-      - "skills/eval-corpus-forge/**"
-      - "skills/architecture-drift-guard/**"
-      - "skills/openai-judge/**"
-      - "skills/model-bench/**"
-      - "skills/project-setup/**"
-      - "skills/quality-gate/**"
-      - "skills/deploy/**"
+      - "skills/**"
       - ".github/workflows/skills-ci.yml"
   pull_request:
     paths:
-      - "skills/eval-corpus-forge/**"
-      - "skills/architecture-drift-guard/**"
-      - "skills/openai-judge/**"
-      - "skills/model-bench/**"
-      - "skills/project-setup/**"
-      - "skills/quality-gate/**"
-      - "skills/deploy/**"
+      - "skills/**"
       - ".github/workflows/skills-ci.yml"
   workflow_dispatch:
 
@@ -275,3 +268,103 @@ jobs:
       - run: mypy --config-file ../../pyproject.toml scripts/lint_dataset.py
       - run: python -m pytest tests --cov=lint_dataset --cov-branch --cov-report=term-missing --cov-fail-under=99
       - run: python scripts/validate_skill.py --skill . --tier structural,behavioral
+
+  # Repo-level guard over the skill *set*, not a per-skill quality gate (ADR 0030) -- it sits
+  # outside the ADR 0021 delegation chain by design, so its steps run inline rather than
+  # through a generated quality-gate.sh. Gives every skills/*/ directory a structural floor,
+  # not just the 8 with a dedicated job above (F-050).
+  all-skills:
+    name: all-skills structural + registry + drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.12"
+      # jsonschema is NOT optional here: skill_marketplace.py's validate_schema() catches
+      # ImportError and only *warns* before returning 0 -- a lean install would silently
+      # no-op the registry schema check while the step still reported success.
+      - run: pip install "pyyaml>=6" "jsonschema>=4.0"
+      # Structural tier for every skill directory, dynamically discovered (skills/*/, never
+      # an allowlist -- a new skill is covered the day it lands). Accumulates failures
+      # instead of short-circuiting so one bad skill can't hide a second.
+      - name: Structural validation for every skill
+        run: |
+          rc=0
+          for d in skills/*/; do
+            python scripts/validate_skill.py --skill "$d" --tier structural || rc=1
+          done
+          exit $rc
+      - name: Marketplace registry validation
+        run: python scripts/skill_marketplace.py validate
+      # Vendored validate_skill.py copies must stay byte-identical to their canonical
+      # source. This job is what makes the guard reachable on every skill's own changes --
+      # previously only the 8 skills with a dedicated job below triggered any check at all.
+      - name: Skill-script drift guard
+        run: python scripts/check_skill_script_drift.py
+      # Every skills/*/ directory must be registered in marketplace.yaml, and must have
+      # either a dedicated job in this file or a documented EXEMPT entry. Structured on the
+      # docs.yml component-README guard: a derived list plus a dict[name, reason] EXEMPT, not
+      # a bare set. Inline (not scripts/*.py) so it stays out of the scripts/ coverage floor
+      # (F-031) and the protected tests/** guard.
+      - name: Every skill is registered and CI-covered
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+          import sys
+
+          import yaml
+
+          ROOT = pathlib.Path(".")
+
+          # Skills exempt from a dedicated lint/type/pytest job: the template's own
+          # "Subjective skills" class (docs/SKILL_TEMPLATE.md Sec.5.B) -- structural tier +
+          # marketplace registration + drift guard is their complete CI contract (ADR 0030).
+          # Each reason is re-checked below against evals/evals.json so a skill that later
+          # grows real evals and library code can't stay silently exempted forever.
+          EXEMPT = {
+              "hierarchical-recursive-brainstorm": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",
+              "openspec-quality-plan": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",
+              "openspec-peer-review": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",
+          }
+
+          marketplace = yaml.safe_load((ROOT / "skills" / "marketplace.yaml").read_text())
+          registered = {s["name"] for s in marketplace.get("skills", [])}
+
+          workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "skills-ci.yml").read_text())
+          job_names = set(workflow["jobs"].keys())
+
+          skill_dirs = sorted(p.name for p in (ROOT / "skills").iterdir() if p.is_dir())
+          if not skill_dirs:
+              print("skill-coverage: FAIL - no skill directories discovered under skills/")
+              sys.exit(1)
+
+          errors = []
+          for name in skill_dirs:
+              if name not in registered:
+                  errors.append(f"{name}: not registered in skills/marketplace.yaml")
+              if name not in job_names and name not in EXEMPT:
+                  errors.append(
+                      f"{name}: no dedicated job in skills-ci.yml and not in EXEMPT "
+                      "(add a job, or add a documented EXEMPT entry -- see ADR 0030)"
+                  )
+
+          for name, reason in EXEMPT.items():
+              evals = ROOT / "skills" / name / "evals" / "evals.json"
+              if evals.is_file():
+                  errors.append(
+                      f"{name}: EXEMPT reason ({reason!r}) is stale -- evals/evals.json now "
+                      "exists; give it a dedicated job or reclassify per ADR 0030"
+                  )
+
+          if errors:
+              print(f"skill-coverage: FAIL - {len(errors)} issue(s):")
+              for e in errors:
+                  print(f"  - {e}")
+              sys.exit(1)
+          print(f"skill-coverage: OK - {len(skill_dirs)} skill(s) registered and CI-covered.")
+          PY

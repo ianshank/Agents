@@ -31,11 +31,12 @@ import F_037  # noqa: E402
 import F_039  # noqa: E402
 import F_041  # noqa: E402
 import F_045  # noqa: E402
+import F_050  # noqa: E402
 
 
 @pytest.mark.parametrize(
     "module",
-    [F_020, F_021, F_022, F_023, F_031, F_032, F_033, F_034, F_035, F_037, F_039, F_041, F_045],
+    [F_020, F_021, F_022, F_023, F_031, F_032, F_033, F_034, F_035, F_037, F_039, F_041, F_045, F_050],
     ids=[
         "F_020",
         "F_021",
@@ -50,6 +51,7 @@ import F_045  # noqa: E402
         "F_039",
         "F_041",
         "F_045",
+        "F_050",
     ],
 )
 def test_validator_main_passes(module):

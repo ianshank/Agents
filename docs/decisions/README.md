@@ -47,3 +47,4 @@ changes course is a *new* ADR that supersedes the old one, not an edit.
 | [0027](0027-no-history-rewrite.md) | No git-history rewrite for the leaked Langfuse keys |
 | [0028](0028-claude-foundation-staging.md) | `claude-foundation` staging directory is the sanctioned interim state |
 | [0029](0029-operating-region-calibrator-health.md) | Calibrator health is measured on the operating region, and an unmeasurable floor never passes |
+| [0030](0030-skill-ci-tiers.md) | Skill CI tiers: a structural floor for every skill, full gates only where there's code |
