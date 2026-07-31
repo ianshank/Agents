@@ -31,6 +31,12 @@ floor actually do work, so a future edit cannot silently reinstate the fail-open
        while ``bin_index`` floored them to bin 0.
     7. The sample floor counts the fold it measures (``n=len(eval_recs)``), not the
        both-fold total that overstated it 2x.
+    8. ``n_bins`` is bounded above (a resource-safety guard distinct from the "reject the
+       vacuous endpoint" rule the other fields follow -- it is now a CLI value, and scoring
+       is O(n * n_bins) per domain per CI run) and scoring is a single pass per score
+       (``_bucket_by_bin``), not an O(n_bins) re-scan per bin -- peer review measured the
+       naive version at ~3.8s for n_bins=200 on 5000 scores, a real hang/timeout risk once
+       the bin count became operator-reachable.
 
 Exit codes: 0 all checks passed; 1 one or more failed.
 """
@@ -207,6 +213,19 @@ def validate_f049() -> int:
         "the bin count is a policy field defaulted from the single library source",
         errors,
     )
+    _check(
+        "MAX_N_BINS" in gate and "self.n_bins > MAX_N_BINS" in gate,
+        "n_bins has an upper bound: it is now an operator-supplied CLI value, and "
+        "build_domain_models does O(n * n_bins) work per domain per CI run",
+        errors,
+    )
+    _check(
+        "_bucket_by_bin" in store,
+        "fit and _operating_bin_ci_width assign each score to a bin ONCE and bucket, "
+        "rather than re-scanning every score once per bin -- the latter turned _bin_of's "
+        "own O(n_bins) scan into O(n_bins) calls of it per function, i.e. O(n_bins^2 * n)",
+        errors,
+    )
 
     # --- 4. reachable by an operator; a bad value is a usage error ------------------------
     registered = _registered_flags(gate_ci)
@@ -295,12 +314,25 @@ def validate_f049() -> int:
 
     # --- 6. one routing implementation ---------------------------------------------------
     _check(_func(store, "_bin_of") is not None, "outcome_store defines _bin_of", errors)
+    bucket = _func(store, "_bucket_by_bin")
+    _check(
+        bucket is not None and "_bin_of" in ast.unparse(bucket),
+        "_bucket_by_bin (the shared grouping helper) routes through _bin_of",
+        errors,
+    )
     fit = _func(store, "fit")
     if fit is not None:
         body = ast.unparse(fit)
+        # fit no longer calls _bin_of directly -- it delegates grouping to _bucket_by_bin,
+        # which itself routes through _bin_of (checked above). Routing through the shared
+        # bucketer, not just through _bin_of somewhere in the call chain, is what fixed the
+        # O(n_bins^2 * n) regression: re-scanning every score once per bin via a direct
+        # "_bin_of(s, bins) == b" membership test is what made this check pass on the
+        # REGRESSED code too, so this asserts the grouping call, not merely the routing.
         _check(
-            "_bin_of" in body,
-            "fit routes through _bin_of so it cannot disagree with bin_index",
+            "_bucket_by_bin" in body,
+            "fit groups scores via the shared _bucket_by_bin helper (one bin assignment "
+            "per score), not by re-scanning every score once per bin",
             errors,
         )
         _check(
@@ -309,6 +341,12 @@ def validate_f049() -> int:
             "inflated a bin's accuracy with records bin_index would never route a query to",
             errors,
         )
+    width = _func(store, "_operating_bin_ci_width")
+    _check(
+        width is not None and "_bucket_by_bin" in ast.unparse(width),
+        "_operating_bin_ci_width also groups via _bucket_by_bin, not a per-bin re-scan",
+        errors,
+    )
     idx = _func(store, "bin_index")
     _check(
         idx is not None and "_bin_of" in ast.unparse(idx),

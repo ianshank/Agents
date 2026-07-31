@@ -79,6 +79,15 @@ and `scripts/validations/**` in their own commit. Coverage floor:
       bin, which could keep the gate permanently closed — the correct default, but a human
       decision to confirm.
 - [ ] G4 (widened to 4 CLIs), G6, G7, G8, G9 from the gap analysis.
+- [ ] `behavioral-regression/behavioral_regression/config.py`'s `_require_positive`/
+      `_require_at_least` validators have no `math.isfinite` guard — peer review of this
+      change confirmed `BRConfig(dist_sigma=float("inf"))`, `BRConfig(wilson_z=float("inf"))`,
+      and `BRConfig(n_pairs=float("nan"))` all construct without error. This is the exact
+      failure class `GatePolicyConfig.__post_init__`'s docstring names as "already bitten by
+      twice" — a third, live instance one package over, surfaced but not fixed here (a
+      different package, its own protected-path review). `_require_finite_in` in
+      `merge_gate.py` is the pattern to port; do not import cross-package (`agent_core` stays
+      dependency-free).
 
 ## Archive
 

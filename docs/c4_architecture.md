@@ -144,9 +144,10 @@ C4Component
     Rel(from_config, config_model, "validated input")
 ```
 
-## Level 3 — Component: Calibrated Merge Gate (F-010 + F-032…F-035, agent_core, default-off)
+## Level 3 — Component: Calibrated Merge Gate (F-010 + F-032…F-035 + F-049, agent_core, default-off)
 
-A pure, deterministic merge-decision subsystem under `agent_core` (ADR 0005), wired by
+A pure, deterministic merge-decision subsystem under `agent_core` (ADR 0005; calibrator-health
+measurement and every `GatePolicyConfig` bound are ADR 0029), wired by
 `.github/workflows/calibrated-merge-gate.yml`. It **auto-merges nothing** unless
 `ENABLE_CALIBRATED_AUTOMERGE` is set and a populated, human-audited outcome store has earned it.
 Outcomes are labelled by **real** detectors (git history + GitHub Actions check-runs), all
@@ -178,17 +179,23 @@ is non-finite or outside `[0, 1]` at construction, and `BinningCalibrator.bin_in
 such score to bin 0 for records arriving straight from the store, where `OutcomeRecord` applies
 no validation — a score the gate cannot interpret is never read as maximum confidence. The CLI
 maps every out-of-contract input to exit 2 (usage), never 0, which CI reads as proceed-to-merge.
-See `docs/gap-analysis-merge-gate-2026-07-24.md` for the reproductions behind these guards and
-the subsystem's open findings.
+Every `GatePolicyConfig` tunable (`--risk-target`, `--min-calibration-n`, `--max-ece`,
+`--min-auroc`, `--max-bin-ci-width`, `--n-bins`, `--wilson-floor`, `--wilson-z`, `--risk-ci-z`)
+is a `merge_gate_ci` flag, validated at construction and reported the same way — `--protected
+-auto-merge` is deliberately absent, since never auto-merging protected paths is a design
+invariant, not an operator knob (ADR 0029). See `docs/gap-analysis-merge-gate-2026-07-24.md`
+for the reproductions behind these guards; its G1/G2/G3 findings are closed by F-049/ADR 0029
+(`openspec/changes/merge-gate-health-integrity/`), and the doc's own §3 records which findings
+remain open.
 
 ```mermaid
 C4Component
     title Component Diagram: Calibrated Merge Gate (agent_core)
 
     Container_Boundary(gate, "agent_core merge-gate subsystem") {
-        Component(ci, "merge_gate_ci", "CLI entrypoint", "exit 0/10/20 (+1 internal, +2 usage — incl. any out-of-contract input value; never 0 on bad input); --audit-log JSONL")
-        Component(decide, "merge_gate.decide()", "pure function", "ChangeContext enforces raw_confidence in [0,1] at construction; REJECT mech-fail -> ESCALATE protected -> calibrated trust + Wilson bin floor -> AUTO_MERGE")
-        Component(store, "outcome_store", "append-only JSONL", "OutcomeStore, BinningCalibrator (fail-closed: non-finite / out-of-[0,1] scores floor to bin 0, never the top bin), build_domain_models (held-out fold; logs why records are excluded from the fit)")
+        Component(ci, "merge_gate_ci", "CLI entrypoint", "exit 0/10/20 (+1 internal, +2 usage — incl. any out-of-contract input or gate-policy value; never 0 on bad input); --audit-log JSONL; one flag per GatePolicyConfig tunable (risk_target/min_calibration_n/max_ece/min_auroc/max_bin_ci_width/n_bins/wilson_floor/wilson_z/risk_ci_z), no --protected-auto-merge")
+        Component(decide, "merge_gate.decide()", "pure function", "ChangeContext enforces raw_confidence in [0,1] at construction; GatePolicyConfig.__post_init__ bounds all 9 tunables (rejects the vacuous endpoint, allows the maximally strict one); REJECT mech-fail -> ESCALATE protected -> calibrated trust + Wilson bin floor -> AUTO_MERGE")
+        Component(store, "outcome_store", "append-only JSONL", "OutcomeStore, BinningCalibrator (fail-closed: non-finite / out-of-[0,1] scores floor to bin 0, never the top bin, via the single-sourced _bin_of/_bucket_by_bin routing), build_domain_models (held-out fold; n floors on the held-out count, not the both-fold total; logs why records are excluded from the fit); _operating_bin_ci_width measures calibrator health on the Wilson-floor-eligible operating region and returns None (untrustworthy) rather than a vacuous 0.0 when unmeasurable (ADR 0029)")
         Component(sync, "store_sync", "package + CLI (F-032)", "models/serialization/store/git_sync submodules; pull/push/stats vs merge-gate-data branch; canonical merge, opaque-line preservation, retry-backoff; byte-oriented git-plumbing runner (shared subprocess_util); exit 0/4/5")
         Component(labeller, "outcome_labeller", "module", "passive revert / CI-failure / timeout-clean labels (alerting only)")
         Component(sampler, "audit_sampler", "module", "unbiased stratified sampling + HUMAN_AUDIT verdicts; records each pick's marginal inclusion probability (selection_propensity) so audits can later be reweighted by 1/p -- unreconstructable after the round. Owns the propensity CONTRACT (is_valid_propensity / format_propensity): one predicate and one renderer shared by the write boundary, the issue planner and the recorder, so the layers cannot drift")

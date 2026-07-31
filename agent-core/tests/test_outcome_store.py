@@ -268,6 +268,33 @@ def test_build_models_single_record_folds_fall_back(tmp_path):
     assert models["d0"].tau is None and models["d1"].tau is None
 
 
+def test_fold_collapse_at_moderate_n_still_escalates(tmp_path):
+    """The fallback's safety net at N > 1, not just the masked N=1 case above.
+
+    ``fit_recs = [...] or recs`` / ``eval_recs = [...] or recs`` (outcome_store.py) means a
+    domain whose every change_id happens to hash to the SAME fold reuses the fit fold as its
+    own held-out fold, silently defeating the isolation guarantee. At N=1 that's untestable
+    -- the domain fails min_calibration_n regardless of the fallback. Here N=8, chosen from
+    real hash collisions so this isn't a contrived n=1 pass-through, and the labels are
+    perfectly separable, which is exactly the shape that would look spuriously trustworthy
+    if the calibrator were scored on its own fit data. It still escalates, because
+    min_calibration_n=200 (the default) is never cleared by 8 held-out records -- the
+    fallback's blast radius is bounded by the same sample floor regardless of which fold
+    collapses.
+    """
+    store = OutcomeStore(tmp_path / "s.jsonl")
+    ids = _ids_for_fold(0, 8, "collapse")
+    for i, cid in enumerate(ids):
+        store.append(
+            _rec(cid, "core", 0.95 if i % 2 else 0.05, i % 2 == 1, LabelSource.HUMAN_AUDIT)
+        )
+    m = build_domain_models(store, CFG)["core"]
+    assert m.health.n == 8  # eval_recs fell back to the full (fit-fold) set
+    assert m.health.n_total == 8
+    assert not m.health.is_trustworthy(CFG)  # sample floor, not the collapse itself, blocks it
+    assert m.tau is None
+
+
 def test_build_models_ignores_passive_labels(tmp_path):
     store = OutcomeStore(tmp_path / "s.jsonl")
     store.append(_rec("c1", "core", 0.9, True, LabelSource.TIMEOUT_CLEAN))

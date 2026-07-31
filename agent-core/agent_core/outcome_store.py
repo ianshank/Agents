@@ -156,6 +156,26 @@ def _bin_of(raw_score: float, bins: int) -> int:
     return bins - 1  # score >= top edge (e.g. exactly 1.0)
 
 
+def _bucket_by_bin(scores: list[float], bins: int) -> list[list[int]]:
+    """Group score INDICES by bin, in one pass over ``scores``.
+
+    ``fit`` and ``_operating_bin_ci_width`` both need "every index in bin b", for every b.
+    Computing that by calling ``_bin_of`` from inside a ``for b in range(bins)`` membership
+    test -- ``[k for k, s in enumerate(scores) if _bin_of(s, bins) == b]``, once per bin --
+    re-scans every score once per bin, turning ``_bin_of``'s own O(bins) linear scan into
+    O(bins) calls of it, i.e. O(bins^2) work per score: O(bins^2 * n) overall. That is a real
+    regression introduced by routing through a shared O(bins) function instead of an O(1)
+    inline membership test, and it matters now that ``n_bins`` is an operator-supplied CLI
+    flag with no natural upper bound on cost (`--n-bins 200` on 5000 scores measured ~3.8s;
+    it was a hardcoded 10 before this seam existed). Assigning each score to its bin exactly
+    ONCE and then bucketing restores the original O(bins * n) shape.
+    """
+    buckets: list[list[int]] = [[] for _ in range(bins)]
+    for k, s in enumerate(scores):
+        buckets[_bin_of(s, bins)].append(k)
+    return buckets
+
+
 @dataclass(frozen=True)
 class BinningCalibrator:
     """Histogram calibrator: predict = empirical accuracy of the score's bin."""
@@ -204,10 +224,10 @@ class BinningCalibrator:
                 len(scores),
             )
         edges = tuple(b / bins for b in range(bins + 1))
-        acc: list[float] = []
-        for b in range(bins):
-            idx = [k for k, s in enumerate(scores) if _bin_of(s, bins) == b]
-            acc.append(sum(1 for k in idx if labels[k]) / len(idx) if idx else 0.0)
+        acc = [
+            sum(1 for k in idx if labels[k]) / len(idx) if idx else 0.0
+            for idx in _bucket_by_bin(scores, bins)
+        ]
         return BinningCalibrator(edges=edges, bin_acc=tuple(acc))
 
 
@@ -243,8 +263,7 @@ def _operating_bin_ci_width(
     two knobs balance rather than compound.
     """
     widest: float | None = None
-    for b in range(cfg.n_bins):
-        idx = [k for k, s in enumerate(scores) if _bin_of(s, cfg.n_bins) == b]
+    for idx in _bucket_by_bin(scores, cfg.n_bins):
         if not idx:
             continue
         succ = sum(1 for k in idx if labels[k])

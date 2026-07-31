@@ -22,6 +22,23 @@
   (decision-changing the moment a repo variable is set), and the risk-appetite decision on
   `max_bin_ci_width` — under honest measurement it may keep the gate closed until every
   eligible bin holds ~50+ high-accuracy audits.
+  **Peer-review hardening pass (same PR):** an objective self-review of this change (not the
+  merge-gate subsystem it patches) found the fix itself had regressed `fit`'s and the new
+  width function's complexity from O(n_bins·n) to O(n_bins²·n) by routing per-bin membership
+  through `_bin_of`'s own O(n_bins) scan instead of assigning each score to a bin once —
+  measured at ~3.8s for `n_bins=200` on 5000 scores, a genuine hang risk once the bin count
+  became an operator-facing flag with no upper bound. Fixed by a shared `_bucket_by_bin`
+  helper (one assignment per score, then group; verified bit-for-bit identical to the
+  pre-regression output, ~190× faster) plus a `MAX_N_BINS=1000` ceiling on the policy field
+  — a resource-safety bound, distinct from the "reject the vacuous endpoint" rule the other
+  eight tunables follow. The review also closed two test gaps (`_policy_from_args`'s
+  field-to-flag mapping had no direct test — a `wilson_floor`/`wilson_z` swap would have
+  slipped past every existing assertion; the small-domain fold-collapse fallback was only
+  proven safe at N=1, where the sample floor masks it) and corrected a docstring that
+  misattributed its own NaN-guard rationale. Surfaced, not fixed here (different package,
+  its own review): `behavioral-regression`'s config validators lack the same `isfinite`
+  guard — confirmed live (`BRConfig(dist_sigma=float("inf"))` constructs) — recorded in
+  `openspec/changes/merge-gate-health-integrity/tasks.md`'s follow-on section.
 
 - [x] **Charter alignment audit + fixes + `check_charter_invariants.py` gate (PR #114)** —
   a multi-agent audit (`docs/CHARTER_ALIGNMENT_AUDIT.md`) mechanically re-verified every

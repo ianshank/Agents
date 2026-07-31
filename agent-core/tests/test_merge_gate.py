@@ -186,6 +186,10 @@ def test_change_context_accepts_the_documented_range(ok: float) -> None:
         # A single bin makes predict() constant, tau equal to it, and every change clear.
         ("n_bins", 1),
         ("n_bins", 0),
+        # A resource-safety ceiling, not a vacuous-endpoint rejection: n_bins is now an
+        # operator-supplied CLI value, and scoring costs O(n * n_bins) per domain per run.
+        ("n_bins", 1001),
+        ("n_bins", 1_000_000),
         # Out of range on the other side.
         ("risk_target", -0.1),
         ("max_ece", -0.1),
@@ -229,6 +233,7 @@ def test_gate_policy_rejects_out_of_range(field: str, value: Any) -> None:
         ("wilson_floor", 1.0),
         ("min_calibration_n", 1),
         ("n_bins", 2),
+        ("n_bins", 1000),  # MAX_N_BINS itself: the ceiling is inclusive
     ],
 )
 def test_gate_policy_accepts_the_strict_endpoints(field: str, value: Any) -> None:

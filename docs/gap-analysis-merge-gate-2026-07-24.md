@@ -93,9 +93,15 @@ constructor directly, so it still classifies such a line as opaque and round-tri
 Both invariants hold at once, and a test now crosses the seam in one assertion, which neither
 module's suite previously did.
 
-## 3. Open findings, highest severity first
+## 3. Fixed since this report (F-049, ADR 0029, 2026-07-31)
 
-### G1 — `GatePolicyConfig` is unreachable from any config or CLI (HIGH)
+An independent re-verification (`openspec/changes/merge-gate-health-integrity/review.md`)
+confirmed G1–G3, closed all three, found G3's own stated mechanism wrong, and found the
+severity of G3 understated — it reproduces to `AUTO_MERGE` under stock `GatePolicyConfig()`.
+It also substantially refuted G5's headline claim. Kept here rather than deleted so the
+reproductions remain a record of what shipped broken.
+
+### G1 — `GatePolicyConfig` is unreachable from any config or CLI (HIGH) — FIXED (F-049, ADR 0029)
 
 `merge_gate_ci.py` constructs `GatePolicyConfig()` bare; the only other construction is a
 validation script. So `risk_target`, `min_calibration_n`, `max_ece`, `min_auroc`,
@@ -104,7 +110,14 @@ source. Every sibling config (`ReportConfig`, `AuditConfig`, `LabellerConfig`,
 `StoreSyncConfig`) is CLI-reachable. It also has no `__post_init__`, so it accepts
 `risk_target=1.0` and `min_calibration_n=0`.
 
-### G2 — Four independent equal-width binning implementations (HIGH)
+**Fix:** `GatePolicyConfig.__post_init__` bounds all nine tunables (plus the new `n_bins`),
+and `merge_gate_ci` exposes one CLI flag per tunable with an exit-2 usage path. Bounds follow
+one rule: reject the vacuous endpoint, allow the maximally strict one. `n_bins` additionally
+carries an upper bound (`MAX_N_BINS = 1000`) with a distinct resource-safety rationale, added
+after peer review found the newly CLI-reachable bin count could drive real CI wall-clock cost
+(see G2's fix note).
+
+### G2 — Four independent equal-width binning implementations (HIGH) — FIXED (F-049, ADR 0029)
 
 `calibration.py` (reliability bins), and three in `outcome_store.py`
 (`BinningCalibrator.fit`, `BinningCalibrator.bin_index`, `_upper_half_ci_width`). They agree
@@ -114,26 +127,70 @@ places that must silently agree; `GatePolicyConfig` has no `n_bins` field, so th
 `CalibratorHealth` is computed over a different binning object than the calibrator it
 measures.
 
-### G3 — `_upper_half_ci_width` returns 0.0 for "no data", which passes a health floor (HIGH)
+**Fix:** score-to-bin routing is single-sourced in `_bin_of`; `fit`, `bin_index`, and the
+operating-region width all delegate to it (via the shared `_bucket_by_bin` grouping helper).
+The bin count is single-sourced (`calibration.DEFAULT_N_BINS` as the library default,
+`GatePolicyConfig.n_bins` as the tunable) and threaded explicitly at every call site.
+**Peer-review addendum:** the first version of this fix regressed `fit`'s and the
+operating-region width's complexity from O(n_bins·n) to O(n_bins²·n) by calling `_bin_of`'s
+own O(n_bins) scan once per `(bin, score)` pair instead of once per score — measured at
+~3.8s for `n_bins=200` on 5000 scores, a real hang/timeout risk once the bin count became
+CLI-reachable. `_bucket_by_bin` assigns each score to its bin exactly once and groups,
+restoring O(n_bins·n); verified bit-for-bit identical to the pre-fix output across every
+`n_bins` tested, and benchmarked at ~0.02s for the same case (190×).
+
+### G3 — `_upper_half_ci_width` returns 0.0 for "no data", which passes a health floor (HIGH) — FIXED (F-049, ADR 0029)
 
 A domain whose entire audit history sits below confidence 0.5 gets `bin_ci_width = 0.0`,
 vacuously satisfying `bin_ci_width <= max_bin_ci_width`. "No evidence" scores identically to
-"strongest possible evidence". The same `wilson_interval(0, 0) -> (0.0, 0.0)` return is
-fail-closed at its *lower-bound* call site and fail-open at this *width* one.
+"strongest possible evidence". ~~The same `wilson_interval(0, 0) -> (0.0, 0.0)` return is
+fail-closed at its *lower-bound* call site and fail-open at this *width* one.~~
 
-### G4 — Two CLI summaries can never be emitted (MEDIUM)
+**Correction (re-verification):** the stated mechanism above is wrong. `wilson_interval(0,
+0)` is never reached inside `_upper_half_ci_width` — `if not idx: continue` returns before
+it. The fail-open is the `widest = 0.0` initialiser: the identity element of a
+`max`-reduction over an empty set. Hardening `wilson_interval` would not have fixed this.
+
+**Correction (severity):** reproduced to `AUTO_MERGE` under stock config — this was not a
+latent hygiene issue. 6600 `HUMAN_AUDIT` records at `raw_confidence ∈ {0.05, 0.45}` gave
+`CalibratorHealth(n=6600, ece=0.0, auroc=1.0, bin_ci_width=0.0)`, `is_trustworthy=True`,
+`tau=1.0`, and `decide(raw_confidence=0.45) == AUTO_MERGE`. The function also measured the
+wrong axis: `decide()` gates on the *calibrated* `p`, not the raw score, so "the upper half
+of the raw range" was never "where auto-merges actually happen" as the removed docstring
+claimed.
+
+**Fix:** `_operating_bin_ci_width` defines the eligible region by the per-decision Wilson
+floor (a bin whose Wilson upper bound cannot reach `wilson_floor` can never be an operating
+point, whatever `tau` becomes — tau-free and computable at health time, since `tau` is
+derived *from* health) and returns `None`, not `0.0`, when nothing qualifies.
+`is_trustworthy` rejects `None` before comparing it to `max_bin_ci_width`. Full design
+rationale, including why a sentinel-only fix was rejected as insufficient, in
+[ADR 0029](decisions/0029-operating-region-calibrator-health.md).
+
+## 4. Open findings, highest severity first
+
+### G4 — Four CLI summaries can never be emitted (MEDIUM) — widened, still open
 
 `calibration_report` and `merge_seed` log their only structured run record at INFO but never
 call `configure_logging`, so at the root logger's default WARNING the lines are discarded.
-`merge_gate_ci` and `store_sync` do configure it.
+`merge_gate_ci` and `store_sync` do configure it. **Re-verification widened this finding**:
+`outcome_labeller` and `audit_sampler` gained real logging since this report was written (see
+G5), but neither calls `configure_logging` either — so the same defect now applies to 4 CLIs,
+not 2. None of the four can change a gate decision.
 
-### G5 — `outcome_labeller` and `audit_sampler` have no logging at all (MEDIUM)
+### G5 — `outcome_labeller` and `audit_sampler` have no logging at all (MEDIUM) — headline claim REFUTED; one sub-claim still open
 
-Both write labels — `audit_sampler.record_verdict` writes the *authoritative* `HUMAN_AUDIT`
-label — using `print` only. `outcome_labeller` writes a weak optimistic positive
-(`TIMEOUT_CLEAN, True`) whenever its fail-safe detectors report no signal, with no record of
-why. `record_verdict` is also non-idempotent; the SHA validation and already-audited no-op
-live in the `scripts/record_audit_verdict.py` wrapper, which the library CLI bypasses.
+~~Both write labels — `audit_sampler.record_verdict` writes the *authoritative* `HUMAN_AUDIT`
+label — using `print` only.~~ **Refuted by re-verification**: both modules gained real
+`logger.debug`/`.info`/`.error` calls since this report was written. The residue is folded
+into G4 above.
+
+`outcome_labeller` writes a weak optimistic positive (`TIMEOUT_CLEAN, True`) whenever its
+fail-safe detectors report no signal, with no record of why. `record_verdict` is also
+non-idempotent; the SHA validation and already-audited no-op live in the
+`scripts/record_audit_verdict.py` wrapper, which the library CLI bypasses. **This sub-claim
+is confirmed accurate and remains open** — the library docstring states the split is
+deliberate, so a fix is contested rather than merely deferred.
 
 ### G6 — `scripts/_config.py::load_yaml_mapping` returns bare `dict` (MEDIUM)
 
@@ -160,7 +217,7 @@ post-loop return is shadowed by the `prob >= _x[-1]` guard above it. Neither is 
 `eval-harness-ci.yml`'s by-directory run. The module computing every `raw_confidence` written
 to the store has an 85% floor in one job and none in the other.
 
-## 4. Test gaps worth closing
+## 5. Test gaps worth closing
 
 - `build_domain_models`'s held-out-fold contract is untested: the healthy-domain test uses
   perfectly separable data, so a mutant evaluating on the fit set would pass. The docstring's
@@ -173,7 +230,7 @@ to the store has an 85% floor in one job and none in the other.
   writes an opaque line, asserts `store_sync` preserves it, and reads it back through
   `OutcomeStore` in the same assertion.
 
-## 5. Toolchain note
+## 6. Toolchain note
 
 A local `make check-all` can fail `mypy` on `src/eval_harness/phoenix_client/__init__.py`
 (`trace.get_tracer`) when `opentelemetry` is present transitively via the unpinned

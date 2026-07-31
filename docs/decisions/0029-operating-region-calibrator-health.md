@@ -120,3 +120,22 @@ its inputs are computed rather than loaded.
   cold-starts to `ESCALATE`. None of these paths execute until audits accumulate.
 - Reversible: four `agent_core` modules, no persisted-format impact. `bin_ci_width` is computed
   per run and never written to the store, so no migration is implied.
+
+## Correction — routing complexity (2026-07-31, same-day peer review)
+
+Decision 7 (single-sourcing score→bin routing in `_bin_of`) was implemented in a way that
+regressed `fit`'s and `_operating_bin_ci_width`'s complexity from O(n_bins·n) to
+O(n_bins²·n): both called `_bin_of`'s own O(n_bins) linear scan from inside a
+`for b in range(n_bins)` membership test, turning one O(n_bins) scan per score into
+O(n_bins) of them. Measured at ~3.8s for `n_bins=200` on 5000 scores — a real hang/timeout
+risk given decision 4 makes `n_bins` an operator-supplied CLI value with no natural upper
+bound on cost (it was a hardcoded `10` before this ADR).
+
+Fixed with a shared `_bucket_by_bin(scores, bins)` helper that assigns each score to its bin
+exactly once via `_bin_of`, then groups — restoring the pre-regression O(n_bins·n) shape.
+Verified bit-for-bit identical to the pre-fix output across every `n_bins` tested; benchmarked
+at ~0.02s for the same case (190× faster). `GatePolicyConfig.n_bins` additionally gained
+`MAX_N_BINS = 1000` as a resource-safety ceiling — a different rationale from decision 4's
+"reject the vacuous endpoint" rule (an arbitrarily large `n_bins` is not *unsafe* the way a
+vacuous `risk_target` is, merely expensive, and 1000 is far beyond any realistic per-domain
+audit volume).

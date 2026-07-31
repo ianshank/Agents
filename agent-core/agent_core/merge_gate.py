@@ -33,6 +33,11 @@ from typing import Protocol, runtime_checkable
 from .calibration import DEFAULT_N_BINS, wilson_interval
 from .config import ConfigError
 
+# Upper bound on GatePolicyConfig.n_bins -- see the __post_init__ check for the rationale.
+# 1000 is a generous ceiling: it is never a legitimate operating point (no domain's audit
+# volume approaches populating 1000 bins usefully) but costs no real configuration room.
+MAX_N_BINS = 1000
+
 
 class GateDecision(str, Enum):
     AUTO_MERGE = "auto_merge"
@@ -55,9 +60,16 @@ def _require_finite_in(
     Kept as a helper rather than nine inline ``if``s so ``__post_init__`` stays a flat, low
     -complexity sequence (the mccabe budget is 14) and the interval notation in the message
     is generated rather than hand-duplicated per field. The ``math.isfinite`` guard is not
-    redundant: ``NaN`` compares False against every bound, so an unguarded range test would
-    *pass* it -- the exact one-sided fail-open this subsystem has already been bitten by in
-    ``ChangeContext`` and ``BinningCalibrator.bin_index``.
+    redundant even though every call here already ANDs a lower- and an upper-bound test:
+    two of these fields (``risk_ci_z``, ``wilson_z``) have ``hi=math.inf``, and
+    ``float("inf") <= math.inf`` is True, so without this guard those two would silently
+    accept infinity -- a z-score of infinity collapses the Wilson bound it is meant to widen
+    to a single point. For every OTHER field, finite bounds on both sides already reject NaN
+    on their own (``NaN <= x`` and ``x <= NaN`` are both False), so the guard's necessity here
+    is specifically the open-upper-bound fields, not a restatement of the NaN-comparison bug
+    this subsystem has separately been bitten by in ``ChangeContext`` and
+    ``BinningCalibrator.bin_index`` (whose checks are single-direction scans, not this
+    function's AND of two bounds).
     """
     ok = math.isfinite(value)
     ok = ok and (lo <= value if lo_inclusive else lo < value)
@@ -135,6 +147,20 @@ class GatePolicyConfig:
                 "merge-gate.n_bins must be >= 2 -- a single bin makes predict() a constant, "
                 "tau equal to that constant, and every change clear the threshold "
                 f"(got {self.n_bins!r})"
+            )
+        if self.n_bins > MAX_N_BINS:
+            # A resource-safety guard, not a "vacuous endpoint" per the class docstring's
+            # rule -- an arbitrarily large bin count isn't unsafe in the way a vacuous
+            # risk_target is, it is merely expensive, and it is now operator-reachable via
+            # --n-bins (previously the bin count was a hardcoded 10). build_domain_models
+            # allocates O(n_bins) buckets and does O(n * n_bins) work per domain per CI run;
+            # MAX_N_BINS is far beyond what any realistic per-domain audit volume (ADR 0005's
+            # own ~380-per-domain target) could populate usefully, so it costs no legitimate
+            # configuration while bounding worst-case CI wall-clock.
+            raise ConfigError(
+                f"merge-gate.n_bins must be <= {MAX_N_BINS} -- larger values cost real CI "
+                f"time (O(n * n_bins) per domain) for resolution no realistic audit volume "
+                f"could populate (got {self.n_bins!r})"
             )
 
 

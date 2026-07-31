@@ -44,6 +44,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now a visible constraint rather than one bypassed by a vacuous `0.0`.
   No `SCHEMA_VERSION` bump, no store migration (`bin_ci_width` is computed per run and never
   persisted), auto-merge stays default-off.
+  **Peer-review hardening pass (same change):** an objective self-review found the fix above
+  had itself regressed `fit`'s and `_operating_bin_ci_width`'s complexity from O(n_bins·n) to
+  O(n_bins²·n) — routing per-bin membership through `_bin_of`'s own O(n_bins) scan, once per
+  bin, turned one O(n_bins) scan per score into O(n_bins) of them. Measured at ~3.8s for
+  `n_bins=200` on 5000 scores, a real hang/timeout risk once the bin count became an
+  operator-facing CLI flag. Fixed with a shared `_bucket_by_bin` helper that assigns each
+  score to a bin exactly once and groups — verified bit-for-bit identical to the
+  pre-regression output across every `n_bins` tested, ~190× faster at `n_bins=200`. Also adds
+  `GatePolicyConfig.n_bins`'s upper bound (`MAX_N_BINS=1000`, a resource-safety ceiling, not
+  a vacuous-endpoint rejection); a direct unit test for `_policy_from_args`'s CLI-flag-to
+  -field mapping (no prior test would have caught a `wilson_floor`/`wilson_z` swap, since
+  both fields reject the same invalid probe values for different reasons); a fold-collapse
+  test at N=8 rather than only the N=1 case where the sample floor masks the effect; and a
+  docstring correction on `_require_finite_in` (its `math.isfinite` guard is load-bearing for
+  the two `hi=math.inf` fields, not primarily the NaN-comparison precedent it cited).
 
 ### Security
 - **Credential scrub + fail-closed secret scanning (F-048).** A Langfuse secret/public key

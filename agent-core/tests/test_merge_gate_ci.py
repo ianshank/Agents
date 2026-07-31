@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from datetime import datetime, timezone
 from typing import Any
@@ -352,6 +353,44 @@ def test_policy_flags_reach_the_decision(tmp_path) -> None:
     argv = ["--store", str(store.path), "--context", _ctx_file(tmp_path)]
     assert main(argv) == 0  # AUTO_MERGE at the documented defaults
     assert main([*argv, "--min-calibration-n", "100000"]) == 10  # ESCALATE: floor unreachable
+
+
+def test_policy_from_args_maps_each_flag_to_its_own_field() -> None:
+    """Direct unit test of _policy_from_args's kwarg mapping, not just via main().
+
+    Every prior test either asserts a decision changed (proves SOME flag reached SOME
+    field) or asserts exit 2 on an out-of-range value (proves the wrong field can't
+    silently absorb a bad value THAT field would reject). Neither catches a swap between
+    two fields with overlapping valid ranges: a --wilson-floor/--wilson-z mix-up wouldn't
+    be caught by the exit-2 tests, because both fields reject 0.0 and NaN for their own
+    reasons, so a swapped assignment still produces SOME ConfigError and still exits 2.
+    Nine distinct, individually-valid values makes a mapping bug the only way this fails.
+    """
+    ap = argparse.ArgumentParser()
+    merge_gate_ci._add_policy_args(ap, GatePolicyConfig())
+    args = ap.parse_args(
+        [
+            "--risk-target", "0.11",
+            "--risk-ci-z", "2.22",
+            "--min-calibration-n", "333",
+            "--max-ece", "0.44",
+            "--min-auroc", "0.55",
+            "--max-bin-ci-width", "0.66",
+            "--n-bins", "77",
+            "--wilson-floor", "0.88",
+            "--wilson-z", "1.99",
+        ]
+    )  # fmt: skip
+    cfg = merge_gate_ci._policy_from_args(args)
+    assert cfg.risk_target == 0.11
+    assert cfg.risk_ci_z == 2.22
+    assert cfg.min_calibration_n == 333
+    assert cfg.max_ece == 0.44
+    assert cfg.min_auroc == 0.55
+    assert cfg.max_bin_ci_width == 0.66
+    assert cfg.n_bins == 77
+    assert cfg.wilson_floor == 0.88
+    assert cfg.wilson_z == 1.99
 
 
 def test_no_protected_auto_merge_flag(tmp_path) -> None:
