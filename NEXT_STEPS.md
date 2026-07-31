@@ -2,6 +2,12 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Merge-conflict marker guard + F-048 ledger correction** — removed four orphan
+  `>>>>>>> origin/main` markers (`NEXT_STEPS.md`, `AGENTS.md`, `CHANGELOG.md` ×2) left by a
+  clean merge that had silently discarded content; added an inline sweep to
+  `quality-gates.yml`'s `gates` job so a marker in any tracked file now fails CI. Also flipped
+  F-048 (gitleaks, landed via #83) from `in_progress` to `done` with its `implemented_in` SHA,
+  so `F_048.py` is actually enforced by `validate.py --tier fast` going forward.
 - [x] **Hardened matrix eval tools test suite** — eliminated fragile `try...except pass` swallows and hard-coded mocks in `tests/test_matrix_eval_tools.py`, replacing them with full offline dependency injection.
 - [x] **Reasoning & Planning Skills** — added three composable reasoning skills to the marketplace (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`).
 - [x] **Dynamic drift guard script tech-debt resolution** — resolved tech debt in the dynamic drift guard scripts.
