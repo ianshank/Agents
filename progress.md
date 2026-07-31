@@ -29,7 +29,7 @@
 - All suite coverage floors met
 
 ---
-## Session 012 — 2026-07-07
+## Session 013 — 2026-07-30 (rebased from the original 2026-07-07 F-040 branch)
 
 ### Features
 - F-040 (merge-gate soak-stats): pure `store_sync.soak_progress(records, target)` + opt-in
@@ -49,9 +49,10 @@
 ### Validation evidence
 - `python scripts/validations/F_040.py` exits 0 (offline)
 - store_sync soak/stats tests pass; `store.py` 100% branch coverage; ruff (incl. C901<15) + ruff
-  format + strict mypy clean (61 source files); default `stats` JSON byte-identical without the flag
-- Pre-existing/unrelated: 4 real-git push tests in `test_store_sync.py` fail in this sandbox
-  (local bare-remote push rejected), not touched by F-040
+  format + strict mypy clean; default `stats` JSON byte-identical without the flag
+- Full `test_store_sync.py` (47 tests, incl. real-git push/pull) green post-rebase onto main —
+  the CRLF git-runner fix already on main resolved the sandbox push failures this branch
+  originally hit; no longer a caveat
 
 ### Next
 - Soak stays time-gated (N>=20 + >=1 human verdict + weekly audits, ADR 0005); F-040 only makes
