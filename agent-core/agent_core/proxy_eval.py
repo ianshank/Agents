@@ -35,11 +35,28 @@ from .proxies import (
     ProxyExtractor as ProxyExtractor,
     RawConfidenceProxy as RawConfidenceProxy,
 )
-from .proxy_analysis import ProxyEvalConfig, ProxyReport, analyze_dataset
-from .proxy_dataset import build_dataset
-from .proxy_render import render_json, render_markdown
+from .proxy_analysis import ProxyEvalConfig as ProxyEvalConfig
+from .proxy_analysis import ProxyReport, analyze_dataset as analyze_dataset
+from .proxy_dataset import build_dataset as build_dataset
+from .proxy_render import render_json as render_json
+from .proxy_render import render_markdown as render_markdown
 
 logger = get_logger(__name__)
+
+__all__ = [
+    "MappingProxy",
+    "PassiveLabelProxy",
+    "ProxyExtractor",
+    "RawConfidenceProxy",
+    "ProxyEvalConfig",
+    "analyze_dataset",
+    "build_dataset",
+    "render_json",
+    "render_markdown",
+    "default_extractors",
+    "evaluate_store",
+    "main",
+]
 
 
 def default_extractors(judge_scores: Mapping[str, float] | None = None) -> list[ProxyExtractor]:
