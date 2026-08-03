@@ -16,7 +16,7 @@ Run as a module::
         [--domain-filter agent|human|all] [--judge-scores scores.json] [--format md|json]
 """
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import argparse
 import json
@@ -29,15 +29,15 @@ from .config import ConfigError
 from .domains import DOMAIN_FILTERS
 from .logging_util import debug_span, get_logger
 from .outcome_store import OutcomeStore
-from .proxy_analysis import ProxyEvalConfig, analyze_dataset
-from .proxy_dataset import build_dataset
-from .proxy_render import render_json, render_markdown
 from .proxies import (
     MappingProxy as MappingProxy,
     PassiveLabelProxy as PassiveLabelProxy,
     ProxyExtractor as ProxyExtractor,
     RawConfidenceProxy as RawConfidenceProxy,
 )
+from .proxy_analysis import ProxyEvalConfig, analyze_dataset
+from .proxy_dataset import build_dataset
+from .proxy_render import render_json, render_markdown
 
 logger = get_logger(__name__)
 
