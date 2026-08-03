@@ -410,11 +410,11 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
 
 
 __all__ = [
-    "parse_frontmatter",
-    "load_evals",
-    "first_path_token",
-    "check_structural",
-    "check_behavioral",
     "BEHAVIORAL_TYPES",
     "WORKDIR",
+    "check_behavioral",
+    "check_structural",
+    "first_path_token",
+    "load_evals",
+    "parse_frontmatter",
 ]

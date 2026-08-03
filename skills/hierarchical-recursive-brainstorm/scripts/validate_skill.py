@@ -20,7 +20,7 @@ _SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-from skill_validator import check_behavioral, check_structural
+from skill_validator import check_behavioral, check_structural  # noqa: E402
 
 
 def main() -> int:

@@ -95,7 +95,7 @@ def check_file_freshness(
 
 
 __all__ = [
-    "make_executable",
     "add_root_argument",
     "check_file_freshness",
+    "make_executable",
 ]

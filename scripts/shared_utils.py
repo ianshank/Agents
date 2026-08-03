@@ -178,10 +178,10 @@ def is_file_stale(output_path: str | Path, expected_content: str) -> bool:
 
 __all__ = [
     "add_scripts_to_path",
+    "check_file_exists",
     "configure_logging",
+    "is_file_stale",
+    "make_executable",
     "safe_json_load",
     "safe_json_loads",
-    "check_file_exists",
-    "make_executable",
-    "is_file_stale",
 ]
