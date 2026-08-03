@@ -16,9 +16,19 @@ import argparse
 import os
 import sys
 
-_SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "skills", "common")
-if _SCRIPTS not in sys.path:
-    sys.path.insert(0, _SCRIPTS)
+# Find skills/common directory by traversing up from this file's location.
+# This code works identically from both scripts/validate_skill.py and skills/*/scripts/validate_skill.py.
+_CURRENT = os.path.dirname(os.path.abspath(__file__))
+_VALIDATOR_PATH = None
+while _CURRENT != os.path.dirname(_CURRENT):
+    _CANDIDATE = os.path.join(_CURRENT, "skills", "common")
+    if os.path.isdir(_CANDIDATE) and os.path.isfile(os.path.join(_CANDIDATE, "skill_validator.py")):
+        _VALIDATOR_PATH = _CANDIDATE
+        break
+    _CURRENT = os.path.dirname(_CURRENT)
+
+if _VALIDATOR_PATH and _VALIDATOR_PATH not in sys.path:
+    sys.path.insert(0, _VALIDATOR_PATH)
 
 from skill_validator import check_behavioral, check_structural  # noqa: E402
 

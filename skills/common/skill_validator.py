@@ -32,6 +32,16 @@ BEHAVIORAL_TYPES: set[str] = {
 WORKDIR: str = ".skill-validation"
 
 
+def get_validator_module_path() -> str:
+    """Get the path to this validator module, working from any location.
+
+    Both the canonical scripts/validate_skill.py and all skill copies at
+    skills/*/scripts/validate_skill.py use this to ensure they load the
+    shared validator from the same location regardless of where they're run from.
+    """
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 def parse_frontmatter(skill_md: str) -> tuple[dict[str, str] | None, int]:
     """Return (frontmatter_dict_or_None, line_count). Prefer real YAML; fall back tolerantly."""
     with open(skill_md, encoding="utf-8") as f:
