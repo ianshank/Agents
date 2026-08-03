@@ -327,6 +327,7 @@ jobs:
           # Each reason is re-checked below against evals/evals.json so a skill that later
           # grows real evals and library code can't stay silently exempted forever.
           EXEMPT = {
+              "common": "shared library (skill validator, utilities); not a standalone skill; no evals/",
               "hierarchical-recursive-brainstorm": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",
               "openspec-quality-plan": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",
               "openspec-peer-review": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",

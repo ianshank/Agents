@@ -30,7 +30,23 @@ while _CURRENT != os.path.dirname(_CURRENT):
 if _VALIDATOR_PATH and _VALIDATOR_PATH not in sys.path:
     sys.path.insert(0, _VALIDATOR_PATH)
 
-from skill_validator import check_behavioral, check_structural  # noqa: E402
+from skill_validator import (  # noqa: E402
+    BEHAVIORAL_TYPES,
+    WORKDIR,
+    check_behavioral,
+    check_structural,
+    grade,
+    parse_frontmatter,
+)
+
+__all__ = [
+    "BEHAVIORAL_TYPES",
+    "WORKDIR",
+    "check_behavioral",
+    "check_structural",
+    "grade",
+    "parse_frontmatter",
+]
 
 
 def main() -> int:
