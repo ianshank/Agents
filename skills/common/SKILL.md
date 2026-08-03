@@ -1,5 +1,6 @@
 ---
 name: common
+version: 1.0.0
 tier: none
 description: Shared utilities and validators used by all skills
 ---
