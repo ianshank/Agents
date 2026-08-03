@@ -68,7 +68,9 @@ def main() -> int:
         _check("exit_nonzero" in validator_content, "skill_validator.py defines exit_nonzero assertion", errors)
         _check("idempotent" in validator_content, "skill_validator.py defines idempotent assertion", errors)
         _check(
-            "ASSERTION_GRADERS" in validator_content, "skill_validator.py defines ASSERTION_GRADERS registry mapping", errors
+            "ASSERTION_GRADERS" in validator_content,
+            "skill_validator.py defines ASSERTION_GRADERS registry mapping",
+            errors,
         )
     else:
         _check(False, f"skill_validator.py missing at {Path(skill_validator_script).as_posix()}", errors)
