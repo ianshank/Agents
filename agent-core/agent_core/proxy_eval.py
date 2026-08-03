@@ -35,7 +35,7 @@ from .proxies import (
     ProxyExtractor as ProxyExtractor,
     RawConfidenceProxy as RawConfidenceProxy,
 )
-from .proxy_analysis import ProxyEvalConfig, analyze_dataset
+from .proxy_analysis import ProxyEvalConfig, ProxyReport, analyze_dataset
 from .proxy_dataset import build_dataset
 from .proxy_render import render_json, render_markdown
 
@@ -56,7 +56,7 @@ def evaluate_store(
     cfg: ProxyEvalConfig | None = None,
     *,
     domain_filter: str = "agent",
-) -> list:
+) -> list[ProxyReport]:
     """Build and analyse a dataset per proxy. Read-only over the store."""
     cfg = cfg or ProxyEvalConfig()
     chosen = list(extractors) if extractors is not None else default_extractors()
@@ -65,7 +65,7 @@ def evaluate_store(
             "outcome store %s does not exist -- reporting empty slices (is --store right?)",
             store.path,
         )
-    reports: list = []
+    reports: list[ProxyReport] = []
     with debug_span(logger, "evaluate_store", proxies=len(chosen), domain_filter=domain_filter):
         for extractor in chosen:
             dataset = build_dataset(store, extractor, domain_filter=domain_filter)
