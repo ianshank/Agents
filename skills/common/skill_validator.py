@@ -422,9 +422,11 @@ def check_behavioral(skill_dir: str, evals_path: str, timeout: int) -> list[str]
 __all__ = [
     "BEHAVIORAL_TYPES",
     "WORKDIR",
+    "_run_eval",
     "check_behavioral",
     "check_structural",
     "first_path_token",
+    "grade",
     "load_evals",
     "parse_frontmatter",
 ]

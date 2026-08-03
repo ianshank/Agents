@@ -33,6 +33,7 @@ if _VALIDATOR_PATH and _VALIDATOR_PATH not in sys.path:
 from skill_validator import (  # noqa: E402
     BEHAVIORAL_TYPES,
     WORKDIR,
+    _run_eval,
     check_behavioral,
     check_structural,
     grade,
@@ -42,6 +43,7 @@ from skill_validator import (  # noqa: E402
 __all__ = [
     "BEHAVIORAL_TYPES",
     "WORKDIR",
+    "_run_eval",
     "check_behavioral",
     "check_structural",
     "grade",
