@@ -120,7 +120,6 @@ def validate_f047() -> int:
     errors: list[str] = []
 
     ppi = _read(_AC, "ppi.py")
-    proxy_eval = _read(_AC, "proxy_eval.py")
     proxy_analysis = _read(_AC, "proxy_analysis.py")
     report_types = _read(_AC, "report_types.py")
     render = _read(_AC, "calibration_report_render.py")
