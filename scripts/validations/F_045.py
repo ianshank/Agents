@@ -60,18 +60,20 @@ def main() -> int:
         _check("--required-fields" in lint_content, "lint_dataset.py supports --required-fields option", errors)
         _check("--optional-fields" in lint_content, "lint_dataset.py supports --optional-fields option", errors)
 
-    # 3. Check validate_skill.py has exit_nonzero, idempotent assertions and ASSERTION_GRADERS
-    val_script = os.path.join(_ROOT, "scripts", "validate_skill.py")
-    if os.path.isfile(val_script):
-        with open(val_script, encoding="utf-8") as f:
-            val_content = f.read()
-        _check("exit_nonzero" in val_content, "validate_skill.py defines exit_nonzero assertion", errors)
-        _check("idempotent" in val_content, "validate_skill.py defines idempotent assertion", errors)
+    # 3. Check skill_validator.py has exit_nonzero, idempotent assertions and ASSERTION_GRADERS
+    skill_validator_script = os.path.join(_ROOT, "skills", "common", "skill_validator.py")
+    if os.path.isfile(skill_validator_script):
+        with open(skill_validator_script, encoding="utf-8") as f:
+            validator_content = f.read()
+        _check("exit_nonzero" in validator_content, "skill_validator.py defines exit_nonzero assertion", errors)
+        _check("idempotent" in validator_content, "skill_validator.py defines idempotent assertion", errors)
         _check(
-            "ASSERTION_GRADERS" in val_content, "validate_skill.py defines ASSERTION_GRADERS registry mapping", errors
+            "ASSERTION_GRADERS" in validator_content,
+            "skill_validator.py defines ASSERTION_GRADERS registry mapping",
+            errors,
         )
     else:
-        _check(False, f"validate_skill.py missing at {Path(val_script).as_posix()}", errors)
+        _check(False, f"skill_validator.py missing at {Path(skill_validator_script).as_posix()}", errors)
 
     # 4. Check marketplace.yaml includes dataset-lint
     mkt_yaml = os.path.join(_ROOT, "skills", "marketplace.yaml")

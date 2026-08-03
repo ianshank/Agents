@@ -6,6 +6,11 @@
 # Validate with: python scripts/skill_marketplace.py validate
 registry_version: 1.0.0
 skills:
+  - name: common
+    version: 1.0.0
+    path: skills/common
+    description: Shared skill validator and utility library for skill marketplace.
+    compatibility: python>=3.10
   - name: openai-judge
     version: 1.1.0
     path: skills/openai-judge

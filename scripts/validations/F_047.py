@@ -120,7 +120,7 @@ def validate_f047() -> int:
     errors: list[str] = []
 
     ppi = _read(_AC, "ppi.py")
-    proxy_eval = _read(_AC, "proxy_eval.py")
+    proxy_analysis = _read(_AC, "proxy_analysis.py")
     report_types = _read(_AC, "report_types.py")
     render = _read(_AC, "calibration_report_render.py")
     gate = _read(_AC, "merge_gate.py")
@@ -183,8 +183,8 @@ def validate_f047() -> int:
 
     # 5. A degenerate slice withholds AUROC (never the by-construction 0.5).
     _check(
-        "if degenerate is None and len({int(y) for y in ys}) == 2:" in proxy_eval,
-        "proxy_eval withholds AUROC on a degenerate slice",
+        "if degenerate is None and len({int(y) for y in ys}) == 2:" in proxy_analysis,
+        "proxy_analysis withholds AUROC on a degenerate slice",
         errors,
     )
     _check(

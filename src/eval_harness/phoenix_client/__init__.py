@@ -84,7 +84,7 @@ def _otel_tracer() -> Any | None:
         from phoenix.otel import register  # noqa: F401 - import is a presence gate, not a call
     except ImportError:
         return None
-    return trace.get_tracer(__name__)
+    return trace.get_tracer(__name__)  # type: ignore[attr-defined]
 
 
 def phoenix_observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
