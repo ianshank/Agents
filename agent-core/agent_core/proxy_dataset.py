@@ -6,10 +6,10 @@ to create labeled and unlabeled proxy datasets for analysis.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
-from .domains import DOMAIN_FILTERS, in_domain_scope
+from .domains import in_domain_scope
 from .logging_util import get_logger
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 from .proxies import ProxyExtractor
@@ -115,8 +115,7 @@ def _standardise(xs: Sequence[float]) -> list[float]:
 
 
 __all__ = [
-    "ProxyPair",
     "ProxyDataset",
+    "ProxyPair",
     "build_dataset",
-    "standardise",
 ]

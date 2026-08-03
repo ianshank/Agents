@@ -32,9 +32,6 @@ from .outcome_store import OutcomeStore
 from .proxy_analysis import ProxyEvalConfig, analyze_dataset
 from .proxy_dataset import build_dataset
 from .proxy_render import render_json, render_markdown
-
-# Re-exported (`X as X` is mypy's explicit re-export form) so the proxies stay importable
-# from here after being split into `agent_core.proxies`.
 from .proxies import MappingProxy as MappingProxy
 from .proxies import PassiveLabelProxy as PassiveLabelProxy
 from .proxies import ProxyExtractor as ProxyExtractor

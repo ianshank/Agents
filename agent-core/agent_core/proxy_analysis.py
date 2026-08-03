@@ -7,8 +7,8 @@ on labeled and stratified subsets.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from .calibration import auroc
 from .config import ConfigError
@@ -175,7 +175,7 @@ def analyze_dataset(dataset: ProxyDataset, cfg: ProxyEvalConfig | None = None) -
 
 __all__ = [
     "ProxyEvalConfig",
-    "SliceCorrelation",
     "ProxyReport",
+    "SliceCorrelation",
     "analyze_dataset",
 ]
