@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added
+- **Agent trajectory evaluation (F-051, ADR 0031).** Every built-in scorer read
+  `output.output` only, so an agent that returned plausible text by an invalid, wasteful,
+  looping or policy-violating path scored identically to one that did the work. Langfuse
+  tracing existed, but tracing is not scoring — spans are exported for human inspection and
+  never enter a verdict. Adds immutable `ToolCallRecord` / `TrajectoryStep` /
+  `AgentTrajectory` value objects and an optional `AgentTrajectory` appended **last** to
+  `TargetOutput`, which stays mutable with its existing field order: freezing it or
+  reordering its fields would break every mutation site and all positional construction.
+  Capture is target-owned and Langfuse stays an export sink, so the offline path keeps its
+  zero-network property. `core/_trajectory.py` is pure — tool-name and recursive argument
+  canonicalisation with stable key ordering, a configurable ignored-field set for volatile
+  values applied at any depth, and duplicate calls **preserved**, because duplicates are the
+  precision and loop signal (matching is over multisets, not sets). Seven scorers register
+  from the new `scorers/trajectory.py`: `trajectory_exact`, `trajectory_in_order`,
+  `trajectory_any_order`, `trajectory_precision_recall` (precision and recall reported
+  separately — low precision is wasted work, low recall is work undone),
+  `trajectory_step_efficiency`, `trajectory_loop_detection`, and `trajectory_recovery`.
+  Fully additive and default-off: a target that emits no trajectory behaves exactly as
+  before, `SCHEMA_VERSION` is untouched, and `RunResult.to_dict()` omits the `trajectory`
+  key when absent so historical result JSON is byte-identical. A scorer with no trajectory
+  to grade returns `passed=None` with a comment rather than a failing `0.0`, so a text-only
+  suite's aggregate pass rate is not silently dragged to zero; the emitted value is the
+  documented `on_missing` knob, since values still enter the mean. ADR 0031 amends
+  `docs/CHARTER.md` §4 invariant 1 narrowly to permit this additive core-model extension and
+  explicitly does **not** amend the `eval_harness ⇎ flow_corpus` airgap.
+
 ### Fixed
 - **Skills CI coverage floor (F-050, ADR 0030).** `skills-ci.yml`'s `paths:` filter listed 7
   of 8 skills with a dedicated job (`dataset-lint` was omitted), and no workflow at all

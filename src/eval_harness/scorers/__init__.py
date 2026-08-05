@@ -1,4 +1,9 @@
-"""Built-in scorers. Each registers under a stable name (plus aliases)."""
+"""Built-in scorers. Each registers under a stable name (plus aliases).
+
+Trajectory scorers live in the sibling ``trajectory`` module (imported at the end of
+this file for its registration side effects) so this file stays well inside the
+500-line ceiling ``scripts/check_size_budget.py`` enforces.
+"""
 
 from __future__ import annotations
 
@@ -314,3 +319,9 @@ class AutoevalsScorer(Scorer):
             comment=comment,
             metadata=metadata,
         )
+
+
+# Importing the module runs its ``@SCORERS.register`` decorators, mirroring how
+# ``targets/__init__.py`` pulls in ``targets/model.py``. Kept at the bottom so the
+# registry is fully populated first.
+from . import trajectory  # noqa: E402, F401

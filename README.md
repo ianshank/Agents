@@ -361,6 +361,10 @@ src/eval_harness/
   core/              types, interfaces, generic registry
   scorers/           exact_match, regex_match, contains, json_keys, llm_judge, weighted,
                      autoevals (bridges BrainTrust's autoevals scorer library)
+    trajectory.py    trajectory_{exact,in_order,any_order,precision_recall} match an
+                     agent's tool calls against a reference; trajectory_{step_efficiency,
+                     loop_detection,recovery} grade the path with no reference at all
+                     (F-051, ADR 0031 — see docs/agent-trajectory-evaluation.md)
   datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
   targets/           echo, callable (dynamic import), model (alias llm; calls an
                      OpenAI-compatible / LM Studio / Nemotron endpoint)

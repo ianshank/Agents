@@ -6,9 +6,18 @@ external SDKs so they can be imported anywhere without creating import cycles.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
+
+#: Version of the :class:`AgentTrajectory` payload shape. Deliberately *independent*
+#: of ``eval_harness.version.SCHEMA_VERSION``, which versions the config schema and is
+#: bumped only in dedicated release commits (see ``docs/CHARTER.md`` §3).
+TRAJECTORY_SCHEMA_VERSION = "1.0.0"
+
+#: The kinds of step an agent trajectory can contain, in the order they typically occur.
+StepKind = Literal["model_decision", "tool_call", "tool_observation", "tool_error", "final"]
 
 
 @dataclass
@@ -21,14 +30,71 @@ class EvalItem:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class ToolCallRecord:
+    """One tool invocation: the tool's name and the arguments it was called with.
+
+    ``call_id`` is the provider's correlation id when one exists. It is *not* part
+    of the identity used for matching — two calls that differ only by ``call_id``
+    are the same call — so trajectories stay comparable across runs.
+    """
+
+    name: str
+    arguments: Mapping[str, Any] = field(default_factory=dict)
+    call_id: str | None = None
+
+
+@dataclass(frozen=True)
+class TrajectoryStep:
+    """One step of an agent's execution path.
+
+    ``tool_call`` is populated for ``tool_call`` steps and for the ``tool_observation``
+    / ``tool_error`` steps that answer them, so an observation can be attributed to
+    the call it came from without relying on positional adjacency.
+    """
+
+    kind: StepKind
+    timestamp_ms: int | None = None
+    tool_call: ToolCallRecord | None = None
+    content: Any = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class AgentTrajectory:
+    """The ordered execution path a target took to produce its output.
+
+    Immutable, and target-owned: the target that made the tool calls constructs this.
+    The harness never reconstructs a trajectory from tracing spans — that would put a
+    network dependency on the offline evaluation path.
+    """
+
+    steps: tuple[TrajectoryStep, ...] = ()
+    schema_version: str = TRAJECTORY_SCHEMA_VERSION
+
+    def tool_calls(self) -> tuple[ToolCallRecord, ...]:
+        """Every tool call in execution order, duplicates preserved.
+
+        Duplicates carry the precision and loop signal, so they are never collapsed
+        here; scorers that want set semantics apply them themselves.
+        """
+        return tuple(s.tool_call for s in self.steps if s.kind == "tool_call" and s.tool_call is not None)
+
+
 @dataclass
 class TargetOutput:
-    """The result of running the system-under-test against one item."""
+    """The result of running the system-under-test against one item.
+
+    ``trajectory`` is appended last and defaults to ``None`` so existing targets,
+    positional construction, and historical results all keep working unchanged
+    (see ADR 0031).
+    """
 
     output: Any
     latency_ms: float | None = None
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    trajectory: AgentTrajectory | None = None
 
 
 @dataclass
@@ -83,28 +149,63 @@ class RunResult:
             "aggregate": {
                 k: {"count": v.count, "mean": v.mean, "pass_rate": v.pass_rate} for k, v in self.aggregate.items()
             },
-            "items": [
+            "items": [self._item_to_dict(ir) for ir in self.items],
+        }
+
+    @staticmethod
+    def _item_to_dict(ir: ItemResult) -> dict[str, Any]:
+        """Serialize one item result.
+
+        ``trajectory`` is emitted only when the target produced one, so a run with
+        no trajectories serializes byte-identically to the pre-trajectory harness
+        (ADR 0031 obligation 4).
+        """
+        payload: dict[str, Any] = {
+            "id": ir.item.id,
+            "inputs": ir.item.inputs,
+            "expected": ir.item.expected,
+            "output": ir.output.output,
+            "error": ir.output.error,
+            "latency_ms": ir.output.latency_ms,
+            "scores": [
                 {
-                    "id": ir.item.id,
-                    "inputs": ir.item.inputs,
-                    "expected": ir.item.expected,
-                    "output": ir.output.output,
-                    "error": ir.output.error,
-                    "latency_ms": ir.output.latency_ms,
-                    "scores": [
-                        {
-                            "name": s.name,
-                            "value": s.value,
-                            "passed": s.passed,
-                            "comment": s.comment,
-                            "metadata": s.metadata,
-                        }
-                        for s in ir.scores
-                    ],
+                    "name": s.name,
+                    "value": s.value,
+                    "passed": s.passed,
+                    "comment": s.comment,
+                    "metadata": s.metadata,
                 }
-                for ir in self.items
+                for s in ir.scores
             ],
         }
+        if ir.output.trajectory is not None:
+            payload["trajectory"] = trajectory_to_dict(ir.output.trajectory)
+        return payload
+
+
+def trajectory_to_dict(trajectory: AgentTrajectory) -> dict[str, Any]:
+    """Render an :class:`AgentTrajectory` as JSON-ready plain data.
+
+    Per-step keys that carry no information (an absent tool call, an absent
+    timestamp, empty metadata) are omitted rather than emitted as nulls, so the
+    payload stays readable for the common text-and-tools case.
+    """
+    steps: list[dict[str, Any]] = []
+    for step in trajectory.steps:
+        rendered: dict[str, Any] = {"kind": step.kind}
+        if step.timestamp_ms is not None:
+            rendered["timestamp_ms"] = step.timestamp_ms
+        if step.tool_call is not None:
+            call: dict[str, Any] = {"name": step.tool_call.name, "arguments": dict(step.tool_call.arguments)}
+            if step.tool_call.call_id is not None:
+                call["call_id"] = step.tool_call.call_id
+            rendered["tool_call"] = call
+        if step.content is not None:
+            rendered["content"] = step.content
+        if step.metadata:
+            rendered["metadata"] = dict(step.metadata)
+        steps.append(rendered)
+    return {"schema_version": trajectory.schema_version, "steps": steps}
 
 
 @dataclass
