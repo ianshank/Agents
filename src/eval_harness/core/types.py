@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any, Literal
 
 #: Version of the :class:`AgentTrajectory` payload shape. Deliberately *independent*
@@ -30,6 +31,17 @@ class EvalItem:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+def _freeze(mapping: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return a read-only view of *mapping*.
+
+    ``frozen=True`` blocks attribute rebinding but not in-place mutation of a dict field,
+    so without this a caller could do ``record.arguments["k"] = v`` and change the record's
+    canonical form after construction. Wrapping once at construction makes the immutability
+    these docstrings promise actually hold.
+    """
+    return MappingProxyType(dict(mapping))
+
+
 @dataclass(frozen=True)
 class ToolCallRecord:
     """One tool invocation: the tool's name and the arguments it was called with.
@@ -37,11 +49,19 @@ class ToolCallRecord:
     ``call_id`` is the provider's correlation id when one exists. It is *not* part
     of the identity used for matching — two calls that differ only by ``call_id``
     are the same call — so trajectories stay comparable across runs.
+
+    ``arguments`` is stored as a read-only mapping, so a constructed record cannot
+    change its own canonical form.
     """
 
     name: str
     arguments: Mapping[str, Any] = field(default_factory=dict)
     call_id: str | None = None
+
+    def __post_init__(self) -> None:
+        # object.__setattr__ is the standard frozen-dataclass idiom for normalising a
+        # field at construction.
+        object.__setattr__(self, "arguments", _freeze(self.arguments))
 
 
 @dataclass(frozen=True)
@@ -58,6 +78,9 @@ class TrajectoryStep:
     tool_call: ToolCallRecord | None = None
     content: Any = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "metadata", _freeze(self.metadata))
 
 
 @dataclass(frozen=True)

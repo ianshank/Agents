@@ -78,3 +78,7 @@ openspec/
 !README.md
 *.openspec.md
 *_peer_review.md
+
+# Agent tooling and vendored skills: needed for development and CI, never at runtime.
+.claude/
+skills/

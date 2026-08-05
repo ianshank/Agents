@@ -2,6 +2,41 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Agent trajectory evaluation + its hardening pass (F-051, ADR 0031)** — an external
+  coverage analysis and its companion implementation plan were peer-reviewed against the tree
+  (`docs/plans/agent-eval-coverage/REVIEW.md`) rather than accepted: the analysis audited one
+  package of six and graded κ, human labelling and calibration "Not Covered" when F-013/F-016,
+  F-034 and F-043 already ship them, while the plan collided with four CI-enforced invariants
+  it never named and would have failed CI on first push (it froze and reordered a mutable
+  `TargetOutput`, tasked seven scorers into a file already at 316 of the 500-line ceiling,
+  invented a gate block strict `from_dict` rejects, and never mentioned the F-039 baselines).
+  What survived is real and now shipped: no trajectory evaluation, no repeated-run reliability,
+  no state validation, no judge bias probes.
+  **The hardening pass is the more instructive half.** Nine further issues, two of which
+  defeated `core/_trajectory.py`'s own stated purpose: `json.dumps(default=str)` wrote **memory
+  addresses** into the canonical form, and sets fell through to the scalar branch, so one
+  trajectory canonicalised three ways across three `PYTHONHASHSEED` values. The lesson is in
+  how it slipped through — the original test asserted canonicalisation *"does not raise"*
+  rather than asserting *what it produces*, and a same-process test passes against the bug.
+  The replacement assertions spawn real subprocesses. Also fixed: shallow immutability
+  (`frozen=True` blocks rebinding, not `record.arguments["k"] = v`), an O(n²) recovery scorer
+  on exactly the looping agent it exists to catch (5,000 errors: quadratic → 1.6 ms), and two
+  paths where unscoreable input reported `passed=False` because the engine converts a scorer
+  exception into a failing verdict. **Still open:** the four remaining OpenSpec changes below.
+
+- [ ] **Repeated-run reliability (`openspec/changes/add-repeat-reliability-metrics/`)** — next
+  in the delivery order. Note the trap the proposal records: `_make_item_rng` seeds per item
+  only, so k attempts of a deterministic target are identical and report a fabricated
+  `pass^k = 1.0` unless the attempt index is folded into the seed.
+- [ ] **Stateful outcome evaluation (`openspec/changes/add-stateful-outcome-evaluation/`)** —
+  depends on attempt isolation from the above.
+- [ ] **Judge bias calibration (`openspec/changes/extend-judge-calibration/`)** — the only one
+  of the four with no blocking dependency; probe math goes in `agent_core` so the
+  `eval_harness ⇎ flow_corpus` airgap holds.
+- [ ] **Production eval flywheel (`openspec/changes/add-production-eval-flywheel/`)** —
+  **blocked** pending a CHARTER §3 Ratified Amendment: a production ingestion pipeline is a
+  scope expansion, not merely a change.
+
 - [x] **Merge-gate calibrator-health integrity (F-049, ADR 0029)** — an independent
   re-verification of `docs/gap-analysis-merge-gate-2026-07-24.md`
   (`openspec/changes/merge-gate-health-integrity/review.md`) confirmed its G1/G2/G3 but found

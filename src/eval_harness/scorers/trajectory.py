@@ -21,25 +21,44 @@ mapping.
 
 from __future__ import annotations
 
+import logging
 from collections import Counter
+from collections.abc import Mapping
 from itertools import pairwise
 from typing import Any
 
 from ..core._trajectory import (
     CanonicalCall,
+    DepthLimitError,
     NormalizationConfig,
     canonical_calls,
     is_subsequence,
 )
 from ..core.interfaces import Scorer
-from ..core.types import AgentTrajectory, EvalItem, RunContext, ScoreResult, TargetOutput, ToolCallRecord
+from ..core.types import (
+    AgentTrajectory,
+    EvalItem,
+    RunContext,
+    ScoreResult,
+    TargetOutput,
+    ToolCallRecord,
+    TrajectoryStep,
+)
 from ..plugins import SCORERS
+
+logger = logging.getLogger(__name__)
 
 #: Comment emitted when a scorer needs a trajectory and the target produced none.
 _NO_TRAJECTORY = "no trajectory on target output; scorer not applicable"
 
 #: Comment emitted when a reference trajectory is required but the item declares none.
 _NO_REFERENCE = "item declares no reference trajectory; scorer not applicable"
+
+#: Comment prefix when arguments nest deeper than the configured limit.
+_TOO_DEEP = "tool arguments too deeply nested to canonicalize; scorer not applicable"
+
+#: Placeholder when a tool_error step carries no tool call to name.
+_UNKNOWN_TOOL = "<unknown tool>"
 
 
 class _TrajectoryScorer(Scorer):
@@ -61,6 +80,7 @@ class _TrajectoryScorer(Scorer):
         ignore_fields: list[str] | None = None,
         compare_arguments: bool = True,
         on_missing: float = 0.0,
+        max_depth: int = NormalizationConfig.max_depth,
     ):
         super().__init__(name)
         self.normalization = NormalizationConfig(
@@ -68,6 +88,7 @@ class _TrajectoryScorer(Scorer):
             strip_names=strip_names,
             ignore_fields=frozenset(ignore_fields or ()),
             compare_arguments=compare_arguments,
+            max_depth=max_depth,
         )
         self.on_missing = float(on_missing)
 
@@ -89,8 +110,21 @@ class _TrajectoryScorer(Scorer):
             elif isinstance(entry, str):
                 records.append(ToolCallRecord(name=entry))
             elif isinstance(entry, dict) and "name" in entry:
-                records.append(ToolCallRecord(name=str(entry["name"]), arguments=entry.get("arguments", {})))
+                arguments = entry.get("arguments", {})
+                if not isinstance(arguments, Mapping):
+                    # A malformed *reference* must not fail the *candidate*: without this
+                    # guard canonicalization raises (e.g. dict(None)) and the engine turns
+                    # that into passed=False.
+                    logger.debug(
+                        "item %s: reference call %r has non-mapping arguments (%s); not applicable",
+                        item.id,
+                        entry.get("name"),
+                        type(arguments).__name__,
+                    )
+                    return None
+                records.append(ToolCallRecord(name=str(entry["name"]), arguments=arguments))
             else:
+                logger.debug("item %s: unparseable reference entry of type %s", item.id, type(entry).__name__)
                 return None
         return canonical_calls(records, self.normalization)
 
@@ -100,16 +134,33 @@ class _TrajectoryScorer(Scorer):
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
         trajectory = output.trajectory
         if trajectory is None:
+            logger.debug("item %s: no trajectory on target output; %s not applicable", item.id, self.name)
             return self._not_applicable(_NO_TRAJECTORY)
         # The narrowed trajectory is threaded into the subclass hooks rather than
         # re-derived behind an assert: asserts vanish under `python -O`, which would
         # turn this guard into an AttributeError deep inside a scorer.
-        if not self.requires_reference:
-            return self._score_quality(item, trajectory)
-        reference = self._reference_calls(item)
-        if reference is None:
-            return self._not_applicable(_NO_REFERENCE)
-        return self._score_calls(reference, self._candidate_calls(trajectory))
+        try:
+            if not self.requires_reference:
+                return self._score_quality(item, trajectory)
+            reference = self._reference_calls(item)
+            if reference is None:
+                return self._not_applicable(_NO_REFERENCE)
+            candidate = self._candidate_calls(trajectory)
+            result = self._score_calls(reference, candidate)
+        except DepthLimitError as exc:
+            # Unscoreable input, not a failing agent: report not-applicable rather than
+            # letting the engine convert the exception into passed=False.
+            logger.debug("item %s: %s could not canonicalize arguments: %s", item.id, self.name, exc)
+            return self._not_applicable(f"{_TOO_DEEP}: {exc}")
+        if result.passed is False:
+            logger.debug(
+                "item %s: %s failed; reference=%s candidate=%s",
+                item.id,
+                self.name,
+                _names(reference),
+                _names(candidate),
+            )
+        return result
 
     def _score_calls(
         self,
@@ -357,29 +408,47 @@ class TrajectoryRecoveryScorer(_TrajectoryScorer):
 
     def _score_quality(self, item: EvalItem, trajectory: AgentTrajectory) -> ScoreResult:
         steps = trajectory.steps
-        unrecovered: list[str] = []
-        for index, step in enumerate(steps):
-            if step.kind != "tool_error":
-                continue
-            following = steps[index + 1 :]
-            acted_again = any(later.kind == "tool_call" for later in following)
-            claimed_success = any(
-                later.kind == "final" and not later.metadata.get(self.failure_key, False) for later in following
-            )
-            if not acted_again and claimed_success:
-                unrecovered.append(step.tool_call.name if step.tool_call is not None else "<unknown tool>")
-        if not unrecovered:
-            return ScoreResult(
-                self.name,
-                value=1.0,
-                passed=True,
-                comment=None,
-                metadata={"tool_errors": sum(1 for s in steps if s.kind == "tool_error")},
+        unrecovered = self._unrecovered_errors(steps)
+        tool_errors = sum(1 for step in steps if step.kind == "tool_error")
+        recovered = not unrecovered
+        if not recovered:
+            logger.debug(
+                "item %s: %d of %d tool error(s) unrecovered: %s",
+                item.id,
+                len(unrecovered),
+                tool_errors,
+                unrecovered,
             )
         return ScoreResult(
             self.name,
-            value=0.0,
-            passed=False,
-            comment=f"claimed success after unrecovered tool error(s): {unrecovered}",
-            metadata={"unrecovered_tools": unrecovered},
+            value=1.0 if recovered else 0.0,
+            passed=recovered,
+            comment=None if recovered else f"claimed success after unrecovered tool error(s): {unrecovered}",
+            # Both keys on both branches: a sink or dashboard must not have to guess
+            # which shape it is about to receive.
+            metadata={"tool_errors": tool_errors, "unrecovered_tools": unrecovered},
         )
+
+    def _unrecovered_errors(self, steps: tuple[TrajectoryStep, ...]) -> list[str]:
+        """Tool names whose error was followed by a success claim and no further action.
+
+        Single reverse pass: for each position it needs to know whether *any later* step
+        is a tool call, and whether *any later* step claims success. Both are suffix
+        predicates, so one backwards sweep answers them for every position at once.
+
+        The earlier implementation re-sliced ``steps[index + 1:]`` per error and scanned
+        that copy twice, which is O(E*N) time and O(N) allocation per error — quadratic on
+        precisely the looping, repeatedly-erroring agent this scorer exists to catch.
+        """
+        unrecovered: list[str] = []
+        saw_tool_call_after = False
+        saw_success_claim_after = False
+        for step in reversed(steps):
+            if step.kind == "tool_error" and not saw_tool_call_after and saw_success_claim_after:
+                unrecovered.append(step.tool_call.name if step.tool_call is not None else _UNKNOWN_TOOL)
+            if step.kind == "tool_call":
+                saw_tool_call_after = True
+            elif step.kind == "final" and not step.metadata.get(self.failure_key, False):
+                saw_success_claim_after = True
+        unrecovered.reverse()  # report in execution order
+        return unrecovered

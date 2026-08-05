@@ -236,3 +236,154 @@ def test_helpers_build_the_step_kinds_they_claim():
     assert tool_error("t").kind == "tool_error"
     assert final("d").kind == "final"
     assert isinstance(run_result(TargetOutput("a")), RunResult)
+
+
+# --- determinism (F-051 review findings F10/F11) ---------------------------------
+
+_DETERMINISM_PROBE = """
+import sys
+sys.path.insert(0, {src!r})
+from eval_harness.core._trajectory import NormalizationConfig, canonical_call
+from eval_harness.core.types import ToolCallRecord
+print(canonical_call(ToolCallRecord("t", {{
+    "tags": {{"alpha", "beta", "gamma", "delta"}},
+    "frozen": frozenset({{"x", "y"}}),
+    "obj": object(),
+}}), NormalizationConfig())[1])
+"""
+
+
+def test_canonicalization_is_stable_across_interpreter_processes():
+    """Sets and unknown objects must canonicalize identically under any PYTHONHASHSEED.
+
+    This has to be a *cross-process* assertion: set iteration order and ``str(object())``
+    are both stable within one process, so a same-process test passes against the very
+    bug it is meant to catch.
+    """
+    import os
+    import pathlib
+    import subprocess
+    import sys
+
+    src = str(pathlib.Path(__file__).resolve().parent.parent / "src")
+    program = _DETERMINISM_PROBE.format(src=src)
+    outputs = set()
+    for seed in ("0", "1", "2", "3"):
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        proc = subprocess.run([sys.executable, "-c", program], capture_output=True, text=True, env=env, check=True)
+        outputs.add(proc.stdout.strip())
+    assert len(outputs) == 1, f"canonical form varies with PYTHONHASHSEED: {outputs}"
+
+
+def test_unknown_objects_never_render_a_memory_address():
+    cfg = NormalizationConfig()
+    rendered = canonical_call(call("t", {"v": object()}), cfg)[1]
+    assert "0x" not in rendered
+    assert "builtins.object" in rendered
+
+
+def test_distinct_types_with_equal_str_no_longer_collide():
+    """The collision F9 described is resolved by rendering the *type*, not ``str()``."""
+
+    class Alpha:
+        def __str__(self) -> str:
+            return "X"
+
+    class Beta:
+        def __str__(self) -> str:
+            return "X"
+
+    cfg = NormalizationConfig()
+    assert canonical_call(call("t", {"v": Alpha()}), cfg) != canonical_call(call("t", {"v": Beta()}), cfg)
+
+
+def test_value_derived_payload_is_preserved_alongside_the_type():
+    """Decimal/UUID keep their value, tagged with the type that produced it."""
+    from decimal import Decimal
+    from uuid import UUID
+
+    cfg = NormalizationConfig()
+    rendered = canonical_call(call("t", {"d": Decimal("1.50"), "u": UUID(int=7)}), cfg)[1]
+    assert "Decimal:1.50" in rendered
+    assert "UUID:00000000-0000-0000-0000-000000000007" in rendered
+
+
+def test_a_typed_value_is_distinct_from_a_string_that_reads_the_same():
+    """Decimal("1.50") and the string "1.50" must not canonicalize equal."""
+    from decimal import Decimal
+
+    cfg = NormalizationConfig()
+    assert canonical_call(call("t", {"v": Decimal("1.50")}), cfg) != canonical_call(call("t", {"v": "1.50"}), cfg)
+
+
+def test_sets_compare_equal_regardless_of_construction_order():
+    cfg = NormalizationConfig()
+    assert canonical_call(call("t", {"s": {"a", "b", "c"}}), cfg) == canonical_call(
+        call("t", {"s": {"c", "a", "b"}}), cfg
+    )
+
+
+def test_bytes_render_stably_by_length():
+    cfg = NormalizationConfig()
+    assert "<bytes:len=3>" in canonical_call(call("t", {"b": b"abc"}), cfg)[1]
+
+
+# --- deep immutability (F-051 review finding F12) ---------------------------------
+
+
+def test_tool_call_arguments_are_read_only():
+    record = ToolCallRecord("t", {"a": 1})
+    with pytest.raises(TypeError):
+        record.arguments["a"] = 999  # type: ignore[index]
+
+
+def test_trajectory_step_metadata_is_read_only():
+    step = TrajectoryStep(kind="final")
+    with pytest.raises(TypeError):
+        step.metadata["injected"] = True  # type: ignore[index]
+
+
+def test_a_constructed_record_cannot_change_its_own_canonical_form():
+    cfg = NormalizationConfig()
+    source = {"a": 1}
+    record = ToolCallRecord("t", source)
+    before = canonical_call(record, cfg)
+    source["a"] = 999  # mutating the ORIGINAL dict must not reach the record
+    assert canonical_call(record, cfg) == before
+
+
+def test_read_only_arguments_still_serialize():
+    payload = trajectory_to_dict(AgentTrajectory(steps=(tool_call("t", {"a": 1}),)))
+    assert payload["steps"][0]["tool_call"]["arguments"] == {"a": 1}
+
+
+# --- bounded recursion (F-051 review finding F3) ----------------------------------
+
+
+def test_deep_nesting_raises_a_narrow_error_not_recursion_error():
+    from eval_harness.core._trajectory import DepthLimitError
+
+    deep: dict = {}
+    cursor = deep
+    for _ in range(60):
+        cursor["n"] = {}
+        cursor = cursor["n"]
+    with pytest.raises(DepthLimitError):
+        canonical_call(call("t", deep), NormalizationConfig(max_depth=50))
+
+
+def test_depth_limit_can_truncate_instead_of_raising():
+    from eval_harness.core._trajectory import TRUNCATED
+
+    cfg = NormalizationConfig(max_depth=2, truncate_over_max_depth=True)
+    assert TRUNCATED in canonical_call(call("t", {"a": {"b": {"c": 1}}}), cfg)[1]
+
+
+def test_max_depth_must_be_positive():
+    with pytest.raises(ValueError, match="max_depth must be >= 1"):
+        NormalizationConfig(max_depth=0)
+
+
+def test_ordinary_nesting_is_well_within_the_default_limit():
+    cfg = NormalizationConfig()
+    assert canonical_call(call("t", {"a": {"b": {"c": {"d": 1}}}}), cfg)[0] == "t"

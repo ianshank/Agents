@@ -930,6 +930,10 @@ features:
       - "an agent that claims success after an unrecovered tool error fails trajectory_recovery, while a retry, a fallback, or stopping without claiming success all pass (F_051.py)"
       - "a text-only target scored by any of the seven trajectory scorers gets passed=None, not a failing 0.0, and is therefore excluded from that scorer's aggregate pass_rate (F_051.py; mutation: returning passed=False would drag a text-only suite's pass rate to zero)"
       - "normalization canonicalizes names and nested argument key ordering, drops configured volatile fields at any depth, and preserves duplicate calls (F_051.py)"
+      - "canonicalization is stable ACROSS interpreter processes: sets are sorted by canonical representation and unknown types render as type:value, so no canonical form contains a memory address (F_051.py; mutation: json.dumps(default=str) reintroduces the address and the cross-seed sweep fails)"
+      - "ToolCallRecord.arguments and TrajectoryStep.metadata are read-only mappings, so a constructed value object cannot change its own canonical form after construction (F_051.py)"
+      - "unscoreable input yields passed=None, never passed=False: arguments nested past max_depth, and a reference call whose arguments are not a mapping, both report not-applicable rather than failing the agent (F_051.py)"
+      - "trajectory_recovery is linear in trajectory length and emits both tool_errors and unrecovered_tools on the pass AND fail branches (F_051.py; mutation: the pre-fix per-error tail slice makes a 5000-error trajectory quadratic)"
     validation_command: "python scripts/validations/F_051.py"
     implemented_in: "local"
     depends_on: ["F-020"]

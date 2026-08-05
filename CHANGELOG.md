@@ -33,6 +33,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/CHARTER.md` §4 invariant 1 narrowly to permit this additive core-model extension and
   explicitly does **not** amend the `eval_harness ⇎ flow_corpus` airgap.
 
+  **Hardening pass (same PR).** An objective self-review plus five Copilot review comments
+  found nine further issues, every one reproduced by execution. Two defeated the module's
+  own stated purpose: `json.dumps(default=str)` embedded **memory addresses** in the
+  canonical form, and `set`/`frozenset` arguments fell through to the scalar branch and were
+  rendered by `str()` — so the *same* trajectory canonicalised three different ways across
+  three `PYTHONHASHSEED` values, yielding three different verdicts. Unknown types now render
+  as `type:value` (deterministic, and type-distinguishing, so two classes whose `__str__`
+  agree no longer collide) and sets are sorted by canonical representation. The tests for
+  this assert **across subprocesses**, because a same-process test passes against the bug.
+  `ToolCallRecord.arguments` and `TrajectoryStep.metadata` are now `MappingProxyType`:
+  `frozen=True` blocked attribute rebinding but not in-place mutation, so a constructed
+  record could silently change its own canonical form. `trajectory_recovery` was O(n²) —
+  it re-sliced the step tail per error and scanned it twice — on precisely the looping,
+  repeatedly-erroring agent it exists to catch; a single reverse pass over suffix flags
+  takes a 5,000-error trajectory from quadratic to 1.6 ms, and it now emits a stable
+  metadata key set on both branches instead of different keys on pass and fail. Deeply
+  nested and malformed-reference arguments returned `passed=False` (the engine converts a
+  scorer exception into a failing verdict); both now return `passed=None`, since unscoreable
+  input is not a failing agent. All three new modules gained `logging.getLogger(__name__)`
+  with lazy-`%s` debug at the normalisation, failed-match and not-applicable decision points.
+  `CallableTarget` now passes a returned `TargetOutput` straight through, so an agent can
+  attach a trajectory from a YAML config without a bespoke `TargetRunner` — previously no
+  built-in target could emit one at all, making F-051 unreachable from config.
+
 ### Fixed
 - **Skills CI coverage floor (F-050, ADR 0030).** `skills-ci.yml`'s `paths:` filter listed 7
   of 8 skills with a dedicated job (`dataset-lint` was omitted), and no workflow at all

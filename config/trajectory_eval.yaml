@@ -1,0 +1,81 @@
+# Agent trajectory evaluation (F-051) — offline, deterministic, no network.
+#
+# Grades *how* an agent reached its answer, not only the answer. The `callable` target
+# below returns a fixed trajectory so this file runs anywhere with no provider
+# credentials; point `target` at your own agent to use it for real.
+#
+# See docs/agent-trajectory-evaluation.md for the full scorer reference.
+
+schema_version: "1.0"
+
+run:
+  name: "trajectory-eval-example"
+  seed: 7
+
+dataset:
+  type: inline
+  params:
+    items:
+      # `expected` carries the reference tool calls. Three shapes are accepted:
+      # a bare list of names, a list of {name, arguments}, or a mapping with a
+      # `tool_calls` key alongside other fields.
+      - id: lookup-then-fetch
+        inputs: { question: "what is widget 42" }
+        expected:
+          tool_calls:
+            - name: search
+              arguments: { q: "widget 42" }
+            - name: fetch
+        metadata:
+          # Per-item budget; overrides the scorer's own `budget` param.
+          step_budget: 3
+
+target:
+  type: callable
+  params:
+    path: "tests._sut:trajectory_demo"
+
+scorers:
+  # --- reference matching: pick the LOOSEST mode that states the requirement ---
+  # trajectory_exact is the strictest and the least broadly applicable — most real
+  # tasks admit several correct paths.
+  - type: trajectory_in_order
+    params:
+      # Volatile argument keys, dropped at any nesting depth before comparison.
+      ignore_fields: ["request_id", "timestamp"]
+
+  - type: trajectory_precision_recall
+    params:
+      # Precision and recall are reported separately in ScoreResult.metadata:
+      # low precision is wasted work, low recall is work left undone.
+      pass_threshold: 0.8
+
+  # --- reference-free quality: these grade the path on its own terms ---
+  - type: trajectory_step_efficiency
+    params:
+      budget: 4          # fallback when an item declares no step_budget
+      count: tool_calls  # or `steps` to include observations
+
+  - type: trajectory_loop_detection
+    params:
+      max_repeats: 2
+      consecutive: true  # false also catches non-adjacent repetition
+
+  - type: trajectory_recovery
+    params:
+      # A terminal step whose metadata carries this key is not read as a success
+      # claim, so an agent that stops honestly after a tool error still passes.
+      failure_key: failed
+
+gate:
+  rules:
+    - score: trajectory_in_order
+      metric: pass_rate
+      min: 0.9
+    - score: trajectory_recovery
+      metric: pass_rate
+      min: 1.0
+
+sinks:
+  - type: console
+    params: { verbose: true }

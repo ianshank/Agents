@@ -66,3 +66,8 @@ skills:
     path: skills/dataset-lint
     description: Validate existing eval datasets for structural correctness, duplicate IDs, and encoding issues.
     compatibility: python>=3.10
+  - name: repo-invariant-review
+    version: 1.0.0
+    path: skills/repo-invariant-review
+    description: Predict CI collisions with this repo's enforced invariants (protected paths, airgap, size budget, frozen baselines, CHARTER invariant 1) before pushing.
+    compatibility: python>=3.10

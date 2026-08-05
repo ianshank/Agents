@@ -369,3 +369,46 @@ def test_reference_accepts_tool_call_records_directly():
 
     out = output_with(tool_call("A", {"q": "x"}))
     assert score("trajectory_exact", out, [ToolCallRecord("A", {"q": "x"})]).passed is True
+
+
+# --- malformed reference and unscoreable arguments (review findings F13/F3) --------
+
+
+@pytest.mark.parametrize("arguments", [None, 42, "not-a-mapping", ["a", "b"]])
+def test_reference_with_non_mapping_arguments_is_not_applicable(arguments):
+    """A malformed *reference* must never fail the *candidate*.
+
+    Without the guard, canonicalization raises (``dict(None)``) and the engine converts
+    that into ``passed=False`` — reporting a failing agent for a broken test fixture.
+    """
+    result = score("trajectory_exact", output_with(tool_call("t")), [{"name": "t", "arguments": arguments}])
+    assert result.passed is None
+    assert "not applicable" in (result.comment or "")
+
+
+def test_a_valid_mapping_reference_still_scores_normally():
+    out = output_with(tool_call("t", {"a": 1}))
+    assert score("trajectory_exact", out, [{"name": "t", "arguments": {"a": 1}}]).passed is True
+
+
+def test_arguments_nested_past_the_limit_are_not_applicable_not_failed():
+    deep: dict = {}
+    cursor = deep
+    for _ in range(10):
+        cursor["n"] = {}
+        cursor = cursor["n"]
+    result = score("trajectory_exact", output_with(tool_call("t", deep)), ["t"], params={"max_depth": 3})
+    assert result.passed is None, "unscoreable input is not a failing agent"
+    assert "too deeply nested" in (result.comment or "")
+
+
+def test_depth_limit_applies_to_reference_arguments_too():
+    deep: dict = {}
+    cursor = deep
+    for _ in range(10):
+        cursor["n"] = {}
+        cursor = cursor["n"]
+    result = score(
+        "trajectory_exact", output_with(tool_call("t")), [{"name": "t", "arguments": deep}], params={"max_depth": 3}
+    )
+    assert result.passed is None

@@ -20,6 +20,9 @@ useDefault = true
 [allowlist]
 description = "Documented false positives — no real secrets."
 paths = [
+  # repo-invariant-review fixtures are synthetic stub configs built by
+  # scripts/build_fixture.py; they contain no real credentials.
+  '''skills/repo-invariant-review/evals/fixtures/.*''',
   # The env template ships only empty placeholders (KEY=), never values.
   '''\.env\.example$''',
 ]

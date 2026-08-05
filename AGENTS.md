@@ -118,6 +118,9 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 
 The following files implement "SDK-optional" seams: the real dependency is imported lazily so the package installs and the offline suite runs with **zero external dependencies**. Follow the same pattern for any new integration:
 
+- `src/eval_harness/core/_trajectory.py` — pure, deterministic tool-call canonicalisation
+  (sets sorted by value, unknown types rendered by `type:value`, bounded recursion). No I/O.
+- `src/eval_harness/scorers/trajectory.py` — the seven agent-trajectory scorers (F-051).
 - `src/eval_harness/langfuse_client/__init__.py` — Langfuse tracing + score export.
 - `src/eval_harness/phoenix_client/__init__.py` — Phoenix tracing + score export (mirrors `langfuse_client` deliberately; ROI matrix in `docs/phoenix-spike.md`).
 - `src/eval_harness/braintrust_client/__init__.py` — BrainTrust experiment export (`build_client`) + dataset read (`fetch_dataset_items`); mirrors `phoenix_client`, `docs/braintrust-spike.md`.

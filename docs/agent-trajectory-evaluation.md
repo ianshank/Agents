@@ -116,6 +116,45 @@ make every trajectory unique.
 **Duplicates are preserved.** An agent that calls the same tool eleven times has a loop and a
 precision problem; collapsing duplicates would score it identically to one clean call.
 
+### Determinism is a guarantee, not an aspiration
+
+The same trajectory must canonicalise identically in every process, or a verdict becomes a
+coin flip. Two cases needed explicit handling:
+
+- **Sets.** `set` and `frozenset` iterate in an order that varies with `PYTHONHASHSEED`, so
+  they are normalised to a list sorted by each element's canonical representation.
+- **Types JSON cannot serialise.** They render as `<QualName:value>` — never `str(value)`,
+  because `str(object())` is `"<object object at 0x7f…>"` and would write a *memory address*
+  into the canonical form. Emitting the type alongside the value also keeps
+  `Decimal("1.50")` distinct from the string `"1.50"`, and two unrelated classes whose
+  `__str__` agree from colliding.
+
+Verify it yourself — and note this has to be a *cross-process* check, since both cases are
+stable within a single process:
+
+```bash
+make determinism
+```
+
+### Arguments are read-only after construction
+
+`ToolCallRecord.arguments` and `TrajectoryStep.metadata` are `MappingProxyType`. `frozen=True`
+alone blocks attribute rebinding but not `record.arguments["k"] = v`, which would let a
+constructed record change its own canonical form. Mutating the dict you passed in has no
+effect either — it is copied at construction.
+
+### Nesting is bounded
+
+`max_depth` (default 50) caps argument recursion. Beyond it the scorer reports
+**not-applicable**, not a failure — unscoreable input is not a failing agent, and an
+unguarded recursion would surface as `RecursionError`, which the engine converts into
+`passed=False`. Set `truncate_over_max_depth=True` to compare truncated data instead.
+
+```yaml
+params:
+  max_depth: 50
+```
+
 ## When there is no trajectory to grade
 
 A trajectory scorer facing a text-only target returns `passed=None` with a comment — not a
@@ -130,6 +169,34 @@ explicit knob rather than a hidden constant:
 params:
   on_missing: 0.0   # default; the value recorded when there is nothing to grade
 ```
+
+## Emitting a trajectory from config
+
+`CallableTarget` passes a returned `TargetOutput` straight through, so a tool-using agent
+needs no bespoke `TargetRunner`:
+
+```python
+def my_agent(inputs: dict) -> TargetOutput:
+    ...
+    return TargetOutput(output=answer, trajectory=AgentTrajectory(steps=steps))
+```
+
+```yaml
+target:
+  type: callable
+  params: { path: "my_pkg.agent:my_agent" }
+```
+
+A callable that returns a plain value still behaves exactly as before. See
+`config/trajectory_eval.yaml` for a complete runnable example.
+
+## Combining with other scorers
+
+`CompositeScorer` (`type: weighted`) drops `passed=None` from its verdict logic but still
+blends the child's **value** into the weighted mean. A trajectory child on a text-only target
+therefore contributes `on_missing` to the score while contributing nothing to pass/fail — so a
+composite can report `passed=True` with a materially depressed value. Set `on_missing: 1.0` on
+the trajectory child when you want a missing trajectory to be neutral rather than penalised.
 
 ## Diagnostics
 

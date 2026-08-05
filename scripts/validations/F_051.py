@@ -16,6 +16,11 @@ Checks:
         therefore excluded from the aggregate pass rate.
     10. Normalisation canonicalises names and nested argument ordering, drops
         configured volatile fields at any depth, and preserves duplicate calls.
+    11. Canonicalisation is stable ACROSS interpreter processes (sets sorted by value,
+        unknown types rendered as type:value, never a memory address).
+    12. Value-object mappings are read-only, so a record cannot change its own canonical form.
+    13. Unscoreable input reports not-applicable, never a failing verdict.
+    14. trajectory_recovery is linear and emits a stable metadata key set on both branches.
 
 Exit codes:
     0 - all checks passed
@@ -26,7 +31,9 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -84,6 +91,9 @@ def main() -> int:
 
     def score(name: str, target_output: TargetOutput, expected: object = None, **params: object) -> ScoreResult:
         return SCORERS.create(name, params).score(item(expected), target_output, ctx)
+
+    def final_step() -> TrajectoryStep:
+        return TrajectoryStep(kind="final")
 
     # 1. registration + aliases
     for name in _SCORER_NAMES:
@@ -196,6 +206,72 @@ def main() -> int:
     )
     duplicates = canonical_calls([ToolCallRecord("a"), ToolCallRecord("a")], NormalizationConfig())
     _check(len(duplicates) == 2, "normalisation preserves duplicate calls", errors)
+
+    # 11. cross-process determinism -- the assertion has to spawn real subprocesses:
+    # set iteration order and str(object()) are stable WITHIN a process, so a
+    # same-process check passes against the very bug it is meant to catch.
+    src_dir = os.path.join(os.path.dirname(os.path.dirname(_HERE)), "src")
+    probe = (
+        f"import sys; sys.path.insert(0, {src_dir!r})\n"
+        "from eval_harness.core._trajectory import NormalizationConfig, canonical_call\n"
+        "from eval_harness.core.types import ToolCallRecord\n"
+        "print(canonical_call(ToolCallRecord('t', {'s': {'a','b','c'}, 'o': object()}), NormalizationConfig())[1])\n"
+    )
+    forms = set()
+    for seed in ("0", "1", "2", "3"):
+        proc = subprocess.run(
+            [sys.executable, "-c", probe],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "PYTHONHASHSEED": seed},
+            check=False,
+        )
+        forms.add(proc.stdout.strip())
+    _check(len(forms) == 1, f"canonical form is identical under every PYTHONHASHSEED (got {len(forms)})", errors)
+    _check(all("0x" not in form for form in forms), "no canonical form contains a memory address", errors)
+
+    # 12. read-only value-object mappings
+    record = ToolCallRecord("t", {"a": 1})
+    for label, mapping in (
+        ("ToolCallRecord.arguments", record.arguments),
+        ("TrajectoryStep.metadata", final_step().metadata),
+    ):
+        try:
+            mapping["x"] = 1  # type: ignore[index]
+            _check(False, f"{label} is read-only", errors)
+        except TypeError:
+            _check(True, f"{label} is read-only", errors)
+
+    # 13. unscoreable input is not-applicable, never a failing verdict
+    deep: dict = {}
+    cursor = deep
+    for _ in range(10):
+        cursor["n"] = {}
+        cursor = cursor["n"]
+    _check(
+        score("trajectory_exact", out(call("t", **deep)), ["t"], max_depth=3).passed is None,
+        "arguments nested past max_depth report not-applicable, not a failure",
+        errors,
+    )
+    _check(
+        score("trajectory_exact", out(call("t")), [{"name": "t", "arguments": None}]).passed is None,
+        "a reference call with non-mapping arguments reports not-applicable, not a failure",
+        errors,
+    )
+
+    # 14. recovery is linear and its metadata shape is stable
+    error_steps = tuple(TrajectoryStep(kind="tool_error", tool_call=ToolCallRecord(f"t{n}")) for n in range(5000))
+    many_errors = out(*error_steps, TrajectoryStep(kind="final"))
+    started = time.perf_counter()
+    recovery = score("trajectory_recovery", many_errors)
+    elapsed = time.perf_counter() - started
+    _check(elapsed < 2.0, f"5000-error trajectory scores in under 2s (took {elapsed:.3f}s)", errors)
+    clean_recovery = score("trajectory_recovery", out(TrajectoryStep(kind="final")))
+    _check(
+        set(recovery.metadata) == set(clean_recovery.metadata) == {"tool_errors", "unrecovered_tools"},
+        "recovery emits the same metadata keys on the pass and fail branches",
+        errors,
+    )
 
     return report(logger, "F-051", errors)
 
