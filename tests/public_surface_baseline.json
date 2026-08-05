@@ -16,6 +16,7 @@
       "build_budgeted_judge"
     ],
     "eval_harness.core": [
+      "AgentTrajectory",
       "DatasetSource",
       "EvalItem",
       "ItemResult",
@@ -29,8 +30,13 @@
       "ScoreAggregate",
       "ScoreResult",
       "Scorer",
+      "StepKind",
+      "TRAJECTORY_SCHEMA_VERSION",
       "TargetOutput",
-      "TargetRunner"
+      "TargetRunner",
+      "ToolCallRecord",
+      "TrajectoryStep",
+      "trajectory_to_dict"
     ]
   }
 }

@@ -57,7 +57,7 @@ C4Container
     }
 
     Container_Boundary(components, "Pluggable Components (Tested completely offline via deterministic mocks)") {
-        Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, weighted, llm_judge, autoevals")
+        Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, weighted, llm_judge, autoevals; trajectory_{exact,in_order,any_order,precision_recall,step_efficiency,loop_detection,recovery} (F-051)")
         Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible), anthropic, phoenix_evals")
         Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust")
         Container(targets, "Targets", "Python", "echo, callable (dynamic import)")

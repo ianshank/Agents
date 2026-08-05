@@ -53,6 +53,15 @@ class CallableTarget(TargetRunner):
         try:
             result = fn(item) if self.pass_item else fn(item.inputs)
             latency = (time.perf_counter() - start) * 1000
+            if isinstance(result, TargetOutput):
+                # A callable that builds its own TargetOutput passes straight through, so
+                # a tool-using agent can attach an AgentTrajectory (F-051) without needing
+                # a bespoke TargetRunner class. Latency is filled in only when the callable
+                # did not measure it itself. Callables returning a plain value are
+                # unaffected — this branch simply never fires for them.
+                if result.latency_ms is None:
+                    result.latency_ms = latency
+                return result
             return TargetOutput(output=result, latency_ms=latency)
         except Exception as exc:  # surface target failures as scored errors
             latency = (time.perf_counter() - start) * 1000

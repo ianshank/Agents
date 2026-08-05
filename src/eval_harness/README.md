@@ -14,7 +14,7 @@ for Phoenix and BrainTrust.
 |---|---|
 | `config/` | versioned config models, migrations, env-interpolating loader |
 | `core/` | types, interfaces (abstract base classes), the generic `Registry` |
-| `scorers/` | exact_match, regex_match, contains, json_keys, llm_judge, weighted, autoevals |
+| `scorers/` | exact_match, regex_match, contains, json_keys, llm_judge, weighted, autoevals; `trajectory.py` adds trajectory_exact, trajectory_in_order, trajectory_any_order, trajectory_precision_recall, trajectory_step_efficiency, trajectory_loop_detection, trajectory_recovery (F-051 — see [docs/agent-trajectory-evaluation.md](../../docs/agent-trajectory-evaluation.md)) |
 | `datasets/` | inline, jsonl, langfuse, braintrust, csv, parquet |
 | `targets/` | echo, callable (dynamic import), model (alias llm) |
 | `sinks/` | console, json_file, html_file, langfuse, phoenix, braintrust |

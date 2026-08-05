@@ -1,0 +1,90 @@
+{
+  "skill": "repo-invariant-review",
+  "evals": [
+    {
+      "id": "clean-tree-passes",
+      "prompt": "Review a repository whose change touches nothing protected.",
+      "run": "python scripts/build_fixture.py --kind clean --out .skill-validation/clean && python scripts/check_invariants.py --repo .skill-validation/clean --base HEAD --format json --out .skill-validation/clean-report.json",
+      "assertions": [
+        {
+          "type": "exit_zero",
+          "text": "a clean change reports no blocking collisions"
+        },
+        {
+          "type": "file_contains",
+          "path": ".skill-validation/clean-report.json",
+          "value": "\"passed\": true",
+          "text": "report marks the change as passing"
+        }
+      ]
+    },
+    {
+      "id": "violating-tree-blocks",
+      "prompt": "Review a repository whose change breaches protected paths, the size budget and the airgap.",
+      "run": "python scripts/build_fixture.py --kind violating --out .skill-validation/violating && python scripts/check_invariants.py --repo .skill-validation/violating --base HEAD --format json --out .skill-validation/violating-report.json",
+      "assertions": [
+        {
+          "type": "exit_nonzero",
+          "text": "a violating change fails the run"
+        },
+        {
+          "type": "file_contains",
+          "path": ".skill-validation/violating-report.json",
+          "value": "protected_paths",
+          "text": "protected-path collision is reported"
+        },
+        {
+          "type": "file_contains",
+          "path": ".skill-validation/violating-report.json",
+          "value": "size_budget",
+          "text": "size-budget collision is reported"
+        },
+        {
+          "type": "file_contains",
+          "path": ".skill-validation/violating-report.json",
+          "value": "airgap",
+          "text": "airgap collision is reported"
+        },
+        {
+          "type": "file_contains",
+          "path": ".skill-validation/violating-report.json",
+          "value": "\"passed\": false",
+          "text": "report marks the change as failing"
+        }
+      ]
+    },
+    {
+      "id": "label-suppresses-protected-finding",
+      "prompt": "Re-review the violating change once the eval-change-approved label is present.",
+      "run": "python scripts/build_fixture.py --kind violating --out .skill-validation/labelled && python scripts/check_invariants.py --repo .skill-validation/labelled --base HEAD --has-label --format json --out .skill-validation/labelled-report.json",
+      "assertions": [
+        {
+          "type": "exit_nonzero",
+          "text": "other collisions still fail even with the label"
+        },
+        {
+          "type": "command_exit_zero",
+          "cmd": "! grep -q protected_paths .skill-validation/labelled-report.json",
+          "text": "the label suppresses the protected-path finding so it stops masking the rest"
+        },
+        {
+          "type": "file_contains",
+          "path": ".skill-validation/labelled-report.json",
+          "value": "airgap",
+          "text": "the findings it was masking are still reported"
+        }
+      ]
+    },
+    {
+      "id": "report-is-deterministic",
+      "prompt": "The same input must produce a byte-identical report.",
+      "run": "python scripts/build_fixture.py --kind violating --out .skill-validation/det && { python scripts/check_invariants.py --repo .skill-validation/det --base HEAD --format json --out .skill-validation/a.json || true; } && { python scripts/check_invariants.py --repo .skill-validation/det --base HEAD --format json --out .skill-validation/b.json || true; } && diff .skill-validation/a.json .skill-validation/b.json",
+      "assertions": [
+        {
+          "type": "exit_zero",
+          "text": "two runs over the same tree produce byte-identical reports (diff finds nothing)"
+        }
+      ]
+    }
+  ]
+}

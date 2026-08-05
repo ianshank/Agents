@@ -242,6 +242,7 @@ Agents/                          # repo root
 │       ├── core/                 # Orchestration, registry, interfaces
 │       ├── judges/               # Judge implementations
 │       ├── scorers/              # Scoring functions
+│       │   └── trajectory.py     # Agent trajectory scorers (F-051)
 │       ├── datasets/             # Dataset loaders (inline, jsonl, csv, parquet, langfuse, braintrust)
 │       ├── targets/              # System-under-test adapters (echo, callable, model-backed)
 │       ├── langfuse_client/      # Langfuse integration (SDK-optional seam)

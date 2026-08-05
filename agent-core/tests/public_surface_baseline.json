@@ -101,6 +101,35 @@
       "render_json",
       "render_markdown"
     ],
+    "agent_core.proxy_analysis": [
+      "ProxyEvalConfig",
+      "ProxyReport",
+      "SliceCorrelation",
+      "analyze_dataset"
+    ],
+    "agent_core.proxy_dataset": [
+      "ProxyDataset",
+      "ProxyPair",
+      "build_dataset"
+    ],
+    "agent_core.proxy_eval": [
+      "MappingProxy",
+      "PassiveLabelProxy",
+      "ProxyEvalConfig",
+      "ProxyExtractor",
+      "RawConfidenceProxy",
+      "analyze_dataset",
+      "build_dataset",
+      "default_extractors",
+      "evaluate_store",
+      "main",
+      "render_json",
+      "render_markdown"
+    ],
+    "agent_core.proxy_render": [
+      "render_json",
+      "render_markdown"
+    ],
     "agent_core.store_sync": [
       "EXIT_FETCH_FAILED",
       "EXIT_INTERNAL",

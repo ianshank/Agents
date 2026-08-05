@@ -10,7 +10,7 @@ from pathlib import Path
 from ..braintrust_client import BrainTrustClient, NullBrainTrustClient, build_client
 from ..core._serialize import as_text as _as_text
 from ..core.interfaces import ResultSink
-from ..core.types import RunResult
+from ..core.types import ItemResult, RunResult
 from ..langfuse_client import LangfuseClient
 from ..phoenix_client import PhoenixScoreClient, build_score_client
 from ..plugins import SINKS
@@ -150,12 +150,35 @@ class HtmlFileSink(ResultSink):
         rows.append("</table>")
         return "".join(rows)
 
+    @staticmethod
+    def _trajectory_cell(ir: ItemResult) -> str:
+        """A one-line summary of an item's execution path, or an em dash if it has none.
+
+        Duplicates are kept — a tool called three times is shown three times, because
+        that repetition is the loop signal a reader is looking for.
+        """
+        trajectory = ir.output.trajectory
+        if trajectory is None:
+            return "&mdash;"
+        calls = trajectory.tool_calls()
+        if not calls:
+            return f"{len(trajectory.steps)} step(s), no tool calls"
+        path = " &rarr; ".join(_html.escape(call.name) for call in calls)
+        return f"{len(trajectory.steps)} step(s): {path}"
+
     def _items_table(self, run: RunResult) -> str:
-        rows = ["<table><caption>Items</caption><tr><th>id</th><th>output</th><th>scores</th></tr>"]
+        # The trajectory column appears only when some item actually has one, so a
+        # trajectory-free run renders byte-identically to the pre-trajectory harness.
+        show_trajectory = any(ir.output.trajectory is not None for ir in run.items)
+        header = "<table><caption>Items</caption><tr><th>id</th><th>output</th><th>scores</th>"
+        rows = [f"{header}<th>trajectory</th></tr>" if show_trajectory else f"{header}</tr>"]
         for ir in run.items:
             scores = ", ".join(f"{_html.escape(s.name)}={s.value:.3f}" for s in ir.scores)
             output = _html.escape(_as_text(ir.output.output))
-            rows.append(f"<tr><td>{_html.escape(ir.item.id)}</td><td>{output}</td><td>{scores}</td></tr>")
+            cells = f"<td>{_html.escape(ir.item.id)}</td><td>{output}</td><td>{scores}</td>"
+            if show_trajectory:
+                cells += f"<td>{self._trajectory_cell(ir)}</td>"
+            rows.append(f"<tr>{cells}</tr>")
         rows.append("</table>")
         return "".join(rows)
 

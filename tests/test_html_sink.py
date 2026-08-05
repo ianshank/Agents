@@ -145,3 +145,73 @@ def test_custom_title_and_bar_clamp(tmp_path: Path):
     assert "<title>Custom</title>" in text
     # mean 1.5 clamps to full bar width (280), not 420
     assert 'width="280.00"' in text
+
+
+# --- trajectory column (F-051) ---------------------------------------------------
+
+
+def _traj_run(*outputs):
+    from datetime import datetime, timezone
+
+    from eval_harness.core.types import EvalItem, ItemResult, RunResult
+
+    moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    return RunResult(
+        run_id="r",
+        config_name="c",
+        items=[ItemResult(item=EvalItem(id=f"i{n}", inputs={}), output=o) for n, o in enumerate(outputs)],
+        aggregate={},
+        started_at=moment,
+        finished_at=moment,
+    )
+
+
+def test_trajectory_column_is_absent_when_no_item_has_one():
+    """A trajectory-free run must render exactly as it did before F-051."""
+    from eval_harness.core.types import TargetOutput
+    from eval_harness.sinks import HtmlFileSink
+
+    html = HtmlFileSink(path="unused.html").render(_traj_run(TargetOutput(output="plain")))
+    assert "<th>trajectory</th>" not in html
+
+
+def test_trajectory_column_appears_and_shows_the_call_path():
+    from eval_harness.core.types import TargetOutput
+    from eval_harness.sinks import HtmlFileSink
+    from tests._trajectory_helpers import tool_call, trajectory
+
+    out = TargetOutput(output="ok", trajectory=trajectory(tool_call("search"), tool_call("fetch")))
+    html = HtmlFileSink(path="unused.html").render(_traj_run(out))
+    assert "<th>trajectory</th>" in html
+    assert "search &rarr; fetch" in html
+
+
+def test_items_without_a_trajectory_render_a_dash_when_the_column_exists():
+    from eval_harness.core.types import TargetOutput
+    from eval_harness.sinks import HtmlFileSink
+    from tests._trajectory_helpers import tool_call, trajectory
+
+    with_traj = TargetOutput(output="a", trajectory=trajectory(tool_call("search")))
+    html = HtmlFileSink(path="unused.html").render(_traj_run(with_traj, TargetOutput(output="b")))
+    assert "&mdash;" in html
+
+
+def test_a_trajectory_with_no_tool_calls_is_summarised_by_step_count():
+    from eval_harness.core.types import TargetOutput
+    from eval_harness.sinks import HtmlFileSink
+    from tests._trajectory_helpers import final, trajectory
+
+    out = TargetOutput(output="ok", trajectory=trajectory(final("done")))
+    html = HtmlFileSink(path="unused.html").render(_traj_run(out))
+    assert "1 step(s), no tool calls" in html
+
+
+def test_tool_names_are_escaped_in_the_trajectory_cell():
+    from eval_harness.core.types import TargetOutput
+    from eval_harness.sinks import HtmlFileSink
+    from tests._trajectory_helpers import tool_call, trajectory
+
+    out = TargetOutput(output="ok", trajectory=trajectory(tool_call("<script>")))
+    html = HtmlFileSink(path="unused.html").render(_traj_run(out))
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html

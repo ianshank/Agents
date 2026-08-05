@@ -3,6 +3,8 @@ from __future__ import annotations
 from .interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
 from .registry import Registry, RegistryError
 from .types import (
+    TRAJECTORY_SCHEMA_VERSION,
+    AgentTrajectory,
     EvalItem,
     ItemResult,
     JudgeVerdict,
@@ -10,10 +12,16 @@ from .types import (
     RunResult,
     ScoreAggregate,
     ScoreResult,
+    StepKind,
     TargetOutput,
+    ToolCallRecord,
+    TrajectoryStep,
+    trajectory_to_dict,
 )
 
 __all__ = [
+    "TRAJECTORY_SCHEMA_VERSION",
+    "AgentTrajectory",
     "DatasetSource",
     "EvalItem",
     "ItemResult",
@@ -27,6 +35,10 @@ __all__ = [
     "ScoreAggregate",
     "ScoreResult",
     "Scorer",
+    "StepKind",
     "TargetOutput",
     "TargetRunner",
+    "ToolCallRecord",
+    "TrajectoryStep",
+    "trajectory_to_dict",
 ]
