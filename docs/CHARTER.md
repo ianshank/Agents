@@ -105,6 +105,12 @@ configs untouched.
   [ADR 0018](decisions/0018-outcome-store-persistence.md).
 - **Structural size-budget enforcement:** complexity and file-length limits gated,
   function/method limits warn — [ADR 0019](decisions/0019-size-budget-gate.md).
+- **Agent evaluation may extend the core models and the engine loop (additive, default-off):**
+  trajectory, repeated-run reliability and environment-state evaluation need a field on
+  `TargetOutput` and an attempt-aware item loop, which §4 invariant 1 otherwise forbids. Amended
+  narrowly and under written compatibility obligations (append-only fields, no freezing, untouched
+  `SCHEMA_VERSION`, regenerated surface baselines); the `eval_harness ⇎ flow_corpus` airgap is *not*
+  amended — [ADR 0031](decisions/0031-additive-core-model-extension-for-agent-evaluation.md).
 
 ## 4. Invariants (enforce in review)
 
@@ -114,7 +120,12 @@ restated here.**
 
 1. **Open/closed extensibility.** New judges, scorers, sinks, datasets, and targets are
    added through registries / the `eval_harness.plugins` entry-point group; the engine, core
-   models, and registries themselves stay unmodified.
+   models, and registries themselves stay unmodified. One documented exception: agent-evaluation
+   capabilities may extend the core models and the engine's item loop *additively*, under the
+   compatibility obligations in
+   [ADR 0031](decisions/0031-additive-core-model-extension-for-agent-evaluation.md) (§3 Ratified
+   Amendments). The registries themselves remain unmodified either way, and every new evaluator is
+   still a registered component.
 
 2. **Versioned, backward-compatible surface.** `SCHEMA_VERSION` is single-sourced (see
    [src/eval_harness/version.py](../src/eval_harness/version.py)); the migration chain
