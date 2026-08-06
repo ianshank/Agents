@@ -1,6 +1,6 @@
 # Change: skills-ci-coverage-floor
 
-**Status:** proposed · **Date:** 2026-07-31 · **Author track:** `claude/` agent lane
+**Status:** landed — F-050 @ `c5e7227c6a` · **Date:** 2026-07-31 · **Author track:** `claude/` agent lane
 **Motivated by:** an ROI review of `skills/` CI coverage, independently re-verified against
 `.github/workflows/skills-ci.yml` and every other workflow's `paths:` filters
 **Compiles down to:** F-050 + `scripts/validations/F_050.py` + ADR 0030.

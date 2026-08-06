@@ -114,7 +114,14 @@ jobs:
       # flow-protocol/flow-corpus to sys.path themselves, so no editable install needed.)
       - run: pip install -e ".[dev,langfuse,openai,archguard,parquet]"
       # Feature ledger: schema + DAG + git provenance + tier-fast validation commands.
-      - run: python scripts/validate.py --tier fast
+      # --strict makes an unresolvable `implemented_in` an ERROR, not a warning. Without it
+      # the provenance check was decorative: 6 SHAs from squash-merged branches had rotted
+      # away and 6 entries carried the literal placeholder "local", all reported as warnings
+      # nobody read. Safe to enforce because `implemented_in` is optional — only a *present
+      # but unresolvable* ref fails, and the checkout above uses fetch-depth: 0, which is what
+      # the refs need. (On a shallow clone the script downgrades itself back to warnings; see
+      # _check_git_refs. Squash-merging a PR would rot its own ref, so keep merge commits.)
+      - run: python scripts/validate.py --tier fast --strict
       # Vendored skill-script copies must stay byte-identical to their canonical source.
       - name: Skill-script drift guard
         run: python scripts/check_skill_script_drift.py

@@ -1,6 +1,7 @@
 # 0023 — Agent-confidence proxy + agent-domain seeding & backfill
 
-- Status: **Proposed.**
+- Status: **Accepted.** Landed: F-042, F-043 and F-044 are all `status: done` in
+  `features.yaml` with resolvable provenance.
 - Date: 2026-07-22
 - Related: ADR 0005 (calibrated merge gate), ADR 0018 (outcome-store persistence — this ADR
   supersedes its §5 "no author/branch heuristic" stance), `docs/plans/real-data-activation/PLAN.md`

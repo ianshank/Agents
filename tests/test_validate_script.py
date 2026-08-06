@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -115,11 +116,66 @@ def test_check_git_refs_resolvable_and_absent_ref() -> None:
     assert vs._check_git_refs(feats, strict=True) == []
 
 
-def test_check_git_refs_unresolvable_strict_vs_lenient() -> None:
+def test_check_git_refs_unresolvable_strict_vs_lenient(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pinned non-shallow: on a shallow clone strict self-downgrades, which would make this
+    # assertion fail for a reason that has nothing to do with the behaviour under test.
+    monkeypatch.setattr(vs, "_is_shallow_clone", lambda: False)
     feats = [_feat("A", implemented_in="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")]
     assert vs._check_git_refs(feats, strict=False) == []
     errors = vs._check_git_refs(feats, strict=True)
     assert errors and "does not resolve" in errors[0]
+
+
+def test_shallow_clone_downgrades_strict_to_warnings(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A shallow clone is missing history, not provenance.
+
+    Measured on the clone this was written against: 30 of 50 refs "failed" under --strict
+    purely because the commits had not been fetched. Reporting that as rot trains readers
+    to ignore the finding, so strict downgrades itself and says why.
+    """
+    monkeypatch.setattr(vs, "_is_shallow_clone", lambda: True)
+    feats = [_feat("A", implemented_in="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")]
+    with caplog.at_level(logging.WARNING):
+        assert vs._check_git_refs(feats, strict=True) == []
+    assert any("shallow clone" in r.getMessage() for r in caplog.records)
+
+
+def test_is_shallow_clone_reports_this_repository() -> None:
+    """Whatever the answer, it must be a bool derived from git, never a crash."""
+    assert isinstance(vs._is_shallow_clone(), bool)
+
+
+# ---------------------------------------------------------------------------
+# Ledger provenance integrity (the real features.yaml)
+# ---------------------------------------------------------------------------
+
+
+def _ledger_features() -> list[dict[str, Any]]:
+    path = Path(__file__).resolve().parent.parent / "features.yaml"
+    with path.open(encoding="utf-8") as fh:
+        return list(yaml.safe_load(fh)["features"])
+
+
+def test_no_feature_carries_a_placeholder_provenance_ref() -> None:
+    """``implemented_in: "local"`` resolves nowhere and defeats the whole check.
+
+    Six entries carried it. Omitting the key entirely is the supported way to say "not
+    landed yet" — a placeholder that looks like an answer is worse than no answer.
+    """
+    placeholders = [f["id"] for f in _ledger_features() if f.get("implemented_in") in {"local", "HEAD", ""}]
+    assert not placeholders, f"features with a placeholder implemented_in: {placeholders}"
+
+
+@pytest.mark.skipif(vs._is_shallow_clone(), reason="shallow clone: history is absent, not rotten")
+def test_every_ledger_provenance_ref_resolves() -> None:
+    """The assertion CI now enforces via `validate.py --tier fast --strict`.
+
+    Nine refs across eight features pointed at commits that no longer existed — branch
+    SHAs lost to squash merges — and the check reported it only as a warning nobody read.
+    """
+    assert vs._check_git_refs(_ledger_features(), strict=True) == []
 
 
 # ---------------------------------------------------------------------------

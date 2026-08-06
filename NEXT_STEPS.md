@@ -39,7 +39,7 @@
 
 - [x] **Merge-gate calibrator-health integrity (F-049, ADR 0029)** — an independent
   re-verification of `docs/gap-analysis-merge-gate-2026-07-24.md`
-  (`openspec/changes/merge-gate-health-integrity/review.md`) confirmed its G1/G2/G3 but found
+  (`openspec/changes/archive/merge-gate-health-integrity/review.md`) confirmed its G1/G2/G3 but found
   G3's stated mechanism wrong, its severity understated, and three defects it never named.
   The gate's fourth health floor could pass having measured nothing: `_upper_half_ci_width`
   accumulated into a `0.0` initialiser over bins above raw 0.5, so a domain whose audits all
@@ -73,7 +73,7 @@
   misattributed its own NaN-guard rationale. Surfaced, not fixed here (different package,
   its own review): `behavioral-regression`'s config validators lack the same `isfinite`
   guard — confirmed live (`BRConfig(dist_sigma=float("inf"))` constructs) — recorded in
-  `openspec/changes/merge-gate-health-integrity/tasks.md`'s follow-on section.
+  `openspec/changes/archive/merge-gate-health-integrity/tasks.md`'s follow-on section.
 
 - [x] **Charter alignment audit + fixes + `check_charter_invariants.py` gate (PR #114)** —
   a multi-agent audit (`docs/CHARTER_ALIGNMENT_AUDIT.md`) mechanically re-verified every
@@ -99,7 +99,7 @@
 - [x] **Proxy-correlation measurement, PPI++ report estimator & audit propensity (F-047,
   ADR 0026)** — an external critique proposed swapping the gate's Wilson interval for
   PPI++. The peer review
-  (`openspec/changes/eval-proxy-and-estimator/review.md`) verified its arithmetic and
+  (`openspec/changes/archive/eval-proxy-and-estimator/review.md`) verified its arithmetic and
   citations but found it aimed at the wrong lever: PPI++ on the calibrated-confidence proxy
   buys only ~1.05–1.1× effective-N at the system's own `min_auroc=0.65` floor, and ~0 on the
   *conditional* subsets the gate operates over (restriction of range). Measured on a
@@ -291,7 +291,7 @@
 - [ ] **Merge-gate soak** — accumulate shadow decisions and weekly audits before
   revisiting the ADR 0005 enablement checklist. **The "N≥20" this entry used to quote is a
   soak *counter*, not the activation bar**: the peer review in
-  `openspec/changes/eval-proxy-and-estimator/review.md` establishes that `tau` is gated by
+  `openspec/changes/archive/eval-proxy-and-estimator/review.md` establishes that `tau` is gated by
   a four-gate Wilson stack whose binding term (`threshold_for_risk` at `risk_target=0.02`,
   measured on a held-out fold) needs roughly **380 near-perfect audited records per
   domain**. Treat N≥20 as "enough to publish an honest first report", never as "enough to

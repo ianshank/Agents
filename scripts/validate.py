@@ -157,6 +157,19 @@ def _check_dag(features: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
+def _is_shallow_clone() -> bool:
+    """Whether the working repository has truncated history.
+
+    A shallow clone is missing most commits, so *every* older ``implemented_in`` ref
+    fails to resolve — 30 of 50 in the clone this check was written against, none of
+    them actually broken. Reporting that as provenance rot is worse than not checking:
+    it trains readers to ignore the finding. ``--strict`` therefore downgrades itself
+    here, and says why.
+    """
+    result = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], capture_output=True, text=True)
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
 def _check_git_refs(
     features: list[dict[str, Any]],
     *,
@@ -169,8 +182,18 @@ def _check_git_refs(
     strict:
         When *True*, unresolvable refs are reported as errors.
         When *False* (default), they are warnings only.
+
+        Downgraded to warnings on a shallow clone regardless: the refs are absent
+        because the history is, not because the provenance is wrong. CI checks out with
+        ``fetch-depth: 0``, so the strict path is the one that actually runs there.
     """
     errors: list[str] = []
+    if strict and _is_shallow_clone():
+        logger.warning(
+            "shallow clone detected - downgrading --strict provenance checks to warnings; "
+            "run `git fetch --unshallow` to check them for real"
+        )
+        strict = False
     for feat in features:
         ref: str | None = feat.get("implemented_in")
         if not ref:

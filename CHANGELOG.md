@@ -102,6 +102,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   field list from the dataclass rather than listing it, so a threshold added later is covered
   automatically; the CLI `--set power_min_sample=nan` path is asserted end to end, since
   `cli._coerce` is the reachable entry point that produces a non-finite float.
+- **The ledger's provenance check was decorative, and the OpenSpec index had rotted.**
+  `validate.py` verifies that every `implemented_in` resolves to a real commit, but CI never
+  passed `--strict`, so failures printed as warnings nobody read. Under enforcement, **15 of
+  50 refs were bad**: 6 carried the literal placeholder `"local"` (F-045, F-047, F-049, F-050,
+  F-051, F-052) and 9 across 8 features (F-006, F-007, F-011…F-016, F-039) pointed at branch
+  SHAs lost to squash merges. All 15 are repaired to the commit on `main` that added both the
+  feature's ledger entry and its `scripts/validations/F_0NN.py` proof — two independent
+  derivations that agree on one commit per feature — and `quality-gates.yml` now runs
+  `--strict`. Safe to enforce because `implemented_in` is optional: omitting it is the
+  supported way to say "not landed", and only a *present but unresolvable* ref fails.
+  `_check_git_refs` additionally downgrades itself to warnings on a **shallow clone**, where
+  30 of 50 refs "fail" purely because the commits were never fetched — reporting that as
+  provenance rot trains readers to ignore the finding, which is how it got ignored in the
+  first place.
+  Alongside it, the OpenSpec front-end had drifted the same way: four changes whose capability
+  had shipped still read `Status: proposed`, and `openspec/README.md`'s "Current changes"
+  index listed **2 of 9**. `add-agent-trajectory-evaluation` (F-051),
+  `eval-proxy-and-estimator` (F-047), `merge-gate-health-integrity` (F-049) and
+  `skills-ci-coverage-floor` (F-050) move to `openspec/changes/archive/` (first use) stamped
+  with their F-ID and landing SHA, with every inbound reference repointed and the relative-link
+  depth inside each package corrected. The index now lists all five in-flight changes plus an
+  archive table, and a new blocking *OpenSpec change index* guard in `docs.yml` derives both
+  lists from the directory tree and fails when an in-flight change is unlisted **or** an
+  archived one is still linked as in-flight — either direction alone still lies. ADR 0023 and
+  ADR 0031 flip to Accepted (both landed), and 0031 gains its missing `docs/decisions/README.md`
+  index row. `docs/openspec-spike.md` records that its own evaluate-and-decide trigger has
+  fired with the keep-or-delete ADR outstanding — deliberately not decided here — and what the
+  interval actually showed: the layer's failure mode is silent staleness, which is the
+  "second, weaker registry" risk that document predicted, now observed and mechanically checked.
 - **SessionStart bootstrap missed one package.** `.claude/hooks/session-start.sh` installed the
   root package and four siblings but not `claude-foundation`, so `make check-all` died in that
   target with `No module named 'foundation_tools'` and, before that, `Library stubs not
@@ -349,7 +378,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `p >= base_rate` and `p <= 1` hold exactly in floating point.
 - **Peer review of the "swap Wilson → PPI++" estimator critique + OpenSpec coordination spike
   (planning only).** Added a committed objective peer review
-  (`openspec/changes/eval-proxy-and-estimator/review.md`) that verifies the critique's
+  (`openspec/changes/archive/eval-proxy-and-estimator/review.md`) that verifies the critique's
   arithmetic and citations but corrects it on target, magnitude, and mechanism: the merge
   gate's real activation bar is a four-gate Wilson stack needing ~380 near-perfect audits per
   domain (not one `N≥20` gate), and PPI++ on the calibrated-confidence proxy buys only

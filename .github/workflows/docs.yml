@@ -128,6 +128,51 @@ jobs:
               sys.exit(1)
           print("doc-structure guards OK; components checked:", derived + NESTED_REQUIRED)
           PY
+      # Blocking. openspec/README.md's "Current changes" section is the only index of what is
+      # in flight, and it is maintained by hand — so it rotted to 2 of 9 entries while four
+      # already-landed changes still sat in changes/ marked "proposed". Both directions are
+      # checked, because either one alone lies: an unlisted change is invisible, and a listed
+      # archived change reads as still open. The change list is DERIVED from the directory
+      # tree, never an allowlist. Inline (not scripts/*.py) for the same reason as the guard
+      # above: it stays out of the scripts/ coverage floor (F-031) and the protected tests/**
+      # guard.
+      - name: OpenSpec change index is complete and current
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib, sys
+
+          root = pathlib.Path("openspec/changes")
+          if not root.is_dir():
+              print("openspec/changes/ absent (spike removed?) - nothing to check")
+              sys.exit(0)
+
+          readme = pathlib.Path("openspec/README.md").read_text(encoding="utf-8")
+          current = sorted(d.name for d in root.iterdir() if d.is_dir() and d.name != "archive")
+          archived = sorted(d.name for d in (root / "archive").iterdir() if d.is_dir()) \
+              if (root / "archive").is_dir() else []
+
+          fail = []
+          for name in current:
+              if f"changes/{name}/" not in readme:
+                  fail.append(f"in-flight change not listed in openspec/README.md: changes/{name}/")
+          for name in archived:
+              if f"changes/archive/{name}/" not in readme:
+                  fail.append(f"archived change not listed: changes/archive/{name}/")
+              # A bare `changes/<name>/` link (no `archive/`) points at a moved directory.
+              # Strip the legitimate archive links first, then any survivor is a stale one.
+              if f"changes/{name}/" in readme.replace(f"changes/archive/{name}/", ""):
+                  fail.append(
+                      f"archived change still linked as in-flight: changes/{name}/ "
+                      f"(it now lives at changes/archive/{name}/)"
+                  )
+
+          if fail:
+              print("OPENSPEC INDEX FAILURES:")
+              for x in fail: print("  -", x)
+              sys.exit(1)
+          print(f"openspec index OK; {len(current)} in flight, {len(archived)} archived")
+          PY
 
   links:
     name: relative-link check (advisory)

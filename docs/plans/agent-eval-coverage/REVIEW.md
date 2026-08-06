@@ -180,7 +180,7 @@ The enforced entry points are `./scripts/quality-gate.sh [lint|typecheck|test|co
 ### B12 · Review-artifact ordering is backwards versus house style
 
 In this repository's own changes, `review.md` is the peer review that **motivates** the proposal —
-`openspec/changes/eval-proxy-and-estimator/proposal.md:4` reads "Motivated by: `./review.md`".
+`openspec/changes/archive/eval-proxy-and-estimator/proposal.md:4` reads "Motivated by: `./review.md`".
 Document 2 §7 reads it last, as a closing checklist.
 
 ### B13 · Change 5 is a scope expansion, not merely a change
@@ -228,5 +228,5 @@ of new subsystems must ship near-complete unit tests or the coverage gate goes r
   plausibly a charter §3 scope question (SWE-bench-style adapters execute repository tests), and
   should get its own decision before any proposal.
 - **`behavioral-regression` config validators lack an `isfinite` guard** — already recorded in
-  `openspec/changes/merge-gate-health-integrity/tasks.md`; unrelated to this review, noted so it is
+  `openspec/changes/archive/merge-gate-health-integrity/tasks.md`; unrelated to this review, noted so it is
   not lost.

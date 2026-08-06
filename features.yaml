@@ -99,7 +99,7 @@ features:
       - "Newly failing offline test blocks; class-based nodeids resolved"
       - "Lint identity is line-keyed; report conforms to JSON schema"
     validation_command: "python scripts/validations/F_006.py"
-    implemented_in: "5911c2221b5e03cbc05579f529b28788ebf5f476"
+    implemented_in: "86b21004e9e2990b3f5c98d69247d2a3f1c27009"
     depends_on: ["F-001"]
     notes: "Offline deterministic suite only; never runs live-judge/Langfuse evals."
 
@@ -116,7 +116,7 @@ features:
       - "Guard blocks protected changes without approval label/flag"
       - "Guard allows protected changes when approved, and implementation-only changes always"
     validation_command: "python scripts/validations/F_007.py"
-    implemented_in: "5911c2221b5e03cbc05579f529b28788ebf5f476"
+    implemented_in: "86b21004e9e2990b3f5c98d69247d2a3f1c27009"
     depends_on: ["F-001"]
     notes: "Defense in depth: CODEOWNERS review + label-checked CI guard. Single source of truth in scripts/eval_protected_paths.py."
 
@@ -188,7 +188,7 @@ features:
       - "NEGATIVE: a forbidden flow_corpus->eval_harness import trips drift_check.py (exit 1), proving the airgap fires"
       - "architecture.mmd regenerated and fresh"
     validation_command: "python scripts/validations/F_011.py"
-    implemented_in: "8a73716de0d22a8757cf1918c22b9c4d964663c1"
+    implemented_in: "2cbdbc674d5b533957ca9259ed58c26bd2d8d49b"
     depends_on: ["F-009"]
     notes: "Airgap-bound critical path (Phase 0). flow-protocol carries pydantic only; flow_corpus depends on flow_protocol + agent_core, never eval_harness."
 
@@ -205,7 +205,7 @@ features:
       - "NEGATIVE: a forced protocol-version mismatch raises PinMismatch (build fails)"
       - "NEGATIVE: a forced harness-version mismatch raises PinMismatch (build fails)"
     validation_command: "python scripts/validations/F_012.py"
-    implemented_in: "8a73716de0d22a8757cf1918c22b9c4d964663c1"
+    implemented_in: "2cbdbc674d5b533957ca9259ed58c26bd2d8d49b"
     depends_on: ["F-011"]
     notes: "Phase 0. The negative cases are the point: a wrong pin must fail the build, else the skew tripwire is dead."
 
@@ -224,7 +224,7 @@ features:
       - "canary separates gold from no-op by >= min_canary_margin (Wilson bounds, not AUROC)"
       - "oracle κ-gate passes an agreeing oracle and blocks a disagreeing one (co-determinate, power-aware)"
     validation_command: "python scripts/validations/F_013.py"
-    implemented_in: "27004a9e869953b385b24bd0f1a6c3d0ec1879d9"
+    implemented_in: "2cbdbc674d5b533957ca9259ed58c26bd2d8d49b"
     depends_on: ["F-011", "F-012"]
     notes: "Phase 1. MockPolicy seam keeps flows deterministic/offline; reliability below power_min_sample is directional-only and cannot gate. Agent-core bumped to 1.3.0 for the OutcomeRecord.agent_version keying field (additive, backwards-compatible)."
 
@@ -242,7 +242,7 @@ features:
       - "a sub-power slice is directional-only and cannot gate"
       - "confidence cross-check returns a signed, bootstrap-significance-tested result vs a flow-type indicator"
     validation_command: "python scripts/validations/F_014.py"
-    implemented_in: "4b1398bb69de9560310816212551f9dcfac4e971"
+    implemented_in: "2cbdbc674d5b533957ca9259ed58c26bd2d8d49b"
     depends_on: ["F-013"]
     notes: "Phase 2. Single split authority (HoldoutManager owns the golden._bucket partition; the model builder does not re-split). DeLong deferred to post-MVP in favour of the bootstrap."
 
@@ -259,7 +259,7 @@ features:
       - "task perturbation does NOT re-key the agent; an impl/config change DOES re-key"
       - "holdout rotation produces >= k folds and a Brier-reliability stability spread gated by threshold"
     validation_command: "python scripts/validations/F_015.py"
-    implemented_in: "4b1398bb69de9560310816212551f9dcfac4e971"
+    implemented_in: "2cbdbc674d5b533957ca9259ed58c26bd2d8d49b"
     depends_on: ["F-013", "F-014"]
     notes: "Phase 4 rotation slice — completes the MVP (Phases 0-2 + Phase 4 rotation). Phases 3/5/6 (metamorphic oracle, taxonomy, trust decay) remain as follow-ups."
 
@@ -278,7 +278,7 @@ features:
       - "the gate fails safe to ESCALATE on any untrusted apparatus (canary not separated, judge not validated, or can't-tell); HOLDs a real regression; SHIPs only validated, separable, below-risk changes"
       - "all thresholds live on BRConfig (no hard-coded values in decision logic); 95% branch coverage; strict mypy"
     validation_command: "python scripts/validations/F_016.py"
-    implemented_in: "08b1b8bf48175e40fee50560c2828c913dab3f05"
+    implemented_in: "6bbbfa26d7f815bbd5d0f372490e71a43d9be02c"
     depends_on: ["F-005", "F-013"]
     notes: "New sibling package behavioral-regression depending on agent_core + flow_protocol + flow_corpus (acyclic; never imports eval_harness). The optional live AnthropicJudge lives in eval_harness.judges behind the [anthropic] extra; the sibling stays offline. See ADR 0006."
 
@@ -702,7 +702,7 @@ features:
       - "eval_protected_paths.PROTECTED_PATTERNS and is_protected() cover all 4 sibling tests/ directories; .github/CODEOWNERS mirrors the same 4 entries (F_039.py; locking examples added to tests/test_protected_paths.py)"
       - "The exact-equality contract itself: a dropped/renamed __all__ name fails CI as breaking, a new name must be explicitly frozen too, duplicates and unresolvable names are rejected (tests/test_public_surface.py, exercised directly by the offline suite in every package's own CI)"
     validation_command: "python scripts/validations/F_039.py"
-    implemented_in: "85fd14eb386bc462e25524489401c4e6a7ee1c58"
+    implemented_in: "cffe0c8b13a4c53c7db4e897f97b12192334ffad"
     depends_on: []
     notes: "The companion plugin-registry-surface guard (config-selectable datasets/judges/scorers/sinks/targets + aliases -- the same compat-guard family, covering the surface __all__ cannot see) ships in a separate PR and is intentionally not folded into this entry to avoid a cross-PR dependency; it may become its own feature once merged. numpy: not used anywhere in this change, consistent with the rest of the repo."
 
@@ -783,7 +783,7 @@ features:
       - "dataset-lint skill passes validate_skill.py structural and behavioral tiers"
       - "exit_nonzero and idempotent assertions are validated by tests/test_validate_skill.py"
     validation_command: "python scripts/validations/F_045.py"
-    implemented_in: "local"
+    implemented_in: "9721897e7621b92380cfa3d7c7075aa04794ff03"
     depends_on: ["F-003"]
     notes: "Provides portable dataset linting and enhanced validation capabilities. ASSERTION_GRADERS registry refactor is documented in docs/decisions/0024-assertion-graders-registry.md."
   - id: "F-046"
@@ -824,9 +824,9 @@ features:
       - "rendering is serialisation: format_propensity uses significant figures so every valid propensity parses back valid (fixed-point collapsed 1e-7 to 0.000000, producing a dispatch command guaranteed to fail); property-tested over the contract's whole domain, and no module renders a propensity with a local .6f (F_047.py, agent-core/tests/test_audit_sampler.py)"
       - "the gate-boundary proof is syntax-aware, not substring-based: decide() must REACH a Wilson bound through the call graph (it calls _wilson_bound, so the old substring matched elsewhere and proved nothing), and the import ban covers every form including 'import agent_core.ppi as p' (F_047.py)"
     validation_command: "python scripts/validations/F_047.py"
-    implemented_in: "local"
+    implemented_in: "5404912bdb45281cf50da8a61ebbc7e2243d122f"
     depends_on: ["F-043", "F-034"]
-    notes: "Follow-up to F-043 (calibration report) and F-034 (audit queue). Peer review, design and task breakdown in openspec/changes/eval-proxy-and-estimator/; decision recorded in ADR 0026. Six defects found by adversarial review AFTER the code was fully covered are pinned by regression tests here -- an inverted interval, a variance-reduction figure computed from clipped bounds (3% reported as 94%), unit-interval-only binning, a first-audit-row precedence bug, small-n coverage below nominal, and a residual-dof collapse at n=2."
+    notes: "Follow-up to F-043 (calibration report) and F-034 (audit queue). Peer review, design and task breakdown in openspec/changes/archive/eval-proxy-and-estimator/; decision recorded in ADR 0026. Six defects found by adversarial review AFTER the code was fully covered are pinned by regression tests here -- an inverted interval, a variance-reduction figure computed from clipped bounds (3% reported as 94%), unit-interval-only binning, a first-audit-row precedence bug, small-n coverage below nominal, and a residual-dof collapse at n=2."
 
   - id: "F-048"
     epic: "Quality Gate"
@@ -871,9 +871,9 @@ features:
       - "the fold-collapse fallback (all of a domain's records hashing to one SHA256 fold) is proven safe at N=8, not only the N=1 case where min_calibration_n masks the effect regardless of the fallback (agent-core/tests/test_outcome_store.py)"
       - "agent-core stays at its 95 coverage floor with merge_gate, merge_gate_ci and outcome_store at 100% branch; ruff, ruff format and strict mypy clean; every touched file under the 500-line budget"
     validation_command: "python scripts/validations/F_049.py"
-    implemented_in: "local"
+    implemented_in: "8f7affd6c0af2a2eb47374632effc49ee161d835"
     depends_on: ["F-010", "F-032"]
-    notes: "Peer review, design and task breakdown in openspec/changes/merge-gate-health-integrity/; decision recorded in ADR 0029, with a correction section added to ADR 0005 whose points 3 and 5 this repairs. Re-verification of docs/gap-analysis-merge-gate-2026-07-24.md found its G1/G2/G3 confirmed but G3's stated mechanism wrong (wilson_interval(0,0) is unreachable behind an empty-bin continue; the fail-open is the max-reduction identity) and its G5 substantially refuted (both modules gained logging since). Three defects the gap analysis never named are closed here: the wrong measurement axis, the both-fold sample count, and the missing min_auroc lower guard. Deferred to a follow-on: wiring the workflow to the new flags (decision-changing the moment a repo variable is set) and the risk-appetite decision on max_bin_ci_width, which under honest measurement may keep the gate closed until every eligible bin holds ~50+ high-accuracy audits."
+    notes: "Peer review, design and task breakdown in openspec/changes/archive/merge-gate-health-integrity/; decision recorded in ADR 0029, with a correction section added to ADR 0005 whose points 3 and 5 this repairs. Re-verification of docs/gap-analysis-merge-gate-2026-07-24.md found its G1/G2/G3 confirmed but G3's stated mechanism wrong (wilson_interval(0,0) is unreachable behind an empty-bin continue; the fail-open is the max-reduction identity) and its G5 substantially refuted (both modules gained logging since). Three defects the gap analysis never named are closed here: the wrong measurement axis, the both-fold sample count, and the missing min_auroc lower guard. Deferred to a follow-on: wiring the workflow to the new flags (decision-changing the moment a repo variable is set) and the risk-appetite decision on max_bin_ci_width, which under honest measurement may keep the gate closed until every eligible bin holds ~50+ high-accuracy audits."
 
   - id: "F-040"
     epic: "Quality Gate"
@@ -891,7 +891,7 @@ features:
     validation_command: "python scripts/validations/F_040.py"
     implemented_in: "0f19ecaa81639f8afbf66fcad54869186b02f5c4"
     depends_on: ["F-032"]
-    notes: "Extends the existing store_sync package (F-032 / ADR 0018): soak_progress lives beside store_stats in store.py, the CLI flag beside the stats subparser. `target` is a caller-supplied counter, not a claim about the real activation bar (~380 near-perfect audited records per domain, per NEXT_STEPS.md's corrected soak framing and openspec/changes/eval-proxy-and-estimator/review.md) -- N>=20 is a publish threshold only. Soak enablement itself stays time-gated (real bar reached + >=1 human verdict + weekly audits per ADR 0005) — this feature only makes progress observable. F-036 (real-transcript corpus bridge) remains deferred."
+    notes: "Extends the existing store_sync package (F-032 / ADR 0018): soak_progress lives beside store_stats in store.py, the CLI flag beside the stats subparser. `target` is a caller-supplied counter, not a claim about the real activation bar (~380 near-perfect audited records per domain, per NEXT_STEPS.md's corrected soak framing and openspec/changes/archive/eval-proxy-and-estimator/review.md) -- N>=20 is a publish threshold only. Soak enablement itself stays time-gated (real bar reached + >=1 human verdict + weekly audits per ADR 0005) — this feature only makes progress observable. F-036 (real-transcript corpus bridge) remains deferred."
 
   - id: "F-050"
     epic: "Skills Framework"
@@ -909,9 +909,9 @@ features:
       - "each EXEMPT entry is re-checked against evals/evals.json at guard runtime: a stale exemption (the skill has grown real evals) fails the job rather than continuing to pass silently (F_050.py; mutation: adding evals/evals.json to an EXEMPT skill fails the guard)"
       - "F_050.py itself is coverage-measured, not merely smoke-tested by validate.py --tier fast: it is imported and exercised by tests/test_validation_scripts.py and counted in quality-gates.yml's --cov= list, so it is part of the offline suite eval-harness-ci.yml runs on .github/-only edits (the class of edit PR #64 showed can break CI wiring silently)"
     validation_command: "python scripts/validations/F_050.py"
-    implemented_in: "local"
+    implemented_in: "c5e7227c6a83e2b403c111b08f699714d7d180b7"
     depends_on: ["F-023", "F-037", "F-045"]
-    notes: "Peer-reviewed OpenSpec package in openspec/changes/skills-ci-coverage-floor/; decision recorded in ADR 0030, which also reconciles scope with ADR 0021 (CI gate delegation, status: Proposed) -- the all-skills job is a repo-level guard over the skill *set*, not a per-skill quality gate, so it sits outside that delegation chain by design and its own commands are asserted via plain substring checks rather than the delegation-aware _common.ci_enforces."
+    notes: "Peer-reviewed OpenSpec package in openspec/changes/archive/skills-ci-coverage-floor/; decision recorded in ADR 0030, which also reconciles scope with ADR 0021 (CI gate delegation, status: Proposed) -- the all-skills job is a repo-level guard over the skill *set*, not a per-skill quality gate, so it sits outside that delegation chain by design and its own commands are asserted via plain substring checks rather than the delegation-aware _common.ci_enforces."
   - id: "F-051"
     epic: "Eval Harness"
     name: "Agent trajectory evaluation (normalized tool-call trace + seven trajectory scorers)"
@@ -935,9 +935,9 @@ features:
       - "unscoreable input yields passed=None, never passed=False: arguments nested past max_depth, and a reference call whose arguments are not a mapping, both report not-applicable rather than failing the agent (F_051.py)"
       - "trajectory_recovery is linear in trajectory length and emits both tool_errors and unrecovered_tools on the pass AND fail branches (F_051.py; mutation: the pre-fix per-error tail slice makes a 5000-error trajectory quadratic)"
     validation_command: "python scripts/validations/F_051.py"
-    implemented_in: "local"
+    implemented_in: "a5e1a7847f4cb64dbe46135176923e1d0e500fc2"
     depends_on: ["F-020"]
-    notes: "Peer-reviewed OpenSpec package in openspec/changes/add-agent-trajectory-evaluation/; decision recorded in ADR 0031. First of five ordered changes from docs/plans/agent-eval-coverage/PLAN.md; the remaining four (repeat reliability, stateful outcome, judge bias calibration, production flywheel) ship as reviewed proposals only. The external plan this supersedes would have failed CI on first push: it froze and reordered TargetOutput, tasked seven scorers into an already-near-limit file, invented a gate config block that strict from_dict rejects, and never mentioned the F-039 surface baselines."
+    notes: "Peer-reviewed OpenSpec package in openspec/changes/archive/add-agent-trajectory-evaluation/; decision recorded in ADR 0031. First of five ordered changes from docs/plans/agent-eval-coverage/PLAN.md; the remaining four (repeat reliability, stateful outcome, judge bias calibration, production flywheel) ship as reviewed proposals only. The external plan this supersedes would have failed CI on first push: it froze and reordered TargetOutput, tasked seven scorers into an already-near-limit file, invented a gate config block that strict from_dict rejects, and never mentioned the F-039 surface baselines."
   - id: "F-052"
     epic: "Quality Gate"
     name: "Protected-path guard reachability (PROTECTED_PATTERNS vs the CI path filter)"
@@ -954,6 +954,6 @@ features:
       - "filters declared under push/schedule triggers are not counted as pull_request coverage (F_052.py)"
       - "--json output is byte-stable for a given input, so a report is diffable and committable (F_052.py)"
     validation_command: "python scripts/validations/F_052.py"
-    implemented_in: "local"
+    implemented_in: "ab644fb26338163e14098e3aa4e13a7ffecd2349"
     depends_on: ["F-007"]
     notes: "Found by a 22-agent documentation-deduction pass and confirmed by independent measurement. Complements F-007 (the guard itself): F-007 decides WHAT is protected, F-052 asserts the CI can SEE it. The push-trigger filter is deliberately left narrower -- the label gate operates on pull_request, which is what this checks."

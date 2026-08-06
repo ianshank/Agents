@@ -185,7 +185,7 @@ is a `merge_gate_ci` flag, validated at construction and reported the same way �
 -auto-merge` is deliberately absent, since never auto-merging protected paths is a design
 invariant, not an operator knob (ADR 0029). See `docs/gap-analysis-merge-gate-2026-07-24.md`
 for the reproductions behind these guards; its G1/G2/G3 findings are closed by F-049/ADR 0029
-(`openspec/changes/merge-gate-health-integrity/`), and the doc's own §3 records which findings
+(`openspec/changes/archive/merge-gate-health-integrity/`), and the doc's own §3 records which findings
 remain open.
 
 ```mermaid
