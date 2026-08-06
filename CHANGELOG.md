@@ -58,6 +58,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built-in target could emit one at all, making F-051 unreachable from config.
 
 ### Fixed
+- **Eval-integrity guard reachability (F-052).** The protected-path guard is only as good as
+  the set of PRs it runs on, and that set is decided by a *second* list —
+  `quality-gates.yml`'s `on.pull_request.paths` — which nothing asserted agreed with
+  `scripts/eval_protected_paths.py::PROTECTED_PATTERNS`. They had drifted. Measured with real
+  glob semantics, **9 of 15 protected patterns could not trigger the guard at all**:
+  `features.schema.json`, `config/**`, all five sibling `*/tests/**` roots, `.github/**`
+  beyond `workflows/` and `actions/` (so `CODEOWNERS`, which is what makes the label gate
+  meaningful, sat outside it), and `architecture.yaml` — which is protected *precisely*
+  because editing its declared component edges could quietly dissolve the
+  `eval_harness ⇎ flow_corpus` airgap. The filter is widened to cover all 15, but the fix is
+  the validator, not the edit: new `scripts/check_guard_reachability.py` **imports**
+  `PROTECTED_PATTERNS` and reuses that module's `_glob_to_regex` — a second copy of either
+  would recreate exactly the divergence it exists to prevent — parses the workflow that
+  invokes the guard, and fails CI when any pattern has no covering filter. Same rationale as
+  F-050 above, one layer down: a gate that cannot fire is protection in name only. Wired into
+  `quality-gates.yml` and `check_charter_invariants._EXPECTED_GATE_SCRIPTS`, with
+  `--json`/`--verbose` matching the sibling gates. Four of the tests are **mutation** tests
+  (delete a filter, assert the check fails) — a guard that silently stops detecting drift is
+  worse than none, because the green tick is read as evidence.
+- **NaN and infinity silently deleted statistical-power floors
+  (`behavioral_regression`, `flow_corpus`).** Every comparison against NaN is False, so a
+  non-finite threshold passed *all* of the range guards untouched: `nan <= 0` is False,
+  `nan < bound` is False, and `lo <= nan <= hi` is False. Reproduced: with
+  `power_min_sample=nan`, `is_directional_only(n=30, …)` returned `False`, so a 30-pair
+  sample stopped being directional-only and became **gate-eligible** — turning an honest
+  `ESCALATE` into a real ship/no-ship decision on data far below the declared power floor.
+  The κ-gate, the reliability report, the confidence cross-check and the detector all route
+  through that one call. Infinity is the mirror image: it clears every `> 0` check and
+  produces a maximally-wide interval. `math.isfinite` is now checked **inside** the three
+  shared validators (`_require_positive` / `_require_at_least` / `_require_in_range`), so
+  every field that delegates to them is covered at once rather than by a check repeated at
+  each call site; error messages now name the offending value. `flow_corpus.config` used nine
+  inline `if` checks instead, so the same four helpers were extracted there first — a net
+  *reduction* in duplication, not a second style. The two copies cannot be shared: the
+  packages may both depend on `agent_core` but not on each other, and `agent_core` is
+  deliberately dependency-free. `flow_corpus`'s previously-unguarded `max_brier_reliability`,
+  `min_canary_margin` and `rotation_stability_threshold` gain the finite check only, since
+  inventing bounds would reject configs that work today; `wilson_z` additionally gains the
+  positivity check every other home for that field already has (`behavioral_regression.config`,
+  `agent_core.config`, `eval_harness.config.models`' `gt=0`). Backwards compatible — only
+  input that was always invalid is rejected. Both packages' non-finite tests derive their
+  field list from the dataclass rather than listing it, so a threshold added later is covered
+  automatically; the CLI `--set power_min_sample=nan` path is asserted end to end, since
+  `cli._coerce` is the reachable entry point that produces a non-finite float.
+- **SessionStart bootstrap missed one package.** `.claude/hooks/session-start.sh` installed the
+  root package and four siblings but not `claude-foundation`, so `make check-all` died in that
+  target with `No module named 'foundation_tools'` and, before that, `Library stubs not
+  installed for "yaml"` — its declared `types-PyYAML` never got installed either. Every package
+  the sweep recurses into is now installed, `claude-foundation` with its `[dev]` extra. Also
+  fixes a shell short-circuit: `&& [ -n "$PINNED" ] && …` made the whole chain report failure
+  when no pin was found, printing the "bootstrap incomplete (offline?)" warning after a
+  perfectly successful install.
 - **Skills CI coverage floor (F-050, ADR 0030).** `skills-ci.yml`'s `paths:` filter listed 7
   of 8 skills with a dedicated job (`dataset-lint` was omitted), and no workflow at all
   triggered on the 3 skills with no dedicated job. A PR touching only one of those 4 skills

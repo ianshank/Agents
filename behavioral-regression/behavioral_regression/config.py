@@ -14,6 +14,7 @@ oracle-κ gate, Brier-reliability gate, and canary-separation primitives.
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -32,16 +33,40 @@ class ConfigError(ValueError):
 DEFAULT_SYCOPHANCY_LABEL_THRESHOLD = 0.5
 
 
+def _require_finite(name: str, value: float) -> None:
+    """Reject NaN and infinity before any comparison is attempted.
+
+    Every comparison against NaN is False, so a NaN slips through *all* of the range
+    guards below untouched: ``nan <= 0`` is False, ``nan < bound`` is False, and
+    ``lo <= nan <= hi`` is False. It then silently deletes whatever floor it was
+    configured as. Reproduced before this guard existed: ``power_min_sample=nan`` made
+    ``is_directional_only(n=30, ...)`` return False, so a 30-pair sample stopped being
+    directional-only and became gate-eligible — turning an honest ESCALATE into a real
+    decision on data far below the declared statistical-power floor.
+
+    Infinity is the mirror image: ``inf`` passes every ``> 0`` check and produces a
+    maximally-wide interval. Same guard, same reason — see
+    ``agent_core.report_types``, which documents this hazard for the calibration report.
+
+    Checked here, inside the shared validators, so every field that delegates to them is
+    covered at once rather than by a check repeated at each call site.
+    """
+    if not math.isfinite(value):
+        raise ConfigError(f"{name} must be a finite number (got {value!r})")
+
+
 def _require_positive(name: str, value: float) -> None:
     """Reject ``value`` unless strictly greater than zero."""
+    _require_finite(name, value)
     if value <= 0:
-        raise ConfigError(f"{name} must be > 0")
+        raise ConfigError(f"{name} must be > 0 (got {value!r})")
 
 
 def _require_at_least(name: str, value: float, bound: int) -> None:
     """Reject ``value`` unless greater than or equal to ``bound``."""
+    _require_finite(name, value)
     if value < bound:
-        raise ConfigError(f"{name} must be >= {bound}")
+        raise ConfigError(f"{name} must be >= {bound} (got {value!r})")
 
 
 def _require_in_range(
@@ -58,12 +83,13 @@ def _require_in_range(
     The rendered message uses ``[``/``]`` for inclusive and ``(``/``)`` for exclusive
     endpoints so error text matches interval notation exactly.
     """
+    _require_finite(name, value)
     lo_ok = lo <= value if lo_inclusive else lo < value
     hi_ok = value <= hi if hi_inclusive else value < hi
     if not (lo_ok and hi_ok):
         left = "[" if lo_inclusive else "("
         right = "]" if hi_inclusive else ")"
-        raise ConfigError(f"{name} must be in {left}{lo}, {hi}{right}")
+        raise ConfigError(f"{name} must be in {left}{lo}, {hi}{right} (got {value!r})")
 
 
 @dataclass(frozen=True)
