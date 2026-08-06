@@ -25,9 +25,13 @@
   exception into a failing verdict. **Still open:** the four remaining OpenSpec changes below.
 
 - [ ] **Repeated-run reliability (`openspec/changes/add-repeat-reliability-metrics/`)** — next
-  in the delivery order. Note the trap the proposal records: `_make_item_rng` seeds per item
-  only, so k attempts of a deterministic target are identical and report a fabricated
-  `pass^k = 1.0` unless the attempt index is folded into the seed.
+  in the delivery order. The proposal's original "fold the attempt index into the seed" trap was
+  **retracted** on 2026-08-06 after verification: `target.run(item)` never receives the RNG
+  (it goes to scorers via `RunContext`), so re-seeding cannot change a target's output, and with
+  `ModelTarget`'s default `temperature=0.0` a `pass^k` of 1.0 is *correct* rather than fabricated.
+  The real requirements are k genuinely independent `target.run` calls, **no** harness-injected
+  variance (that would measure the harness, not the agent), and a diagnostic whenever a
+  deterministic configuration makes `pass^k` structurally uninformative.
 - [ ] **Stateful outcome evaluation (`openspec/changes/add-stateful-outcome-evaluation/`)** —
   depends on attempt isolation from the above.
 - [ ] **Judge bias calibration (`openspec/changes/extend-judge-calibration/`)** — the only one

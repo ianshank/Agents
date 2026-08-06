@@ -102,6 +102,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   field list from the dataclass rather than listing it, so a threshold added later is covered
   automatically; the CLI `--set power_min_sample=nan` path is asserted end to end, since
   `cli._coerce` is the reachable entry point that produces a non-finite float.
+- **Retracted a design error in the merged `add-repeat-reliability-metrics` proposal.** That
+  package prescribed folding the attempt index into the per-item seed —
+  `(base_seed, item_index, attempt_index)` — calling it "the single most important line in the
+  change", to stop a deterministic target reporting a "fabricated `pass^k = 1.0`". Verified
+  against the tree, it is wrong on both counts. `Target.run(self, item)`
+  (`targets/__init__.py:22`) receives **only the item**; `engine.py:152` calls
+  `self.target.run(item)`; the per-item RNG goes into `RunContext` (`engine.py:240-241`) and is
+  handed to **scorers**, never to the target — so re-seeding cannot change target behaviour at
+  all. And `ModelTarget` defaults `temperature=0.0` (`targets/model.py:69`), so for a genuinely
+  deterministic target k identical results and `pass^k = 1.0` are the *correct* answer; the agent
+  is perfectly reliable under that configuration. Shipped as written, the change would have
+  injected variance into the harness and reported it as agent unreliability — inverting the defect
+  it was meant to prevent, which is worse than the alleged bug. The requirement is rewritten to
+  what actually holds: k genuinely independent `target.run` invocations (no memoisation may
+  collapse them — none exists today), **no** harness-injected variance (all variation must
+  originate in the target's own sampling), and a diagnostic whenever the configuration makes
+  `pass^k` structurally uninformative — *"`pass^k` is 1.0 because sampling is deterministic, not
+  because the agent is reliable"* — the same vacuous-pass lesson ADR 0029 records. Corrected in
+  the proposal, design, spec, tasks and review, plus the two derived statements in
+  `docs/plans/agent-eval-coverage/REVIEW.md` §B14 and `NEXT_STEPS.md`. Root cause, recorded in
+  the package's review: the finding was asserted from a plausible reading of `engine.py:41`
+  without tracing where the returned RNG is consumed — one `grep` for `target.run` would have
+  refuted it.
 - **The ledger's provenance check was decorative, and the OpenSpec index had rotted.**
   `validate.py` verifies that every `implemented_in` resolves to a real commit, but CI never
   passed `--strict`, so failures printed as warnings nobody read. Under enforcement, **15 of

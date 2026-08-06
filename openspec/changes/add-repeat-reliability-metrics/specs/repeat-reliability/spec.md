@@ -25,17 +25,43 @@ configuration model rather than at any runner call site.
 - THEN each item runs exactly once
 - AND the emitted result is byte-identical to the pre-change output
 
-### Requirement: Attempts are independently seeded
+### Requirement: Attempts are real, independent invocations the harness does not perturb
 
-The system SHALL derive each attempt's random stream from the run seed, the item index **and** the
-attempt index, so that repeated attempts against a deterministic target are not identical by
-construction.
+The system SHALL execute each attempt as a separate `target.run` invocation through the full
+scorer lifecycle, and SHALL NOT introduce any variation of its own between attempts. All observed
+variation must originate in the target's own sampling; harness-injected variance would measure the
+harness rather than the agent.
 
-#### Scenario: A deterministic target does not fabricate perfect reliability
+> Supersedes an earlier "Attempts are independently seeded" requirement, which was based on a
+> false premise. `Target.run(self, item)` receives only the item — the per-item RNG goes to
+> scorers via `RunContext`, never to the target — so re-seeding cannot change a target's output.
 
-- WHEN a seeded deterministic target runs with k of 5
-- THEN the five attempts do not all share one random stream
-- AND a target whose behaviour varies with its random stream produces varying attempt outcomes
+#### Scenario: k attempts are k invocations, not one result copied
+
+- WHEN an item runs with k of 5
+- THEN the target is invoked exactly five times for that item
+- AND no caching or memoisation between the engine and the target collapses the five into one
+
+#### Scenario: The harness does not manufacture variation
+
+- WHEN an item runs with k greater than 1
+- THEN every attempt passes byte-identical input to the target
+- AND no seed, prompt or sampling parameter differs across the attempts of one item
+
+### Requirement: A structurally uninformative pass^k is reported as such
+
+When the configuration makes repeated attempts identical by construction, the system SHALL emit a
+diagnostic alongside the metric. The value itself is correct — a deterministic agent *is*
+perfectly reliable under that configuration — but read without the diagnostic it is mistaken for
+evidence of robustness. This is the failure ADR 0029 records: a metric reporting a pass having
+measured nothing.
+
+#### Scenario: A deterministic configuration is flagged, not silently passed
+
+- WHEN a target configured with `temperature=0` (or a fixture/replay target) runs with k of 5
+- THEN `pass^k` is reported as 1.0
+- AND the run emits a diagnostic stating that the value follows from deterministic sampling, not
+  from measured agent reliability
 
 #### Scenario: Attempt expansion does not trip the duplicate-item guard
 

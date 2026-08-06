@@ -29,12 +29,35 @@ optional, so `SCHEMA_VERSION` is untouched.
 emits them per item. Without this, k attempts serialise as k indistinguishable list entries — the
 existing payload carries only `item.id` (`types.py:86-106`).
 
-## Seeding
+## Seeding — and why it is *not* the lever
 
-`_make_item_rng(base_seed, item_index)` becomes `_make_item_rng(base_seed, item_index,
-attempt_index)`. This is the single most important line in the change: seeding per item only makes
-every attempt of a deterministic target identical, which reports `pass^k = 1.0` for an agent that was
-never tested k times. A regression test asserts distinct attempt streams under `repetitions > 1`.
+> **Corrected 2026-08-06.** This section previously called
+> `_make_item_rng(base_seed, item_index, attempt_index)` "the single most important line in the
+> change". It is not a lever at all. `Target.run(self, item)` (`targets/__init__.py:22`) receives
+> only the item; `engine.py:152` calls `self.target.run(item)`; the per-item RNG is placed in
+> `RunContext` (`engine.py:240-241`) and reaches **scorers** only. Re-seeding cannot change what a
+> target returns. And `ModelTarget` defaults `temperature=0.0` (`targets/model.py:69`), so for a
+> deterministic target `pass^k = 1.0` is the true answer, not a fabricated one.
+
+`_make_item_rng` keeps its current `(base_seed, item_index)` signature. Attempts of one item share
+the item's scorer RNG, which is correct: scorer-side randomness is a property of the item under
+test, and varying it per attempt would make attempt outcomes differ for reasons that have nothing
+to do with the agent.
+
+What the design must guarantee instead:
+
+- **k real invocations.** Each attempt is a separate `target.run(item)` through the full scorer
+  lifecycle. No memoisation may sit between the engine and the target — none exists today, and
+  introducing one would silently collapse the k draws into one.
+- **No harness-injected variance.** The target receives byte-identical input on every attempt.
+  Perturbing prompts, parameters or seeds to *induce* variation would measure the harness and
+  report a `pass^k` strictly worse than the truth.
+- **A determinism diagnostic.** When the configuration makes attempts identical by construction
+  (`temperature=0`, a fixture/replay target, or a target declaring itself deterministic), the run
+  attaches a note to the metric: *"`pass^k` is 1.0 because sampling is deterministic, not because
+  the agent is reliable."* The number stays correct; the diagnostic stops it being read as
+  evidence of robustness. ADR 0029 records the cost of omitting exactly this — a metric that
+  reported a pass having measured nothing.
 
 ## Execution order
 
