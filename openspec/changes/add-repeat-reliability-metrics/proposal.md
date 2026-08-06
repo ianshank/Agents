@@ -75,6 +75,11 @@ The trap is not seeding — it is measuring the harness instead of the agent, in
 2. **The harness must not manufacture variation.** Perturbing seeds, prompts or parameters
    across attempts would measure harness noise, not agent reliability, and would make `pass^k`
    strictly worse than the truth. Variation must come only from the target's own sampling.
+   This cuts both ways for the *scorer* RNG: `RunContext.rng` is a mutable `random.Random`, so
+   simply reusing one per-item instance across attempts lets a scorer's draws advance between
+   them and change a verdict for identical target output. Each attempt therefore gets the item's
+   RNG **freshly reseeded**, so every k-to-k difference is attributable to the target
+   (`design.md` records why including scorer noise was rejected).
 3. **A structurally uninformative `pass^k` must say so.** When the configuration makes repeated
    attempts identical by construction — `temperature=0`, a fixture/replay target, any target
    documented as deterministic — the run emits a diagnostic alongside the metric:

@@ -1,7 +1,10 @@
 # 0031 - Agent evaluation may extend the core models and the engine loop, additively and under compatibility obligations
 
-**Status**: Accepted — landed as F-051 (`a5e1a7847f`); all four obligations are asserted by
-`scripts/validations/F_051.py`.
+**Status**: Accepted — landed as F-051 (`a5e1a7847f`). Of the six obligations below,
+`scripts/validations/F_051.py` asserts 1, 2 and 4 (append-only fields, no freezing of existing
+types, backward-compatible serialisation); the rest are enforced by the gates named under
+**Compliance** — 3 and 6 by `scripts/check_charter_invariants.py`, 5 by the surface-baseline
+tests. No obligation is unenforced.
 **Date**: 2026-08-05
 
 Related: [ADR 0005](0005-calibrated-merge-gate.md), [ADR 0011](0011-multi-model-comparison.md),

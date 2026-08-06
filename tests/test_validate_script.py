@@ -147,6 +147,65 @@ def test_is_shallow_clone_reports_this_repository() -> None:
     assert isinstance(vs._is_shallow_clone(), bool)
 
 
+# --- git itself missing (PR #124 review finding) -------------------------------------
+#
+# `subprocess.run(["git", ...])` raises FileNotFoundError when git is not on PATH — a
+# minimal container, a docs-only image, a sandbox. Reproduced with PATH cleared: BOTH
+# _is_shallow_clone() and _check_git_refs()'s own loop died with a bare traceback, taking
+# down the schema, DAG and validation-command checks, none of which need git at all.
+
+
+def _no_git(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make every git invocation fail the way an absent binary does."""
+
+    def boom(*_a: Any, **_k: Any) -> Any:
+        raise FileNotFoundError(2, "No such file or directory: 'git'")
+
+    monkeypatch.setattr(vs.subprocess, "run", boom)
+
+
+def test_run_git_returns_none_when_git_is_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    _no_git(monkeypatch)
+    assert vs._run_git(["rev-parse", "HEAD"]) is None
+
+
+def test_is_shallow_clone_does_not_crash_without_git(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ "Cannot tell" is not "shallow" — the missing-git case is handled explicitly."""
+    _no_git(monkeypatch)
+    assert vs._is_shallow_clone() is False
+
+
+def test_missing_git_is_an_error_under_strict(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Deliberately unlike the shallow-clone downgrade.
+
+    A shallow clone is a detectable, benign reason for the refs to be absent, so
+    downgrading is honest. No git at all means *nothing was verified*, and passing a
+    check that measured nothing is the exact failure this validator exists to prevent.
+    """
+    _no_git(monkeypatch)
+    with caplog.at_level(logging.ERROR):
+        errors = vs._check_git_refs([_feat("A", implemented_in="HEAD")], strict=True)
+    assert errors and "git is not available" in errors[0]
+
+
+def test_missing_git_is_only_a_warning_without_strict(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The other three checks still run; git absence must not fail an unstrict pass."""
+    _no_git(monkeypatch)
+    with caplog.at_level(logging.WARNING):
+        assert vs._check_git_refs([_feat("A", implemented_in="HEAD")], strict=False) == []
+    assert any("git is not available" in r.getMessage() for r in caplog.records)
+
+
+def test_missing_git_with_nothing_to_verify_is_silent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No feature declares provenance, so there is nothing git absence prevented."""
+    _no_git(monkeypatch)
+    assert vs._check_git_refs([_feat("A"), _feat("B")], strict=True) == []
+
+
 # ---------------------------------------------------------------------------
 # Ledger provenance integrity (the real features.yaml)
 # ---------------------------------------------------------------------------

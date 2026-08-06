@@ -48,6 +48,11 @@ from eval_protected_paths import PROTECTED_PATTERNS, _glob_to_regex  # noqa: E40
 
 logger = logging.getLogger(__name__)
 
+
+class GuardNotInvokedError(RuntimeError):
+    """The workflow under inspection never executes the protected-path guard."""
+
+
 #: The workflow that invokes the protected-path guard. Single-sourced here rather than at
 #: call sites so relocating the job is a one-line change.
 GUARD_WORKFLOW = Path(".github/workflows/quality-gates.yml")
@@ -56,9 +61,15 @@ GUARD_WORKFLOW = Path(".github/workflows/quality-gates.yml")
 #: another workflow, this is what finds it.
 GUARD_SCRIPT = "check_protected_changes.py"
 
-#: A representative file used to test whether a directory pattern is covered. Any path
-#: under the protected subtree works; this one is arbitrary but stable.
-_SAMPLE_LEAF = "sample/probe.py"
+#: Probe leaves used to test whether a directory pattern is covered. There is more than
+#: one on purpose, and they differ in *depth* as well as name.
+#:
+#: A single probe is not enough, and the failure is a false GREEN. With only
+#: ``sample/probe.py``, the narrowed filter ``config/sample/**`` matches the probe and so
+#: reports the protected pattern ``config/**`` as reachable — while a PR touching
+#: ``config/other.yaml`` runs no guard at all. Requiring a filter to match every probe,
+#: including a direct child and a differently-named subtree, rejects that filter.
+_SAMPLE_LEAVES = ("probe.py", "sample/probe.py", "other/deep/leaf.txt")
 
 
 @dataclass(frozen=True)
@@ -66,7 +77,7 @@ class Coverage:
     """Whether one protected pattern can trigger the guard, and via which filter."""
 
     pattern: str
-    sample: str
+    samples: tuple[str, ...]
     covering_filter: str | None
 
     @property
@@ -74,15 +85,27 @@ class Coverage:
         return self.covering_filter is not None
 
 
-def sample_path_for(pattern: str) -> str:
-    """A concrete path that the protected *pattern* would match.
+def sample_paths_for(pattern: str) -> tuple[str, ...]:
+    """Concrete paths that the protected *pattern* matches, spanning its breadth.
 
-    Directory patterns (``tests/**``) need a leaf to test against; exact file patterns
-    (``features.yaml``) are already concrete.
+    Exact file patterns (``features.yaml``) are already concrete and yield themselves.
+    Directory patterns (``tests/**``) yield several leaves at different depths, so a
+    filter is only credited with covering the pattern when it matches *all* of them.
+
+    This is a breadth probe, not a proof of language containment: it demonstrates that a
+    filter fails to cover the pattern, and treats matching every probe as covering it.
+    For the grammar actually in ``PROTECTED_PATTERNS`` — exact paths and ``prefix/**``
+    trees — that distinction does not arise, and the probes are chosen to make any
+    narrowed child filter fail.
     """
     if "*" not in pattern:
-        return pattern
-    return pattern.replace("**", _SAMPLE_LEAF).replace("//", "/")
+        return (pattern,)
+    return tuple(pattern.replace("**", leaf).replace("//", "/") for leaf in _SAMPLE_LEAVES)
+
+
+def sample_path_for(pattern: str) -> str:
+    """The first probe path for *pattern* — kept for single-path callers and reporting."""
+    return sample_paths_for(pattern)[0]
 
 
 def filter_matches(path: str, glob: str) -> bool:
@@ -124,27 +147,69 @@ def extract_path_filters(workflow_text: str) -> list[str]:
     return globs
 
 
+def script_is_invoked(workflow_text: str, script: str) -> bool:
+    """Whether a workflow actually *executes* *script*, rather than merely mentioning it.
+
+    A bare ``script in text`` search is satisfied by a comment — and this repo's
+    workflows comment on their own gate scripts extensively, so that search proves
+    nothing. Requires the name to appear on a non-comment line that is a ``run:`` step
+    or a continuation of one (multi-line ``run: >-`` blocks).
+
+    Shared with ``check_charter_invariants.check_quality_gates_wired``, which had the
+    same substring weakness, so one definition of "wired into CI" serves both.
+    """
+    run_indent: int | None = None  # indentation of the `run:` key we are inside, if any
+    for raw in workflow_text.splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        if run_indent is not None and indent <= run_indent:
+            run_indent = None  # dedented out of the run block
+        if re.search(r"(^|\s)run:", stripped):
+            run_indent = indent
+            if script in stripped:
+                return True
+            continue
+        if run_indent is not None and script in stripped:
+            return True  # a continuation line of a `run: >-` or `run: |` block
+    return False
+
+
+def guard_is_invoked(workflow_text: str) -> bool:
+    """Whether the workflow actually executes the protected-path guard."""
+    return script_is_invoked(workflow_text, GUARD_SCRIPT)
+
+
 def analyse(repo_root: Path, workflow: Path = GUARD_WORKFLOW) -> tuple[list[Coverage], list[str]]:
-    """Map every protected pattern to the filter that covers it, if any."""
+    """Map every protected pattern to the filter that covers it, if any.
+
+    Raises ``GuardNotInvokedError`` when the workflow does not run the guard at all.
+    That has to be fail-closed: with the guard job deleted but the ``paths:`` filter left
+    broad, every pattern still looks "reachable" and the check reports OK — a green tick
+    for a guard that no longer exists, which is the precise failure this script was
+    written to prevent.
+    """
     path = repo_root / workflow
     if not path.is_file():
-        raise FileNotFoundError(f"guard workflow not found: {path}")
+        raise FileNotFoundError(f"guard workflow not found: {path.as_posix()}")
     text = path.read_text(encoding="utf-8")
-    if GUARD_SCRIPT not in text:
-        logger.warning(
-            "%s does not invoke %s — the guard may have moved; this check is looking at the wrong workflow",
-            workflow,
-            GUARD_SCRIPT,
+    if not guard_is_invoked(text):
+        raise GuardNotInvokedError(
+            f"{workflow.as_posix()} does not run {GUARD_SCRIPT} — "
+            "the guard is not invoked, so no path filter can make it fire"
         )
     filters = extract_path_filters(text)
     logger.debug("found %d pull_request path filter(s): %s", len(filters), filters)
 
     coverages: list[Coverage] = []
     for pattern in PROTECTED_PATTERNS:
-        sample = sample_path_for(pattern)
-        covering = next((f for f in filters if filter_matches(sample, f)), None)
-        logger.debug("pattern %-32s sample %-40s -> %s", pattern, sample, covering or "UNREACHABLE")
-        coverages.append(Coverage(pattern=pattern, sample=sample, covering_filter=covering))
+        samples = sample_paths_for(pattern)
+        # Every probe must match: a filter covering only part of the protected subtree
+        # leaves the rest unguarded, which is indistinguishable from no filter at all.
+        covering = next((f for f in filters if all(filter_matches(s, f) for s in samples)), None)
+        logger.debug("pattern %-32s samples %-52s -> %s", pattern, samples, covering or "UNREACHABLE")
+        coverages.append(Coverage(pattern=pattern, samples=samples, covering_filter=covering))
     return coverages, filters
 
 
@@ -156,7 +221,9 @@ def render_text(coverages: list[Coverage], filters: list[str]) -> str:
             f"guard-reachability: FAIL - {len(unreachable)} of {len(coverages)} protected pattern(s) cannot trigger the guard:"
         )
         for c in unreachable:
-            lines.append(f"  - {c.pattern}  (a PR touching only {c.sample} runs no protected-path check)")
+            uncovered = [s for s in c.samples if not any(filter_matches(s, f) for f in filters)]
+            example = (uncovered or list(c.samples))[0]
+            lines.append(f"  - {c.pattern}  (a PR touching only {example} runs no protected-path check)")
         lines.append("")
         lines.append(f"  Current pull_request paths filters: {filters}")
         lines.append("  Fix: widen the filter in .github/workflows/quality-gates.yml to cover these paths.")
@@ -183,6 +250,12 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("%s", exc)
         print(f"guard-reachability: usage error - {exc}", file=sys.stderr)
         return 2
+    except GuardNotInvokedError as exc:
+        # A failure, not a usage error: the guard being absent is exactly the condition
+        # this gate exists to catch, and must never exit 0.
+        logger.error("%s", exc)
+        print(f"guard-reachability: FAIL - {exc}")
+        return 1
 
     unreachable = [c for c in coverages if not c.reachable]
     if args.json:

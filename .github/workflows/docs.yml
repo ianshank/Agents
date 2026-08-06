@@ -140,7 +140,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import pathlib, sys
+          import pathlib, re, sys
 
           root = pathlib.Path("openspec/changes")
           if not root.is_dir():
@@ -152,16 +152,23 @@ jobs:
           archived = sorted(d.name for d in (root / "archive").iterdir() if d.is_dir()) \
               if (root / "archive").is_dir() else []
 
+          # Match LINK TARGETS, not substrings. A substring search is satisfied by prose or
+          # a code span that merely names a change, so a package could be "listed" without
+          # ever being linked -- an index that looks complete and navigates nowhere.
+          targets = set(re.findall(r"\]\(([^)\s]+)\)", readme))
+
+          def linked(rel):
+              return any(t == rel or t.rstrip("/") == rel.rstrip("/") for t in targets)
+
           fail = []
           for name in current:
-              if f"changes/{name}/" not in readme:
-                  fail.append(f"in-flight change not listed in openspec/README.md: changes/{name}/")
+              if not linked(f"changes/{name}/"):
+                  fail.append(f"in-flight change not linked from openspec/README.md: changes/{name}/")
           for name in archived:
-              if f"changes/archive/{name}/" not in readme:
-                  fail.append(f"archived change not listed: changes/archive/{name}/")
+              if not linked(f"changes/archive/{name}/"):
+                  fail.append(f"archived change not linked: changes/archive/{name}/")
               # A bare `changes/<name>/` link (no `archive/`) points at a moved directory.
-              # Strip the legitimate archive links first, then any survivor is a stale one.
-              if f"changes/{name}/" in readme.replace(f"changes/archive/{name}/", ""):
+              if linked(f"changes/{name}/"):
                   fail.append(
                       f"archived change still linked as in-flight: changes/{name}/ "
                       f"(it now lives at changes/archive/{name}/)"

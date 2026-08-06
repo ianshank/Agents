@@ -14,12 +14,15 @@ from pathlib import Path
 import pytest
 from check_guard_reachability import (
     Coverage,
+    GuardNotInvokedError,
     analyse,
     extract_path_filters,
     filter_matches,
+    guard_is_invoked,
     main,
     render_text,
     sample_path_for,
+    sample_paths_for,
 )
 from eval_protected_paths import PROTECTED_PATTERNS
 
@@ -129,12 +132,85 @@ def test_filter_matching_semantics(path, glob, expected):
     [
         ("features.yaml", "features.yaml"),
         ("architecture.yaml", "architecture.yaml"),
-        ("tests/**", "tests/sample/probe.py"),
-        ("config/**", "config/sample/probe.py"),
+        ("tests/**", "tests/probe.py"),
+        ("config/**", "config/probe.py"),
     ],
 )
 def test_sample_path_generation(pattern, expected):
     assert sample_path_for(pattern) == expected
+
+
+def test_exact_patterns_yield_exactly_themselves():
+    assert sample_paths_for("features.yaml") == ("features.yaml",)
+
+
+def test_directory_patterns_probe_more_than_one_depth():
+    """One probe is not enough — see the child-filter regression below."""
+    samples = sample_paths_for("config/**")
+    assert len(samples) > 1
+    assert any("/" not in s[len("config/") :] for s in samples), "need a direct child probe"
+    assert any(s.count("/") > 2 for s in samples), "need a deeper probe"
+
+
+def test_a_narrowed_child_filter_does_not_cover_the_protected_tree(tmp_path):
+    """The false GREEN found in review of PR #124.
+
+    With a single `config/sample/probe.py` probe, the filter `config/sample/**` matched
+    it and `config/**` was reported reachable — while a PR touching `config/other.yaml`
+    ran no protected-path check at all. Requiring every probe to match rejects it.
+    """
+    text = (REPO_ROOT / GUARD_WORKFLOW).read_text(encoding="utf-8")
+    mutated = text.replace('- "config/**"', '- "config/sample/**"')
+    assert mutated != text, "config/** filter was not present to narrow"
+    root = tmp_path / "repo"
+    (root / GUARD_WORKFLOW.parent).mkdir(parents=True)
+    (root / GUARD_WORKFLOW).write_text(mutated, encoding="utf-8")
+
+    coverages, _ = analyse(root)
+    assert "config/**" in [c.pattern for c in coverages if not c.reachable]
+
+
+# --- the guard must actually be invoked ----------------------------------------------
+
+
+def _workflow_text(tmp_path: Path, text: str) -> Path:
+    root = tmp_path / "repo"
+    (root / GUARD_WORKFLOW.parent).mkdir(parents=True)
+    (root / GUARD_WORKFLOW).write_text(text, encoding="utf-8")
+    return root
+
+
+def test_analyse_fails_closed_when_the_guard_is_not_invoked(tmp_path):
+    """Deleting the guard job left every pattern looking "reachable" — a green tick for
+    a guard that no longer exists, the precise failure this script exists to prevent."""
+    text = (REPO_ROOT / GUARD_WORKFLOW).read_text(encoding="utf-8")
+    without = "\n".join(line for line in text.splitlines() if "check_protected_changes.py" not in line)
+    with pytest.raises(GuardNotInvokedError, match="does not run"):
+        analyse(_workflow_text(tmp_path, without))
+
+
+def test_a_commented_out_guard_does_not_count_as_invoked(tmp_path):
+    """A bare substring search would pass here — this repo's workflows mention the
+    script in comments, so the check must look for an executable `run:` step."""
+    text = (REPO_ROOT / GUARD_WORKFLOW).read_text(encoding="utf-8")
+    commented = text.replace(
+        "      - run: python scripts/check_protected_changes.py",
+        "      # - run: python scripts/check_protected_changes.py",
+    )
+    assert commented != text
+    with pytest.raises(GuardNotInvokedError):
+        analyse(_workflow_text(tmp_path, commented))
+
+
+def test_cli_exits_nonzero_when_the_guard_is_not_invoked(tmp_path, capsys):
+    text = (REPO_ROOT / GUARD_WORKFLOW).read_text(encoding="utf-8")
+    without = "\n".join(line for line in text.splitlines() if "check_protected_changes.py" not in line)
+    assert main(["--repo", str(_workflow_text(tmp_path, without))]) == 1
+    assert "FAIL" in capsys.readouterr().out
+
+
+def test_guard_is_invoked_on_the_real_workflow():
+    assert guard_is_invoked((REPO_ROOT / GUARD_WORKFLOW).read_text(encoding="utf-8")) is True
 
 
 # --- workflow parsing ---------------------------------------------------------------
@@ -173,13 +249,17 @@ def test_missing_workflow_is_a_usage_error(tmp_path, capsys):
     assert main(["--repo", str(tmp_path)]) == 2
 
 
-def test_warns_when_the_workflow_does_not_invoke_the_guard(tmp_path, caplog):
+def test_a_catch_all_filter_without_the_guard_still_fails(tmp_path):
+    """This used to be a *warning*, and that was the bug.
+
+    A `**` filter makes every protected pattern look reachable, so the check reported OK
+    for a workflow that runs no guard at all. It now raises instead.
+    """
     root = tmp_path / "repo"
     (root / GUARD_WORKFLOW.parent).mkdir(parents=True)
     (root / GUARD_WORKFLOW).write_text('on:\n  pull_request:\n    paths:\n      - "**"\njobs: {}\n', encoding="utf-8")
-    with caplog.at_level(logging.WARNING):
+    with pytest.raises(GuardNotInvokedError):
         analyse(root)
-    assert any("may have moved" in r.getMessage() for r in caplog.records)
 
 
 # --- reporting ----------------------------------------------------------------------

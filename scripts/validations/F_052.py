@@ -72,6 +72,49 @@ def main() -> int:
     # 2. mutation: removing a covering filter must fail the check
     workflow_rel = gr.GUARD_WORKFLOW
     original = (repo_root / workflow_rel).read_text(encoding="utf-8")
+
+    def _analyse_text(text: str) -> list[str] | str:
+        """Unreachable patterns for a mutated workflow, or the guard-not-invoked message."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / workflow_rel.parent).mkdir(parents=True)
+            (root / workflow_rel).write_text(text, encoding="utf-8")
+            try:
+                cov, _ = gr.analyse(root)
+            except gr.GuardNotInvokedError as exc:
+                return str(exc)
+            return [c.pattern for c in cov if not c.reachable]
+
+    # 2a. NARROWING a filter to a child of the protected tree must also fail. A single
+    # representative probe made `config/sample/**` look like coverage for `config/**`,
+    # while a PR touching config/other.yaml ran no guard — a false green.
+    narrowed = _analyse_text(original.replace('- "config/**"', '- "config/sample/**"'))
+    _check(
+        isinstance(narrowed, list) and "config/**" in narrowed,
+        f"a child-only filter (config/sample/**) does not count as covering config/** (got {narrowed})",
+        errors,
+    )
+
+    # 2b. The guard must be INVOKED, not merely mentioned. With the job deleted and a
+    # broad filter left in place, every pattern still looks reachable.
+    removed = _analyse_text("\n".join(x for x in original.splitlines() if gr.GUARD_SCRIPT not in x))
+    _check(
+        isinstance(removed, str) and "does not run" in removed,
+        f"deleting the guard invocation fails closed rather than reporting OK (got {removed})",
+        errors,
+    )
+    commented = _analyse_text(
+        original.replace(
+            "      - run: python scripts/check_protected_changes.py",
+            "      # - run: python scripts/check_protected_changes.py",
+        )
+    )
+    _check(
+        isinstance(commented, str) and "does not run" in commented,
+        f"a commented-out guard invocation does not satisfy the check (got {commented})",
+        errors,
+    )
+
     for target in _MUTATION_TARGETS:
         mutated = "\n".join(line for line in original.splitlines() if line.strip() != f'- "{target}"')
         if mutated == original:
