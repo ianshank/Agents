@@ -938,3 +938,22 @@ features:
     implemented_in: "local"
     depends_on: ["F-020"]
     notes: "Peer-reviewed OpenSpec package in openspec/changes/add-agent-trajectory-evaluation/; decision recorded in ADR 0031. First of five ordered changes from docs/plans/agent-eval-coverage/PLAN.md; the remaining four (repeat reliability, stateful outcome, judge bias calibration, production flywheel) ship as reviewed proposals only. The external plan this supersedes would have failed CI on first push: it froze and reordered TargetOutput, tasked seven scorers into an already-near-limit file, invented a gate config block that strict from_dict rejects, and never mentioned the F-039 surface baselines."
+  - id: "F-052"
+    epic: "Quality Gate"
+    name: "Protected-path guard reachability (PROTECTED_PATTERNS vs the CI path filter)"
+    description: "The eval-integrity guard is only as good as the set of PRs it runs on, and that set is decided by a SECOND list -- quality-gates.yml's on.pull_request.paths -- which nothing asserted agreed with scripts/eval_protected_paths.py::PROTECTED_PATTERNS. They had drifted: 9 of 15 protected patterns could not trigger the guard at all. Unreachable were features.schema.json, config/**, all five sibling */tests/** roots, .github/** beyond the workflows/ and actions/ prefixes (so CODEOWNERS -- the file that makes the label gate mean anything -- sat outside it), and architecture.yaml, which is protected precisely because editing its declared component edges could quietly dissolve the eval_harness/flow_corpus airgap (F-011). A PR touching only any of those ran no protected-path check and merged without the eval-change-approved label ever being demanded. This is the same class of defect the workflow's own push-filter comment already records ('PR #64 merged through that gap and left F-031/F-037 red on main, undetected'), recreated one trigger over. scripts/check_guard_reachability.py closes the loop mechanically rather than by re-syncing once: it IMPORTS PROTECTED_PATTERNS (never restates it -- a second copy would recreate the exact divergence it exists to prevent) and reuses that module's _glob_to_regex, so its matching agrees with the guard's own by construction. Registered in check_charter_invariants.py's _EXPECTED_GATE_SCRIPTS, so removing it from CI fails a different gate."
+    category: "infrastructure"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "every entry in PROTECTED_PATTERNS is matched by at least one on.pull_request.paths filter in the workflow that invokes check_protected_changes.py (F_052.py)"
+      - "the check FAILS when any covering filter is removed -- asserted by mutation over architecture.yaml, config/**, agent-core/tests/** and .github/** (F_052.py; a guard that stops detecting drift is worse than none, because the green tick is read as evidence)"
+      - "PROTECTED_PATTERNS is imported rather than restated, and glob matching reuses eval_protected_paths._glob_to_regex, so the checker cannot disagree with the guard it audits (F_052.py)"
+      - "path-boundary semantics hold: tests/** does not match testsuite/x.py, and .github/workflows/** does not match .github/CODEOWNERS (F_052.py)"
+      - "filters declared under push/schedule triggers are not counted as pull_request coverage (F_052.py)"
+      - "--json output is byte-stable for a given input, so a report is diffable and committable (F_052.py)"
+    validation_command: "python scripts/validations/F_052.py"
+    implemented_in: "local"
+    depends_on: ["F-007"]
+    notes: "Found by a 22-agent documentation-deduction pass and confirmed by independent measurement. Complements F-007 (the guard itself): F-007 decides WHAT is protected, F-052 asserts the CI can SEE it. The push-trigger filter is deliberately left narrower -- the label gate operates on pull_request, which is what this checks."

@@ -70,6 +70,7 @@ _EXPECTED_GATE_SCRIPTS = (
     "check_charter_drift.py",
     "check_charter_invariants.py",
     "check_size_budget.py",
+    "check_guard_reachability.py",
     "check_protected_changes.py",
     "regression_gate.py",
 )
