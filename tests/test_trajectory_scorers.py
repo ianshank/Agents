@@ -1,6 +1,6 @@
 """Behavioural tests for the seven trajectory scorers.
 
-The scenarios in `openspec/changes/add-agent-trajectory-evaluation/specs/` are each
+The scenarios in `openspec/changes/archive/add-agent-trajectory-evaluation/specs/` are each
 asserted here, plus the not-applicable path that keeps text-only targets from being
 silently failed.
 """

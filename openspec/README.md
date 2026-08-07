@@ -24,15 +24,41 @@ registry).
 
 ## Current changes
 
-- [`changes/eval-proxy-and-estimator/`](changes/eval-proxy-and-estimator/) — proxy-correlation
-  measurement, audit-selection-propensity logging, and a dual `wilson`/`ppi++` report
-  estimator, from the 2026-07-25 peer review of the "swap Wilson → PPI++" critique. Gate
-  untouched.
-- [`changes/skills-ci-coverage-floor/`](changes/skills-ci-coverage-floor/) — closes a
-  reproducible CI gap where 4 of 11 registered skills ran no CI on their own changes
-  (including the vendored-script drift guard); adds an `all-skills` structural/registry/drift
-  job and a registration + job-coverage guard, from a 2026-07-31 ROI review of `skills/` CI
-  coverage. See ADR 0030.
+Every directory under `changes/` (excluding `changes/archive/`) must appear here, and no
+archived one may — asserted by the *OpenSpec change index* guard in
+[`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
+before that guard existed.
+
+- [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
+  *proposed.* The system has strong internal validation and no external evidence. Replaces the
+  rejected "add-business-readiness-wedge" (which would have pulled a public
+  `merge_gate_report` CLI into the harness) with a measurement wedge that does not widen the
+  public surface.
+- [`changes/extend-judge-calibration/`](changes/extend-judge-calibration/) — *proposed.*
+  Answers the external analysis's "judge calibration: Not Covered" grade, which is refuted —
+  Cohen's κ with a statistical-power floor already ships — and scopes what is genuinely
+  missing on top of it.
+- [`changes/add-repeat-reliability-metrics/`](changes/add-repeat-reliability-metrics/) —
+  *proposed.* `pass^k` over k independent attempts per item. Depends on
+  `add-agent-trajectory-evaluation` (landed); authorised by ADR 0031.
+- [`changes/add-stateful-outcome-evaluation/`](changes/add-stateful-outcome-evaluation/) —
+  *proposed.* Evaluating end-state rather than final text. Depends on
+  `add-repeat-reliability-metrics`, which defines per-attempt reset/isolation.
+- [`changes/add-production-eval-flywheel/`](changes/add-production-eval-flywheel/) —
+  **blocked.** Ingesting production traces back into the golden dataset. Blocked on a
+  CHARTER §3 ratified amendment plus its own ADR — §3 lists "a general observability
+  platform" as a non-goal — and on the three changes above.
+
+## Archived changes
+
+Landed; kept for provenance. Each carries its F-ID and the commit it landed in.
+
+| Change | F-ID | Landed in |
+|---|---|---|
+| [`changes/archive/eval-proxy-and-estimator/`](changes/archive/eval-proxy-and-estimator/) | F-047 | `5404912bdb` |
+| [`changes/archive/merge-gate-health-integrity/`](changes/archive/merge-gate-health-integrity/) | F-049 | `8f7affd6c0` |
+| [`changes/archive/skills-ci-coverage-floor/`](changes/archive/skills-ci-coverage-floor/) | F-050 | `c5e7227c6a` |
+| [`changes/archive/add-agent-trajectory-evaluation/`](changes/archive/add-agent-trajectory-evaluation/) | F-051 | `a5e1a7847f` |
 
 ## Removing this spike
 

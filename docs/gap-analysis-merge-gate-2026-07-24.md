@@ -95,7 +95,7 @@ module's suite previously did.
 
 ## 3. Fixed since this report (F-049, ADR 0029, 2026-07-31)
 
-An independent re-verification (`openspec/changes/merge-gate-health-integrity/review.md`)
+An independent re-verification (`openspec/changes/archive/merge-gate-health-integrity/review.md`)
 confirmed G1–G3, closed all three, found G3's own stated mechanism wrong, and found the
 severity of G3 understated — it reproduces to `AUTO_MERGE` under stock `GatePolicyConfig()`.
 It also substantially refuted G5's headline claim. Kept here rather than deleted so the

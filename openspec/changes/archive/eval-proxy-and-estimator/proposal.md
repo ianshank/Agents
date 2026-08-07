@@ -1,6 +1,6 @@
 # Change: eval-proxy-and-estimator
 
-**Status:** proposed · **Date:** 2026-07-25 · **Author track:** `claude/` agent lane
+**Status:** landed — F-047 @ `5404912bdb` · **Date:** 2026-07-25 · **Author track:** `claude/` agent lane
 **Motivated by:** `./review.md` (peer review of the "swap Wilson → PPI++" critique)
 **Compiles down to:** `docs/plans/<topic>/PLAN.md` + F-IDs (claimed at land) + a design ADR.
 

@@ -34,6 +34,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from _cli import configure_logging
+from check_guard_reachability import script_is_invoked
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ _EXPECTED_GATE_SCRIPTS = (
     "check_charter_drift.py",
     "check_charter_invariants.py",
     "check_size_budget.py",
+    "check_guard_reachability.py",
     "check_protected_changes.py",
     "regression_gate.py",
 )
@@ -231,14 +233,21 @@ def check_protected_path_label(root: Path) -> list[Finding]:
 
 
 def check_quality_gates_wired(root: Path) -> list[Finding]:
-    """Charter §4 invariant 6: the named gate scripts still run in CI."""
+    """Charter §4 invariant 6: the named gate scripts still *run* in CI.
+
+    Deliberately not a substring search. This workflow comments on its own gate scripts
+    extensively, so ``script in text`` is satisfied by a comment describing a gate that
+    was deleted — a wiring check that passes for unwired gates. ``script_is_invoked``
+    requires the name inside an executable ``run:`` step, and is shared with
+    ``check_guard_reachability`` so "wired into CI" has one definition.
+    """
     path = root / ".github/workflows/quality-gates.yml"
     if not path.is_file():
-        return [Finding("quality_gates_workflow_missing", str(path), hard=True)]
+        return [Finding("quality_gates_workflow_missing", path.as_posix(), hard=True)]
     text = path.read_text(encoding="utf-8")
     findings = []
     for script in _EXPECTED_GATE_SCRIPTS:
-        if script not in text:
+        if not script_is_invoked(text, script):
             findings.append(Finding("gate_not_wired", script, hard=True))
     return findings
 

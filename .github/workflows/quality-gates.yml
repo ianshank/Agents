@@ -21,17 +21,33 @@ on:
     # 'labeled'/'unlabeled' so adding the eval-change-approved label re-runs the
     # protected-path guard and clears the check (default types don't fire on labels).
     types: [opened, synchronize, reopened, labeled, unlabeled]
+    # Every entry in scripts/eval_protected_paths.py::PROTECTED_PATTERNS must be covered
+    # here, or a PR touching only that path runs no protected-path check and the guard is
+    # protection in name only. That agreement is asserted by
+    # scripts/check_guard_reachability.py (F-052) and fails CI if either list drifts —
+    # do not edit one without the other.
     paths:
       - "features.yaml"
+      - "features.schema.json"
       - "scripts/validations/**"
       - "scripts/**"
+      - "config/**"
       - "src/**"
       - "tests/**"
+      # The four sibling packages plus the claude-foundation staging tree each carry their
+      # own protected tests/ root; none were reachable before F-052.
+      - "agent-core/tests/**"
+      - "behavioral-regression/tests/**"
+      - "flow-corpus/tests/**"
+      - "flow-protocol/tests/**"
+      - "claude-foundation/tests/**"
       - "pyproject.toml"
-      # See the push filter above: `.github/**` is protected, so workflow/action edits must
-      # run the guard and the validators rather than bypassing both.
-      - ".github/workflows/**"
-      - ".github/actions/**"
+      # Broadened from workflows/ + actions/ to all of .github/**: CODEOWNERS is what makes
+      # the label gate meaningful, and it sat outside both narrower prefixes.
+      - ".github/**"
+      # The architecture manifest is the airgap's enforcement surface — editing its declared
+      # component edges could quietly let the corpus and harness import each other.
+      - "architecture.yaml"
   workflow_dispatch:
 
 permissions:
@@ -98,7 +114,14 @@ jobs:
       # flow-protocol/flow-corpus to sys.path themselves, so no editable install needed.)
       - run: pip install -e ".[dev,langfuse,openai,archguard,parquet]"
       # Feature ledger: schema + DAG + git provenance + tier-fast validation commands.
-      - run: python scripts/validate.py --tier fast
+      # --strict makes an unresolvable `implemented_in` an ERROR, not a warning. Without it
+      # the provenance check was decorative: 6 SHAs from squash-merged branches had rotted
+      # away and 6 entries carried the literal placeholder "local", all reported as warnings
+      # nobody read. Safe to enforce because `implemented_in` is optional — only a *present
+      # but unresolvable* ref fails, and the checkout above uses fetch-depth: 0, which is what
+      # the refs need. (On a shallow clone the script downgrades itself back to warnings; see
+      # _check_git_refs. Squash-merging a PR would rot its own ref, so keep merge commits.)
+      - run: python scripts/validate.py --tier fast --strict
       # Vendored skill-script copies must stay byte-identical to their canonical source.
       - name: Skill-script drift guard
         run: python scripts/check_skill_script_drift.py
@@ -106,6 +129,12 @@ jobs:
       # and public-method-count overages print as non-blocking warnings (ADR 0019).
       - name: Source-file size budget
         run: python scripts/check_size_budget.py
+      # Guard-reachability gate: a protected path the guard never fires on is not
+      # protected. Asserts every PROTECTED_PATTERNS entry is covered by this workflow's own
+      # pull_request paths: filter — the two lists had drifted to 9 of 15 unreachable,
+      # including architecture.yaml, the airgap's own enforcement surface (F-052).
+      - name: Protected-path guard reachability
+        run: python scripts/check_guard_reachability.py
       # Charter-drift guard: every markdown reference in docs/CHARTER.md resolves to a
       # real repo file/ADR (also enforced via the full test suite; this is the first-class
       # gate signal, mirroring the sibling guards above).
@@ -129,15 +158,17 @@ jobs:
           tests/test_merge_gate_context.py tests/test_record_audit_verdict.py
           tests/test_audit_issue_sync.py tests/test_check_size_budget.py
           tests/test_check_charter_drift.py tests/test_check_charter_invariants.py
+          tests/test_check_guard_reachability.py
           --override-ini addopts=""
           --cov=regression_gate --cov=eval_protected_paths
           --cov=check_protected_changes --cov=fix_loop
           --cov=check_skill_script_drift --cov=_cli --cov=check_size_budget
           --cov=check_charter_drift --cov=check_charter_invariants
+          --cov=check_guard_reachability
           --cov=skill_marketplace --cov=_common
           --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023
           --cov=merge_gate_context --cov=record_audit_verdict --cov=audit_issue_sync
-          --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_050
+          --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_050 --cov=F_052
           --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
       # Net-new lint/test regressions vs the PR base (or main on push). Blocks on net-new.
       - name: Regression gate

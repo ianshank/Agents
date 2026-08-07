@@ -5,7 +5,7 @@
 
 Related: [ADR 0005](0005-calibrated-merge-gate.md) (the gate this hardens),
 [ADR 0025](0025-outcome-record-forward-compatibility.md) (why the store fails closed rather
-than raising), `openspec/changes/merge-gate-health-integrity/`,
+than raising), `openspec/changes/archive/merge-gate-health-integrity/`,
 `docs/gap-analysis-merge-gate-2026-07-24.md`.
 
 ## Context and Problem Statement

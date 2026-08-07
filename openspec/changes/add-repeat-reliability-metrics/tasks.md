@@ -15,8 +15,32 @@ Coverage floor: **96%** (root `eval_harness`).
 - [ ] Assert a `repetitions=1` run serialises byte-identically to the pre-change output.
 
 ## 3. Execution — PR 1
-- [ ] Change `_make_item_rng` to fold in `attempt_index`.
-- [ ] **Regression test:** a deterministic target under `repetitions=5` must not produce five identical attempts.
+- [ ] ~~Change `_make_item_rng` to fold in `attempt_index`.~~ **Retracted 2026-08-06** — the RNG
+  reaches scorers, never the target (`target.run(item)` takes only the item), so re-seeding cannot
+  change what a target returns. `_make_item_rng` keeps its `(base_seed, item_index)` signature.
+  See `review.md` → "Correction to this review".
+- [ ] Execute each attempt as a separate `target.run(item)` through the full scorer lifecycle.
+- [ ] **Test:** `repetitions=5` invokes the target exactly five times for the item — no caching or
+  memoisation between engine and target collapses the five draws into one.
+- [ ] **Test:** every attempt passes byte-identical input to the target — the harness introduces no
+  variance of its own, which would measure the harness rather than the agent.
+- [ ] Reset the scorer RNG to the item's seed at the start of each attempt. `RunContext.rng` is a
+  mutable `random.Random`; reusing one instance lets a scorer's draws advance between attempts and
+  change a verdict for identical target output — harness variance read as agent unreliability.
+- [ ] **Test:** a deterministic target scored by a scorer that draws from `ctx.rng` reports
+  `pass^k = 1.0` — the scorer's randomness does not manufacture flakiness.
+- [ ] Add the optional `is_deterministic` property to the `TargetRunner` protocol, appended and
+  optional so every existing target stays valid (ADR 0031 obligation 1); derive it for
+  `ModelTarget` from `temperature == 0.0`.
+- [ ] Emit `reliability.diagnostics` as a list of `{code, message}`, code
+  `deterministic_sampling`, only when `pass^k == 1.0` **and** the target is declared, derived or
+  observed deterministic: *"`pass^k` is 1.0 because sampling is deterministic, not because the
+  agent is reliable."* (ADR 0029's vacuous-pass lesson.)
+- [ ] Omit the `diagnostics` key entirely when the list is empty, so pre-change result JSON is
+  byte-identical (ADR 0031 obligation 4).
+- [ ] **Test:** the diagnostic is present whenever a deterministic configuration yields
+  `pass^k = 1.0`, and **absent** for a `temperature=0.7` target that passes all k — that agent was
+  genuinely measured.
 - [ ] Expand attempts inside the run loop, after the duplicate-item-ID check.
 - [ ] Assert no duplicate-ID warning fires for attempts of the same item.
 - [ ] Route attempts through the existing thread pool so `max_workers` still bounds concurrency.

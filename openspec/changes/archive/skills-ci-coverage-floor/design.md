@@ -1,6 +1,6 @@
 # Design: skills-ci-coverage-floor
 
-Promotes to [ADR 0030](../../../docs/decisions/0030-skill-ci-tiers.md). Format follows the
+Promotes to [ADR 0030](../../../../docs/decisions/0030-skill-ci-tiers.md). Format follows the
 house ADR idiom (Context / Decision / Consequences) — see the ADR for the full rationale,
 including the relationship to ADR 0021 (CI gate delegation) and the alternatives considered.
 This file adds the `openspec-quality-plan` mandatory section and the design points specific

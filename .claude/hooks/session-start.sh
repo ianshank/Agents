@@ -13,6 +13,9 @@
 #   config/__init__.py "Returning Any" mypy error     pydantic not installed
 #   5 `untyped-decorator` errors in agent-core        hypothesis not installed, so @given is
 #                                                       untyped
+#   `make check-all` dies in claude-foundation with   claude-foundation was the one package
+#     "No module named 'foundation_tools'", and         this hook did not install, and its
+#     'Library stubs not installed for "yaml"'          declared types-PyYAML came with it
 #
 # Idempotent and safe to re-run. Never fails the session: a sandbox without network still
 # gets a usable shell, just with the warning below.
@@ -39,11 +42,15 @@ if [ -z "${SKIP_SESSION_BOOTSTRAP:-}" ]; then
   log "installing the pinned toolchain and every package the gates import"
   {
     # Order matters: the root package first, then siblings, so editable installs resolve.
+    # Every package `make check-all` recurses into must be here — claude-foundation is a
+    # target like any other, and omitting it made the sweep die before reaching it.
+    # `[dev]` on claude-foundation pulls its declared types-PyYAML stubs.
     python3 -m pip install -q -e '.[dev,langfuse,openai,anthropic,archguard,parquet]' \
       && python3 -m pip install -q -e ./agent-core -e ./flow-protocol \
                                    -e ./flow-corpus -e ./behavioral-regression \
+                                   -e './claude-foundation[dev]' \
       && python3 -m pip install -q hypothesis \
-      && [ -n "$PINNED" ] && python3 -m pip install -q $PINNED
+      && { [ -z "$PINNED" ] || python3 -m pip install -q $PINNED; }
   } || log "WARNING: bootstrap incomplete (offline?). Gate output may show environment artifacts, not real findings."
 else
   log "SKIP_SESSION_BOOTSTRAP set — skipping dependency install"

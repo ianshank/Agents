@@ -1,13 +1,17 @@
 # 0031 - Agent evaluation may extend the core models and the engine loop, additively and under compatibility obligations
 
-**Status**: Proposed
+**Status**: Accepted — landed as F-051 (`a5e1a7847f`). Of the six obligations below,
+`scripts/validations/F_051.py` asserts 1, 2 and 4 (append-only fields, no freezing of existing
+types, backward-compatible serialisation); the rest are enforced by the gates named under
+**Compliance** — 3 and 6 by `scripts/check_charter_invariants.py`, 5 by the surface-baseline
+tests. No obligation is unenforced.
 **Date**: 2026-08-05
 
 Related: [ADR 0005](0005-calibrated-merge-gate.md), [ADR 0011](0011-multi-model-comparison.md),
 [ADR 0013](0013-model-backed-target.md) (the additive-opt-in pattern this follows),
 [CHARTER.md](../CHARTER.md) §4 invariant 1 (the constraint being amended),
 `docs/plans/agent-eval-coverage/REVIEW.md` (the peer review that motivates this),
-`openspec/changes/add-agent-trajectory-evaluation/`.
+`openspec/changes/archive/add-agent-trajectory-evaluation/`.
 
 ## Context and Problem Statement
 

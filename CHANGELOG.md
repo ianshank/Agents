@@ -58,6 +58,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built-in target could emit one at all, making F-051 unreachable from config.
 
 ### Fixed
+- **Eval-integrity guard reachability (F-052).** The protected-path guard is only as good as
+  the set of PRs it runs on, and that set is decided by a *second* list —
+  `quality-gates.yml`'s `on.pull_request.paths` — which nothing asserted agreed with
+  `scripts/eval_protected_paths.py::PROTECTED_PATTERNS`. They had drifted. Measured with real
+  glob semantics, **9 of 15 protected patterns could not trigger the guard at all**:
+  `features.schema.json`, `config/**`, all five sibling `*/tests/**` roots, `.github/**`
+  beyond `workflows/` and `actions/` (so `CODEOWNERS`, which is what makes the label gate
+  meaningful, sat outside it), and `architecture.yaml` — which is protected *precisely*
+  because editing its declared component edges could quietly dissolve the
+  `eval_harness ⇎ flow_corpus` airgap. The filter is widened to cover all 15, but the fix is
+  the validator, not the edit: new `scripts/check_guard_reachability.py` **imports**
+  `PROTECTED_PATTERNS` and reuses that module's `_glob_to_regex` — a second copy of either
+  would recreate exactly the divergence it exists to prevent — parses the workflow that
+  invokes the guard, and fails CI when any pattern has no covering filter. Same rationale as
+  F-050 above, one layer down: a gate that cannot fire is protection in name only. Wired into
+  `quality-gates.yml` and `check_charter_invariants._EXPECTED_GATE_SCRIPTS`, with
+  `--json`/`--verbose` matching the sibling gates. Four of the tests are **mutation** tests
+  (delete a filter, assert the check fails) — a guard that silently stops detecting drift is
+  worse than none, because the green tick is read as evidence.
+- **NaN and infinity silently deleted statistical-power floors
+  (`behavioral_regression`, `flow_corpus`).** Every comparison against NaN is False, so a
+  non-finite threshold passed *all* of the range guards untouched: `nan <= 0` is False,
+  `nan < bound` is False, and `lo <= nan <= hi` is False. Reproduced: with
+  `power_min_sample=nan`, `is_directional_only(n=30, …)` returned `False`, so a 30-pair
+  sample stopped being directional-only and became **gate-eligible** — turning an honest
+  `ESCALATE` into a real ship/no-ship decision on data far below the declared power floor.
+  The κ-gate, the reliability report, the confidence cross-check and the detector all route
+  through that one call. Infinity is the mirror image: it clears every `> 0` check and
+  produces a maximally-wide interval. `math.isfinite` is now checked **inside** the three
+  shared validators (`_require_positive` / `_require_at_least` / `_require_in_range`), so
+  every field that delegates to them is covered at once rather than by a check repeated at
+  each call site; error messages now name the offending value. `flow_corpus.config` used nine
+  inline `if` checks instead, so the same four helpers were extracted there first — a net
+  *reduction* in duplication, not a second style. The two copies cannot be shared: the
+  packages may both depend on `agent_core` but not on each other, and `agent_core` is
+  deliberately dependency-free. `flow_corpus`'s previously-unguarded `max_brier_reliability`,
+  `min_canary_margin` and `rotation_stability_threshold` gain the finite check only, since
+  inventing bounds would reject configs that work today; `wilson_z` additionally gains the
+  positivity check every other home for that field already has (`behavioral_regression.config`,
+  `agent_core.config`, `eval_harness.config.models`' `gt=0`). Backwards compatible — only
+  input that was always invalid is rejected. Both packages' non-finite tests derive their
+  field list from the dataclass rather than listing it, so a threshold added later is covered
+  automatically; the CLI `--set power_min_sample=nan` path is asserted end to end, since
+  `cli._coerce` is the reachable entry point that produces a non-finite float.
+- **Retracted a design error in the merged `add-repeat-reliability-metrics` proposal.** That
+  package prescribed folding the attempt index into the per-item seed —
+  `(base_seed, item_index, attempt_index)` — calling it "the single most important line in the
+  change", to stop a deterministic target reporting a "fabricated `pass^k = 1.0`". Verified
+  against the tree, it is wrong on both counts. `Target.run(self, item)`
+  (`targets/__init__.py:22`) receives **only the item**; `engine.py:152` calls
+  `self.target.run(item)`; the per-item RNG goes into `RunContext` (`engine.py:240-241`) and is
+  handed to **scorers**, never to the target — so re-seeding cannot change target behaviour at
+  all. And `ModelTarget` defaults `temperature=0.0` (`targets/model.py:69`), so for a genuinely
+  deterministic target k identical results and `pass^k = 1.0` are the *correct* answer; the agent
+  is perfectly reliable under that configuration. Shipped as written, the change would have
+  injected variance into the harness and reported it as agent unreliability — inverting the defect
+  it was meant to prevent, which is worse than the alleged bug. The requirement is rewritten to
+  what actually holds: k genuinely independent `target.run` invocations (no memoisation may
+  collapse them — none exists today), **no** harness-injected variance (all variation must
+  originate in the target's own sampling), and a diagnostic whenever the configuration makes
+  `pass^k` structurally uninformative — *"`pass^k` is 1.0 because sampling is deterministic, not
+  because the agent is reliable"* — the same vacuous-pass lesson ADR 0029 records. Corrected in
+  the proposal, design, spec, tasks and review, plus the two derived statements in
+  `docs/plans/agent-eval-coverage/REVIEW.md` §B14 and `NEXT_STEPS.md`. Root cause, recorded in
+  the package's review: the finding was asserted from a plausible reading of `engine.py:41`
+  without tracing where the returned RNG is consumed — one `grep` for `target.run` would have
+  refuted it.
+- **The ledger's provenance check was decorative, and the OpenSpec index had rotted.**
+  `validate.py` verifies that every `implemented_in` resolves to a real commit, but CI never
+  passed `--strict`, so failures printed as warnings nobody read. Under enforcement, **15 of
+  50 refs were bad**: 6 carried the literal placeholder `"local"` (F-045, F-047, F-049, F-050,
+  F-051, F-052) and 9 across 8 features (F-006, F-007, F-011…F-016, F-039) pointed at branch
+  SHAs lost to squash merges. All 15 are repaired to the commit on `main` that added both the
+  feature's ledger entry and its `scripts/validations/F_0NN.py` proof — two independent
+  derivations that agree on one commit per feature — and `quality-gates.yml` now runs
+  `--strict`. Safe to enforce because `implemented_in` is optional: omitting it is the
+  supported way to say "not landed", and only a *present but unresolvable* ref fails.
+  `_check_git_refs` additionally downgrades itself to warnings on a **shallow clone**, where
+  30 of 50 refs "fail" purely because the commits were never fetched — reporting that as
+  provenance rot trains readers to ignore the finding, which is how it got ignored in the
+  first place.
+  Alongside it, the OpenSpec front-end had drifted the same way: four changes whose capability
+  had shipped still read `Status: proposed`, and `openspec/README.md`'s "Current changes"
+  index listed **2 of 9**. `add-agent-trajectory-evaluation` (F-051),
+  `eval-proxy-and-estimator` (F-047), `merge-gate-health-integrity` (F-049) and
+  `skills-ci-coverage-floor` (F-050) move to `openspec/changes/archive/` (first use) stamped
+  with their F-ID and landing SHA, with every inbound reference repointed and the relative-link
+  depth inside each package corrected. The index now lists all five in-flight changes plus an
+  archive table, and a new blocking *OpenSpec change index* guard in `docs.yml` derives both
+  lists from the directory tree and fails when an in-flight change is unlisted **or** an
+  archived one is still linked as in-flight — either direction alone still lies. ADR 0023 and
+  ADR 0031 flip to Accepted (both landed), and 0031 gains its missing `docs/decisions/README.md`
+  index row. `docs/openspec-spike.md` records that its own evaluate-and-decide trigger has
+  fired with the keep-or-delete ADR outstanding — deliberately not decided here — and what the
+  interval actually showed: the layer's failure mode is silent staleness, which is the
+  "second, weaker registry" risk that document predicted, now observed and mechanically checked.
+- **SessionStart bootstrap missed one package.** `.claude/hooks/session-start.sh` installed the
+  root package and four siblings but not `claude-foundation`, so `make check-all` died in that
+  target with `No module named 'foundation_tools'` and, before that, `Library stubs not
+  installed for "yaml"` — its declared `types-PyYAML` never got installed either. Every package
+  the sweep recurses into is now installed, `claude-foundation` with its `[dev]` extra. Also
+  fixes a shell short-circuit: `&& [ -n "$PINNED" ] && …` made the whole chain report failure
+  when no pin was found, printing the "bootstrap incomplete (offline?)" warning after a
+  perfectly successful install.
 - **Skills CI coverage floor (F-050, ADR 0030).** `skills-ci.yml`'s `paths:` filter listed 7
   of 8 skills with a dedicated job (`dataset-lint` was omitted), and no workflow at all
   triggered on the 3 skills with no dedicated job. A PR touching only one of those 4 skills
@@ -297,7 +401,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `p >= base_rate` and `p <= 1` hold exactly in floating point.
 - **Peer review of the "swap Wilson → PPI++" estimator critique + OpenSpec coordination spike
   (planning only).** Added a committed objective peer review
-  (`openspec/changes/eval-proxy-and-estimator/review.md`) that verifies the critique's
+  (`openspec/changes/archive/eval-proxy-and-estimator/review.md`) that verifies the critique's
   arithmetic and citations but corrects it on target, magnitude, and mechanism: the merge
   gate's real activation bar is a four-gate Wilson stack needing ~380 near-perfect audits per
   domain (not one `N≥20` gate), and PPI++ on the calibrated-confidence proxy buys only

@@ -1,6 +1,6 @@
 # Design: merge-gate-health-integrity
 
-Promotes to [ADR 0029](../../../docs/decisions/0029-operating-region-calibrator-health.md).
+Promotes to [ADR 0029](../../../../docs/decisions/0029-operating-region-calibrator-health.md).
 Format follows the house ADR idiom (Context / Decision / Consequences).
 
 ## Context

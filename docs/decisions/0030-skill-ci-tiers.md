@@ -4,7 +4,7 @@
 - Date: 2026-07-31
 - Related: `.github/workflows/skills-ci.yml`, `scripts/skill_marketplace.py`,
   `scripts/check_skill_script_drift.py`, `scripts/validations/F_050.py`,
-  `docs/SKILL_TEMPLATE.md` §5, `openspec/changes/skills-ci-coverage-floor/`, ADR 0020
+  `docs/SKILL_TEMPLATE.md` §5, `openspec/changes/archive/skills-ci-coverage-floor/`, ADR 0020
   (deterministic generator skills), ADR 0021 (CI gate delegation), ADR 0022 (determinism
   boundary for inference skills).
 

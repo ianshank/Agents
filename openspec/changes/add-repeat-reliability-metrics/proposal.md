@@ -50,12 +50,47 @@ behaviour under real traffic. Neither exists in the tree today.
 
 ## The correctness trap this change must not fall into
 
-`_make_item_rng(base_seed, item_index)` (`engine.py:41`) seeds per item only. Running k attempts
-without folding the attempt index into the seed makes every deterministic target return k
-**identical** results — reporting `pass^k = 1.0` for an agent that was never actually tested k
-times. The metric would then certify exactly the property it exists to detect. The seed becomes
-`(base_seed, item_index, attempt_index)`, and a test asserts that a deterministic target under
-`repetitions>1` produces distinct attempt streams (`REVIEW.md` §B14).
+> **Corrected 2026-08-06.** An earlier revision of this section prescribed folding the attempt
+> index into the per-item seed — `(base_seed, item_index, attempt_index)` — to stop a
+> deterministic target reporting a "fabricated `pass^k = 1.0`". That prescription is wrong on
+> both counts, verified against the tree:
+>
+> - `Target.run(self, item: EvalItem)` (`targets/__init__.py:22`) takes **only the item**.
+>   `engine.py:152` calls `self.target.run(item)`. The per-item RNG goes into `RunContext`
+>   (`engine.py:240-241`), which is passed to **scorers** (`scorer.score(item, output, ctx)`),
+>   never to the target. Changing the seed therefore cannot alter target behaviour at all.
+> - `ModelTarget` defaults `temperature=0.0` (`targets/model.py:69`). For a genuinely
+>   deterministic target, k identical results and `pass^k = 1.0` are **correct** — the agent
+>   *is* perfectly reliable under that configuration. Nothing is fabricated.
+>
+> Left uncorrected, the change would have shipped harness-injected variance and called it
+> agent unreliability. The real requirements are below.
+
+The trap is not seeding — it is measuring the harness instead of the agent, in either direction.
+
+1. **k genuinely independent `target.run` calls.** The attempts must go through the full
+   target-and-scorer lifecycle k times, not be computed once and copied. Verified today: no
+   caching layer exists between the engine and the target that could collapse the k draws, and
+   none may be introduced without invalidating this metric.
+2. **The harness must not manufacture variation.** Perturbing seeds, prompts or parameters
+   across attempts would measure harness noise, not agent reliability, and would make `pass^k`
+   strictly worse than the truth. Variation must come only from the target's own sampling.
+   This cuts both ways for the *scorer* RNG: `RunContext.rng` is a mutable `random.Random`, so
+   simply reusing one per-item instance across attempts lets a scorer's draws advance between
+   them and change a verdict for identical target output. Each attempt therefore gets the item's
+   RNG **freshly reseeded**, so every k-to-k difference is attributable to the target
+   (`design.md` records why including scorer noise was rejected).
+3. **A structurally uninformative `pass^k` must say so.** When the configuration makes repeated
+   attempts identical by construction — `temperature=0`, a fixture/replay target, any target
+   documented as deterministic — the run emits a diagnostic alongside the metric:
+   *"`pass^k` is 1.0 because sampling is deterministic, not because the agent is reliable."*
+   The value is still correct; what would be wrong is reading it as evidence of robustness.
+   This is the same failure ADR 0029 records, where a metric reported a pass having measured
+   nothing.
+
+Tests assert each of the three: k distinct `target.run` invocations for `repetitions=k`; byte-
+identical target inputs across attempts (no injected variance); and the diagnostic present
+whenever a deterministic configuration yields `pass^k = 1.0` (`REVIEW.md` §B14).
 
 Two secondary hazards from the same finding: `run()` checks for duplicate item IDs over the
 *dataset* list (`engine.py:280-289`), so attempt expansion must happen inside the run loop, after

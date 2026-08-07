@@ -128,6 +128,58 @@ jobs:
               sys.exit(1)
           print("doc-structure guards OK; components checked:", derived + NESTED_REQUIRED)
           PY
+      # Blocking. openspec/README.md's "Current changes" section is the only index of what is
+      # in flight, and it is maintained by hand — so it rotted to 2 of 9 entries while four
+      # already-landed changes still sat in changes/ marked "proposed". Both directions are
+      # checked, because either one alone lies: an unlisted change is invisible, and a listed
+      # archived change reads as still open. The change list is DERIVED from the directory
+      # tree, never an allowlist. Inline (not scripts/*.py) for the same reason as the guard
+      # above: it stays out of the scripts/ coverage floor (F-031) and the protected tests/**
+      # guard.
+      - name: OpenSpec change index is complete and current
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+
+          root = pathlib.Path("openspec/changes")
+          if not root.is_dir():
+              print("openspec/changes/ absent (spike removed?) - nothing to check")
+              sys.exit(0)
+
+          readme = pathlib.Path("openspec/README.md").read_text(encoding="utf-8")
+          current = sorted(d.name for d in root.iterdir() if d.is_dir() and d.name != "archive")
+          archived = sorted(d.name for d in (root / "archive").iterdir() if d.is_dir()) \
+              if (root / "archive").is_dir() else []
+
+          # Match LINK TARGETS, not substrings. A substring search is satisfied by prose or
+          # a code span that merely names a change, so a package could be "listed" without
+          # ever being linked -- an index that looks complete and navigates nowhere.
+          targets = set(re.findall(r"\]\(([^)\s]+)\)", readme))
+
+          def linked(rel):
+              return any(t == rel or t.rstrip("/") == rel.rstrip("/") for t in targets)
+
+          fail = []
+          for name in current:
+              if not linked(f"changes/{name}/"):
+                  fail.append(f"in-flight change not linked from openspec/README.md: changes/{name}/")
+          for name in archived:
+              if not linked(f"changes/archive/{name}/"):
+                  fail.append(f"archived change not linked: changes/archive/{name}/")
+              # A bare `changes/<name>/` link (no `archive/`) points at a moved directory.
+              if linked(f"changes/{name}/"):
+                  fail.append(
+                      f"archived change still linked as in-flight: changes/{name}/ "
+                      f"(it now lives at changes/archive/{name}/)"
+                  )
+
+          if fail:
+              print("OPENSPEC INDEX FAILURES:")
+              for x in fail: print("  -", x)
+              sys.exit(1)
+          print(f"openspec index OK; {len(current)} in flight, {len(archived)} archived")
+          PY
 
   links:
     name: relative-link check (advisory)

@@ -25,9 +25,13 @@
   exception into a failing verdict. **Still open:** the four remaining OpenSpec changes below.
 
 - [ ] **Repeated-run reliability (`openspec/changes/add-repeat-reliability-metrics/`)** — next
-  in the delivery order. Note the trap the proposal records: `_make_item_rng` seeds per item
-  only, so k attempts of a deterministic target are identical and report a fabricated
-  `pass^k = 1.0` unless the attempt index is folded into the seed.
+  in the delivery order. The proposal's original "fold the attempt index into the seed" trap was
+  **retracted** on 2026-08-06 after verification: `target.run(item)` never receives the RNG
+  (it goes to scorers via `RunContext`), so re-seeding cannot change a target's output, and with
+  `ModelTarget`'s default `temperature=0.0` a `pass^k` of 1.0 is *correct* rather than fabricated.
+  The real requirements are k genuinely independent `target.run` calls, **no** harness-injected
+  variance (that would measure the harness, not the agent), and a diagnostic whenever a
+  deterministic configuration makes `pass^k` structurally uninformative.
 - [ ] **Stateful outcome evaluation (`openspec/changes/add-stateful-outcome-evaluation/`)** —
   depends on attempt isolation from the above.
 - [ ] **Judge bias calibration (`openspec/changes/extend-judge-calibration/`)** — the only one
@@ -39,7 +43,7 @@
 
 - [x] **Merge-gate calibrator-health integrity (F-049, ADR 0029)** — an independent
   re-verification of `docs/gap-analysis-merge-gate-2026-07-24.md`
-  (`openspec/changes/merge-gate-health-integrity/review.md`) confirmed its G1/G2/G3 but found
+  (`openspec/changes/archive/merge-gate-health-integrity/review.md`) confirmed its G1/G2/G3 but found
   G3's stated mechanism wrong, its severity understated, and three defects it never named.
   The gate's fourth health floor could pass having measured nothing: `_upper_half_ci_width`
   accumulated into a `0.0` initialiser over bins above raw 0.5, so a domain whose audits all
@@ -73,7 +77,7 @@
   misattributed its own NaN-guard rationale. Surfaced, not fixed here (different package,
   its own review): `behavioral-regression`'s config validators lack the same `isfinite`
   guard — confirmed live (`BRConfig(dist_sigma=float("inf"))` constructs) — recorded in
-  `openspec/changes/merge-gate-health-integrity/tasks.md`'s follow-on section.
+  `openspec/changes/archive/merge-gate-health-integrity/tasks.md`'s follow-on section.
 
 - [x] **Charter alignment audit + fixes + `check_charter_invariants.py` gate (PR #114)** —
   a multi-agent audit (`docs/CHARTER_ALIGNMENT_AUDIT.md`) mechanically re-verified every
@@ -99,7 +103,7 @@
 - [x] **Proxy-correlation measurement, PPI++ report estimator & audit propensity (F-047,
   ADR 0026)** — an external critique proposed swapping the gate's Wilson interval for
   PPI++. The peer review
-  (`openspec/changes/eval-proxy-and-estimator/review.md`) verified its arithmetic and
+  (`openspec/changes/archive/eval-proxy-and-estimator/review.md`) verified its arithmetic and
   citations but found it aimed at the wrong lever: PPI++ on the calibrated-confidence proxy
   buys only ~1.05–1.1× effective-N at the system's own `min_auroc=0.65` floor, and ~0 on the
   *conditional* subsets the gate operates over (restriction of range). Measured on a
@@ -291,7 +295,7 @@
 - [ ] **Merge-gate soak** — accumulate shadow decisions and weekly audits before
   revisiting the ADR 0005 enablement checklist. **The "N≥20" this entry used to quote is a
   soak *counter*, not the activation bar**: the peer review in
-  `openspec/changes/eval-proxy-and-estimator/review.md` establishes that `tau` is gated by
+  `openspec/changes/archive/eval-proxy-and-estimator/review.md` establishes that `tau` is gated by
   a four-gate Wilson stack whose binding term (`threshold_for_risk` at `risk_target=0.02`,
   measured on a held-out fold) needs roughly **380 near-perfect audited records per
   domain**. Treat N≥20 as "enough to publish an honest first report", never as "enough to

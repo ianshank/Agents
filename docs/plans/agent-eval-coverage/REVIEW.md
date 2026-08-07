@@ -180,7 +180,7 @@ The enforced entry points are `./scripts/quality-gate.sh [lint|typecheck|test|co
 ### B12 · Review-artifact ordering is backwards versus house style
 
 In this repository's own changes, `review.md` is the peer review that **motivates** the proposal —
-`openspec/changes/eval-proxy-and-estimator/proposal.md:4` reads "Motivated by: `./review.md`".
+`openspec/changes/archive/eval-proxy-and-estimator/proposal.md:4` reads "Motivated by: `./review.md`".
 Document 2 §7 reads it last, as a closing checklist.
 
 ### B13 · Change 5 is a scope expansion, not merely a change
@@ -191,12 +191,28 @@ deduplication and review-queue pipeline requires a §3 Ratified Amendment and an
 proposal, exactly as the calibrated auto-merge gate did with ADR 0005. Document 2 correctly keeps
 the pipeline offline and human-approved, but does not route it through the charter.
 
-### B14 · A silent correctness trap in Change 2 that Document 2 never names — CONFIRMED defect
+### B14 · A silent correctness trap in Change 2 that Document 2 never names — RETRACTED, replaced
 
-`_make_item_rng(base_seed, item_index)` (`src/eval_harness/engine.py:41`) seeds per item only. Run
+> **Retracted 2026-08-06.** The finding below was *my own*, not Document 2's, and it is wrong.
+> Re-verified against the tree: `Target.run(self, item: EvalItem)`
+> (`src/eval_harness/targets/__init__.py:22`) takes **only the item**, `engine.py:152` calls
+> `self.target.run(item)`, and the per-item RNG is placed in `RunContext` (`engine.py:240-241`)
+> which is handed to **scorers** (`scorer.score(item, output, ctx)`) — never to the target. A seed
+> change therefore cannot alter target behaviour. Furthermore `ModelTarget` defaults
+> `temperature=0.0` (`targets/model.py:69`), so for a deterministic target k identical results and
+> `pass^k = 1.0` are the *correct* answer; nothing is fabricated.
+>
+> Had this shipped as specified, the change would have injected variance into the harness and
+> reported it as agent unreliability — inverting the defect it was meant to prevent. The corrected
+> requirements (k real invocations, no harness-injected variance, and a diagnostic when the
+> configuration makes `pass^k` structurally uninformative) are in
+> `openspec/changes/add-repeat-reliability-metrics/`. The two secondary hazards below were checked
+> again and **stand**.
+
+~~`_make_item_rng(base_seed, item_index)` (`src/eval_harness/engine.py:41`) seeds per item only. Run
 k attempts without folding the attempt index into the seed and every deterministic target returns k
 **identical** results — reporting a fabricated `pass^k = 1.0`, the precise failure the metric exists
-to prevent. Two secondary hazards: `run()` checks for duplicate item IDs over the *dataset* list
+to prevent.~~ Two secondary hazards: `run()` checks for duplicate item IDs over the *dataset* list
 (`engine.py:280-289`), so expanding attempts into that list before the check emits spurious
 warnings; and `RunResult.to_dict()` emits `items` as a flat list carrying only `item.id`
 (`types.py:86-106`), so k attempts serialise as indistinguishable entries unless attempt identity is
@@ -228,5 +244,5 @@ of new subsystems must ship near-complete unit tests or the coverage gate goes r
   plausibly a charter §3 scope question (SWE-bench-style adapters execute repository tests), and
   should get its own decision before any proposal.
 - **`behavioral-regression` config validators lack an `isfinite` guard** — already recorded in
-  `openspec/changes/merge-gate-health-integrity/tasks.md`; unrelated to this review, noted so it is
+  `openspec/changes/archive/merge-gate-health-integrity/tasks.md`; unrelated to this review, noted so it is
   not lost.

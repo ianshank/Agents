@@ -5,13 +5,13 @@
 - Related: [0005](0005-calibrated-merge-gate.md), [0018](0018-outcome-store-persistence.md),
   [0023](0023-agent-confidence-proxy-and-agent-domain-seeding.md),
   [0025](0025-outcome-record-forward-compatibility.md); F-043, F-034, F-047;
-  `openspec/changes/eval-proxy-and-estimator/` (peer review, design, tasks).
+  `openspec/changes/archive/eval-proxy-and-estimator/` (peer review, design, tasks).
 
 ## Context
 
 An external critique proposed replacing the merge gate's Wilson interval with **PPI++**,
 arguing the soak-scale sample cannot support a CI-lower-bound gate. A peer review
-(committed at `openspec/changes/eval-proxy-and-estimator/review.md`) verified the
+(committed at `openspec/changes/archive/eval-proxy-and-estimator/review.md`) verified the
 arithmetic and the citations and found the *direction* right but the *targeting* wrong:
 
 - The critique attacks an `N>=20` **soak counter**, not a decision gate. The operative bar

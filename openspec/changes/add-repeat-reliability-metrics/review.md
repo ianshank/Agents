@@ -13,10 +13,37 @@ harmful rather than merely broken.
 
 | # | Finding | Correction |
 |---|---|---|
-| B14 | Seeding not addressed | `_make_item_rng` folds in `attempt_index`. Without it a deterministic target returns k identical results and the harness reports `pass^k = 1.0` — certifying the exact property the metric exists to detect. A regression test now guards this |
+| B14 | ~~Seeding not addressed~~ **RETRACTED — the correction was itself wrong** | See "Correction to this review" below. `_make_item_rng` keeps `(base_seed, item_index)`; the requirements become k real `target.run` calls, no harness-injected variance, and a diagnostic when determinism makes `pass^k` uninformative |
 | B14 | Duplicate-ID guard and flat serialisation unmentioned | Attempt expansion moved inside the run loop after the dataset check; attempt identity added to the `to_dict()` payload |
 | B3 | Invented a top-level `gates:` block with `minimum`/`maximum` | Does not exist and would not parse under strict `from_dict`. `GateRule.metric` is extended instead |
 | B15 | No coverage acceptance | 96% floor stated on the change |
+
+## Correction to this review (2026-08-06)
+
+The B14 seeding row above was wrong, and it was wrong in the direction that matters: it would have
+made the change actively harmful, which is exactly what this review claimed to be preventing.
+
+Re-verified against the tree:
+
+- `Target.run(self, item: EvalItem)` (`src/eval_harness/targets/__init__.py:22`) receives **only
+  the item**. `engine.py:152` calls `self.target.run(item)`. The per-item RNG is placed in
+  `RunContext` (`engine.py:240-241`) and passed to **scorers** via `scorer.score(item, output,
+  ctx)` — never to the target. Folding `attempt_index` into that seed cannot change target
+  behaviour at all.
+- `ModelTarget` defaults `temperature=0.0` (`targets/model.py:69`). For a genuinely deterministic
+  target, k identical results and `pass^k = 1.0` are **correct**: the agent *is* perfectly
+  reliable under that configuration. Nothing is fabricated.
+
+Had it shipped as written, the harness would have injected variance across attempts and reported
+it as agent unreliability — an inversion of the metric's purpose, and a worse defect than the one
+alleged. The proposal, design and spec are corrected accordingly.
+
+Why the error survived a review whose whole point was catching this class of thing: the finding was
+asserted from a plausible reading of `engine.py:41` without ever tracing where the returned RNG is
+consumed. One `grep` for `target.run` would have refuted it. Same root cause as the F-051
+canonicalisation defects, where the test asserted "does not raise" instead of asserting what was
+produced — a claim about behaviour, verified against the shape of the code rather than its
+behaviour.
 
 ## Assumptions challenged
 

@@ -1,6 +1,6 @@
 # Change: merge-gate-health-integrity
 
-**Status:** proposed · **Date:** 2026-07-31 · **Author track:** `claude/` agent lane
+**Status:** landed — F-049 @ `8f7affd6c0` · **Date:** 2026-07-31 · **Author track:** `claude/` agent lane
 **Motivated by:** `./review.md` (independent re-verification of `docs/gap-analysis-merge-gate-2026-07-24.md`)
 **Compiles down to:** an F-ID (claimed at land) + `scripts/validations/F_0NN.py` + a design ADR.
 

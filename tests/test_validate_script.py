@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -115,11 +116,125 @@ def test_check_git_refs_resolvable_and_absent_ref() -> None:
     assert vs._check_git_refs(feats, strict=True) == []
 
 
-def test_check_git_refs_unresolvable_strict_vs_lenient() -> None:
+def test_check_git_refs_unresolvable_strict_vs_lenient(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pinned non-shallow: on a shallow clone strict self-downgrades, which would make this
+    # assertion fail for a reason that has nothing to do with the behaviour under test.
+    monkeypatch.setattr(vs, "_is_shallow_clone", lambda: False)
     feats = [_feat("A", implemented_in="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")]
     assert vs._check_git_refs(feats, strict=False) == []
     errors = vs._check_git_refs(feats, strict=True)
     assert errors and "does not resolve" in errors[0]
+
+
+def test_shallow_clone_downgrades_strict_to_warnings(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A shallow clone is missing history, not provenance.
+
+    Measured on the clone this was written against: 30 of 50 refs "failed" under --strict
+    purely because the commits had not been fetched. Reporting that as rot trains readers
+    to ignore the finding, so strict downgrades itself and says why.
+    """
+    monkeypatch.setattr(vs, "_is_shallow_clone", lambda: True)
+    feats = [_feat("A", implemented_in="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")]
+    with caplog.at_level(logging.WARNING):
+        assert vs._check_git_refs(feats, strict=True) == []
+    assert any("shallow clone" in r.getMessage() for r in caplog.records)
+
+
+def test_is_shallow_clone_reports_this_repository() -> None:
+    """Whatever the answer, it must be a bool derived from git, never a crash."""
+    assert isinstance(vs._is_shallow_clone(), bool)
+
+
+# --- git itself missing (PR #124 review finding) -------------------------------------
+#
+# `subprocess.run(["git", ...])` raises FileNotFoundError when git is not on PATH — a
+# minimal container, a docs-only image, a sandbox. Reproduced with PATH cleared: BOTH
+# _is_shallow_clone() and _check_git_refs()'s own loop died with a bare traceback, taking
+# down the schema, DAG and validation-command checks, none of which need git at all.
+
+
+def _no_git(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make every git invocation fail the way an absent binary does."""
+
+    def boom(*_a: Any, **_k: Any) -> Any:
+        raise FileNotFoundError(2, "No such file or directory: 'git'")
+
+    monkeypatch.setattr(vs.subprocess, "run", boom)
+
+
+def test_run_git_returns_none_when_git_is_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    _no_git(monkeypatch)
+    assert vs._run_git(["rev-parse", "HEAD"]) is None
+
+
+def test_is_shallow_clone_does_not_crash_without_git(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ "Cannot tell" is not "shallow" — the missing-git case is handled explicitly."""
+    _no_git(monkeypatch)
+    assert vs._is_shallow_clone() is False
+
+
+def test_missing_git_is_an_error_under_strict(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Deliberately unlike the shallow-clone downgrade.
+
+    A shallow clone is a detectable, benign reason for the refs to be absent, so
+    downgrading is honest. No git at all means *nothing was verified*, and passing a
+    check that measured nothing is the exact failure this validator exists to prevent.
+    """
+    _no_git(monkeypatch)
+    with caplog.at_level(logging.ERROR):
+        errors = vs._check_git_refs([_feat("A", implemented_in="HEAD")], strict=True)
+    assert errors and "git is not available" in errors[0]
+
+
+def test_missing_git_is_only_a_warning_without_strict(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The other three checks still run; git absence must not fail an unstrict pass."""
+    _no_git(monkeypatch)
+    with caplog.at_level(logging.WARNING):
+        assert vs._check_git_refs([_feat("A", implemented_in="HEAD")], strict=False) == []
+    assert any("git is not available" in r.getMessage() for r in caplog.records)
+
+
+def test_missing_git_with_nothing_to_verify_is_silent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No feature declares provenance, so there is nothing git absence prevented."""
+    _no_git(monkeypatch)
+    assert vs._check_git_refs([_feat("A"), _feat("B")], strict=True) == []
+
+
+# ---------------------------------------------------------------------------
+# Ledger provenance integrity (the real features.yaml)
+# ---------------------------------------------------------------------------
+
+
+def _ledger_features() -> list[dict[str, Any]]:
+    path = Path(__file__).resolve().parent.parent / "features.yaml"
+    with path.open(encoding="utf-8") as fh:
+        return list(yaml.safe_load(fh)["features"])
+
+
+def test_no_feature_carries_a_placeholder_provenance_ref() -> None:
+    """``implemented_in: "local"`` resolves nowhere and defeats the whole check.
+
+    Six entries carried it. Omitting the key entirely is the supported way to say "not
+    landed yet" — a placeholder that looks like an answer is worse than no answer.
+    """
+    placeholders = [f["id"] for f in _ledger_features() if f.get("implemented_in") in {"local", "HEAD", ""}]
+    assert not placeholders, f"features with a placeholder implemented_in: {placeholders}"
+
+
+@pytest.mark.skipif(vs._is_shallow_clone(), reason="shallow clone: history is absent, not rotten")
+def test_every_ledger_provenance_ref_resolves() -> None:
+    """The assertion CI now enforces via `validate.py --tier fast --strict`.
+
+    Nine refs across eight features pointed at commits that no longer existed — branch
+    SHAs lost to squash merges — and the check reported it only as a warning nobody read.
+    """
+    assert vs._check_git_refs(_ledger_features(), strict=True) == []
 
 
 # ---------------------------------------------------------------------------

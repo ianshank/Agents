@@ -3,7 +3,7 @@
 **Status:** spike (reversible-adoption pattern, per `docs/phoenix-spike.md`).
 **Date:** 2026-07-25.
 **Related:** `openspec/project.md`, `openspec/AGENTS.md`,
-`openspec/changes/eval-proxy-and-estimator/`, `docs/plans/agent-record-decontamination/PLAN.md:171`.
+`openspec/changes/archive/eval-proxy-and-estimator/`, `docs/plans/agent-record-decontamination/PLAN.md:171`.
 
 ## What this is
 
@@ -25,7 +25,7 @@ removable without trace.
 
 ## Scope of the spike
 
-The single change `openspec/changes/eval-proxy-and-estimator/` (the PPI++/proxy work from
+The single change `openspec/changes/archive/eval-proxy-and-estimator/` (the PPI++/proxy work from
 the 2026-07-25 peer review). Its artifacts map down as:
 
 - `proposal.md` + `tasks.md` → `docs/plans/<topic>/PLAN.md`
@@ -78,3 +78,17 @@ justify keeping it, versus authoring `docs/plans/<topic>/` directly? If not, del
 contract above. If yes, add a `make`/CI convenience that checks each `specs/<cap>/spec.md`
 delta has a matching `features.yaml` F-ID before archive (the only automation worth adding —
 and even that stays advisory).
+
+**Trigger status (2026-08-06): fired, decision outstanding.** `eval-proxy-and-estimator`
+landed as F-047 (`5404912bdb`) and three further changes have landed since — F-049, F-050,
+F-051 — all four now under `openspec/changes/archive/`. So the evaluate-and-decide condition
+above is met and the keep-or-delete ADR has not been written. That call is a human one and is
+deliberately **not** made here.
+
+What the interval did surface, recorded so the eventual ADR argues from evidence rather than
+impression: the layer's failure mode is silent staleness. Four changes stayed marked
+`proposed` after landing, `README.md`'s index listed 2 of 9, and nothing detected either —
+because nothing executes. That is the predicted "second, weaker registry" risk above,
+observed. It is now mechanically checked by the *OpenSpec change index* guard in
+`.github/workflows/docs.yml`, which is the advisory automation this section anticipated,
+one step earlier in the lifecycle than proposed (index completeness, not F-ID matching).
