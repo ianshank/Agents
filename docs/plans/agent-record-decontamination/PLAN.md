@@ -1,21 +1,17 @@
-# Implementation Plan — Agent-Record Calibration: First Honest Report (v2, post-review)
+# Implementation Plan — Agent-Record Calibration: First Honest Report (v3, post-review)
 
-**ID:** PLAN-2026-07-24-agent-record-decontamination-v2
-**Date:** 2026-07-24 · **Base commit:** `961cfd14` (merge of PR #79)
-**Supersedes:** the same-day draft; peer-review corrections in `REVIEW.md` (this directory)
-are incorporated throughout. Narrows the soak-endgame record counting of
-PLAN-2026-07-03-agents-foundation-extraction-soak-v2 Phase 3 ("N≥20 + ≥1 human verdict",
-`../agents-critical-path/PLAN.md`) and `../real-data-activation/PLAN.md` step 6: milestones
-are henceforth stated over **agent-domain** records — a tightening ("never lower N
-silently" holds), recorded in ADR 0026.
-**Scope:** Milestone redefinition + F-044 backfill decision (ADR 0026) → confidence-lane
-consistency → first human-audit verdicts through the existing machinery → fit-time
-degeneracy guards + first committed agent-records calibration report →
-calibrated-confidence decision point.
-**Non-goals:** tau enablement / auto-merge activation (`min_calibration_n=200` and the
-ADR 0005 checklist untouched); Braintrust work (F-038 done; managed prompts tracked
-separately); external replication before its evidence is committed in-repo; `experiments/`
-deletion.
+**ID:** PLAN-2026-08-06-agent-record-calibration-v3
+**Date:** 2026-08-06 · **Base commit:** `f565e08` (merge of PR #122)
+**Supersedes:** v2 (`PLAN-2026-07-24-agent-record-decontamination-v2`), merged in PR #80;
+peer-review corrections in `REVIEW-v2.md` (this directory) are incorporated throughout. v2
+remained accurate for about a day; 82 commits later four of its claims no longer hold.
+**Scope:** F-044 backfill disposition → shadow-lane confidence consistency → first
+human-audit verdicts through the existing machinery → first committed agent-records
+calibration report → the calibrated-confidence decision point, now measurable.
+**Non-goals:** `tau` enablement / auto-merge activation (ADR 0005 checklist untouched);
+changing `risk_target` or `wilson_floor` — ADR 0026 rules those a risk-appetite decision
+needing their own ADR; the milestone redefinition v2 proposed, which **ADR 0026 has already
+settled**; external replication; `experiments/` deletion.
 
 ---
 
@@ -23,189 +19,161 @@ deletion.
 
 | Standard | Rule | Source of truth |
 |---|---|---|
-| Store ground truth | The store moves daily (labeller cron 05:17 UTC). Every committed figure carries a measured-at timestamp and the `merge-gate-data` SHA; every phase re-measures at start. | `.github/workflows/outcome-labeller.yml`, ADR 0018 |
-| Config discipline | Tunables are frozen `*Config` dataclass fields; `agent_core` stays config-file-free. No YAML knobs for calibration math. | `AGENTS.md`, `agent-core/agent_core/domains.py` |
-| Label model | `LabelSource` = REVERT, CI_FAILURE, TIMEOUT_CLEAN (passive) + HUMAN_AUDIT (authoritative). Tau/health fit from HUMAN_AUDIT only via the tested silent filter; passive labels are diagnostics; `timeout_clean` is optimistic by construction (fail-safe detectors). | `agent-core/agent_core/outcome_store.py:157-199`, `agent-core/tests/test_outcome_store.py:195-198`, `agent-core/agent_core/outcome_labeller.py:99-101` |
-| ID assignment | ADR 0026 is next-free (0025 was consumed the same day by the outcome-record forward-compatibility decision -- a live instance of the drift this row warns about; re-verify at authoring). F-numbers are claimed by the implementation PR that lands them (next free today: F-047), never reserved in plans — every ID the 07-03 plan pre-assigned (F-038/F-039/F-040, ADR 0019/0020) drifted or gapped. | `../../decisions/README.md`, `features.yaml` |
-| Protected paths | Phase 1 and Phase 3 implementation PRs touch `.github/**` / root `tests/**` / `scripts/validations/**` → each needs `eval-change-approved` before merge (the guard re-runs on label events). Phase 0 (docs) and Phase 2 (zero code) need none. | `scripts/eval_protected_paths.py` |
-| Report views | PRIMARY (HUMAN_AUDIT-only, tau-relevant) is never pooled with DIAGNOSTIC (includes weak `timeout_clean`). | F-043, `agent-core/agent_core/calibration_report.py:266-285` |
+| Store ground truth | The store moves daily (labeller cron 05:17 UTC). Every committed figure carries a measured-at stamp and the `merge-gate-data` SHA; every phase re-measures before it acts. This is the standard that caught v2's drift. | `.github/workflows/outcome-labeller.yml`, ADR 0018 |
+| **Reserve no identifiers** | Never pre-assign an ADR or F-number. v2's own table said so and v2 then reserved ADR 0026, which was taken the next day (`REVIEW-v2.md` finding 1); the 07-03 plan's F-040 gap took a month to close. Measured 2026-08-06: next free ADR **0032**, next free **F-052** — re-verify at authoring, cite nothing until claimed. | `../../decisions/README.md`, `features.yaml` |
+| Config discipline | Tunables are frozen `*Config` dataclass fields, validated in `__post_init__`, and reachable from the CLI by defaulting the flag off the dataclass. `GatePolicyConfig` now models this fully. | `AGENTS.md`, `agent-core/agent_core/merge_gate.py` |
+| Label model | `LabelSource` = REVERT, CI_FAILURE, TIMEOUT_CLEAN (passive) + HUMAN_AUDIT (authoritative). Tau/health fit from HUMAN_AUDIT only; passive labels are diagnostics, and `timeout_clean` is optimistic by construction. | `agent-core/agent_core/outcome_store.py` (filter at :307), `agent-core/tests/test_outcome_store.py:298` |
+| Estimator boundary | Wilson is the gate's only estimator. PPI++ is report-only and fail-closed; nothing on an auto-merge path may import it. | ADR 0026 |
+| Protected paths | Phase 1 touches `.github/**` and root `tests/**` → its own PR, with `eval-change-approved`. Phases 0, 2 and 3 as scoped need none. | `scripts/eval_protected_paths.py` |
 
 ---
 
-## Phase 0 — Agent-record milestone + backfill decision (ADR 0026; P0, docs only, same day)
+## Measured state (store `4c07d7e`, measured 2026-08-06; latest `merged_at` 2026-08-05)
 
-Measured state (store @ `39b3c22`, latest `merged_at` 2026-07-24T18:08:21-04:00): 43
-records / 31 change_ids; 5 agent-domain rows (`claude-code`), 4 distinct confidences; 8
-`timeout_clean` + 4 `ci_failure`; **0 `human_audit`** ⇒ tau `None` everywhere.
-
-1. Author **ADR 0026** (`docs/decisions/0026-agent-record-calibration-milestone.md`),
-   bundling (precedent: ADR 0023 bundles four decisions):
-   - **Reporting milestone:** N≥20 agent-domain records with ≥3 distinct `raw_confidence`
-     values and both label classes present among agent rows. Reporting-only — tau floors
-     (`min_calibration_n=200`, `is_trustworthy`) and the ADR 0005 checklist untouched.
-   - **Acting-gate posture:** the acting gate's confidence-blindness
-     (`.github/workflows/calibrated-merge-gate.yml:52-53`) is declared intentional while
-     `ENABLE_CALIBRATED_AUTOMERGE` stays off; revisit at enablement-checklist time.
-   - **Fit-guard posture:** opt-in `FitGuardConfig` (Phase 3); dataclass fields, no YAML.
-   - **Decision-point criterion:** K=15 audited agent rows; AUROC bar = `min_auroc`
-     (0.65).
-   - **F-044 backfill disposition:** run the landed-but-never-applied
-     `scripts/migrations/agent_domain_backfill.py` against the live store (dry-run first;
-     converts the ~18 historical Claude-authored `human/*` rows to agent domains, taking
-     the agent-domain count from ≈5 to ≈23) — or record why not. Run-state verified
-     2026-07-24: those rows are still `human/*`; the sole pre-07-23 agent row is PR #73's
-     real-time self-seed, not backfill output.
-2. Add the index row in `../../decisions/README.md` (the 0007 gap stays).
-
-**Exit gate:** ADR 0026 merged; the milestone can no longer be satisfied by `human/*`
-rows; backfill decision executed with its store SHA recorded.
-**Files:** `docs/decisions/0026-agent-record-calibration-milestone.md` (new),
-`docs/decisions/README.md`.
+| | |
+|---|---|
+| Total | 83 rows / 46 change_ids |
+| Agent-domain | **24 rows / 15 change_ids** (was 5/5 on 07-24 — organic growth, no backfill) |
+| Agent `raw_confidence` | 4 distinct: 0.02, 0.024844, 0.05643, 0.724122 |
+| Agent labels | `timeout_clean` ×9, unlabelled ×15 — **no failure class** |
+| `human_audit` | **0** ⇒ `tau is None` in every domain |
+| All labels | `timeout_clean` ×32, `ci_failure` ×5, unlabelled ×46 |
 
 ---
 
-## Phase 1 — Confidence-lane consistency (F claimed at land; ~half day + review)
+## Phase 0 — Close the F-044 backfill decision (docs only; ~half day)
 
-1. **Shadow-lane classification.** The shadow job composes context with neither
-   `--confidence` nor `--human` (`.github/workflows/calibrated-merge-gate.yml:141`),
-   silently producing un-prefixed agent domains at 0.0 via
-   `scripts/merge_gate_context.py:135`. Fix: classify `github.head_ref` against
-   `config/agent-authors.yaml` via `scripts/agent_confidence.py` (mirrors the seed lane;
-   no API call needed on `pull_request` events): agent → `--confidence <proxy>`, else
-   `--human`.
-2. **Fail loud.** `scripts/merge_gate_context.py` exits 2 when neither flag is given,
-   closing the :135 leak (after step 1 no caller relies on it). Update root
-   `tests/test_merge_gate_context.py`.
-3. **No acting-gate wiring** — covered by ADR 0026 (acting-gate posture).
-4. **Elicited self-reported confidence:** design sketch only, deferred behind the Phase 4
-   decision point. The proxy is the baseline; a second signal must beat it on audited
-   data before earning plumbing.
-5. `config/agent-authors.yaml` grows only when a new agent family's PRs are actually
-   observed.
-6. Update workflow-content pins in `scripts/validations/F_035.py` / `F_042.py` if the
-   workflow edit trips them; claim the next free F-number (`features.yaml` +
-   `scripts/validations/F_0XX.py`).
+v2 left this open ("run it — or record why not"). The evidence now answers it, and an
+open-ended disposition on a production-data migration is itself a liability.
 
-**Exit gate:** a `claude/*` PR's shadow summary shows the agent lane with nonzero proxy
-confidence; neither-flag invocation fails with exit 2; validations green;
-`eval-change-approved` obtained before merge.
+**Decision to record: do not run it.** Four independent reasons:
+1. Its stated purpose — crossing N≥20 agent records — is **already met organically** (24).
+2. ADR 0026 reframed that target as a soak counter, not a gate, so the thing it aimed at is
+   not a decision threshold at all.
+3. It cannot supply what is missing. The gaps are a failure class among agent rows and
+   `human_audit` anywhere; re-attributing a domain creates neither.
+4. It mutates append-only production data on `merge-gate-data` for historical tidiness,
+   against an audit trail whose value is that it is not rewritten.
+
+Write it as an ADR (next free at authoring), following the `0026`/`0029` shape:
+Status/Date/Related, Context, Decision, Consequences, explicit reversibility. State the
+condition that would reopen it — a future need to key historical records by
+`(agent_version, domain)` for cross-cell analysis, which ADR 0026 defers until ≥3 populated
+cells exist. Add the index row in `../../decisions/README.md`; the intentional `0007` gap
+stays.
+
+**Exit gate:** ADR merged; `scripts/migrations/agent_domain_backfill.py` either deleted or
+carrying a header pointing at it, so the next reader does not rediscover an unrun migration
+with no verdict.
+**Files:** `docs/decisions/00XX-*.md` (new), `docs/decisions/README.md`.
+
+---
+
+## Phase 1 — Shadow-lane confidence consistency (own PR, `eval-change-approved`; ~half day)
+
+Re-verified live at `f565e08`: `.github/workflows/calibrated-merge-gate.yml:141` composes
+context with **neither** `--confidence` nor `--human`, so every shadow decision records an
+un-prefixed agent domain at confidence 0.0 — the un-prefixed lane is the *agent* lane, so
+this mislabels human PRs as agent ones at zero confidence.
+
+1. Classify `github.head_ref` against `config/agent-authors.yaml` via
+   `scripts/agent_confidence.py` — mirrors the seed lane and needs no API call on
+   `pull_request` events: agent → `--confidence <proxy>`, else `--human`.
+2. Make `scripts/merge_gate_context.py` exit 2 when neither flag is given, closing the
+   silent-default path once no caller relies on it. Re-derive the line number first.
+3. Update root `tests/test_merge_gate_context.py`; refresh any workflow-content pin in
+   `scripts/validations/`; claim the F-number at land time.
+
+**Exit gate:** a `claude/*` PR's shadow summary shows the agent lane at nonzero proxy
+confidence, a human PR shows `human/*` at 0.0, and a neither-flag invocation fails instead
+of defaulting.
 **Files:** `.github/workflows/calibrated-merge-gate.yml`, `scripts/merge_gate_context.py`,
 `tests/test_merge_gate_context.py`, `scripts/validations/*`, `features.yaml`.
 
 ---
 
-## Phase 2 — First human-audit verdicts (zero code; ~1-2 h operator time across 1-2 weeks)
+## Phase 2 — First human-audit verdicts (zero code; operator-gated)
 
-The chain is fully implemented and has never been exercised; this phase runs it and writes
-nothing new.
+Unchanged from v2 and still the critical path: this is the only reason `tau` is `None`
+everywhere. The chain is fully built and has still never been exercised.
 
-1. Trigger `merge-gate-audit.yml` selection (workflow_dispatch, or consume the next Monday
-   06:23 UTC cron run). At today's N the per-domain floor (`MERGE_GATE_AUDIT_FLOOR=3`)
-   dominates the 5% rate — agent domains will be sampled.
-2. Record **10-15 verdicts** via `merge-gate-verdict.yml` (workflow_dispatch; the sole
-   HUMAN_AUDIT writer; auditor allowlist + environment), prioritizing (a) every
-   agent-domain row, (b) the known `ci_failure` rows — the audited set needs a chance at
-   both classes; verdicts on merged changes will skew "correct" and a single-class outcome
-   may not be forceable.
-3. If the audited set stays single-class, that is reported honestly (the report already
-   marks single-class slices DEGENERATE) and Phase 4 waits.
+1. Trigger `merge-gate-audit.yml` selection (dispatch, or the Monday 06:23 UTC cron). Select
+   `--with-propensity` so `selection_propensity` is captured **during** the round — ADR 0026
+   is explicit that it cannot be reconstructed afterwards.
+2. Record verdicts via `merge-gate-verdict.yml` (dispatch-only; the sole HUMAN_AUDIT writer).
+   Prioritise agent-domain rows, and include `ci_failure` rows so the audited set has any
+   chance at both classes.
+3. If it stays single-class, report that honestly — the report already marks such a slice
+   DEGENERATE — and let Phase 4 wait rather than forcing a verdict.
 
-**Exit gate:** ≥10 `label_source == "human_audit"` rows including ≥5 agent-domain rows
-(re-measure; agent rows accrue with every merged `claude/*` PR, plus the backfill if run);
-a single-class outcome documented if it happens.
+**Exit gate:** ≥10 `human_audit` rows including ≥5 agent-domain, each with a recorded
+propensity. Re-measure; agent rows accrue with every merged `claude/*` PR.
 
 ---
 
-## Phase 3 — Fit-time guards + first committed report (F claimed at land; ~1 day)
+## Phase 3 — First committed agent-records calibration report (~half day)
 
-1. **Opt-in `FitGuardConfig`** in `agent-core/agent_core/calibration.py`: frozen
-   dataclass, fields `min_fit_samples: int | None = None`,
-   `refuse_constant: bool = False`; enforced in `IsotonicCalibrator.fit` only when set.
-   Default-`None` call sites stay byte-identical — the cold-start empty-fold fallback
-   (`agent-core/agent_core/outcome_store.py:173-174`) and its locking test
-   (`agent-core/tests/test_outcome_store.py:185-192`) keep fitting N=1 by design
-   (ADR 0023 I-2: no TCB semantic change). `calibration_report` threads guards from
-   `ReportConfig` for report-path fits.
-2. **Single-class honesty:** document or tighten `evaluate_calibration`'s AUROC
-   pass-through (`agent-core/agent_core/calibration.py:321-325` — `roc is None` currently
-   satisfies the criterion).
-3. **First committed snapshot:** `docs/calibration-agent-records-2026-MM.md` in the
-   gap-analysis idiom — dated measured prose + embedded `calibration_report` output (both
-   views) + store SHA + measured-at. Not baseline-JSON (wrong for a daily-moving store);
-   the ephemeral live view stays in the labeller step summary. Include the honesty
-   statement: at n≈12 audited records, Wilson half-widths are ≈±0.2-0.3 — a baseline, not
-   a verdict.
-4. Tests to the agent-core 95 floor; F-entry + `scripts/validations/F_0XX.py`; CHANGELOG
-   entry (user-visible artifact).
+The guard work v2 scoped here **shipped in PR #80** (`CalibrationConfig.min_eval_samples` /
+`require_discrimination`), and the degeneracy machinery is richer than v2 anticipated. What
+remains is the deliverable itself, which still does not exist.
 
-**Exit gate:** agent-core gate green; guards verified opt-in (existing call sites
-byte-identical); snapshot committed and linked; `eval-change-approved` obtained.
-**Files:** `agent-core/agent_core/calibration.py`,
-`agent-core/agent_core/calibration_report.py`, `agent-core/tests/*`,
-`docs/calibration-agent-records-*.md` (new), `features.yaml`, `scripts/validations/*`,
-`CHANGELOG.md`.
+1. Run `agent_core.calibration_report` over the agent slice with `--estimator wilson`
+   (default), and render the PPI++ column alongside it as ADR 0026 intends — report-only.
+2. Commit it as `docs/calibration-agent-records-<YYYY-MM>.md` in the gap-analysis idiom:
+   dated measured prose, embedded output, store SHA, measured-at.
+3. State the honest width. At the audit counts Phase 2 can realistically produce, Wilson
+   half-widths sit around ±0.2-0.3; the document is a baseline, not a verdict, and should
+   say so in its opening line.
+4. Optional, cheap, and worth folding in: **G4** — four CLIs (`calibration_report`,
+   `merge_seed`, `outcome_labeller`, `audit_sampler`) log their only structured run record at
+   INFO but never call `configure_logging`, so it is discarded. One line each; none can
+   change a gate decision.
+
+**Exit gate:** report committed and linked from `docs/README.md`; agent-core gate green.
 
 ---
 
-## Phase 4 — Calibrated-confidence decision point (clock-gated on ≥15 audited agent rows)
+## Phase 4 — Calibrated-confidence decision point (clock-gated on Phase 2)
 
-On the audited agent subset: if neither the proxy nor (if built by then) an elicited
-signal clears `min_auroc = 0.65`, the calibrated-confidence thesis re-scopes to the gate's
-existing Wilson-floor-on-outcomes path — recorded as a new ADR (next free number at that
-time). Either outcome is publishable. The proxy is the baseline being tested, not the
-fallback: the draft's kill criterion assumed self-reported confidence was the plan of
-record and mechanical signals the pivot; ADR 0023 shipped the reverse.
+Now concrete rather than hypothetical. Use `agent_core.proxy_eval` to measure proxy↔audit
+correlation **marginally and conditionally** (on `score >= candidate tau`, and per bin). Per
+ADR 0026 the difference between those rows is the finding: a marginal number alone
+recommends the wrong lever.
+
+Decision: if no proxy clears `min_auroc` (0.65) on the audited agent subset, the
+calibrated-confidence thesis re-scopes to Wilson-floor-on-outcomes, and the orthogonal
+`passive_label` proxy — which ADR 0026 measured at 1.63× effective-N against
+`raw_confidence`'s 1.08× — becomes the candidate worth building. Either outcome is
+publishable; record it as an ADR at that time.
 
 ---
-
-## Explicitly deferred / evidence-gated
-
-- **External replication (GABench failure taxonomy, WML repo review):** no phase until
-  the 2026-07-24 scan notes are committed under `docs/` — nothing in-repo currently
-  evidences them.
-- **Braintrust:** nothing to defer — F-038 shipped (additive, off by default); managed
-  prompts remain deferred on their own record (`../../braintrust-spike.md`).
-- **`experiments/` audit:** after Phase 3; corrected figures 7,444 Python lines (4,282
-  non-test); it is D-0 (Langfuse-vs-Opik) evidence infrastructure with pending human
-  steps, not deletion-ready.
-- **SpecKit-vs-OpenSpec bake-off:** dropped — no in-repo trace exists to be "unchanged"
-  relative to.
 
 ## Sequencing
 
 ```
-P0 (ADR 0026 + backfill, same day) ──► P1 (lane consistency) ──────► P3 (guards + report)
-        └────────────► P2 (audit verdicts; independent, human-paced) ──┘
-P3 + ≥15 audited agent rows ──► P4 decision point (new ADR)
-External replication: no phase until scan notes are committed in-repo
+P0 (backfill verdict, docs) ──────────────────────────────► P3 (first report)
+P1 (shadow lane, own PR + label) ─────────────────────────► P3
+P2 (audit verdicts; operator-paced, the critical path) ───► P3 ──► P4 (needs P2's audits)
 ```
 
 ## Risk register
 
 | Risk | Mitigation |
 |---|---|
-| Store drift between planning and execution | Re-measure at each phase start; every committed figure stamped measured-at + store SHA |
-| Protected-path guard blocks P1/P3 | Request `eval-change-approved` up front; the guard re-runs on label events |
-| Audited subset stays single-class | Report marks it DEGENERATE honestly; audit floor pulls `ci_failure` rows in; P4 stays clock-gated |
-| Fit guards break cold-start semantics | Opt-in `None` defaults; existing call sites byte-identical; fold-fallback test locks it |
-| ID pre-assignment drift | Only ADR 0026 named (authored same day in P0); F-numbers claimed at land — the F-040 gap is the precedent |
-| Backfill double-run or audit-row rewrite | Migration refuses audit-row rewrites (`scripts/migrations/agent_domain_backfill.py:99-100`); dry-run first; run-state verified before the ADR |
-| Elicited signal would recreate a constant predictor | Distinctness check before any calibrator sees it; comparison confined to the audited subset |
-| Snapshot mistaken for live state | Dated filename + measured-at header + pointer to the ephemeral live view |
+| Plan drifts again between authoring and execution | Re-measure at every phase start and stamp the store SHA; that rule is what caught v2 |
+| An identifier is reserved and then taken | Reserve none; claim at land time (`REVIEW-v2.md` finding 1) |
+| Audited subset stays single-class | Report DEGENERATE honestly; pull `ci_failure` rows into the sample; P4 waits rather than forcing a number |
+| Phase 1 stalls on the protected-path label | Keep it in its own PR so Phases 0/3 are not blocked behind it |
+| PPI++ mistaken for a gate estimator | Wilson stays the gate's only estimator; the report column is labelled report-only (ADR 0026, pinned by its validation script) |
+| Propensity lost | Phase 2 selects `--with-propensity`; it is unreconstructable after the round |
 
 ## Acceptance summary
 
-- ADR 0026 accepted: agent-record reporting milestone (unsatisfiable by `human/*` rows),
-  acting-gate posture, fit-guard posture, decision-point criterion, backfill disposition —
-  tau floors untouched
-- Backfill decision executed with recorded store SHA (expected: agent rows ≈5 → ≈23)
+- Backfill disposition recorded as an ADR, with its reopening condition — no longer an open
+  question against production data
 - Shadow lane routes like the seed lane; neither-flag invocation fails loud
-- ≥10 HUMAN_AUDIT verdicts including ≥5 agent-domain rows through the
-  previously-unexercised audit chain
-- Opt-in fit guards merged with locking tests; single-class AUROC pass-through documented
-  or tightened
-- First committed dated agent-records calibration report (PRIMARY + DIAGNOSTIC, Wilson
-  CIs, honesty statement)
-- Phantom work items corrected in the record: no Braintrust migration pending,
-  `experiments/` figures fixed, SpecKit/OpenSpec dropped, external replication
-  evidence-gated
+- ≥10 HUMAN_AUDIT verdicts incl. ≥5 agent-domain, each carrying a propensity
+- First committed dated agent-records calibration report, honest about its width
+- Decision point answered with a measured ρ, marginal and conditional, or explicitly still
+  waiting on audits
+- No identifier reserved anywhere in this document
