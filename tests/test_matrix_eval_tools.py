@@ -1647,46 +1647,68 @@ class TestPhoenixEvalJudge:
 # ----------------------------------------------------------------------------
 
 
+def _write_parquet(path: Path, columns: dict[str, list]) -> Path:
+    """Write a Parquet fixture with pyarrow only — no pandas.
+
+    `ParquetDataset.load()` imports `pyarrow.parquet` and nothing else, and pyarrow is
+    the whole of the `parquet` extra (`pyproject.toml`) and is also in `dev`. pandas is
+    in NEITHER, and CI installs `.[dev,langfuse,openai,parquet,autoevals]` — so the
+    earlier `importorskip("pandas")` on this class skipped every parquet cell in CI
+    while the coverage artifact claimed them: a false green of exactly the class this
+    feature exists to eliminate. Building the fixture on the SUT's own dependency makes
+    these cells execute where they are claimed.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    pq.write_table(pa.table(columns), str(path))
+    return path
+
+
 class TestParquetDataset:
     MATRIX_KIND = "dataset"
     MATRIX_COMPONENTS = ("parquet",)
 
     def setup_class(self):
-        pytest.importorskip("pandas")
+        pytest.importorskip("pyarrow", reason="pyarrow is the parquet extra and is in dev; pandas is not needed")
 
-    def test_m1_correctness(self, tmp_path) -> None:
-        import pandas as pd
-
-        df = pd.DataFrame([{"id": "ds-1", "question": "q1", "expected": "a1"}])
-        p = tmp_path / "test_data.parquet"
-        df.to_parquet(p)
+    def test_m1_correctness(self, tmp_path: Path) -> None:
+        p = _write_parquet(
+            tmp_path / "test_data.parquet",
+            {"id": ["ds-1"], "question": ["q1"], "expected": ["a1"]},
+        )
         ds = DATASETS.create("parquet", {"path": p.as_posix(), "input_columns": ["question"]})
         items = list(ds.load())
         assert len(items) == 1
         assert items[0].id == "ds-1"
+        assert items[0].inputs == {"question": "q1"}
+        assert items[0].expected == "a1"
 
-    def test_m2_edge_empty_frame_yields_no_items(self, tmp_path) -> None:
-        import pandas as pd
-
-        df = pd.DataFrame({"id": [], "question": [], "expected": []})
-        p = tmp_path / "empty.parquet"
-        df.to_parquet(p)
+    def test_m2_edge_empty_table_yields_no_items(self, tmp_path: Path) -> None:
+        p = _write_parquet(tmp_path / "empty.parquet", {"id": [], "question": [], "expected": []})
         ds = DATASETS.create("parquet", {"path": p.as_posix(), "input_columns": ["question"]})
         assert list(ds.load()) == []
 
-    def test_m3_type_safety(self, tmp_path) -> None:
-        import pandas as pd
-
-        df = pd.DataFrame([{"id": "ds-1", "question": "q1", "expected": "a1"}])
-        p = tmp_path / "typed.parquet"
-        df.to_parquet(p)
+    def test_m3_type_safety(self, tmp_path: Path) -> None:
+        p = _write_parquet(
+            tmp_path / "typed.parquet",
+            {"id": [42], "question": ["q1"], "expected": ["a1"]},
+        )
         items = list(DATASETS.create("parquet", {"path": p.as_posix(), "input_columns": ["question"]}).load())
         assert isinstance(items[0], EvalItem)
-        assert isinstance(items[0].id, str)
+        # A non-string id column is coerced to str, so downstream item ids stay uniform.
+        assert items[0].id == "42"
+        assert isinstance(items[0].metadata, dict)
 
     def test_m6_missing_file(self) -> None:
         ds = DATASETS.create("parquet", {"path": "invalid-path-123.parquet"})
         with pytest.raises(FileNotFoundError):
+            list(ds.load())
+
+    def test_m6_error_missing_input_column(self, tmp_path: Path) -> None:
+        p = _write_parquet(tmp_path / "cols.parquet", {"id": ["a"], "question": ["q"]})
+        ds = DATASETS.create("parquet", {"path": p.as_posix(), "input_columns": ["nonexistent"]})
+        with pytest.raises(ValueError, match="missing required input column"):
             list(ds.load())
 
 

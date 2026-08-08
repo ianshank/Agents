@@ -23,7 +23,7 @@ committed baseline); M8 is per-kind (see the pipelines section).
 | `inline` | 1 | 1 | 1 | — | waived |
 | `jsonl` | 1 | 1 | 1 | — | 1 |
 | `langfuse` | 1 | 1 | 1 | — | 1 |
-| `parquet` | 1 | 1 | 1 | — | 1 |
+| `parquet` | 1 | 1 | 1 | — | 2 |
 
 - `inline` M6 waived: config-embedded items have no I/O failure path; a malformed record fails loudly at load
 
