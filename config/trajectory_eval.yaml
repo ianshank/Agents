@@ -22,10 +22,14 @@ dataset:
       - id: lookup-then-fetch
         inputs: { question: "what is widget 42" }
         expected:
+          # Arguments must match what the target actually sends (the demo SUT echoes
+          # the question verbatim into `q`) — comparison includes arguments unless
+          # `compare_arguments: false` is set on the scorer.
           tool_calls:
             - name: search
-              arguments: { q: "widget 42" }
+              arguments: { q: "what is widget 42" }
             - name: fetch
+              arguments: { id: "42" }
         metadata:
           # Per-item budget; overrides the scorer's own `budget` param.
           step_budget: 3

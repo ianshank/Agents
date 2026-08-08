@@ -175,8 +175,15 @@ def test_config_loading_is_strict_about_unknown_scorer_params():
 
 
 def test_the_shipped_example_config_loads_and_builds():
-    """`config/trajectory_eval.yaml` must stay runnable, not just illustrative."""
+    """`config/trajectory_eval.yaml` must stay a WORKING example, not just a loadable one.
+
+    The non-emptiness assert alone hid a real defect: the shipped reference arguments
+    never matched what `tests._sut:trajectory_demo` emits, so `trajectory_in_order`
+    scored 0.0 and the config failed its own gate while this test stayed green.
+    """
     from pathlib import Path
+
+    from eval_harness.gating import evaluate_gate
 
     path = Path(__file__).resolve().parent.parent / "config" / "trajectory_eval.yaml"
     config = load_config(path)
@@ -184,6 +191,13 @@ def test_the_shipped_example_config_loads_and_builds():
     run = engine.run()
     assert run.items, "the example config must actually produce results"
     assert any(name.startswith("trajectory") for name in run.aggregate)
+    # EVERY configured scorer must pass, derived from the config rather than naming one:
+    # the gate only covers two of the five, so a reference that never matches what the
+    # SUT emits could recur in the other three and stay invisible.
+    for scorer in config.scorers:
+        assert run.aggregate[scorer.type].pass_rate == 1.0, scorer.type
+    gate = evaluate_gate(config.gate, run)
+    assert gate.passed, f"the shipped example must pass its own gate: {gate}"
 
 
 # --- composite interaction (F7) ----------------------------------------------------

@@ -158,7 +158,7 @@ jobs:
           tests/test_merge_gate_context.py tests/test_record_audit_verdict.py
           tests/test_audit_issue_sync.py tests/test_check_size_budget.py
           tests/test_check_charter_drift.py tests/test_check_charter_invariants.py
-          tests/test_check_guard_reachability.py
+          tests/test_check_guard_reachability.py tests/test_matrix_coverage.py
           --override-ini addopts=""
           --cov=regression_gate --cov=eval_protected_paths
           --cov=check_protected_changes --cov=fix_loop
@@ -168,7 +168,9 @@ jobs:
           --cov=skill_marketplace --cov=_common
           --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023
           --cov=merge_gate_context --cov=record_audit_verdict --cov=audit_issue_sync
-          --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_050 --cov=F_052
+          --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037
+          --cov=F_039 --cov=F_041 --cov=F_045 --cov=F_050 --cov=F_052 --cov=F_053
+          --cov=tests._matrix_coverage
           --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
       # Net-new lint/test regressions vs the PR base (or main on push). Blocks on net-new.
       - name: Regression gate

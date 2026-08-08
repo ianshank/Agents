@@ -97,7 +97,98 @@
   `quality-gates.yml`'s `gates` job so a marker in any tracked file now fails CI. Also flipped
   F-048 (gitleaks, landed via #83) from `in_progress` to `done` with its `implemented_in` SHA,
   so `F_048.py` is actually enforced by `validate.py --tier fast` going forward.
-- [x] **Hardened matrix eval tools test suite** — eliminated fragile `try...except pass` swallows and hard-coded mocks in `tests/test_matrix_eval_tools.py`, replacing them with full offline dependency injection.
+- [x] **Matrix completeness (F-053, ADR 0032)** — the matrix's component axis is now derived
+  and enforced: a fresh-subprocess registry census + AST cell map + per-kind dim floors with
+  a two-way-hygienic waiver map (`tests/test_matrix_coverage.py`), an exact-equality
+  alias→canonical freeze, and a generated, freshness-gated `docs/matrix-coverage.md`. All 7
+  trajectory scorers gained full rows; every sparse cell was filled to its floor; the
+  shipped `config/trajectory_eval.yaml` (which failed its own gate) and two never-ran
+  braintrust matrix cells were fixed in-flight. This formalizes the earlier F-ID-less
+  "hardened matrix eval tools test suite" item (fragile `try...except pass` swallows and
+  hard-coded mocks replaced with full offline dependency injection).
+  **Post-merge hardening pass (same PR, after a two-agent peer review):** the review found
+  the feature had shipped its own defect class twice. Three of the phoenix sink's floor
+  cells asserted *nothing* — mutation-proven to pass against a gutted `emit()` and a
+  factory that never degraded — while the artifact certified them; the recording null
+  clients that both vendor sinks document as test doubles were unused, and the cells now
+  assert through them. F_053's docstring claimed `--check` verified the dim floors
+  "transitively"; it compares document text, so `--update` then the validator would have
+  reported PASS on a holed matrix whose doc faithfully recorded the holes — F_053 now
+  evaluates the policy directly and `--update` refuses to write a holed artifact. The
+  parquet false-green (a class gated on `pandas`, which no extra installs, so every
+  parquet cell skipped in CI while the artifact claimed four) is now a gate rather than a
+  review catch: `SKIP_GATED_IMPORTS` + `skip_gate_problems()` assert every
+  `importorskip` in a matrix class is satisfied by the CI job's install line, in both
+  directions. Also closed: the inverse of the F-052 dead-`--cov=` bug (F_031/F_037/F_039/
+  F_041/F_045 ran every build and were measured never) plus a drift test so neither
+  direction recurs; the guard library's own 710 lines went from measured-by-nothing to a
+  gated 95%; `_GRID_DIMS` and the dim regex now derive from the policy (a hardcoded grid
+  omitted a column, so a genuinely missing cell rendered as *no* cell); markdown cell
+  escaping (a `|` in a note fabricated a column identically on both sides of the freshness
+  comparison, so the gate stayed green while the published artifact was wrong); and
+  logging per `AGENTS.md`, including the `basicConfig` without which those records were
+  discarded at root WARNING in script mode — the G4 defect recreated in new code.
+
+- [ ] **Matrix follow-ons deferred from the F-053 hardening pass** — each verified, none
+  blocking:
+  - **Extract the shared registry probe** to `tests/_registry_probe.py`. ~60-70 lines are
+    duplicated between `tests/_matrix_coverage.py` and `tests/test_plugin_registry_surface.py`
+    (identical `_PROBE` bootstrap, `subprocess.run` args, all three failure-mode messages,
+    `_PROBE_TIMEOUT_SECONDS`), and they have **already diverged**: the newer copy added a
+    `_run_probe` monkeypatch seam, `OSError` translation and partial-stream capture on
+    timeout that the older one lacks. This is the `agent_core/subprocess_util.py` situation
+    verbatim ("extracted so the two copies cannot drift — they had, and one had dropped the
+    warning logs"). Prerequisite for the Phase-2 generator, which should emit code that
+    imports the seam rather than a seventh copy. `tests/` is not coverage-gated and is
+    already protected, so extraction there costs nothing extra.
+  - **`docs.yml`'s registry-drift guard hardcodes a 5-entry `REGISTRIES` map** — the third
+    independent enumeration of the registry set (after the census, which derives it, and
+    F_053's deliberate independent anchor). When `STATE_ADAPTERS` lands, the census
+    auto-catches it and F_053 fails loudly, but that guard **silently skips it**. Fold into
+    F-054 or derive it.
+  - **`--cov-config=/dev/null`** in the tooling-coverage step discards
+    `pyproject.toml`'s `exclude_lines`, so every validator is charged for its
+    `raise SystemExit(main())` and `sys.path` bootstrap — a systematic tax absorbed by the
+    85% floor. Point it at a real rcfile, or `# pragma: no cover` the `__main__` guards.
+  - **`EvalConfig` is not in `eval_harness.config.__all__`** — the single `mypy --strict`
+    error in the new guard library, and it also lands on the matrix suite. Worth fixing in
+    the library regardless.
+  - **`mypy --strict` over root `tests/`** — 18 errors in `test_matrix_eval_tools.py`
+    (11 missing annotations on `setup_class`/helpers, 7 bare generics). The four sibling
+    packages already run `strict = true` over their tests; enabling
+    `warn_unused_ignores` root-wide is the cheap first step (it would have caught the dead
+    `type: ignore` this pass removed).
+
+- [ ] **Skills/agents extraction from the F-053 work** (ranked by value per hour; the
+  Phase-2 fan-out is the forcing function):
+  1. **Extend `skills/openspec-peer-review`** with the two-pass protocol this branch used —
+     an independent mechanical fact-check (every falsifiable claim re-derived against a
+     pinned SHA, verdicts CONFIRMED/CORRECTED/REFUTED) *plus* an adversarial design pass,
+     attacks verified before kept and refuted attacks recorded. It caught five real defects
+     across two rounds here. SKILL.md edit only, stays subjective tier, ~2h.
+  2. **Validator-registration guard (F-054)** — the 5-point sweep (ledger entry, `F_0NN.py`,
+     the import/parametrize hook, the `--cov=` token) has now been half-done twice. This
+     pass added the drift test for two of those lists; a ~25-line guard over all of them
+     (plus `docs.yml`'s `REGISTRIES`) makes the whole class structurally impossible.
+     Prefer the guard over a scaffold skill: derived reality beats a generated manual list.
+  3. **`test-completeness-guard` generator skill** (root `skills/`, code tier at the 95%
+     floor) — Phase 2 needs this machinery five more times, and the precedent for the same
+     1→5 fan-out (`test_public_surface.py`) was solved by byte-copy + drift-pin. Emits the
+     probe/extractor/policy/renderer plus the `--check`/`--update` CLI and an `F_0NN` stub;
+     the per-package floors and waivers stay author-supplied judgment (ADR 0020 law 2 — do
+     not fabricate). Its evals should assert byte-stability and mutation in both directions
+     on a fixture package. Do the probe extraction first. 2-3 days.
+  4. **`scaffold_change.py` in `openspec-quality-plan`** — the 5-file change package plus
+     two index patches is rigid and CI-checked. Note the real cost: adding a script promotes
+     that skill from subjective to code tier (ADR 0030 §3), so it inherits a dedicated CI
+     job at the 95% branch floor and loses its `EXEMPT` entry. ~1.5 days.
+  5. **Rejected: a "generated-artifact + freshness gate" skill.** Only ~12 lines are
+     genuinely shared between `mermaid_gen --check` and this guard's CLI (the third
+     `__main__`, the surface guard's `--update`/`--allow-drops`, is a materially different
+     freeze-with-drop-veto), and ADR 0020 law 4 pushes generator-emitted `--check` toward
+     advisory — the opposite of what these blocking gates need. A ~15-line
+     `freshness_main(render, path, hint)` helper is the right size; candidate 3 subsumes the
+     rest.
 - [x] **Reasoning & Planning Skills** — added three composable reasoning skills to the marketplace (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`).
 - [x] **Dynamic drift guard script tech-debt resolution** — resolved tech debt in the dynamic drift guard scripts.
 - [x] **Proxy-correlation measurement, PPI++ report estimator & audit propensity (F-047,
@@ -148,7 +239,7 @@
   agent-confidence artifact the merge-gate soak item was waiting on. Remaining: accumulate the
   agent-domain HUMAN_AUDIT labels (the corpus now grows on every agent merge) before any agent
   domain can leave cold-start ESCALATE.
-- [x] **Skill Validation Assertion Registries & dataset-lint (F-045)** — Re-architected `validate_skill.py` to decouple assertion grading from validation loops using the `ASSERTION_GRADERS` registry (detailed in [ADR 0024](docs/decisions/0024-assertion-graders-registry.md)). Introduced a standalone `dataset-lint` skill capable of format-agnostic deep validation. Brought both components up to 100% test coverage and captured comprehensive testing matrices into `eval_test_matrix.xlsx`.
+- [x] **Skill Validation Assertion Registries & dataset-lint (F-045)** — Re-architected `validate_skill.py` to decouple assertion grading from validation loops using the `ASSERTION_GRADERS` registry (detailed in [ADR 0024](docs/decisions/0024-assertion-graders-registry.md)). Introduced a standalone `dataset-lint` skill capable of format-agnostic deep validation. Brought both components up to 100% test coverage. (An `eval_test_matrix.xlsx` companion workbook was described here but never committed on any ref — not to be confused with `experiments/backend-validation`'s *external* `Eval_Harness_Test_Matrix_v2.xlsx`; the canonical, generated coverage matrix is now `docs/matrix-coverage.md`, F-053.)
 - [x] **Merge-gate soak-stats (F-040)** — `agent_core.store_sync.soak_progress(records, target)`
   makes progress toward the ADR 0005 enablement threshold observable: a pure, read-only summary
   (total/pending/labeled, HUMAN_AUDIT count, per-domain cold-start keyed on
