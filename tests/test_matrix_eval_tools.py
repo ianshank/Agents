@@ -1033,9 +1033,12 @@ class TestConsoleSink:
         assert len(captured.out) > 0
 
     def test_m3_type_safety(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from eval_harness.sinks import ConsoleSink
+
         s = SINKS.create("console", {})
-        assert s.emit(_make_run_result()) is None
-        assert all(isinstance(line, str) for line in s.lines)
+        assert isinstance(s, ConsoleSink)
+        s.emit(_make_run_result())
+        assert s.lines and all(isinstance(line, str) for line in s.lines)
         capsys.readouterr()
 
 
@@ -1094,7 +1097,10 @@ class TestHtmlFileSink:
         assert "My Report" in content
 
     def test_m3_type_safety_render_is_str(self) -> None:
+        from eval_harness.sinks import HtmlFileSink
+
         s = SINKS.create("html_file", {"path": "unused.html"})
+        assert isinstance(s, HtmlFileSink)
         rendered = s.render(_make_run_result())
         assert isinstance(rendered, str)
         assert rendered.startswith("<!DOCTYPE html>")
