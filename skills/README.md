@@ -24,7 +24,7 @@ the marketplace itself doesn't provide.
 | [`dataset-lint`](dataset-lint/) | 1.0.0 | Validate eval datasets for structure, duplicate IDs, and encoding |
 | [`hierarchical-recursive-brainstorm`](hierarchical-recursive-brainstorm/) | 1.0.0 | Decompose a topic into a pruned, recursively-expanded hierarchy and synthesize upward |
 | [`openspec-quality-plan`](openspec-quality-plan/) | 1.0.0 | Generate a complete OpenSpec change package (proposal, design, tasks, spec deltas) |
-| [`openspec-peer-review`](openspec-peer-review/) | 1.0.0 | Emit objective peer-review findings and rewrite an OpenSpec package to meet quality standards |
+| [`openspec-peer-review`](openspec-peer-review/) | 1.1.0 | Emit objective peer-review findings and rewrite an OpenSpec package to meet quality standards |
 
 ## Three kinds of skill
 

@@ -103,6 +103,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attach a trajectory from a YAML config without a bespoke `TargetRunner` — previously no
   built-in target could emit one at all, making F-051 unreachable from config.
 
+### Changed
+- **`openspec-peer-review` skill 1.0.0 → 1.1.0.** The procedure now codifies the two-pass
+  protocol the repo's last two major reviews actually used (pinned-SHA mechanical
+  fact-check with CONFIRMED/CORRECTED/REFUTED verdicts, then an adversarial design review
+  whose refuted attacks are recorded, never deleted), the findings ordering, and a new
+  `references/two-pass-protocol.md` with both worked examples
+  (`openspec/changes/add-eval-matrix-completeness/review.md`,
+  `docs/plans/agent-eval-coverage/REVIEW.md`). Subjective tier unchanged (no `evals/`).
+
 ### Fixed
 - **Eval-integrity guard reachability (F-052).** The protected-path guard is only as good as
   the set of PRs it runs on, and that set is decided by a *second* list —
