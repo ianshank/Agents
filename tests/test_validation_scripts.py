@@ -41,29 +41,30 @@ import F_050  # noqa: E402
 import F_052  # noqa: E402
 import F_053  # noqa: E402
 
-
-@pytest.mark.parametrize(
-    "module",
-    [F_020, F_021, F_022, F_023, F_031, F_032, F_033, F_034, F_035, F_037, F_039, F_041, F_045, F_050, F_052, F_053],
-    ids=[
-        "F_020",
-        "F_021",
-        "F_022",
-        "F_023",
-        "F_031",
-        "F_032",
-        "F_033",
-        "F_034",
-        "F_035",
-        "F_037",
-        "F_039",
-        "F_041",
-        "F_045",
-        "F_050",
-        "F_052",
-        "F_053",
-    ],
+#: Single source of truth for which validators this file exercises. The ids are derived
+#: from each module's own ``__name__`` rather than restated, so the list cannot drift
+#: from its own labels (the previous parallel ``ids=`` list was 16 hand-kept strings).
+_VALIDATOR_MODULES = (
+    F_020,
+    F_021,
+    F_022,
+    F_023,
+    F_031,
+    F_032,
+    F_033,
+    F_034,
+    F_035,
+    F_037,
+    F_039,
+    F_041,
+    F_045,
+    F_050,
+    F_052,
+    F_053,
 )
+
+
+@pytest.mark.parametrize("module", _VALIDATOR_MODULES, ids=lambda m: m.__name__)
 def test_validator_main_passes(module):
     # Each validator returns 0 on success (F_022 returns 0 even if agent_core is
     # absent, per its lazy-import contract).
@@ -105,6 +106,30 @@ class TestCiEnforces:
 
     def test_unrelated_workflow_is_not_treated_as_delegating(self):
         assert not _common.delegates_to_gate(self.NEITHER)
+
+
+def test_imported_validators_and_the_ci_cov_list_agree():
+    """The two lists that must never drift: what this file imports, and what the
+    tooling-coverage step measures.
+
+    Both directions have already bitten. F-052 was in the ``--cov=`` list but imported
+    nowhere, so coverage warned "Module F_052 was never imported" and measured nothing;
+    F_031/F_037/F_039/F_041/F_045 were the inverse — executed here every run, measured
+    never. Asserting the agreement is the same two-list-drift fix F-052 applied to the
+    protected-path filters, so neither direction can recur silently.
+    """
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    imported = {module.__name__ for module in _VALIDATOR_MODULES}
+    workflow = (root / ".github" / "workflows" / "quality-gates.yml").read_text(encoding="utf-8")
+    measured = set(re.findall(r"--cov=(F_\d+)", workflow))
+    assert imported == measured, (
+        "validator import list and quality-gates.yml --cov= list disagree:\n"
+        f"  imported but unmeasured: {sorted(imported - measured)}\n"
+        f"  measured but unimported: {sorted(measured - imported)}"
+    )
 
 
 def test_common_check_records_failure():

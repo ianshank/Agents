@@ -191,7 +191,11 @@ def test_the_shipped_example_config_loads_and_builds():
     run = engine.run()
     assert run.items, "the example config must actually produce results"
     assert any(name.startswith("trajectory") for name in run.aggregate)
-    assert run.aggregate["trajectory_in_order"].pass_rate == 1.0
+    # EVERY configured scorer must pass, derived from the config rather than naming one:
+    # the gate only covers two of the five, so a reference that never matches what the
+    # SUT emits could recur in the other three and stay invisible.
+    for scorer in config.scorers:
+        assert run.aggregate[scorer.type].pass_rate == 1.0, scorer.type
     gate = evaluate_gate(config.gate, run)
     assert gate.passed, f"the shipped example must pass its own gate: {gate}"
 

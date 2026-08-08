@@ -206,8 +206,13 @@ class TestMockJudge:
         assert all(r.score == results[0].score for r in results)
 
     def test_m6_error_string_score_coerced(self) -> None:
-        """Score from config could be string '0.5' — should be float-coerced."""
-        j = JUDGES.create("mock", {"default_score": "0.5"})  # type: ignore[arg-type]
+        """Score from config could be string '0.5' — should be float-coerced.
+
+        No `type: ignore` needed: `Registry.create` takes an untyped `dict`, so there is
+        no arg-type check to suppress. The suppression that used to sit here was dead —
+        invisible because the root config leaves `warn_unused_ignores` off.
+        """
+        j = JUDGES.create("mock", {"default_score": "0.5"})
         v = j.evaluate("test")
         assert v.score == 0.5
         assert isinstance(v.score, float)
@@ -821,19 +826,37 @@ class TestTrajectoryScorersShared:
         assert isinstance(r.metadata, dict)
 
     @pytest.mark.parametrize("name", TRAJECTORY_SCORERS)
-    def test_m5_determinism_with_set_bearing_arguments(self, name: str) -> None:
-        """Same-process stability over a set-valued argument (unordered on purpose).
+    def test_m5_determinism_across_argument_key_order(self, name: str) -> None:
+        """Two EQUAL trajectories built with different argument key insertion order must
+        score identically — plus repeat-scoring stability.
 
-        The cross-interpreter, cross-PYTHONHASHSEED canonicalisation property is pinned
-        by real subprocesses in tests/test_trajectory_contracts.py; duplicating those
-        spawns here would buy nothing. This cell asserts the scorer level: repeat
-        scoring of one output is verdict-identical.
+        Re-scoring one object ten times cannot falsify anything: any pure function passes
+        it. Dict key order is the property that genuinely varies in-process, so the cell
+        scores two separately-built equal trajectories whose argument dicts were
+        populated in opposite order. The cross-interpreter/cross-PYTHONHASHSEED
+        canonicalisation property stays pinned by real subprocesses in
+        tests/test_trajectory_contracts.py.
         """
         params, expected = self._M3_SETUP[name]
-        out = traj.output_with(traj.tool_call("a", {"tags": {"x", "y", "z"}}), traj.final())
-        results = [_score_trajectory(name, out, expected=expected, params=params) for _ in range(10)]
-        verdicts = {(r.value, r.passed, r.comment) for r in results}
-        assert len(verdicts) == 1
+        first_args: dict[str, object] = {}
+        first_args["x"], first_args["y"] = 1, 2
+        second_args: dict[str, object] = {}
+        second_args["y"], second_args["x"] = 2, 1
+        assert first_args == second_args and list(first_args) != list(second_args)
+
+        def verdict(arguments: dict[str, object]) -> tuple[float, bool | None, str | None]:
+            out = traj.output_with(traj.tool_call("a", arguments), traj.final())
+            r = _score_trajectory(name, out, expected=expected, params=params)
+            return (r.value, r.passed, r.comment)
+
+        assert verdict(first_args) == verdict(second_args)
+
+        stable = traj.output_with(traj.tool_call("a", {"tags": {"x", "y", "z"}}), traj.final())
+        repeats = {
+            (r.value, r.passed, r.comment)
+            for r in (_score_trajectory(name, stable, expected=expected, params=params) for _ in range(10))
+        }
+        assert len(repeats) == 1
 
     @pytest.mark.parametrize(
         "name,params,exc",
@@ -1925,22 +1948,46 @@ class TestLangfuseSink:
 
 
 class TestPhoenixSink:
+    """Asserts through the recording null client rather than "it did not crash".
+
+    `NullPhoenixScoreClient` documents itself as a test double that records calls, and
+    the earlier version of this class asserted nothing at all — a no-op `emit` and a
+    `build_score_client` that never degraded both passed it, while the coverage artifact
+    reported the component's whole floor as covered.
+    """
+
     MATRIX_KIND = "sink"
     MATRIX_COMPONENTS = ("phoenix",)
 
-    def test_m1_correctness_disabled_default_is_a_no_op(self) -> None:
-        """`enabled` defaults to False, so the sink emits through the no-op client —
-        the documented offline posture; nothing to patch and nothing crashes."""
+    def test_m1_correctness_disabled_default_logs_every_score(self) -> None:
+        from eval_harness.phoenix_client import NullPhoenixScoreClient
+
         s = SINKS.create("phoenix", {})
         s.emit(_make_run_result())
+        client = s._client  # type: ignore[attr-defined]
+        assert isinstance(client, NullPhoenixScoreClient)
+        assert [row["name"] for row in client.scores] == ["exact_match"]
+        assert client.scores[0]["item_id"] == "t1"
+        assert client.scores[0]["value"] == 1.0
+        assert client.flushed is True
+
+    def test_m1_correctness_min_value_filters_scores(self) -> None:
+        s = SINKS.create("phoenix", {"min_value_to_log": 2.0})
+        s.emit(_make_run_result())
+        assert s._client.scores == []  # type: ignore[attr-defined]
+        assert s._client.flushed is True  # type: ignore[attr-defined]
 
     def test_m6_error_enabled_without_sdk_degrades_to_no_op(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Export requested but the OTel SDK is absent: warn + no-op, never crash the run."""
+        """Export requested but the OTel SDK is absent: degrade to the null client and
+        still complete the run. The degrade IS the contract, so it is what's asserted."""
         import eval_harness.phoenix_client as phoenix_client
+        from eval_harness.phoenix_client import NullPhoenixScoreClient
 
         monkeypatch.setattr(phoenix_client, "_otel_tracer", lambda: None)
         s = SINKS.create("phoenix", {"enabled": True})
+        assert isinstance(s._client, NullPhoenixScoreClient)  # type: ignore[attr-defined]
         s.emit(_make_run_result())
+        assert s._client.flushed is True  # type: ignore[attr-defined]
 
 
 class TestBraintrustSink:
@@ -1967,9 +2014,18 @@ class TestBraintrustSink:
         mock_experiment.flush.assert_called_once()
 
     def test_m6_error_enabled_without_sdk_degrades_to_no_op(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Telemetry must not break the run — and the degrade path is asserted, not
+        merely survived: the null client is chosen AND the items still round-trip it."""
+        from eval_harness.braintrust_client import NullBrainTrustClient
+
         monkeypatch.setitem(sys.modules, "braintrust", None)
         s = SINKS.create("braintrust", {"enabled": True})
-        s.emit(_make_run_result())  # warns + no-ops; telemetry must not break the run
+        s.emit(_make_run_result())
+        client = s._client  # type: ignore[attr-defined]
+        assert isinstance(client, NullBrainTrustClient)
+        assert [row["item_id"] for row in client.items] == ["t1"]
+        assert client.items[0]["scores"] == {"exact_match": 1.0}
+        assert client.flushed is True
 
 
 class TestSinksShared:
@@ -1979,7 +2035,10 @@ class TestSinksShared:
     MATRIX_COMPONENTS = ("console", "json_file", "html_file", "langfuse", "phoenix", "braintrust")
 
     @pytest.mark.parametrize("name", MATRIX_COMPONENTS)
-    def test_m2_edge_empty_run_emits_without_error(self, name: str, tmp_path: Path) -> None:
+    def test_m2_edge_empty_run_emits_an_empty_but_valid_artifact(self, name: str, tmp_path: Path) -> None:
+        """Every sink must survive a zero-item run AND produce the empty artifact, not
+        merely avoid raising: "did not crash" would pass a sink whose emit() was gutted.
+        """
         from datetime import datetime
 
         empty = RunResult(
@@ -1991,9 +2050,36 @@ class TestSinksShared:
             finished_at=datetime(2026, 1, 1, 0, 0, 1),
         )
         params: dict = {}
+        out_path: Path | None = None
         if name in ("json_file", "html_file"):
-            params["path"] = str(tmp_path / f"{name}.out")
+            out_path = tmp_path / f"{name}.out"
+            params["path"] = str(out_path)
         sink = SINKS.create(name, params)
+        client: MagicMock | None = None
         if name == "langfuse":
-            sink.attach_client(MagicMock())  # type: ignore[attr-defined]
+            client = MagicMock()
+            sink.attach_client(client)  # type: ignore[attr-defined]
+
         sink.emit(empty)
+
+        if name == "json_file":
+            assert out_path is not None
+            payload = json.loads(out_path.read_text())
+            assert payload["run_id"] == "empty-run"
+            assert payload["items"] == []
+        elif name == "html_file":
+            assert out_path is not None
+            rendered = out_path.read_text()
+            assert "empty-run" in rendered and rendered.rstrip().endswith("</html>")
+        elif name == "console":
+            assert sink.lines == ["run 'empty-run' — 0 item(s)"]  # type: ignore[attr-defined]
+        elif name == "langfuse":
+            assert client is not None
+            client.log_score.assert_not_called()  # nothing to score
+            client.flush.assert_called_once()  # but the client is still closed out
+        else:  # phoenix / braintrust self-construct a recording null client
+            recorded = getattr(sink._client, "scores", None)  # type: ignore[attr-defined]
+            if recorded is None:
+                recorded = sink._client.items  # type: ignore[attr-defined]
+            assert recorded == []
+            assert sink._client.flushed is True  # type: ignore[attr-defined]

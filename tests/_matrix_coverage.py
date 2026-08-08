@@ -32,7 +32,9 @@ them instead of restating them (the F-052 no-restatement principle):
 from __future__ import annotations
 
 import ast
+import difflib
 import json
+import logging
 import re
 import subprocess
 import sys
@@ -40,6 +42,14 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+
+#: Module logger, following the repo convention (``getLogger(__name__)`` + lazy %s
+#: formatting). Records are emitted at DEBUG/INFO and are therefore invisible by
+#: default; pytest surfaces them with ``--log-cli-level=DEBUG`` (or in the captured
+#: log of a failing test), which is when a census/extraction question is actually
+#: being asked. Nothing here logs at WARNING or above: a real problem is returned as
+#: a policy violation or raised, never merely logged.
+logger = logging.getLogger(__name__)
 
 _TESTS_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _TESTS_DIR.parent
@@ -153,7 +163,39 @@ FOLLOW_ON: tuple[FollowOn, ...] = (
 #: several files keeps working without touching the extractor).
 MATRIX_FILE_GLOB = "test_matrix_*.py"
 
-_DIM_METHOD_RE = re.compile(r"^test_m([1-8])_")
+#: Distributions whose absence would make a matrix class SKIP rather than run. A class
+#: that gates itself with ``pytest.importorskip("X")`` claims cells in the artifact that
+#: only execute where X is installed, so every gate must appear here AND every value must
+#: be installed by the CI job that runs the matrix suite — otherwise the artifact reports
+#: coverage CI never verified.
+#:
+#: This exists because it happened: `TestParquetDataset` gated on `pandas`, which no
+#: extra installs, so all four parquet cells skipped in CI while the artifact claimed
+#: them. It was caught by review, not by this guard; now the coupling is checked.
+SKIP_GATED_IMPORTS: dict[str, str] = {
+    "TestAutoevalsScorer": "autoevals",
+    "TestOpenAIJudge": "openai",
+    "TestAnthropicJudge": "anthropic",
+    "TestParquetDataset": "pyarrow",
+}
+
+#: The workflow whose install line must satisfy every gate above, and the extras→imports
+#: it provides. Kept narrow deliberately: this maps only the gates matrix classes use, so
+#: an unrecognised gate fails loudly rather than being assumed satisfied.
+MATRIX_CI_WORKFLOW = Path(".github/workflows/eval-harness-ci.yml")
+_EXTRA_PROVIDES: dict[str, frozenset[str]] = {
+    "dev": frozenset({"pytest", "mypy", "ruff", "jsonschema", "anthropic", "pyarrow"}),
+    "langfuse": frozenset({"langfuse"}),
+    "openai": frozenset({"openai", "tenacity"}),
+    "anthropic": frozenset({"anthropic"}),
+    "bedrock": frozenset({"boto3"}),
+    "parquet": frozenset({"pyarrow"}),
+    "autoevals": frozenset({"autoevals"}),
+}
+
+#: The dimension vocabulary. Single source of truth: the method-name pattern and the
+#: rendered grid are both derived from it, so adding a ninth dimension here cannot leave
+#: a matching method silently uncounted (a hardcoded ``[1-8]`` bound would).
 _DIM_TITLES: dict[int, str] = {
     1: "Correctness",
     2: "Edge Cases",
@@ -164,6 +206,8 @@ _DIM_TITLES: dict[int, str] = {
     7: "Registry",
     8: "Composability",
 }
+
+_DIM_METHOD_RE = re.compile(rf"^test_m([{min(_DIM_TITLES)}-{max(_DIM_TITLES)}])_")
 
 # --------------------------------------------------------------------------- census
 
@@ -198,14 +242,41 @@ print(json.dumps(census))
 
 
 def _run_probe() -> subprocess.CompletedProcess[str]:
-    """One fresh-interpreter census run. Split out so tests can monkeypatch it."""
-    return subprocess.run(
-        [sys.executable, "-c", _PROBE],
-        capture_output=True,
-        text=True,
-        cwd=_REPO_ROOT,
-        timeout=_PROBE_TIMEOUT_SECONDS,
+    """One fresh-interpreter census run. Split out so tests can monkeypatch it.
+
+    ``OSError`` is translated rather than allowed to escape: this is called from module
+    scope in the guard suite, so a raw ``FileNotFoundError`` / exec-format error on
+    ``sys.executable`` would surface as a pytest *collection* error rather than a test
+    failure, losing the context. The named conditions mirror
+    ``agent_core.subprocess_util``'s three degradation cases, but this raises where that
+    degrades: a completeness guard that reports "no signal observed" passes vacuously,
+    which is the failure mode ADR 0029 records.
+    """
+    logger.debug(
+        "census probe: %s (cwd %s, timeout %ss)",
+        sys.executable,
+        _REPO_ROOT,
+        _PROBE_TIMEOUT_SECONDS,
     )
+    try:
+        return subprocess.run(
+            [sys.executable, "-c", _PROBE],
+            capture_output=True,
+            text=True,
+            cwd=_REPO_ROOT,
+            timeout=_PROBE_TIMEOUT_SECONDS,
+        )
+    except OSError as exc:  # missing/unexecutable interpreter, permission denied
+        raise RuntimeError(f"matrix census probe could not start ({sys.executable!r}): {exc}") from exc
+
+
+def _as_stream_text(stream: str | bytes | None) -> str:
+    """A captured stream rendered for a human, whatever shape it arrives in."""
+    if stream is None:
+        return ""
+    if isinstance(stream, bytes):
+        return stream.decode("utf-8", errors="replace")
+    return stream
 
 
 def _parse_census(raw: object, *, source: str) -> dict[str, dict[str, object]]:
@@ -241,7 +312,15 @@ def registry_census() -> dict[str, dict[str, object]]:
     try:
         completed = _run_probe()
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(f"matrix census probe did not finish within {_PROBE_TIMEOUT_SECONDS}s") from exc
+        # Carry the partial streams: a probe that hangs mid-import (a blocking import, a
+        # lock) leaves its most useful evidence there, and only the message reaches a CI
+        # log. `text=True` should make these str, but TimeoutExpired's contract allows
+        # bytes, so decode defensively rather than rendering a b'...' repr.
+        raise RuntimeError(
+            f"matrix census probe did not finish within {_PROBE_TIMEOUT_SECONDS}s\n"
+            f"partial stdout:\n{_as_stream_text(exc.stdout)}\n"
+            f"partial stderr:\n{_as_stream_text(exc.stderr)}"
+        ) from exc
     if completed.returncode != 0:
         raise RuntimeError(
             f"matrix census probe failed (exit {completed.returncode})\n"
@@ -253,7 +332,16 @@ def registry_census() -> dict[str, dict[str, object]]:
         raise ValueError(
             f"matrix census probe output: not valid JSON ({exc})\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
         ) from exc
-    return _parse_census(data, source="census probe")
+    census = _parse_census(data, source="census probe")
+    # Once-per-run summary (lru_cache guarantees a single emission per process), per the
+    # AGENTS.md logging convention: info for run summaries, debug for per-call detail.
+    logger.info(
+        "census: %d kind(s), %d component(s) — %s",
+        len(census),
+        sum(len(census_names(census, kind)) for kind in census),
+        {kind: len(census_names(census, kind)) for kind in sorted(census)},
+    )
+    return census
 
 
 def census_names(census: Mapping[str, Mapping[str, object]], kind: str) -> list[str]:
@@ -282,6 +370,16 @@ class MatrixClass:
     registry_marker: bool
     #: dim -> number of test methods carrying that dim prefix (static count).
     dim_counts: dict[int, int]
+    #: True when a ``MATRIX_COMPONENTS`` assignment was seen at all, even if its value
+    #: did not parse as a literal string tuple. Lets the policy check distinguish "you
+    #: forgot to declare components" from "you declared them in a shape the extractor
+    #: cannot read" (a bare string is the likely typo: it is iterable, so a naive
+    #: extractor would silently yield per-character components).
+    components_declared: bool = False
+    #: Base-class names other than ``object``. Inherited ``test_m*`` methods live in the
+    #: base's AST, not this class's, so a matrix class with bases would under-count its
+    #: own cells; the policy check refuses rather than under-counting silently.
+    bases: tuple[str, ...] = ()
 
     @property
     def dims(self) -> frozenset[int]:
@@ -316,38 +414,70 @@ def _string_tuple(node: ast.expr) -> tuple[str, ...] | None:
     return tuple(values)
 
 
+def _base_names(node: ast.ClassDef) -> tuple[str, ...]:
+    """Base-class names other than ``object``, best-effort (``Name`` / dotted ``Attribute``)."""
+    names: list[str] = []
+    for base in node.bases:
+        if isinstance(base, ast.Name):
+            rendered = base.id
+        elif isinstance(base, ast.Attribute):
+            rendered = base.attr
+        else:  # a subscripted/generic base: record its shape rather than dropping it
+            rendered = type(base).__name__
+        if rendered != "object":
+            names.append(rendered)
+    return tuple(names)
+
+
+def _class_declarations(
+    node: ast.ClassDef, module_tuples: Mapping[str, tuple[str, ...]]
+) -> tuple[str | None, tuple[str, ...], bool, bool, dict[int, int]]:
+    """(kind, components, components_declared, registry_marker, dim_counts) for one class."""
+    kind: str | None = None
+    components: tuple[str, ...] = ()
+    components_declared = False
+    registry_marker = False
+    dim_counts: dict[int, int] = {}
+    for stmt in node.body:
+        if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+            target = stmt.targets[0]
+            if not isinstance(target, ast.Name):
+                continue
+            if target.id == "MATRIX_KIND":
+                if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
+                    kind = stmt.value.value
+            elif target.id == "MATRIX_COMPONENTS":
+                components_declared = True
+                strings = _string_tuple(stmt.value)
+                if strings is None and isinstance(stmt.value, ast.Name):
+                    strings = module_tuples.get(stmt.value.id)
+                components = strings or ()
+            elif target.id == "MATRIX_REGISTRY":
+                registry_marker = bool(isinstance(stmt.value, ast.Constant) and stmt.value.value is True)
+        elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            match = _DIM_METHOD_RE.match(stmt.name)
+            if match:
+                dim = int(match.group(1))
+                dim_counts[dim] = dim_counts.get(dim, 0) + 1
+    return kind, components, components_declared, registry_marker, dim_counts
+
+
 def extract_matrix_classes(paths: Iterable[Path]) -> list[MatrixClass]:
+    """Every ``Test*`` class in ``paths``, with its declarations and dim counts.
+
+    Only top-level classes are read: a matrix class nested inside another class or a
+    function would not be collected as a matrix row by convention, and reading one would
+    invite declarations that pytest never runs.
+    """
     classes: list[MatrixClass] = []
-    for path in paths:
+    path_list = list(paths)  # materialised: `paths` may be a generator, and it is logged below
+    for path in path_list:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         module_tuples = _module_literal_tuples(tree)
         for node in tree.body:
             if not isinstance(node, ast.ClassDef) or not node.name.startswith("Test"):
                 continue
-            kind: str | None = None
-            components: tuple[str, ...] = ()
-            registry_marker = False
-            dim_counts: dict[int, int] = {}
-            for stmt in node.body:
-                if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
-                    target = stmt.targets[0]
-                    if not isinstance(target, ast.Name):
-                        continue
-                    if target.id == "MATRIX_KIND":
-                        if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
-                            kind = stmt.value.value
-                    elif target.id == "MATRIX_COMPONENTS":
-                        strings = _string_tuple(stmt.value)
-                        if strings is None and isinstance(stmt.value, ast.Name):
-                            strings = module_tuples.get(stmt.value.id)
-                        components = strings or ()
-                    elif target.id == "MATRIX_REGISTRY":
-                        registry_marker = bool(isinstance(stmt.value, ast.Constant) and stmt.value.value is True)
-                elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    match = _DIM_METHOD_RE.match(stmt.name)
-                    if match:
-                        dim = int(match.group(1))
-                        dim_counts[dim] = dim_counts.get(dim, 0) + 1
+            kind, components, declared, registry_marker, dim_counts = _class_declarations(node, module_tuples)
             classes.append(
                 MatrixClass(
                     module=path.name,
@@ -356,9 +486,93 @@ def extract_matrix_classes(paths: Iterable[Path]) -> list[MatrixClass]:
                     components=components,
                     registry_marker=registry_marker,
                     dim_counts=dim_counts,
+                    components_declared=declared,
+                    bases=_base_names(node),
                 )
             )
+    logger.debug(
+        "cell map: %d class(es) across %d file(s), %d declared cell(s)",
+        len(classes),
+        len(path_list),
+        sum(len(c.dim_counts) for c in classes),
+    )
     return classes
+
+
+def importorskip_gates(paths: Iterable[Path]) -> dict[str, str]:
+    """``{class name: imported distribution}`` for every ``importorskip`` in a matrix class.
+
+    A gated class runs only where its distribution is installed, so its cells are claimed
+    in the artifact but conditionally verified. Extracted so the coupling to the CI install
+    line can be asserted instead of assumed.
+    """
+    gates: dict[str, str] = {}
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for call in ast.walk(node):
+                if (
+                    isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                    and call.func.attr == "importorskip"
+                    and call.args
+                    and isinstance(call.args[0], ast.Constant)
+                    and isinstance(call.args[0].value, str)
+                ):
+                    gates[node.name] = call.args[0].value
+    return gates
+
+
+def ci_installed_imports(workflow_text: str) -> frozenset[str]:
+    """Distributions the matrix CI job installs, resolved from its extras.
+
+    Reads the ``install:`` line's ``.[a,b,c]`` extras and maps them through
+    ``_EXTRA_PROVIDES``. An extra with no mapping contributes nothing — unknown extras
+    must not be silently credited with providing an import.
+    """
+    provided: set[str] = set()
+    for extras in re.findall(r"install:[^\n]*\.\[([^\]]+)\]", workflow_text):
+        for extra in extras.split(","):
+            provided |= _EXTRA_PROVIDES.get(extra.strip(), frozenset())
+    return frozenset(provided)
+
+
+def skip_gate_problems(paths: Iterable[Path], workflow_text: str) -> list[str]:
+    """Every matrix cell claimed in the artifact must actually execute in CI.
+
+    Two directions, because both have bitten: an undeclared gate (a class that skips
+    without saying so) and an unsatisfied gate (a declared distribution the CI job does
+    not install — the parquet defect).
+    """
+    problems: list[str] = []
+    found = importorskip_gates(paths)
+    installed = ci_installed_imports(workflow_text)
+    for class_name, distribution in sorted(found.items()):
+        if class_name not in SKIP_GATED_IMPORTS:
+            problems.append(
+                f"{class_name} gates on importorskip({distribution!r}) but is absent from "
+                "SKIP_GATED_IMPORTS — a gated class claims cells that only conditionally run"
+            )
+        elif SKIP_GATED_IMPORTS[class_name] != distribution:
+            problems.append(
+                f"{class_name}: SKIP_GATED_IMPORTS says {SKIP_GATED_IMPORTS[class_name]!r} "
+                f"but the class gates on {distribution!r}"
+            )
+    for class_name, distribution in sorted(SKIP_GATED_IMPORTS.items()):
+        if class_name not in found:
+            problems.append(
+                f"stale skip gate: {class_name} no longer calls importorskip — remove it from "
+                "SKIP_GATED_IMPORTS (its cells now run unconditionally)"
+            )
+        elif distribution not in installed:
+            problems.append(
+                f"{class_name} skips unless {distribution!r} is installed, but "
+                f"{MATRIX_CI_WORKFLOW}'s install line provides only {sorted(installed)} — "
+                "its matrix cells would be claimed in the artifact and never verified in CI"
+            )
+    return problems
 
 
 def literal_parametrize_violations(paths: Iterable[Path]) -> list[str]:
@@ -372,9 +586,9 @@ def literal_parametrize_violations(paths: Iterable[Path]) -> list[str]:
     violations: list[str] = []
     for path in paths:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in tree.body:
-            if not isinstance(node, ast.ClassDef):
-                continue
+        # Nested classes are visited too, and each violation is attributed to its
+        # INNERMOST enclosing class, so nesting is neither an evasion nor a misreport.
+        for node in _iter_classdefs(tree):
             designated = node.name.startswith("Test") and node.name.endswith("Registry")
             for stmt in node.body:
                 if (
@@ -388,27 +602,69 @@ def literal_parametrize_violations(paths: Iterable[Path]) -> list[str]:
                     designated = True
             if not designated:
                 continue
+            inner_classes = [c for c in _iter_classdefs(node) if c is not node]
             for call in ast.walk(node):
-                if (
+                if not (
                     isinstance(call, ast.Call)
                     and isinstance(call.func, ast.Attribute)
                     and call.func.attr == "parametrize"
-                    and len(call.args) >= 2
-                    and _is_all_literal(call.args[1])
                 ):
-                    violations.append(
-                        f"{path.name}::{node.name}: parametrize over a constant literal "
-                        f"(line {call.args[1].lineno}) — derive from the census/baseline instead"
-                    )
+                    continue
+                argvalues = _parametrize_argvalues(call)
+                if argvalues is None or not _is_all_literal(argvalues):
+                    continue
+                # Skip calls that belong to a nested class: that class is visited on its
+                # own iteration and judged on its own designation.
+                if any(inner.lineno <= call.lineno <= (inner.end_lineno or inner.lineno) for inner in inner_classes):
+                    continue
+                violations.append(
+                    f"{path.name}::{node.name}: parametrize over a constant literal "
+                    f"(line {argvalues.lineno}) — derive from the census/baseline instead"
+                )
     return violations
 
 
 def _is_all_literal(node: ast.expr) -> bool:
+    """Whether an expression is built entirely from constant literals, at any nesting.
+
+    Covers dicts, negative numbers and f-strings-of-constants as well as the obvious
+    sequence forms: a list-of-dicts restatement of the registry surface is the same
+    banned defect in a different shape, and would otherwise pass.
+    """
     if isinstance(node, ast.Constant):
         return True
     if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
         return all(_is_all_literal(el) for el in node.elts)
+    if isinstance(node, ast.Dict):
+        return all(k is not None and _is_all_literal(k) for k in node.keys) and all(
+            _is_all_literal(v) for v in node.values
+        )
+    if isinstance(node, ast.UnaryOp):  # -1, +1, not True
+        return _is_all_literal(node.operand)
+    if isinstance(node, ast.JoinedStr):  # f"{'a'}" over constants only
+        return all(_is_all_literal(v.value) if isinstance(v, ast.FormattedValue) else True for v in node.values)
     return False
+
+
+def _iter_classdefs(node: ast.AST) -> Iterable[ast.ClassDef]:
+    """Every ``ClassDef`` at any nesting, innermost-attributable.
+
+    The ban must not be evadable by nesting a designated class inside another class or
+    an ``if`` block, which a ``tree.body``-only scan would miss.
+    """
+    for child in ast.walk(node):
+        if isinstance(child, ast.ClassDef):
+            yield child
+
+
+def _parametrize_argvalues(call: ast.Call) -> ast.expr | None:
+    """The argvalues expression of a ``parametrize`` call, positional or by keyword."""
+    if len(call.args) >= 2:
+        return call.args[1]
+    for keyword in call.keywords:
+        if keyword.arg == "argvalues":
+            return keyword.value
+    return None
 
 
 # --------------------------------------------------------------------------- policy
@@ -435,6 +691,14 @@ def _collect_cells(
                 )
             continue
         if cls.kind in EXTRA_SUITES:
+            if cls.components:
+                # Components on a non-registry suite are silently unused, and the likely
+                # cause is a mistyped MATRIX_KIND — which would also strand every cell
+                # the class declares, reported elsewhere as "no matrix rows at all".
+                problems.append(
+                    f"{cls.module}::{cls.name}: extra suite {cls.kind!r} takes no MATRIX_COMPONENTS "
+                    f"(got {list(cls.components)}) — drop them, or fix a mistyped MATRIX_KIND"
+                )
             extras.setdefault(cls.kind, set()).update(cls.dims)
             continue
         if cls.kind not in REQUIRED_DIMS:
@@ -443,8 +707,34 @@ def _collect_cells(
                 "add a REQUIRED_DIMS row in tests/_matrix_coverage.py (and amend ADR 0032)"
             )
             continue
+        if cls.bases:
+            # Inherited test_m* methods live in the base's AST, so counting only this
+            # class's body would under-count cells pytest actually runs. Refuse instead
+            # of silently under-counting (which would demand rows that already exist).
+            problems.append(
+                f"{cls.module}::{cls.name}: matrix classes must not inherit "
+                f"(bases: {list(cls.bases)}) — inherited test_m*_ methods are invisible to the "
+                "AST cell map; inline the methods or parametrize a single class instead"
+            )
+            continue
         if not cls.components:
-            problems.append(f"{cls.module}::{cls.name}: MATRIX_KIND set but MATRIX_COMPONENTS is empty")
+            detail = (
+                "MATRIX_COMPONENTS is declared but is not a literal string tuple "
+                '(a bare string such as MATRIX_COMPONENTS = "exact_match" is not a tuple; '
+                'write ("exact_match",) — note the trailing comma)'
+                if cls.components_declared
+                else "MATRIX_KIND set but MATRIX_COMPONENTS is missing"
+            )
+            problems.append(f"{cls.module}::{cls.name}: {detail}")
+            continue
+        if not cls.dim_counts:
+            # A declaration with no dim methods of its own contributes nothing. The usual
+            # cause is inheritance (already refused above) or a renamed method that no
+            # longer matches the test_m<dim>_ convention.
+            problems.append(
+                f"{cls.module}::{cls.name}: declares {cls.kind}/{list(cls.components)} but has no "
+                "test_m<dim>_ methods of its own"
+            )
             continue
         known = set(census_names(census, cls.kind)) if cls.kind in census else set()
         for component in cls.components:
@@ -495,8 +785,21 @@ def _hygiene_problems(
         if missing:
             problems.append(f"extra suite {suite!r}: missing required dim(s) {_dims_label(missing)}")
 
+    # Waiver keys are validated first: WAIVED is the one policy table with no schema of
+    # its own, so a waiver naming a non-registry kind or a dim outside that kind's floor
+    # would sit in the file looking authoritative while having no effect anywhere.
     for (kind, component, dim), reason in sorted(WAIVED.items()):
-        if kind in EXTRA_SUITES:
+        if kind not in REQUIRED_DIMS:
+            problems.append(
+                f"inert waiver: {kind!r} is not a registry kind with a REQUIRED_DIMS floor "
+                f"({reason!r}) — extra suites are waived by editing their floor, not WAIVED"
+            )
+            continue
+        if dim not in REQUIRED_DIMS[kind]:
+            problems.append(
+                f"inert waiver: {kind} {component!r} M{dim} — M{dim} is not in {kind}'s floor "
+                f"{_dims_label(REQUIRED_DIMS[kind])}, so waiving it changes nothing"
+            )
             continue
         if kind not in census or component not in census_names(census, kind):
             problems.append(f"stale waiver: {kind} {component!r} is not registered ({reason!r})")
@@ -517,9 +820,25 @@ def coverage_problems(
 ) -> list[str]:
     """Every policy violation, accumulated — never short-circuited."""
     problems: list[str] = []
+    if not census:
+        # A census that measured nothing must never satisfy the floors vacuously — the
+        # ADR 0029 lesson this repo is built on (a metric reporting a pass having
+        # measured nothing). Guarded here, not only in the suite's populated-census
+        # test, so every caller (F_053, the renderer) inherits the refusal.
+        problems.append(
+            "census is empty: no registries were discovered, so no floor could be checked — "
+            "this is a probe failure, not a complete matrix"
+        )
+        return problems
     cells, extras = _collect_cells(census, classes, problems)
     _census_floor_problems(census, cells, problems)
     _hygiene_problems(census, cells, extras, problems)
+    logger.debug(
+        "policy: %d kind(s), %d cell(s) declared, %d problem(s)",
+        len(census),
+        len(cells),
+        len(problems),
+    )
     return problems
 
 
@@ -558,6 +877,16 @@ def doc_path() -> Path:
     return _DOC_PATH
 
 
+def _cell(text: str) -> str:
+    """Prose rendered safely into a markdown table cell.
+
+    A ``|`` fabricates a column and a newline splits the row — and because the freshness
+    gate compares rendered-vs-committed, both sides would be corrupted identically and
+    the gate would stay green while the published artifact was wrong.
+    """
+    return " ".join(text.split()).replace("|", "\\|")
+
+
 def _count_cells(
     classes: Iterable[MatrixClass],
 ) -> tuple[dict[tuple[str, str], dict[int, int]], dict[str, dict[int, int]]]:
@@ -578,7 +907,14 @@ def _count_cells(
     return cells, extras
 
 
-_GRID_DIMS = (1, 2, 3, 5, 6)
+#: Columns of the rendered per-kind grid, DERIVED from the policy rather than listed.
+#: A hardcoded tuple silently under-reported the artifact: `_render_kind_section` only
+#: reaches its `MISSING` branch for dims it iterates, so adding M4 or M7 to any kind's
+#: floor would have the guard enforce the cell correctly while the committed doc omitted
+#: the column entirely — a genuinely missing cell rendering as no cell at all.
+#: `EXTRA_SUITES` dims are excluded on purpose: M8 is a non-registry, per-kind property
+#: reported in its own section, not a per-component grid column.
+_GRID_DIMS: tuple[int, ...] = tuple(sorted(set().union(*REQUIRED_DIMS.values())))
 
 
 def _render_kind_section(
@@ -602,7 +938,7 @@ def _render_kind_section(
                 row.append(str(counts[dim]))
             elif (kind, component, dim) in WAIVED:
                 row.append("waived")
-                waiver_notes.append(f"- `{component}` M{dim} waived: {WAIVED[(kind, component, dim)]}")
+                waiver_notes.append(f"- `{component}` M{dim} waived: {_cell(WAIVED[(kind, component, dim)])}")
             elif dim in floor:
                 row.append("MISSING")
             else:
@@ -659,7 +995,7 @@ def _render_tail_sections(
             "|---|---|",
         ]
     )
-    lines.extend(f"| `{row.change_id}` | {row.note} |" for row in FOLLOW_ON)
+    lines.extend(f"| `{_cell(row.change_id)}` | {_cell(row.note)} |" for row in FOLLOW_ON)
     lines.append("")
     return lines
 
@@ -708,3 +1044,36 @@ def doc_is_fresh() -> tuple[bool, str]:
     if not _DOC_PATH.exists():
         return (False, rendered)
     return (_DOC_PATH.read_text(encoding="utf-8") == rendered, rendered)
+
+
+#: How many diff lines a staleness report shows before truncating. A bounded diff keeps
+#: a CI log readable while still naming the drift; the full artifact is one command away.
+MAX_DIFF_LINES = 40
+
+REGEN_HINT = "regenerate and commit: python tests/test_matrix_coverage.py --update"
+
+
+def freshness_failure_message(rendered: str) -> str:
+    """Why the committed artifact is stale, not merely that it is.
+
+    Emitting the actual diff — rather than logging a count or printing only the hint —
+    puts the drift where a CI reader looks: in the failure output. Applies the
+    ``mermaid_gen --check`` dual-channel idea at the level that helps.
+    """
+    if not _DOC_PATH.exists():
+        return f"{_DOC_PATH} does not exist — {REGEN_HINT}"
+    committed = _DOC_PATH.read_text(encoding="utf-8").splitlines()
+    diff = list(
+        difflib.unified_diff(
+            committed,
+            rendered.splitlines(),
+            fromfile=f"{_DOC_PATH.name} (committed)",
+            tofile=f"{_DOC_PATH.name} (regenerated)",
+            lineterm="",
+            n=1,
+        )
+    )
+    shown = diff[:MAX_DIFF_LINES]
+    if len(diff) > MAX_DIFF_LINES:
+        shown.append(f"... {len(diff) - MAX_DIFF_LINES} more diff line(s) truncated")
+    return f"{_DOC_PATH} is stale — {REGEN_HINT}\n" + "\n".join(shown)

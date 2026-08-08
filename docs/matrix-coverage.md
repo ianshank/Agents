@@ -99,7 +99,7 @@ Aliases (scorer):
 | `html_file` | 2 | 1 | 1 | 1 | 1 |
 | `json_file` | 1 | 1 | 1 | 1 | 1 |
 | `langfuse` | 1 | 1 | — | — | 1 |
-| `phoenix` | 1 | 1 | — | — | 1 |
+| `phoenix` | 2 | 1 | — | — | 1 |
 
 - `console` M6 waived: prints to stdout; no failure path to exercise
 
