@@ -61,7 +61,7 @@ This package applies them via the specific mechanisms below:
 |---|-----------|
 | Open/closed extensibility | Judges, scorers, sinks, datasets, and targets register via `eval_harness.plugins`' `SCORERS`/`JUDGES`/`SINKS`/`DATASETS`/`TARGETS` registries — never by editing the engine |
 | No raw `print()` in production paths | Lint rule (ruff) |
-| External API calls mocked in tests | Full offline deterministic matrix coverage (`tests/test_matrix_eval_tools.py`) |
+| External API calls mocked in tests | Full offline deterministic matrix coverage (`tests/test_matrix_eval_tools.py`); completeness enforced by `tests/test_matrix_coverage.py` — derived registry census, per-kind dimension floors (ADR 0032) — and rendered in the generated, freshness-gated `docs/matrix-coverage.md` |
 | Dependency-direction discipline | `architecture.yaml` + `skills/architecture-drift-guard` (grimp-based import-graph diff, CI-enforced) |
 
 ---

@@ -24,6 +24,10 @@ agents share one source of navigation. Prose docs also render as a site — see
   container / sub-component diagrams (runtime/call semantics).
 - [../architecture.mmd](../architecture.mmd) + [../architecture.yaml](../architecture.yaml)
   — the generated import-edge component view (drift-gated in CI).
+- [matrix-coverage.md](matrix-coverage.md) — the generated eval-matrix coverage
+  grid (components × dims, waivers, alias freezes, follow-on obligations;
+  regenerate with `python tests/test_matrix_coverage.py --update` — freshness-gated
+  in CI, never hand-edit).
 
 ## Decisions (ADRs)
 

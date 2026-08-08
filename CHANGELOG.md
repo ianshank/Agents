@@ -23,11 +23,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generated (`python tests/test_matrix_coverage.py --update`) and freshness-gated. All
   seven trajectory scorers gained full matrix rows, and every sparse cell was filled to its
   kind's floor (judges/datasets/targets M2/M3/M6, scorers M3/M5/M6, sinks empty-run M2 +
-  per-sink degrade/error M6, gating M6). Three shipped defects surfaced and fixed in-flight:
-  `config/trajectory_eval.yaml` failed its own gate (reference arguments never matched the
-  demo SUT; the covering test now runs it and asserts the gate PASSES); the braintrust
-  dataset/sink matrix tests sat under an `importorskip` for an SDK CI never installs and
-  could not have passed as written; `quality-gates.yml` carried a dead `--cov=F_052`.
+  per-sink degrade/error M6, gating M6). Filling the rows surfaced shipped defects the old
+  matrix had masked: `config/trajectory_eval.yaml` failed its own gate (reference arguments
+  never matched the demo SUT; the covering test now runs it and asserts the gate PASSES);
+  the braintrust dataset/sink matrix tests sat under an `importorskip` for an SDK CI never
+  installs and could not have passed as written; `quality-gates.yml` carried a dead
+  `--cov=F_052` — and the hardening pass below found more.
+
+  **Hardening pass (same PR).** A two-agent peer review found the feature shipping its own
+  defect class — coverage claims nothing verified. Three of the phoenix sink's floor cells
+  asserted *nothing* (mutation-proven to pass against a gutted `emit()` and a factory that
+  never degraded) while the artifact certified them; the cells now assert through the
+  recording null clients both vendor sinks document as their test doubles. The parquet
+  cells were a false green: gated on `pandas`, which no CI extra installs, every cell
+  skipped in CI while the artifact claimed four — fixtures are now written with `pyarrow`
+  (the reader's own dependency), and the whole class is mechanical rather than a review
+  catch: `SKIP_GATED_IMPORTS` + `skip_gate_problems()` assert in both directions that every
+  `importorskip` gate inside a matrix class is satisfied by the CI job's install line.
+  `F_053.py`'s docstring claimed `--check` verified the floors "transitively"; it compares
+  document text, so `--update` followed by the validator would have PASSed a holed matrix
+  whose doc faithfully recorded the holes — the validator now evaluates the policy directly
+  and `--update` refuses to write a holed artifact. The inverse of the dead-`--cov=` bug
+  was live too (F_031/F_037/F_039/F_041/F_045 ran every build and were measured never);
+  both directions are now closed by a drift test pinning the validator import list to the
+  workflow's `--cov=` list. The guard library's own ~710 lines went from measured-by-nothing
+  to a gated 95%; `_GRID_DIMS` and the dim-method regex now derive from `REQUIRED_DIMS` (a
+  hardcoded grid omitted a column, so a genuinely missing cell rendered as *no* cell);
+  markdown cell escaping stops a `|` in a waiver note from fabricating a column identically
+  on both sides of the freshness comparison; and the guard gained convention-conforming
+  logging including the CLI `basicConfig` without which its records were discarded at the
+  root WARNING level — the G4 defect recreated in new code.
 - **Agent trajectory evaluation (F-051, ADR 0031).** Every built-in scorer read
   `output.output` only, so an agent that returned plausible text by an invalid, wasteful,
   looping or policy-violating path scored identically to one that did the work. Langfuse

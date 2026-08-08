@@ -5,6 +5,11 @@ F-053 (`implemented_in` recorded in `features.yaml`; the archive entry carries t
 landing SHA). Enforcement is live from the same change: the guard suite, the frozen
 alias maps, and the freshness-gated artifact all ship with it.
 **Date**: 2026-08-08
+**Errata** (2026-08-08, post-acceptance — factual corrections only, no change of course):
+the `WAIVED` snapshot below now shows all three waivers that were accepted with the change
+(the original text showed one), and the Neutral consequence now records that the guard
+library *is* coverage-measured — the same PR wired `--cov=tests._matrix_coverage` into the
+tooling gate, contradicting the original "outside the coverage measurement source" wording.
 
 Related: [ADR 0024](0024-assertion-graders-registry.md) (registry dispatch over hand-rolled
 loops), [ADR 0030](0030-skill-ci-tiers.md) (the derived-list + EXEMPT-with-reason
@@ -42,7 +47,11 @@ REQUIRED_DIMS = {                     # M4/M7 are global-dynamic; M8: ≥1 pipel
 }                                     # sink M2 = empty-run emit; M6 = degrade/error path;
                                       # sink M3/M5 are extra rows where an artifact exists
 EXTRA_SUITES = {"gating": {1, 2, 6}, "engine": {8}}   # non-registry rows, same enforcement
-WAIVED = {("target", "echo", 6): "no failure modes by design"}
+WAIVED = {  # snapshot at acceptance; tests/_matrix_coverage.py is authoritative
+    ("target", "echo", 6): "no failure modes by design (pure dict access)",
+    ("dataset", "inline", 6): "config-embedded items have no I/O failure path; a malformed record fails loudly at load",
+    ("sink", "console", 6): "prints to stdout; no failure path to exercise",
+}
 ```
 
 1. **The component census is derived**, from a fresh-subprocess probe of the live registries
@@ -83,8 +92,12 @@ WAIVED = {("target", "echo", 6): "no failure modes by design"}
   must be kept.
 - **Negative.** Per-kind floors are policy, and policy invites relitigating. The floor-vs-
   extra rule above is the tiebreaker; changes to `REQUIRED_DIMS` amend this ADR.
-- **Neutral.** No production code is touched; the matrix suite grows in `tests/`, which is
-  exempt from the file-length gate and outside the coverage measurement source.
+- **Neutral.** Production `src/` code is untouched (the one non-test change is
+  `config/trajectory_eval.yaml`, fixed when its new matrix row proved the shipped config
+  failed its own gate); the matrix suite grows in `tests/`, which is exempt from the
+  file-length gate. The guard library is not exempt from coverage measurement:
+  quality-gates.yml's tooling-coverage step lists `--cov=tests._matrix_coverage`, so the
+  policy module sits under the same ≥85% branch floor as the rest of the gate tooling.
 
 ## Compliance
 
