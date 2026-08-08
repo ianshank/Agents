@@ -50,6 +50,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `hooks.json` has no SessionEnd hook despite its README naming one. The Sources section now
   discloses which claims were corroborated via search snippets rather than direct fetch
   (the JetBrains post was egress-blocked) and flags the two claims that remain unverified.
+- **Docs: the rtk benchmark proposal now isolates per-arm configuration state.** Review
+  surfaced that `rtk init -g` is a *global* mutation (`~/.claude/hooks/rtk-rewrite.sh`,
+  `~/.claude/RTK.md`, a `settings.json` hook entry, an `@RTK.md` reference in `CLAUDE.md`),
+  so toggling install/uninstall in place between the rtk-on and rtk-off arms would leak hook
+  state across the boundary and leave the next arm contaminated after any mid-run failure —
+  silently invalidating the measurement the P1 item exists to produce. The proposal now
+  requires a dedicated Claude configuration directory (or container) per arm, and notes that
+  `--uninstall` leaves runtime artifacts under `~/.local/share/rtk/` so "uninstalled" is not
+  "clean". Both documented package commands were also pinned to their reviewed versions
+  (`@zilliz/claude-context-mcp@0.1.15`, `repomix@1.18.0`) instead of `@latest` and an
+  uncopyable `<pinned>` placeholder, with the per-package token budget moved to config.
 - **Matrix completeness: derived census, per-kind dim floors, generated coverage artifact
   (F-053, ADR 0032).** The declared test matrix (`tests/test_matrix_eval_tools.py`) was
   silently incomplete: the seven F-051 trajectory scorers had zero rows, `TestM7Registry`'s

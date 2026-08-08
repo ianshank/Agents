@@ -77,8 +77,13 @@ retrieval quality.
 ```bash
 claude mcp add claude-context \
   -e OPENAI_API_KEY=... -e MILVUS_ADDRESS=... -e MILVUS_TOKEN=... \
-  -- npx @zilliz/claude-context-mcp@latest
+  -- npx @zilliz/claude-context-mcp@0.1.15
 ```
+
+Upstream's README documents this command with `@latest`. It is **pinned here deliberately**
+(0.1.15 is the version reviewed on 2026-08-08): an unpinned `npx` tag re-resolves on every
+session start, which is an unreviewed dependency bump and contradicts the pinning rule this
+document argues for below. Bump the pin as a reviewed change, never by dropping it.
 
 Four MCP tools: `index_codebase`, `search_code`, `clear_index`, `get_indexing_status`.
 Config is fully env-var driven (`EMBEDDING_PROVIDER` = OpenAI default / VoyageAI / Gemini /
@@ -197,12 +202,24 @@ not average over. Measure here, on this repo's pytest/ruff-heavy workloads.
 **Incorporation plan.**
 
 1. *(P1 — the flagship dogfooding move)* A **paired-trial scenario in the `model-bench`
-   skill**: rtk-on vs rtk-off arms (`rtk init -g --auto-patch` / `--uninstall`), scored by a
-   harness scorer that reads *actual* input tokens from Langfuse traces, never `rtk gain`'s
-   bytes/4 estimate. Reproduces the JetBrains methodology on our own workloads and produces
-   a defensible adopt/reject ADR. **Stratify the arms by reasoning effort** — pooling low and
-   high would average away the exact effect that decides the question, and a pooled null would
-   be misread as "no harm". ~80 paired trials *per effort level* for significance.
+   skill**: rtk-on vs rtk-off arms, scored by a harness scorer that reads *actual* input
+   tokens from Langfuse traces, never `rtk gain`'s bytes/4 estimate. Reproduces the JetBrains
+   methodology on our own workloads and produces a defensible adopt/reject ADR.
+   **Stratify the arms by reasoning effort** — pooling low and high would average away the
+   exact effect that decides the question, and a pooled null would be misread as "no harm".
+   ~80 paired trials *per effort level* for significance.
+
+   **Isolate the arms' configuration state.** `rtk init -g` is a *global* mutation — it writes
+   `~/.claude/hooks/rtk-rewrite.sh` and `~/.claude/RTK.md`, registers a hook entry in
+   `settings.json`, and adds an `@RTK.md` reference to `CLAUDE.md`; `--uninstall` removes the
+   same global files. Toggling that in place between arms lets hook state leak across the
+   boundary, and a trial that dies mid-run leaves the *next* arm contaminated — which would
+   silently invalidate the very measurement this item exists to produce. Give each arm its own
+   Claude configuration directory (or its own container) rather than installing and
+   uninstalling against one shared home. Note also that `--uninstall` leaves runtime artifacts
+   behind (`~/.local/share/rtk/`: history DB, tee logs, telemetry/rate-limit state), so
+   "uninstalled" is not the same as "clean" — clear those between runs or treat a fresh
+   environment per arm as mandatory.
 2. *(P2, technique-not-tool)* A **pure-Python output compactor** in the harness pipeline
    (dedup repeated log lines with counts, group failures by type, keep first+last N of
    tracebacks) applied before eval artifacts reach LLM judges, with before/after token counts
@@ -367,11 +384,18 @@ dependency-free, secret-scanned, CI-native. Complementary to claude-context, not
 **Incorporation plan.**
 
 1. *(P1)* **CI token-budget gate**: per-package
-   `npx repomix@<pinned> --compress --style xml --token-budget <N> --token-count-encoding o200k_base`,
+
+   ```bash
+   npx repomix@1.18.0 --compress --style xml \
+     --token-budget "$PKG_TOKEN_BUDGET" --token-count-encoding o200k_base
+   ```
+
    with `--token-count-tree` emitted as a job artifact showing token hotspots. Turns context
    bloat into a measurable, gated regression — the same philosophy as the
-   behavioral-regression gate, fully deterministic. Budgets need per-package calibration;
-   cache the pinned npx fetch.
+   behavioral-regression gate, fully deterministic. `1.18.0` is the version reviewed on
+   2026-08-08; bump it deliberately, and cache the pinned npx fetch. The budget is per-package
+   and needs calibration, so it belongs in config (one value per package) rather than as a
+   literal at the call site — the same no-hard-coded-values rule the rest of the repo follows.
 2. *(P1)* **A `repo-pack` skill in `skills/marketplace.yaml`** wrapping the CLI (pack with
    `--compress`, then Grep/Read the output — the official explorer agent's own workflow),
    giving the `explorer` subagent token-efficient comprehension of *external* dependencies
