@@ -57,7 +57,7 @@ skills:
     description: Generates a complete OpenSpec change package containing proposal, design, and task specs. Use this whenever the user asks to create an implementation plan, an OpenSpec package, or convert a research leaf node into a concrete project plan.
     compatibility: python>=3.10
   - name: openspec-peer-review
-    version: 1.0.0
+    version: 1.1.0
     path: skills/openspec-peer-review
     description: Emits an objective Peer Review Findings section and rewrites an OpenSpec package to satisfy quality standards. Use this whenever the user asks to review, critique, or polish an existing plan, or as the final step in generating an OpenSpec package.
     compatibility: python>=3.10

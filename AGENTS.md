@@ -137,6 +137,7 @@ Test the "SDK absent" path via `sys.modules` injection, not `@patch(...)` — se
 
 - Every scorer, judge, sink, and dataset registers itself via `@REGISTRY.register("name")`. Tests should exercise the registered name path, not the class constructor path — that's how the real engine resolves them.
 - All evaluation components (Judges, Datasets, Scorers, Sinks) that interact with external dependencies must be fully mocked for offline testing using deterministic dependency injection as seen in `tests/test_matrix_eval_tools.py`. Do not use hardcoded `try...except` exception swallows or brittle magic mock returns.
+- Registered components carry a **matrix obligation** (ADR 0032): rows in `tests/test_matrix_eval_tools.py` to the kind's `REQUIRED_DIMS` floor, declared with literal `MATRIX_KIND`/`MATRIX_COMPONENTS` class attributes and `test_m<dim>_*` method names — both cross-checked against the live-registry census by `tests/test_matrix_coverage.py`, so the declarations cannot go stale. Waivers are data with reasons (`WAIVED` in `tests/_matrix_coverage.py`), never silent omissions. After adding or renaming rows, regenerate the artifact with `python tests/test_matrix_coverage.py --update`; never hand-edit `docs/matrix-coverage.md`.
 - Pytest markers: `integration` (live API tests, skipped by default), `slow` (>5s). Filter with `-m "not integration"` for the offline suite; only `test_phoenix_live.py` currently carries the `integration` marker for live-collector tests.
 - Hypothesis: run with `HYPOTHESIS_PROFILE=ci` when reproducing CI behaviour locally (matches `agent-core-ci.yml`).
 - Do NOT patch `os.environ.clear()` — replace with `monkeypatch.delenv` for surgical env manipulation. See `CHANGELOG.md` note under [1.2.0-dev] `Testing`.
@@ -182,6 +183,14 @@ make check-all                                     # root + every sibling packag
                                                    #  pytest --cov with the package's floor)
 pip install '.[phoenix-evals,parquet]' --dry-run                  # numpy/pyarrow resolve
 ```
+
+If the matrix freshness gate fails (`docs/matrix-coverage.md` stale), the remedy is
+`python tests/test_matrix_coverage.py --update` — never a hand edit to the generated file
+(`--update` refuses to write while the matrix itself has holes; fix the rows first).
+Note `make check-all` is not the whole CI surface: `quality-gates.yml` additionally runs
+the merge-marker sweep, size budget, guard reachability, charter drift/invariants, the
+validator battery (`python scripts/validate.py --tier fast --strict`) and the tooling
+coverage step — run those too when touching `scripts/`, workflows, or `features.yaml`.
 
 On Windows, `pwsh scripts/run_all_e2e.ps1 -Tiers offline` is the equivalent whole-repo pass
 (it applies the WMI shim and per-package coverage floors). If any step fails, do NOT push —

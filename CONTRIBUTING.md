@@ -100,7 +100,14 @@ If your change touches one of these, expect a CODEOWNER review and the label.
 
 - **A new scorer / judge / sink / dataset / target:** register it via the
   `Registry` / entry-point seam — no core edits. See the "Extend" section of the
-  [README](README.md#extend-no-core-changes).
+  [README](README.md#extend-no-core-changes). Registration creates a matrix
+  obligation ([ADR 0032](docs/decisions/0032-matrix-completeness-policy.md)):
+  add rows to `tests/test_matrix_eval_tools.py` meeting your kind's
+  `REQUIRED_DIMS` floor, declared via `MATRIX_KIND`/`MATRIX_COMPONENTS` class
+  attributes and `test_m<dim>_*` method names, then regenerate the coverage
+  artifact with `python tests/test_matrix_coverage.py --update`. The census is
+  derived from the live registries, so a rowless component is a red gate, not a
+  review comment.
 - **A new skill:** follow [docs/SKILL_TEMPLATE.md](docs/SKILL_TEMPLATE.md), add it
   to `skills/marketplace.yaml`, and validate with
   `python scripts/skill_marketplace.py validate`. See [skills/README.md](skills/README.md).
