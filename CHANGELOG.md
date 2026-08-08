@@ -34,6 +34,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GitHub and raise the known non-strict `mkdocs build` warning count for outside-`docs_dir`
   targets from 52 to 65 (the accepted pattern `docs/CHARTER.md` already follows — see the
   note in `mkdocs.yml`).
+- **Docs: factual corrections to the ecosystem research from an adversarial fact-check.** The
+  research doc was re-verified claim-by-claim against primary sources after drafting. Two
+  substantive errors were corrected: the archived MCP reference-server count was **14, not
+  13** (and `git` exists in *both* the archived and live trees, so the proposed MCP-hygiene
+  denylist must key on package name or it would reject the maintained Git server); and the
+  JetBrains rtk benchmark's `+7.6%` cost result is scoped to **low reasoning effort** — the
+  effect is flat/zero at high effort, across 425 billed trials — so the P1 replication now
+  requires stratifying by reasoning effort rather than pooling, which would have averaged
+  away the deciding variable. Also corrected: claude-hud writes private-permission cache
+  files (it is not "zero storage"); `modelcontextprotocol/servers` is tri-licensed
+  (Apache-2.0 new code/spec, MIT un-relicensed legacy, CC-BY-4.0 docs, reported
+  `NOASSERTION`) and is maintained by the MCP steering group rather than Anthropic;
+  claude-mem's cloud tier is CMEM Cloud/CMEM Cloud Pro; and claude-mem's shipped
+  `hooks.json` has no SessionEnd hook despite its README naming one. The Sources section now
+  discloses which claims were corroborated via search snippets rather than direct fetch
+  (the JetBrains post was egress-blocked) and flags the two claims that remain unverified.
 - **Matrix completeness: derived census, per-kind dim floors, generated coverage artifact
   (F-053, ADR 0032).** The declared test matrix (`tests/test_matrix_eval_tools.py`) was
   silently incomplete: the seven F-051 trajectory scorers had zero rows, `TestM7Registry`'s

@@ -7,7 +7,7 @@ verified against the live GitHub API / npm registry on that date; they will drif
 
 Source material: the seven repositories popularized by the Medium article
 ["7 GitHub Repos That Made Me Addicted to Building with Claude AI"](https://medium.com/@the_infinity/7-github-repos-that-made-me-addicted-to-building-with-claude-ai-6a2b148a4cad)
-(@the_infinity, ~2026-08-07) — [zilliztech/claude-context](https://github.com/zilliztech/claude-context),
+(@the_infinity, ~2026-08-01) — [zilliztech/claude-context](https://github.com/zilliztech/claude-context),
 [modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers),
 [rtk-ai/rtk](https://github.com/rtk-ai/rtk),
 [jarrodwatts/claude-hud](https://github.com/jarrodwatts/claude-hud),
@@ -53,12 +53,12 @@ protected-path, size-budget, airgap, and baseline failures before they reach CI.
 | Repo | What it is | Stars | License | Verdict |
 |---|---|---|---|---|
 | yamadashy/repomix | Deterministic repo→single-file packer, CLI + MCP + official Claude Code plugins | 27.7k | MIT | **Adopt now** — best doctrinal fit; CI-safe, offline, token-budget gate built in |
-| modelcontextprotocol/servers | Official MCP reference servers (7 remain) | 89.4k | MIT/Apache-2.0 | **Adopt selectively** — bundle pinned Memory + Sequential Thinking default-off; use as style corpus for our own MCP server |
+| modelcontextprotocol/servers | Official MCP reference servers (7 remain) | 89.4k | MIT→Apache-2.0 (+CC-BY-4.0 docs) | **Adopt selectively** — bundle pinned Memory + Sequential Thinking default-off; use as style corpus for our own MCP server |
 | hesreallyhim/awesome-claude-code | Curated ecosystem index, generated from a CSV registry | 51.9k | CC BY-NC-ND 4.0 | **Adopt the pattern + submit to it** — registry-generation ideas; the distribution channel for `claude-foundation` |
 | thedotmack/claude-mem | Persistent memory: per-tool-call capture → LLM compression → re-injection | 90.1k | Apache-2.0 | **Adopt the data model, not the runtime** — typed observations + FTS5 + progressive disclosure on top of our session-logger |
-| jarrodwatts/claude-hud | Statusline HUD ("htop for Claude Code"), zero hooks, zero network | 27.2k | MIT | **Recommend to devs; borrow the telemetry tap** — statusline/transcript parsing as harness metadata |
+| jarrodwatts/claude-hud | Statusline HUD ("htop for Claude Code"), zero hooks, no network | 27.2k | MIT | **Recommend to devs; borrow the telemetry tap** — statusline/transcript parsing as harness metadata |
 | zilliztech/claude-context | Semantic code-search MCP over Milvus + embeddings | 12.3k | MIT | **Default-off dev convenience only** — external infra + non-determinism; also a good system-under-test for the harness |
-| rtk-ai/rtk | Rust CLI proxy compressing shell output 60–90% (claimed) | 75.3k | Apache-2.0 | **Measure first — do not adopt on reputation**: an independent benchmark found it *raised* session cost; dogfood the harness on the question |
+| rtk-ai/rtk | Rust CLI proxy compressing shell output 60–90% (claimed) | 75.3k | Apache-2.0 | **Measure first — do not adopt on reputation**: an independent benchmark found it *raised* session cost at low reasoning effort (flat at high); dogfood the harness on the question |
 
 ---
 
@@ -84,7 +84,8 @@ Four MCP tools: `index_codebase`, `search_code`, `clear_index`, `get_indexing_st
 Config is fully env-var driven (`EMBEDDING_PROVIDER` = OpenAI default / VoyageAI / Gemini /
 **Ollama** — the only keyless local path), with a global `~/.context/.env`.
 
-**Health check.** MIT; 12.3k stars; created 2025-06; last push 2026-07-14; npm 0.1.15
+**Health check.** MIT; 12.3k stars; created 2025-06; last push 2026-07-14 — **the least
+recently maintained of the seven** (~3.5 weeks stale at research date); npm 0.1.15
 (2026-06-22), pre-1.0, no GitHub releases. Known rough edges: snapshot corruption,
 force-reindex issues, gRPC deadline errors against idle Zilliz clusters, BM25 weakness on
 exact identifiers, per-machine index state. Requires running Milvus infrastructure
@@ -113,20 +114,27 @@ usable as an *opt-in developer convenience* and genuinely interesting as a
 
 ### 2. modelcontextprotocol/servers — the official MCP reference servers
 
-**What it is.** Anthropic's reference-implementation repo for MCP — deliberately *not* a
-registry (discovery moved to registry.modelcontextprotocol.io). After the 2025 archive sweep
-(13 servers moved to `servers-archived`), exactly **seven** reference servers remain as of
+**What it is.** The MCP steering group's reference-implementation repo (vendor-neutral
+`modelcontextprotocol` org, not an Anthropic-owned project) — deliberately *not* a registry
+(discovery moved to registry.modelcontextprotocol.io). After the archive sweep
+(**14** servers moved to `servers-archived`), exactly **seven** reference servers remain as of
 Aug 2026: Everything, Fetch, Filesystem, Git, **Memory** (knowledge-graph JSONL),
 **Sequential Thinking**, and Time. TS servers ship as `@modelcontextprotocol/server-*` (npx);
 Python ones as `mcp-server-*` (uvx).
+
+Note that **`git` appears in both trees** — an archived `src/git` *and* a live one. Any
+denylist built from the archived set must key on the archived *package name*, not the server
+concept, or it will reject the maintained Git server too.
 
 **Integration mechanism.** Three routes, all relevant: `claude mcp add ... -- npx -y ...`;
 a project-scoped `.mcp.json`; or **plugin-bundled** (`.mcp.json` at plugin root or an
 `mcpServers` field in `plugin.json`) — the route that matters for `claude-foundation`.
 
-**Health check.** 89.4k stars; ~4,150 commits; last push 2026-08-05. Dual-license transition
-(existing MIT, new contributions Apache-2.0). Reference-quality by design, not
-production-hardened. `npx -y`/`uvx` fetch latest-at-invocation unless pinned — a
+**Health check.** 89.4k stars; ~4,150 commits; last push 2026-08-05. Mid-transition licensing:
+new code and spec contributions are Apache-2.0, un-relicensed legacy contributions remain MIT,
+and documentation is CC-BY-4.0 — GitHub reports the repo as `NOASSERTION`, so treat **per-file
+provenance as the authority** before vendoring anything from it. Reference-quality by design,
+not production-hardened. `npx -y`/`uvx` fetch latest-at-invocation unless pinned — a
 supply-chain and determinism hazard to manage explicitly.
 
 **Fit assessment.** Two distinct values for this repo: (a) Memory + Sequential Thinking are
@@ -147,9 +155,10 @@ MCP server — the most strategic idea on this list.
    a gitignored `.claude/memory/`. Reversible by deleting one config block; document that
    npx implies network at session start (keep out of any test path).
 3. *(P2)* An **MCP-hygiene validator** in the quality-gate family: lint every `.mcp.json` in
-   the repo — versions pinned, commands on an npx/uvx allowlist, denylist of the 13 archived
-   server packages (unmaintained upstream). Near-zero cost; lands via the OpenSpec flow since
-   validators are protected paths.
+   the repo — versions pinned, commands on an npx/uvx allowlist, denylist of the **14**
+   archived server *package names* (unmaintained upstream; see the `git` collision above —
+   denylisting the concept rather than the package would reject the live Git server).
+   Near-zero cost; lands via the OpenSpec flow since validators are protected paths.
 4. *(P3)* Scoped **Filesystem** server entries for the `explorer`/`test-runner` subagents
    (allowed-roots restricted per package) to turn "least-privilege subagents" from a prompt
    convention into an enforced boundary — watch for double-denial confusion with
@@ -170,16 +179,20 @@ bytes/4 — rtk ships no tokenizer (its own README says absolute numbers are app
 
 **The critical finding.** An independent controlled benchmark
 ([JetBrains, 2026-07-20](https://blog.jetbrains.com/ai/2026/07/rtk-claude-code-token-savings/),
-80 paired trials) found rtk **raised** Claude Code session cost: median **+7.6% per task**
-(p=0.004), +13.8% turns, +14.3% cache reads — while `rtk gain` self-reported 96.2M tokens
-"saved" on the same trials. Causes: `rtk gain` measures compression against a counterfactual,
-not the bill; Claude Code's built-in Read/Grep/Glob bypass the Bash hook entirely; compressed
-output degrades agent effectiveness, adding turns that swamp per-command savings.
+425 billed trials) found rtk **raised** Claude Code session cost **at low reasoning effort**:
+across 80 clean paired comparisons, median **+7.6% per task** (p=0.004), **+13.8% turns**
+(p=0.03), **+14.3% cache reads** (p=0.008) — while `rtk gain` self-reported **96.2M tokens
+"saved"** on those same trials (99.8% of everything it touched). **At high reasoning effort the
+measured effect was flat/zero.** Causes: `rtk gain` measures compression against a
+counterfactual that does not exist, not the bill; Claude Code's built-in Read/Grep/Glob bypass
+the Bash hook entirely (a limitation rtk's own README acknowledges); and compressed output
+degrades agent effectiveness, adding turns that swamp per-command savings.
 
 **Fit assessment.** This is precisely the kind of claim `langfuse-eval-harness` exists to
-adjudicate. Global adoption on reputation would be malpractice by this repo's own standards;
-the JetBrains result is one workload profile, not a universal verdict — so measure here,
-on this repo's pytest/ruff-heavy workloads.
+adjudicate. Global adoption on reputation would be malpractice by this repo's own standards —
+but so would global *rejection*: the harm is concentrated at low reasoning effort and vanishes
+at high, so **reasoning effort is a moderating variable any replication must stratify on**,
+not average over. Measure here, on this repo's pytest/ruff-heavy workloads.
 
 **Incorporation plan.**
 
@@ -187,7 +200,9 @@ on this repo's pytest/ruff-heavy workloads.
    skill**: rtk-on vs rtk-off arms (`rtk init -g --auto-patch` / `--uninstall`), scored by a
    harness scorer that reads *actual* input tokens from Langfuse traces, never `rtk gain`'s
    bytes/4 estimate. Reproduces the JetBrains methodology on our own workloads and produces
-   a defensible adopt/reject ADR. ~80 paired trials for significance.
+   a defensible adopt/reject ADR. **Stratify the arms by reasoning effort** — pooling low and
+   high would average away the exact effect that decides the question, and a pooled null would
+   be misread as "no harm". ~80 paired trials *per effort level* for significance.
 2. *(P2, technique-not-tool)* A **pure-Python output compactor** in the harness pipeline
    (dedup repeated log lines with counts, group failures by type, keep first+last N of
    tracebacks) applied before eval artifacts reach LLM judges, with before/after token counts
@@ -203,9 +218,11 @@ on this repo's pytest/ruff-heavy workloads.
 
 **What it is.** "htop for Claude Code": a statusline plugin rendering context-window %,
 usage-window burn, active tools, running subagents, and todo progress under the input box.
-Architecturally notable for what it *doesn't* do: **zero lifecycle hooks, zero storage, zero
-network** — a stateless subprocess fed stdin JSON by Claude Code's native statusline API,
-plus read-only parsing of the session transcript JSONL. MIT; 27.2k stars; v0.7.0 (2026-08-07);
+Architecturally notable for what it *doesn't* do: **zero lifecycle hooks and no network
+requests** — a subprocess fed stdin JSON by Claude Code's native statusline API, plus
+read-only parsing of the session transcript JSONL, git metadata, and selected `~/.claude`
+files. It is not quite stateless: it writes private-permission cache files under
+`~/.claude/plugins/claude-hud`. MIT; 27.2k stars; v0.7.0 (2026-08-07);
 very active. Install: `/plugin marketplace add jarrodwatts/claude-hud` →
 `/plugin install claude-hud` → `/claude-hud:setup`. Kill switch `CLAUDE_HUD_DISABLE=1`.
 
@@ -276,7 +293,7 @@ CLAUDE.md/AGENTS.md/SKILL.md/hooks/MCP configs), `Zandereins/schliff` (determini
 
 ### 6. thedotmack/claude-mem — persistent memory
 
-**What it is.** The largest-starred Claude Code plugin (90.1k; Apache-2.0; v13.14.0
+**What it is.** One of the largest-starred Claude Code plugins (90.1k; Apache-2.0; v13.14.0
 released the day of this research). Five lifecycle hooks capture every tool call
 (PostToolUse → non-blocking ~8ms HTTP POST), a resident Bun/Express worker compresses
 outputs via the Claude Agent SDK into ~500-token **typed observations** (9 types: decision,
@@ -285,10 +302,16 @@ Chroma vectors, and re-injected at SessionStart (matcher `startup|clear|compact`
 is a deliberate 3-layer progressive disclosure: `search` (~50–100 tokens/result) → `timeline`
 → `get_observations` (~500–1,000 tokens/result). Install: `npx claude-mem install`.
 
+One upstream detail matters to anyone porting the design: the shipped `plugin/hooks/hooks.json`
+registers SessionStart, UserPromptSubmit, PostToolUse, **PreToolUse**, and Stop — the README
+names a **SessionEnd** hook that the config does not contain. Do not copy the hook set on the
+strength of the README; read the JSON.
+
 **Costs and risks.** Every tool call triggers an LLM compression call (subscription quota or
 API spend; Haiku-class default mitigates). Records everything by default — privacy opt-outs
-are `<private>` tags and the "sensitive" type; a commercial cloud tier (CMEM Pro) is
-increasingly promoted. Operationally heavy: Bun worker must stay up (documented restart-storm
+are `<private>` tags (unverified — the docs site was egress-blocked) and the "sensitive"
+type; a commercial cloud tier (CMEM Cloud, $20/mo; CMEM Cloud Pro $199/yr) is increasingly
+promoted. Operationally heavy: Bun worker must stay up (documented restart-storm
 and port-race incidents), plus uv/Python/Chroma. Injected memories consume context budget and
 are a prompt-injection-shaped surface.
 
@@ -300,7 +323,7 @@ produces the JSONL audit log that claude-mem's capture layer exists to create.
 **Incorporation plan.**
 
 1. *(P1)* **Memory distillation as a default-off extension of `session-logger`**: an
-   SDK-optional post-processing stage (batched at SessionEnd, not per-tool-call — capping
+   SDK-optional post-processing stage (batched at session end, not per-tool-call — capping
    cost) that distills the existing JSONL log into claude-mem-style typed observations in a
    local SQLite+FTS5 index. Null-compressor double keeps the suite offline; golden-file
    tests pin the taxonomy.
@@ -427,7 +450,7 @@ activation study (awesome #4).
 - **Secrets:** session logs, tee files, packed repos, and memory DBs all accumulate raw tool
   output. Repomix's default Secretlint scan is the model; any distillation/packing pipeline
   here needs the same fail-closed posture before anything leaves the machine.
-- **Vendor gravity:** claude-context (Zilliz Cloud) and claude-mem (CMEM Pro) are open-source
+- **Vendor gravity:** claude-context (Zilliz Cloud) and claude-mem (CMEM Cloud) are open-source
   on-ramps to commercial services. Local-first profiles (Ollama/self-hosted Milvus; local
   SQLite) keep the exits open.
 
@@ -443,3 +466,17 @@ Primary: each repo's README/docs/releases and GitHub API metadata (2026-08-08); 
 [Repomix Claude Code plugins guide](https://repomix.com/guide/claude-code-plugins),
 and the [Medium article](https://medium.com/@the_infinity/7-github-repos-that-made-me-addicted-to-building-with-claude-ai-6a2b148a4cad)
 (via search snippets; direct fetch egress-blocked).
+
+**Sourcing caveats** (applying the same disclosure standard to every claim, not just the
+article): `blog.jetbrains.com`, `techtimes.com`, and `repomix.com` were also egress-blocked
+from the research environment. The JetBrains statistics were corroborated through two
+independent search retrievals returning verbatim figures plus secondary coverage
+(TechTimes, 2026-07-21) — not by reading the post directly. Everything else in this document
+was verified against primary sources (GitHub API, raw READMEs, in-repo files, npm registry).
+Two claims remain **unverified** and are flagged where they appear: claude-context's
+issue-tracker "rough edges" (issue-derived, not enumerated) and claude-mem's `<private>`-tag
+opt-out (`docs.claude-mem.ai` blocked).
+
+This document was itself adversarially fact-checked after drafting; that pass corrected the
+archived-server count, the scope of the JetBrains result, claude-hud's storage behavior, the
+`servers` license description, and the CMEM product naming.
