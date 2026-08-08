@@ -15,14 +15,17 @@ Run: pytest tests/test_matrix_eval_tools.py -v --tb=short
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import sys
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from eval_harness.config import EvalConfig
 from eval_harness.core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
 from eval_harness.core.types import (
     EvalItem,
@@ -34,7 +37,10 @@ from eval_harness.core.types import (
     ScoreResult,
     TargetOutput,
 )
+from eval_harness.engine import EvalEngine
+from eval_harness.gating import evaluate_gate
 from eval_harness.plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS, bootstrap
+from tests import _trajectory_helpers as traj
 
 bootstrap()
 
@@ -473,6 +479,267 @@ class TestAutoevalsScorer:
 
 
 # ============================================================================
+# TRAJECTORY SCORERS (F-051)
+# ============================================================================
+#
+# Matrix rows only: the discriminating scenario per scorer plus the shared
+# cross-scorer dimensions. Behavioural depth stays in tests/test_trajectory_scorers.py
+# and tests/test_trajectory_contracts.py — these cells are the index, not the depth.
+# Assertions bind to `passed`/`value`, never `comment`: an arguments-only mismatch
+# renders identical name lists in the comment.
+
+#: All seven registered trajectory scorer names. Literal on purpose — the matrix
+#: completeness guard cross-checks this file's declarations against the live registry
+#: census, so a stale tuple fails loudly (a checked declaration, not a trusted list).
+TRAJECTORY_SCORERS = (
+    "trajectory_exact",
+    "trajectory_in_order",
+    "trajectory_any_order",
+    "trajectory_precision_recall",
+    "trajectory_step_efficiency",
+    "trajectory_loop_detection",
+    "trajectory_recovery",
+)
+
+#: The four reference-matching scorers (the other three grade the path on its own terms).
+TRAJECTORY_REFERENCE_SCORERS = (
+    "trajectory_exact",
+    "trajectory_in_order",
+    "trajectory_any_order",
+    "trajectory_precision_recall",
+)
+
+TRAJECTORY_QUALITY_SCORERS = (
+    "trajectory_step_efficiency",
+    "trajectory_loop_detection",
+    "trajectory_recovery",
+)
+
+
+def _score_trajectory(
+    name: str,
+    output: TargetOutput,
+    expected: object = None,
+    params: dict | None = None,
+    **item_metadata: object,
+) -> ScoreResult:
+    scorer = SCORERS.create(name, params or {})
+    return scorer.score(traj.item(expected, **item_metadata), output, CTX)
+
+
+class TestTrajectoryExactScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("trajectory_exact",)
+
+    def test_m1_correctness_same_calls_same_order(self) -> None:
+        out = traj.output_with(traj.tool_call("a"), traj.tool_call("b"))
+        r = _score_trajectory("trajectory_exact", out, expected=["a", "b"])
+        assert r.value == 1.0 and r.passed is True
+
+    def test_m1_correctness_extra_call_fails_exact(self) -> None:
+        """The pair that separates exact from in_order: A,X,B fails exact."""
+        out = traj.output_with(traj.tool_call("a"), traj.tool_call("x"), traj.tool_call("b"))
+        r = _score_trajectory("trajectory_exact", out, expected=["a", "b"])
+        assert r.value == 0.0 and r.passed is False
+
+
+class TestTrajectoryInOrderScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("trajectory_in_order",)
+
+    def test_m1_correctness_subsequence_passes(self) -> None:
+        out = traj.output_with(traj.tool_call("a"), traj.tool_call("x"), traj.tool_call("b"))
+        r = _score_trajectory("trajectory_in_order", out, expected=["a", "b"])
+        assert r.value == 1.0 and r.passed is True
+
+    def test_m1_correctness_wrong_order_fails(self) -> None:
+        out = traj.output_with(traj.tool_call("b"), traj.tool_call("a"))
+        r = _score_trajectory("trajectory_in_order", out, expected=["a", "b"])
+        assert r.value == 0.0 and r.passed is False
+
+
+class TestTrajectoryAnyOrderScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("trajectory_any_order",)
+
+    def test_m1_correctness_order_ignored(self) -> None:
+        out = traj.output_with(traj.tool_call("b"), traj.tool_call("a"))
+        r = _score_trajectory("trajectory_any_order", out, expected=["a", "b"])
+        assert r.value == 1.0 and r.passed is True
+
+    def test_m1_correctness_multiset_not_set(self) -> None:
+        """A reference asking for two lookups is not satisfied by one."""
+        out = traj.output_with(traj.tool_call("a"))
+        r = _score_trajectory("trajectory_any_order", out, expected=["a", "a"])
+        assert r.value == 0.0 and r.passed is False
+
+
+class TestTrajectoryPrecisionRecallScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("trajectory_precision_recall",)
+
+    def test_m1_correctness_repeat_and_omission_report_separately(self) -> None:
+        """One repeated required call + one omitted call: precision AND recall drop,
+        and they are reported as separate numbers, not one blended verdict."""
+        out = traj.output_with(traj.tool_call("a"), traj.tool_call("a"))
+        r = _score_trajectory("trajectory_precision_recall", out, expected=["a", "b"])
+        assert r.metadata["precision"] == 0.5
+        assert r.metadata["recall"] == 0.5
+        assert r.value == 0.5 and r.passed is False  # default pass_threshold=1.0
+
+    def test_m1_correctness_threshold_is_configurable(self) -> None:
+        out = traj.output_with(traj.tool_call("a"), traj.tool_call("a"))
+        r = _score_trajectory("trajectory_precision_recall", out, expected=["a", "b"], params={"pass_threshold": 0.5})
+        assert r.value == 0.5 and r.passed is True
+
+
+class TestTrajectoryStepEfficiencyScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("trajectory_step_efficiency",)
+
+    def test_m1_correctness_within_budget(self) -> None:
+        out = traj.output_with(traj.tool_call("a"), traj.tool_call("b"))
+        r = _score_trajectory("trajectory_step_efficiency", out, params={"budget": 4})
+        assert r.value == 1.0 and r.passed is True
+
+    def test_m1_correctness_overrun_degrades_proportionally(self) -> None:
+        out = traj.output_with(*(traj.tool_call(f"t{i}") for i in range(5)))
+        r = _score_trajectory("trajectory_step_efficiency", out, params={"budget": 4})
+        assert r.value == 0.8 and r.passed is False
+
+    def test_m1_correctness_item_budget_overrides_param(self) -> None:
+        out = traj.output_with(traj.tool_call("a"), traj.tool_call("b"))
+        r = _score_trajectory("trajectory_step_efficiency", out, params={"budget": 4}, step_budget=1)
+        assert r.value == 0.5 and r.passed is False
+
+
+class TestTrajectoryLoopDetectionScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("trajectory_loop_detection",)
+
+    def test_m1_correctness_repeats_at_limit_pass(self) -> None:
+        out = traj.output_with(traj.tool_call("a"), traj.tool_call("a"), traj.tool_call("b"))
+        r = _score_trajectory("trajectory_loop_detection", out, params={"max_repeats": 2})
+        assert r.value == 1.0 and r.passed is True
+
+    def test_m1_correctness_exceeding_limit_fails(self) -> None:
+        out = traj.output_with(traj.tool_call("a"), traj.tool_call("a"), traj.tool_call("a"))
+        r = _score_trajectory("trajectory_loop_detection", out, params={"max_repeats": 2})
+        assert r.value == 0.0 and r.passed is False
+
+
+class TestTrajectoryRecoveryScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("trajectory_recovery",)
+
+    def test_m1_correctness_hallucinated_success_fails(self) -> None:
+        out = traj.output_with(traj.tool_error("db"), traj.final())
+        r = _score_trajectory("trajectory_recovery", out)
+        assert r.value == 0.0 and r.passed is False
+
+    def test_m1_correctness_retry_recovers(self) -> None:
+        out = traj.output_with(traj.tool_error("db"), traj.tool_call("db"), traj.final())
+        r = _score_trajectory("trajectory_recovery", out)
+        assert r.value == 1.0 and r.passed is True
+
+    def test_m1_correctness_honest_stop_is_not_a_success_claim(self) -> None:
+        out = traj.output_with(traj.tool_error("db"), traj.final(failed=True))
+        r = _score_trajectory("trajectory_recovery", out)
+        assert r.value == 1.0 and r.passed is True
+
+
+class TestTrajectoryScorersShared:
+    """Cross-scorer dimensions, parametrized over all seven trajectory scorers."""
+
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = TRAJECTORY_SCORERS
+
+    #: Per-scorer (params, expected) that make a normal 1-call trajectory score PASS,
+    #: so the M3 assertions see a real bool verdict rather than a not-applicable None.
+    _M3_SETUP: ClassVar[dict[str, tuple[dict, list | None]]] = {
+        "trajectory_exact": ({}, ["a"]),
+        "trajectory_in_order": ({}, ["a"]),
+        "trajectory_any_order": ({}, ["a"]),
+        "trajectory_precision_recall": ({}, ["a"]),
+        "trajectory_step_efficiency": ({"budget": 4}, None),
+        "trajectory_loop_detection": ({}, None),
+        "trajectory_recovery": ({}, None),
+    }
+
+    @pytest.mark.parametrize("name", TRAJECTORY_SCORERS)
+    def test_m2_edge_missing_trajectory_is_not_applicable(self, name: str) -> None:
+        r = _score_trajectory(name, TargetOutput(output="text only"))
+        assert r.passed is None and r.value == 0.0
+
+    @pytest.mark.parametrize("name", TRAJECTORY_SCORERS)
+    def test_m2_edge_on_missing_sets_the_emitted_value(self, name: str) -> None:
+        r = _score_trajectory(name, TargetOutput(output="text only"), params={"on_missing": 0.5})
+        assert r.passed is None and r.value == 0.5
+
+    @pytest.mark.parametrize("name", TRAJECTORY_REFERENCE_SCORERS)
+    def test_m2_edge_missing_reference_is_not_applicable(self, name: str) -> None:
+        out = traj.output_with(traj.tool_call("a"))
+        r = _score_trajectory(name, out, expected=None)
+        assert r.passed is None
+
+    @pytest.mark.parametrize("name", TRAJECTORY_QUALITY_SCORERS)
+    def test_m2_edge_empty_trajectory_passes_quality_scorers(self, name: str) -> None:
+        out = TargetOutput(output="x", trajectory=traj.trajectory())
+        r = _score_trajectory(name, out, params={"budget": 4} if name == "trajectory_step_efficiency" else {})
+        assert r.passed is True
+
+    def test_m2_edge_empty_trajectory_fails_a_nonempty_reference(self) -> None:
+        out = TargetOutput(output="x", trajectory=traj.trajectory())
+        r = _score_trajectory("trajectory_exact", out, expected=["a"])
+        assert r.value == 0.0 and r.passed is False
+
+    @pytest.mark.parametrize("name", TRAJECTORY_SCORERS)
+    def test_m3_type_safety(self, name: str) -> None:
+        params, expected = self._M3_SETUP[name]
+        out = traj.output_with(traj.tool_call("a"), traj.final())
+        r = _score_trajectory(name, out, expected=expected, params=params)
+        assert isinstance(r, ScoreResult)
+        assert isinstance(r.value, float)
+        assert isinstance(r.passed, bool)
+        assert isinstance(r.metadata, dict)
+
+    @pytest.mark.parametrize("name", TRAJECTORY_SCORERS)
+    def test_m5_determinism_with_set_bearing_arguments(self, name: str) -> None:
+        """Same-process stability over a set-valued argument (unordered on purpose).
+
+        The cross-interpreter, cross-PYTHONHASHSEED canonicalisation property is pinned
+        by real subprocesses in tests/test_trajectory_contracts.py; duplicating those
+        spawns here would buy nothing. This cell asserts the scorer level: repeat
+        scoring of one output is verdict-identical.
+        """
+        params, expected = self._M3_SETUP[name]
+        out = traj.output_with(traj.tool_call("a", {"tags": {"x", "y", "z"}}), traj.final())
+        results = [_score_trajectory(name, out, expected=expected, params=params) for _ in range(10)]
+        verdicts = {(r.value, r.passed, r.comment) for r in results}
+        assert len(verdicts) == 1
+
+    @pytest.mark.parametrize(
+        "name,params,exc",
+        [
+            ("trajectory_step_efficiency", {"count": "bogus"}, ValueError),
+            ("trajectory_step_efficiency", {"budget": 0}, ValueError),
+            ("trajectory_loop_detection", {"max_repeats": 0}, ValueError),
+            # ValueError requires a non-numeric *string*; None raises TypeError instead.
+            ("trajectory_exact", {"on_missing": "abc"}, ValueError),
+            ("trajectory_exact", {"max_depth": 0}, ValueError),
+            # Unknown kwarg raises from _TrajectoryScorer.__init__ (kwargs-free base);
+            # also pinned by test_trajectory_integration's strict-config test.
+            ("trajectory_exact", {"not_a_param": 1}, TypeError),
+        ],
+    )
+    def test_m6_error_bad_config_is_rejected_at_construction(
+        self, name: str, params: dict, exc: type[Exception]
+    ) -> None:
+        with pytest.raises(exc):
+            SCORERS.create(name, params)
+
+
+# ============================================================================
 # DATASETS
 # ============================================================================
 
@@ -685,41 +952,161 @@ class TestGating:
 # M8 - Composability: full engine pipeline
 # ============================================================================
 
-
-class TestM8Composability:
-    """M8 - End-to-end engine pipeline with real components."""
-
-    def test_full_pipeline_echo_exact_match(self, tmp_path: Path) -> None:
-        """Echo target + exact_match scorer + mock judge + json_file sink."""
-        from eval_harness.config import EvalConfig
-
-        out_json = tmp_path / "out.json"
-        config_dict = {
-            "schema_version": "1.0",
-            "run": {"name": "matrix-test", "seed": 42},
-            "dataset": {
-                "type": "inline",
+#: The machine-readable index of every M8 pipeline. The tests below RUN these configs;
+#: tests/test_matrix_coverage.py IMPORTS this constant and reads each component's kind
+#: from the validated config's typed fields (never from bare "type" string literals,
+#: which are ambiguous — `braintrust`/`langfuse` are registered as both a dataset and
+#: a sink). Sink paths are placeholders, overridden per-test with tmp_path.
+PIPELINES: dict[str, dict] = {
+    "echo_exact_match": {
+        "schema_version": "1.0",
+        "run": {"name": "matrix-test", "seed": 42},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {"id": "m1", "inputs": {"q": "hello"}, "expected": "hello"},
+                    {"id": "m2", "inputs": {"q": "world"}, "expected": "world"},
+                ],
+            },
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [
+            {"type": "exact_match", "params": {"name": "em"}},
+            {"type": "contains", "params": {"name": "c", "substring": "hello"}},
+        ],
+        "judge": {"type": "mock", "params": {"default_score": 0.95}},
+        "sinks": [{"type": "json_file", "params": {"path": "PLACEHOLDER.json"}}],
+        "gate": {"rules": [{"score": "em", "metric": "mean", "min": 0.9}]},
+    },
+    "llm_judge": {
+        "schema_version": "1.0",
+        "run": {"name": "judge-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "j1", "inputs": {"q": "test"}, "expected": "test"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "llm_judge", "params": {"name": "quality"}}],
+        "judge": {"type": "mock", "params": {"default_score": 0.7}},
+        "sinks": [{"type": "console"}],
+    },
+    "weighted": {
+        "schema_version": "1.0",
+        "run": {"name": "composite-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "c1", "inputs": {"q": "hello"}, "expected": "hello"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [
+            {
+                "type": "weighted",
                 "params": {
-                    "items": [
-                        {"id": "m1", "inputs": {"q": "hello"}, "expected": "hello"},
-                        {"id": "m2", "inputs": {"q": "world"}, "expected": "world"},
+                    "name": "combo",
+                    "components": [
+                        {"type": "exact_match", "weight": 2.0},
+                        {"type": "contains", "weight": 1.0, "params": {"substring": "hello"}},
                     ],
                 },
+            }
+        ],
+        "judge": {"type": "mock"},
+        "sinks": [{"type": "console"}],
+    },
+    "trajectory": {
+        "schema_version": "1.0",
+        "run": {"name": "matrix-trajectory", "seed": 7},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "traj1",
+                        "inputs": {"question": "what is widget 42"},
+                        # Full arguments on purpose: comparison includes arguments by
+                        # default, and the demo SUT echoes the question verbatim into
+                        # `q` — a names-only reference fails trajectory_exact.
+                        "expected": {
+                            "tool_calls": [
+                                {"name": "search", "arguments": {"q": "what is widget 42"}},
+                                {"name": "fetch", "arguments": {"id": "42"}},
+                            ]
+                        },
+                        "metadata": {"step_budget": 4},
+                    }
+                ],
             },
-            "target": {"type": "echo", "params": {"output_key": "q"}},
-            "scorers": [
-                {"type": "exact_match", "params": {"name": "em"}},
-                {"type": "contains", "params": {"name": "c", "substring": "hello"}},
-            ],
-            "judge": {"type": "mock", "params": {"default_score": 0.95}},
-            "sinks": [{"type": "json_file", "params": {"path": str(out_json)}}],
-            "gate": {"rules": [{"score": "em", "metric": "mean", "min": 0.9}]},
-        }
-        config = EvalConfig.model_validate(config_dict)
-        from eval_harness.engine import EvalEngine
+        },
+        "target": {"type": "callable", "params": {"path": "tests._sut:trajectory_demo"}},
+        "scorers": [
+            {"type": "trajectory_exact", "params": {}},
+            {"type": "trajectory_in_order", "params": {}},
+            {"type": "trajectory_any_order", "params": {}},
+            {"type": "trajectory_precision_recall", "params": {}},
+            {"type": "trajectory_step_efficiency", "params": {"budget": 4}},
+            {"type": "trajectory_loop_detection", "params": {}},
+            {"type": "trajectory_recovery", "params": {}},
+        ],
+        "judge": {"type": "mock"},
+        "sinks": [{"type": "json_file", "params": {"path": "PLACEHOLDER.json"}}],
+        "gate": {
+            "rules": [
+                {"score": "trajectory_in_order", "metric": "pass_rate", "min": 1.0},
+                {"score": "trajectory_recovery", "metric": "pass_rate", "min": 1.0},
+            ]
+        },
+    },
+    "trajectory_mixed": {
+        "schema_version": "1.0",
+        "run": {"name": "matrix-trajectory-mixed", "seed": 7},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "mix1",
+                        "inputs": {"question": "what is widget 42"},
+                        "expected": {
+                            "tool_calls": [
+                                {"name": "search", "arguments": {"q": "what is widget 42"}},
+                                {"name": "fetch", "arguments": {"id": "42"}},
+                            ]
+                        },
+                    }
+                ],
+            },
+        },
+        "target": {"type": "callable", "params": {"path": "tests._sut:trajectory_demo"}},
+        "scorers": [
+            {"type": "trajectory_in_order", "params": {}},
+            {"type": "contains", "params": {"name": "mentions_widget", "substring": "widget 42"}},
+        ],
+        "judge": {"type": "mock"},
+        "sinks": [{"type": "console"}],
+    },
+}
 
-        engine = EvalEngine.from_config(config)
-        result = engine.run()
+
+class TestM8Composability:
+    """M8 - End-to-end engine pipelines over the PIPELINES index."""
+
+    MATRIX_KIND = "engine"
+
+    def _run(self, name: str, tmp_path: Path | None = None) -> tuple[EvalConfig, RunResult, Path | None]:
+        config_dict = copy.deepcopy(PIPELINES[name])
+        out_path: Path | None = None
+        for sink in config_dict.get("sinks", []):
+            if sink.get("type") == "json_file":
+                assert tmp_path is not None, f"pipeline {name!r} writes a file; pass tmp_path"
+                out_path = tmp_path / f"{name}.json"
+                sink.setdefault("params", {})["path"] = str(out_path)
+        config = EvalConfig.model_validate(config_dict)
+        return config, EvalEngine.from_config(config).run(), out_path
+
+    def test_m8_full_pipeline_echo_exact_match(self, tmp_path: Path) -> None:
+        """Echo target + exact_match scorer + mock judge + json_file sink."""
+        _, result, out_json = self._run("echo_exact_match", tmp_path)
 
         # Verify the pipeline produced correct results
         assert result.config_name == "matrix-test"
@@ -730,64 +1117,45 @@ class TestM8Composability:
         assert result.aggregate["c"].mean == 0.5
 
         # Verify the sink wrote the file
-        assert out_json.exists()
+        assert out_json is not None and out_json.exists()
         data = json.loads(out_json.read_text())
         assert data["run_id"] == result.run_id
 
-    def test_pipeline_with_llm_judge_scorer(self) -> None:
+    def test_m8_pipeline_with_llm_judge_scorer(self) -> None:
         """LLM judge scorer uses injected mock judge through ctx."""
-        from eval_harness.config import EvalConfig
-        from eval_harness.engine import EvalEngine
-
-        config = EvalConfig.model_validate(
-            {
-                "schema_version": "1.0",
-                "run": {"name": "judge-test", "seed": 1},
-                "dataset": {
-                    "type": "inline",
-                    "params": {"items": [{"id": "j1", "inputs": {"q": "test"}, "expected": "test"}]},
-                },
-                "target": {"type": "echo", "params": {"output_key": "q"}},
-                "scorers": [{"type": "llm_judge", "params": {"name": "quality"}}],
-                "judge": {"type": "mock", "params": {"default_score": 0.7}},
-                "sinks": [{"type": "console"}],
-            }
-        )
-        result = EvalEngine.from_config(config).run()
+        _, result, _ = self._run("llm_judge")
         assert result.aggregate["quality"].mean == 0.7
 
-    def test_pipeline_with_composite_scorer(self) -> None:
+    def test_m8_pipeline_with_composite_scorer(self) -> None:
         """Composite scorer composes children inside the engine pipeline."""
-        from eval_harness.config import EvalConfig
-        from eval_harness.engine import EvalEngine
-
-        config = EvalConfig.model_validate(
-            {
-                "schema_version": "1.0",
-                "run": {"name": "composite-test", "seed": 1},
-                "dataset": {
-                    "type": "inline",
-                    "params": {"items": [{"id": "c1", "inputs": {"q": "hello"}, "expected": "hello"}]},
-                },
-                "target": {"type": "echo", "params": {"output_key": "q"}},
-                "scorers": [
-                    {
-                        "type": "weighted",
-                        "params": {
-                            "name": "combo",
-                            "components": [
-                                {"type": "exact_match", "weight": 2.0},
-                                {"type": "contains", "weight": 1.0, "params": {"substring": "hello"}},
-                            ],
-                        },
-                    }
-                ],
-                "judge": {"type": "mock"},
-                "sinks": [{"type": "console"}],
-            }
-        )
-        result = EvalEngine.from_config(config).run()
+        _, result, _ = self._run("weighted")
         assert result.aggregate["combo"].mean == 1.0
+
+    def test_m8_trajectory_pipeline(self, tmp_path: Path) -> None:
+        """All 7 trajectory scorers over the shipped trajectory-emitting callable,
+        through config validation, the engine, a file sink and the gate."""
+        config, result, out_json = self._run("trajectory", tmp_path)
+
+        # The callable target swallows SUT exceptions into TargetOutput.error, so a
+        # broken SUT would surface here as error text, not as a raised exception.
+        assert result.items[0].output.error is None
+        for name in TRAJECTORY_SCORERS:
+            assert result.aggregate[name].pass_rate == 1.0, name
+
+        assert out_json is not None
+        data = json.loads(out_json.read_text())
+        emitted = data["items"][0]
+        assert "trajectory" in emitted, "the sink payload must carry the trajectory"
+        assert len(emitted["trajectory"]["steps"]) == 6
+
+        gate = evaluate_gate(config.gate, result)
+        assert gate.passed is True
+
+    def test_m8_trajectory_and_outcome_scorers_compose(self) -> None:
+        """A trajectory scorer and a text scorer grade the same run side by side."""
+        _, result, _ = self._run("trajectory_mixed")
+        assert result.aggregate["trajectory_in_order"].pass_rate == 1.0
+        assert result.aggregate["mentions_widget"].pass_rate == 1.0
 
 
 # ============================================================================
