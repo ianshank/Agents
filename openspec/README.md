@@ -29,6 +29,12 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
+- [`changes/add-eval-matrix-completeness/`](changes/add-eval-matrix-completeness/) —
+  *proposed.* The declared test matrix ("all eval tools × standardized metrics") is silently
+  incomplete — seven registered scorers have zero rows, the M7 lists are hand-maintained and
+  stale, and nothing enforces completeness. Derives the component census from the live
+  registries, sets per-kind dimension floors with reviewable waivers (ADR 0032), freezes the
+  alias→canonical pairings, and generates a freshness-gated `docs/matrix-coverage.md`.
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
   *proposed.* The system has strong internal validation and no external evidence. Replaces the
   rejected "add-business-readiness-wedge" (which would have pulled a public
