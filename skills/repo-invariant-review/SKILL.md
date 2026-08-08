@@ -34,7 +34,10 @@ quality of a peer review").
 ## 2. Procedure (the E2E steps)
 
 ```bash
-python scripts/check_invariants.py --repo <path> --base origin/main [--has-label] [--strict] [--format {text,json}] [--out report.json]
+# Path is relative to this skill directory. From the repo root (where §1 says to run it),
+# spell it out in full — a bare `scripts/check_invariants.py` resolves to the repo's own
+# scripts/ directory, which does not contain this checker.
+python skills/repo-invariant-review/scripts/check_invariants.py --repo <path> --base origin/main [--has-label] [--strict] [--format {text,json}] [--out report.json]
 ```
 
 1. **Run** it against the branch before pushing.
