@@ -35,6 +35,11 @@ coverage: ## Run tests with coverage (via the quality-gate script)
 check: ## Run the full quality gate
 	./scripts/quality-gate.sh all
 
+# Hand-added convenience targets (not emitted by the generator). None of them creates a
+# file with its own name, so they are declared phony here -- in their own statement, so
+# the generated .PHONY line above stays byte-stable for the generator's --check.
+.PHONY: determinism matrix-check matrix-update
+
 determinism: ## Prove tool-call canonicalisation is stable across interpreter processes
 	@# Delegates to the test that owns this assertion rather than restating the probe here,
 	@# so the two can never drift. The test spawns real subprocesses with differing
