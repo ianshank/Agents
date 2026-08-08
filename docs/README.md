@@ -53,6 +53,13 @@ See that index for the full list and the (intentional) numbering gap.
 - [openspec-spike.md](openspec-spike.md) — OpenSpec as a reversible coordination layer
   over the enforced `features.yaml` / `F_*.py` / ADR system (`openspec/`).
 
+## Research
+
+- [claude-code-ecosystem-research.md](claude-code-ecosystem-research.md) — survey of seven
+  Claude Code ecosystem repos (repomix, the MCP reference servers, claude-mem, claude-hud,
+  claude-context, rtk, awesome-claude-code) with per-repo adoption verdicts and a
+  prioritized incorporation roadmap mapped to this repo's integration surfaces.
+
 ## Baselines & audits
 
 - [gap-analysis-2026-07.md](gap-analysis-2026-07.md) — measured lint/type/coverage baseline.

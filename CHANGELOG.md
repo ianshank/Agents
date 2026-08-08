@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Docs: Claude Code ecosystem research (`docs/claude-code-ecosystem-research.md`).**
+  Survey of the seven ecosystem repos popularized by the "7 GitHub Repos That Made Me
+  Addicted to Building with Claude AI" article — repomix, the MCP reference servers,
+  claude-mem, claude-hud, claude-context, rtk, and awesome-claude-code — verified against
+  live GitHub/npm sources on 2026-08-08. Each repo gets an adoption verdict against the
+  repo's reversible-adoption / offline-determinism doctrine, concrete integration points
+  (claude-foundation plugin, `skills/marketplace.yaml`, harness registries, CI gates), and
+  a P1–P3 incorporation roadmap; notable finding: an independent JetBrains benchmark
+  contradicts rtk's headline token-savings claim, so rtk is routed through a model-bench
+  paired-trial measurement rather than adopted on reputation. Indexed in `docs/README.md`
+  and the mkdocs nav.
 - **Matrix completeness: derived census, per-kind dim floors, generated coverage artifact
   (F-053, ADR 0032).** The declared test matrix (`tests/test_matrix_eval_tools.py`) was
   silently incomplete: the seven F-051 trajectory scorers had zero rows, `TestM7Registry`'s
