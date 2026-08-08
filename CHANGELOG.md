@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Docs: Claude Code ecosystem research (`docs/claude-code-ecosystem-research.md`).**
+  Survey of the seven ecosystem repos popularized by the "7 GitHub Repos That Made Me
+  Addicted to Building with Claude AI" article — repomix, the MCP reference servers,
+  claude-mem, claude-hud, claude-context, rtk, and awesome-claude-code — verified against
+  live GitHub/npm sources on 2026-08-08. Each repo gets an adoption verdict against the
+  repo's reversible-adoption / offline-determinism doctrine, concrete integration points
+  (claude-foundation plugin, `skills/marketplace.yaml`, harness registries, CI gates), and
+  a P1–P3 incorporation roadmap; notable finding: an independent JetBrains benchmark
+  contradicts rtk's headline token-savings claim, so rtk is routed through a model-bench
+  paired-trial measurement rather than adopted on reputation. Indexed in `docs/README.md`
+  and the mkdocs nav.
+
+### Fixed
+- **Docs: eleven orphaned plan documents are now reachable.** `docs/README.md`'s "Plans"
+  section described the `plans/<topic>/{PLAN.md,REVIEW.md}` convention but linked a single
+  example, so a link-graph walk from the documented entry points (`README.md`, `AGENTS.md`,
+  `docs/README.md`, the mkdocs nav) reached 53 of 64 `docs/**/*.md` files — eleven plan
+  documents under `agent-eval-coverage`, `agent-record-decontamination`,
+  `agents-critical-path`, `claude-foundation`, and `real-data-activation` were unreachable
+  from anywhere. The section now carries a complete per-topic index; reachability is 64/64
+  and the repo-wide broken-relative-link count (the advisory `docs.yml` `links` job) is 0.
+  The research doc added in this release also gained 16 cross-links to the artifacts it
+  names (`features.yaml`, `AGENTS.md`, the marketplace, the foundation plugin, ADR 0009,
+  `session_logger.py`) per `docs/STYLE.md`'s relative-cross-link rule; these resolve on
+  GitHub and raise the known non-strict `mkdocs build` warning count for outside-`docs_dir`
+  targets from 52 to 65 (the accepted pattern `docs/CHARTER.md` already follows — see the
+  note in `mkdocs.yml`).
+- **Docs: factual corrections to the ecosystem research from an adversarial fact-check.** The
+  research doc was re-verified claim-by-claim against primary sources after drafting. Two
+  substantive errors were corrected: the archived MCP reference-server count was **14, not
+  13** (and `git` exists in *both* the archived and live trees, so the proposed MCP-hygiene
+  denylist must key on package name or it would reject the maintained Git server); and the
+  JetBrains rtk benchmark's `+7.6%` cost result is scoped to **low reasoning effort** — the
+  effect is flat/zero at high effort, across 425 billed trials — so the P1 replication now
+  requires stratifying by reasoning effort rather than pooling, which would have averaged
+  away the deciding variable. Also corrected: claude-hud writes private-permission cache
+  files (it is not "zero storage"); `modelcontextprotocol/servers` is tri-licensed
+  (Apache-2.0 new code/spec, MIT un-relicensed legacy, CC-BY-4.0 docs, reported
+  `NOASSERTION`) and is maintained by the MCP steering group rather than Anthropic;
+  claude-mem's cloud tier is CMEM Cloud/CMEM Cloud Pro; and claude-mem's shipped
+  `hooks.json` has no SessionEnd hook despite its README naming one. The Sources section now
+  discloses which claims were corroborated via search snippets rather than direct fetch
+  (the JetBrains post was egress-blocked) and flags the two claims that remain unverified.
+- **Docs: the rtk benchmark proposal now isolates per-arm configuration state.** Review
+  surfaced that `rtk init -g` is a *global* mutation (`~/.claude/hooks/rtk-rewrite.sh`,
+  `~/.claude/RTK.md`, a `settings.json` hook entry, an `@RTK.md` reference in `CLAUDE.md`),
+  so toggling install/uninstall in place between the rtk-on and rtk-off arms would leak hook
+  state across the boundary and leave the next arm contaminated after any mid-run failure —
+  silently invalidating the measurement the P1 item exists to produce. The proposal now
+  requires a dedicated Claude configuration directory (or container) per arm, and notes that
+  `--uninstall` leaves runtime artifacts under `~/.local/share/rtk/` so "uninstalled" is not
+  "clean". Both documented package commands were also pinned to their reviewed versions
+  (`@zilliz/claude-context-mcp@0.1.15`, `repomix@1.18.0`) instead of `@latest` and an
+  uncopyable `<pinned>` placeholder, with the per-package token budget moved to config.
 - **Matrix completeness: derived census, per-kind dim floors, generated coverage artifact
   (F-053, ADR 0032).** The declared test matrix (`tests/test_matrix_eval_tools.py`) was
   silently incomplete: the seven F-051 trajectory scorers had zero rows, `TestM7Registry`'s

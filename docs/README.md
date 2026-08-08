@@ -53,6 +53,13 @@ See that index for the full list and the (intentional) numbering gap.
 - [openspec-spike.md](openspec-spike.md) — OpenSpec as a reversible coordination layer
   over the enforced `features.yaml` / `F_*.py` / ADR system (`openspec/`).
 
+## Research
+
+- [claude-code-ecosystem-research.md](claude-code-ecosystem-research.md) — survey of seven
+  Claude Code ecosystem repos (repomix, the MCP reference servers, claude-mem, claude-hud,
+  claude-context, rtk, awesome-claude-code) with per-repo adoption verdicts and a
+  prioritized incorporation roadmap mapped to this repo's integration surfaces.
+
 ## Baselines & audits
 
 - [gap-analysis-2026-07.md](gap-analysis-2026-07.md) — measured lint/type/coverage baseline.
@@ -71,8 +78,18 @@ See that index for the full list and the (intentional) numbering gap.
 ## Plans
 
 Cross-cutting execution plans live under [plans/](plans/) as
-`plans/<topic>/{PLAN.md,REVIEW.md}` (e.g.
-[plans/enterprise-docs-overhaul/PLAN.md](plans/enterprise-docs-overhaul/PLAN.md)).
+`plans/<topic>/{PLAN.md,REVIEW.md}`. Every plan is listed here — an unlisted plan is
+unreachable from any documented entry point, which is how eleven of them went invisible
+before this index existed:
+
+| Topic | Documents |
+|---|---|
+| agent-eval-coverage | [PLAN](plans/agent-eval-coverage/PLAN.md) · [REVIEW](plans/agent-eval-coverage/REVIEW.md) |
+| agent-record-decontamination | [PLAN](plans/agent-record-decontamination/PLAN.md) · [REVIEW](plans/agent-record-decontamination/REVIEW.md) · [REVIEW-v2](plans/agent-record-decontamination/REVIEW-v2.md) |
+| agents-critical-path | [PLAN](plans/agents-critical-path/PLAN.md) · [REVIEW](plans/agents-critical-path/REVIEW.md) |
+| claude-foundation | [PLAN](plans/claude-foundation/PLAN.md) · [REVIEW](plans/claude-foundation/REVIEW.md) · [sources](plans/claude-foundation/sources.md) |
+| enterprise-docs-overhaul | [PLAN](plans/enterprise-docs-overhaul/PLAN.md) · [GAP_ANALYSIS](plans/enterprise-docs-overhaul/GAP_ANALYSIS.md) |
+| real-data-activation | [PLAN](plans/real-data-activation/PLAN.md) · [REVIEW](plans/real-data-activation/REVIEW.md) |
 
 ## Per-package docs
 
