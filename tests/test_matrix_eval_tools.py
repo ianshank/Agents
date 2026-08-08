@@ -25,8 +25,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from eval_harness import plugins as _plugins_module
 from eval_harness.config import EvalConfig
 from eval_harness.core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
+from eval_harness.core.registry import Registry
 from eval_harness.core.types import (
     EvalItem,
     ItemResult,
@@ -43,6 +45,17 @@ from eval_harness.plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS, boot
 from tests import _trajectory_helpers as traj
 
 bootstrap()
+
+# The committed registry surface (names + aliases, flat per kind) and the live
+# registries it must resolve against, discovered dynamically by `.kind` so a future
+# sixth registry is picked up without a code change here.
+_REGISTRY_BASELINE: dict[str, list[str]] = json.loads(
+    (Path(__file__).parent / "plugin_registry_baseline.json").read_text(encoding="utf-8")
+)
+_BASELINE_PAIRS = [(kind, key) for kind, keys in sorted(_REGISTRY_BASELINE.items()) for key in keys]
+_LIVE_REGISTRIES: dict[str, Registry] = {
+    obj.kind: obj for obj in vars(_plugins_module).values() if isinstance(obj, Registry)
+}
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -74,62 +87,42 @@ CTX_WITH_JUDGE = RunContext(config=None, judge=MOCK_JUDGE)
 
 
 # ============================================================================
-# M7 - Registry: all expected keys are present, aliases resolve
+# M7 - Registry: every committed surface key resolves in its live registry
 # ============================================================================
 
 
 class TestM7Registry:
-    """M7 - Every component is registered under expected keys and aliases resolve."""
+    """M7 - Derived from the committed registry baseline, never a hand list.
 
-    @pytest.mark.parametrize(
-        "name",
-        ["mock", "openai", "anthropic", "bedrock", "phoenix_evals"],
-        ids=lambda n: f"judge:{n}",
-    )
-    def test_judge_registered(self, name: str) -> None:
-        assert name in JUDGES
+    The old hardcoded name/alias lists went stale by seven scorers the day F-051
+    registered them — the manual-list-vs-derived-reality defect F-050/F-052 closed
+    elsewhere. `tests/plugin_registry_baseline.json` stores names and aliases MERGED
+    FLAT per kind, so what this class asserts is *resolvability*: every committed key
+    is accepted by the live registry of its kind and resolves to a canonical name.
+    The directed alias→canonical PAIRING (a flat baseline cannot see a repointed
+    alias, and `Registry._aliases` assignment has no duplicate guard) is frozen by
+    exact equality against FROZEN_ALIAS_MAP in tests/test_matrix_coverage.py.
 
-    @pytest.mark.parametrize(
-        "alias,canonical",
-        [("deterministic", "mock"), ("claude", "anthropic"), ("phoenix-evals", "phoenix_evals")],
-    )
-    def test_judge_alias(self, alias: str, canonical: str) -> None:
-        assert JUDGES.resolve(alias) == canonical
+    In-process reads are safe for THIS direction only: canonical registrations are
+    add-only (`register_class` raises on a differing duplicate), so pollution from
+    test doubles can only ADD live keys, never mask a baseline key. The opposite
+    direction — live ⊆ baseline — is the fresh-subprocess surface guard's job in
+    tests/test_plugin_registry_surface.py; do not "simplify" these into one.
+    """
 
-    @pytest.mark.parametrize(
-        "name",
-        ["exact_match", "contains", "regex_match", "json_keys", "llm_judge", "weighted", "autoevals"],
-        ids=lambda n: f"scorer:{n}",
-    )
-    def test_scorer_registered(self, name: str) -> None:
-        assert name in SCORERS
+    MATRIX_REGISTRY = True
 
-    @pytest.mark.parametrize(
-        "alias,canonical",
-        [
-            ("exact", "exact_match"),
-            ("regex", "regex_match"),
-            ("composite", "weighted"),
-            ("ensemble", "weighted"),
-            ("llm-judge", "llm_judge"),
-            ("judge", "llm_judge"),
-            ("schema_keys", "json_keys"),
-        ],
-    )
-    def test_scorer_alias(self, alias: str, canonical: str) -> None:
-        assert SCORERS.resolve(alias) == canonical
+    @pytest.mark.parametrize("kind,key", _BASELINE_PAIRS, ids=[f"{k}:{n}" for k, n in _BASELINE_PAIRS])
+    def test_committed_key_resolves_in_its_live_registry(self, kind: str, key: str) -> None:
+        assert kind in _LIVE_REGISTRIES, f"baseline kind {kind!r} has no live registry"
+        registry = _LIVE_REGISTRIES[kind]
+        assert key in registry, f"{kind} key {key!r} no longer resolves"
+        assert registry.resolve(key) in registry.names()
 
-    @pytest.mark.parametrize("name", ["inline", "jsonl", "csv", "parquet", "langfuse", "braintrust"])
-    def test_dataset_registered(self, name: str) -> None:
-        assert name in DATASETS
-
-    @pytest.mark.parametrize("name", ["echo", "callable", "model"])
-    def test_target_registered(self, name: str) -> None:
-        assert name in TARGETS
-
-    @pytest.mark.parametrize("name", ["console", "json_file", "html_file", "langfuse", "phoenix", "braintrust"])
-    def test_sink_registered(self, name: str) -> None:
-        assert name in SINKS
+    def test_baseline_is_populated(self) -> None:
+        """Vacuity guard: an empty or truncated baseline must fail, not pass silently."""
+        assert len(_BASELINE_PAIRS) > 40
+        assert set(_REGISTRY_BASELINE) == set(_LIVE_REGISTRIES)
 
 
 # ============================================================================
@@ -168,6 +161,9 @@ class TestM4Interface:
 
 class TestMockJudge:
     """Mock judge test matrix."""
+
+    MATRIX_KIND = "judge"
+    MATRIX_COMPONENTS = ("mock",)
 
     def test_m1_correctness_default_score(self) -> None:
         j = JUDGES.create("mock", {"default_score": 0.75})
@@ -223,6 +219,9 @@ class TestMockJudge:
 
 
 class TestExactMatchScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("exact_match",)
+
     def test_m1_correctness_match(self) -> None:
         s = SCORERS.create("exact_match", {"name": "em"})
         r = s.score(ITEM_NORMAL, OUT_NORMAL, CTX)
@@ -273,8 +272,15 @@ class TestExactMatchScorer:
         results = [s.score(ITEM_NORMAL, OUT_PARTIAL, CTX).value for _ in range(20)]
         assert len(set(results)) == 1
 
+    def test_m6_error_unknown_param_rejected(self) -> None:
+        with pytest.raises(TypeError):
+            SCORERS.create("exact_match", {"name": "em", "not_a_param": 1})
+
 
 class TestContainsScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("contains",)
+
     def test_m1_correctness_present(self) -> None:
         s = SCORERS.create("contains", {"name": "c", "substring": "hello"})
         assert s.score(ITEM_NORMAL, OUT_NORMAL, CTX).value == 1.0
@@ -304,8 +310,20 @@ class TestContainsScorer:
         r = s.score(ITEM_NORMAL, OUT_NORMAL, CTX)
         assert isinstance(r, ScoreResult)
 
+    def test_m5_determinism(self) -> None:
+        s = SCORERS.create("contains", {"name": "c", "substring": "hello"})
+        results = [s.score(ITEM_NORMAL, OUT_NORMAL, CTX).value for _ in range(10)]
+        assert len(set(results)) == 1
+
+    def test_m6_error_unknown_param_rejected(self) -> None:
+        with pytest.raises(TypeError):
+            SCORERS.create("contains", {"name": "c", "not_a_param": 1})
+
 
 class TestRegexMatchScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("regex_match",)
+
     def test_m1_correctness_match(self) -> None:
         s = SCORERS.create("regex_match", {"name": "rx", "pattern": r"hel{2}o"})
         assert s.score(ITEM_NORMAL, OUT_NORMAL, CTX).value == 1.0
@@ -322,8 +340,23 @@ class TestRegexMatchScorer:
         with pytest.raises(re.error):
             SCORERS.create("regex_match", {"name": "rx", "pattern": "[invalid"})
 
+    def test_m3_type_safety(self) -> None:
+        s = SCORERS.create("regex_match", {"name": "rx", "pattern": r"\w+"})
+        r = s.score(ITEM_NORMAL, OUT_NORMAL, CTX)
+        assert isinstance(r, ScoreResult)
+        assert isinstance(r.value, float)
+        assert isinstance(r.passed, bool)
+
+    def test_m5_determinism(self) -> None:
+        s = SCORERS.create("regex_match", {"name": "rx", "pattern": r"hel+o"})
+        results = [s.score(ITEM_NORMAL, OUT_NORMAL, CTX).value for _ in range(10)]
+        assert len(set(results)) == 1
+
 
 class TestJsonKeysScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("json_keys",)
+
     def test_m1_correctness_all_present(self) -> None:
         s = SCORERS.create("json_keys", {"name": "jk", "required": ["a", "b"]})
         assert s.score(ITEM_JSON, OUT_JSON_STR, CTX).value == 1.0
@@ -354,8 +387,27 @@ class TestJsonKeysScorer:
         assert r.value == 0.0
         assert "not an object" in (r.comment or "")
 
+    def test_m3_type_safety(self) -> None:
+        s = SCORERS.create("json_keys", {"name": "jk", "required": ["a"]})
+        r = s.score(ITEM_JSON, OUT_JSON_STR, CTX)
+        assert isinstance(r, ScoreResult)
+        assert isinstance(r.value, float)
+        assert isinstance(r.passed, bool)
+
+    def test_m5_determinism(self) -> None:
+        s = SCORERS.create("json_keys", {"name": "jk", "required": ["a", "x"]})
+        results = [s.score(ITEM_JSON, OUT_JSON_STR, CTX).value for _ in range(10)]
+        assert len(set(results)) == 1
+
+    def test_m6_error_unknown_param_rejected(self) -> None:
+        with pytest.raises(TypeError):
+            SCORERS.create("json_keys", {"name": "jk", "not_a_param": 1})
+
 
 class TestLLMJudgeScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("llm_judge",)
+
     def test_m1_correctness_with_judge(self) -> None:
         s = SCORERS.create("llm_judge", {"name": "lj"})
         r = s.score(ITEM_NORMAL, OUT_NORMAL, CTX_WITH_JUDGE)
@@ -384,8 +436,28 @@ class TestLLMJudgeScorer:
         r = s.score(ITEM_NORMAL, OUT_NORMAL, CTX_WITH_JUDGE)
         assert isinstance(r, ScoreResult)
 
+    def test_m2_edge_empty_output_and_expected_still_judged(self) -> None:
+        s = SCORERS.create("llm_judge", {"name": "lj"})
+        r = s.score(ITEM_EMPTY, OUT_EMPTY, CTX_WITH_JUDGE)
+        assert r.value == 0.8  # the judge is still consulted; emptiness is its problem
+
+    def test_m3_type_safety(self) -> None:
+        s = SCORERS.create("llm_judge", {"name": "lj"})
+        r = s.score(ITEM_NORMAL, OUT_NORMAL, CTX_WITH_JUDGE)
+        assert isinstance(r, ScoreResult)
+        assert isinstance(r.value, float)
+        assert isinstance(r.passed, bool)
+
+    def test_m5_determinism_with_deterministic_judge(self) -> None:
+        s = SCORERS.create("llm_judge", {"name": "lj"})
+        results = [s.score(ITEM_NORMAL, OUT_NORMAL, CTX_WITH_JUDGE).value for _ in range(10)]
+        assert len(set(results)) == 1
+
 
 class TestCompositeScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("weighted",)
+
     def test_m1_correctness_weighted_mean(self) -> None:
         s = SCORERS.create(
             "weighted",
@@ -452,8 +524,35 @@ class TestCompositeScorer:
                 },
             )
 
+    def test_m3_type_safety(self) -> None:
+        s = SCORERS.create(
+            "weighted",
+            {"name": "comp", "components": [{"type": "exact_match", "weight": 1.0}]},
+        )
+        r = s.score(ITEM_NORMAL, OUT_NORMAL, CTX)
+        assert isinstance(r, ScoreResult)
+        assert isinstance(r.value, float)
+        assert isinstance(r.metadata["components"], list)
+
+    def test_m5_determinism(self) -> None:
+        s = SCORERS.create(
+            "weighted",
+            {
+                "name": "comp",
+                "components": [
+                    {"type": "exact_match", "weight": 2.0},
+                    {"type": "contains", "weight": 1.0, "params": {"substring": "xyz"}},
+                ],
+            },
+        )
+        results = [s.score(ITEM_NORMAL, OUT_NORMAL, CTX).value for _ in range(10)]
+        assert len(set(results)) == 1
+
 
 class TestAutoevalsScorer:
+    MATRIX_KIND = "scorer"
+    MATRIX_COMPONENTS = ("autoevals",)
+
     def setup_class(self):
         pytest.importorskip("autoevals")
 
@@ -472,10 +571,28 @@ class TestAutoevalsScorer:
             SCORERS.create("autoevals", {"name": "ae", "scorer": "NonExistentScorer"})
 
     def test_m6_error_missing_autoevals(self, monkeypatch) -> None:
-
         monkeypatch.setitem(sys.modules, "autoevals", None)
         with pytest.raises(RuntimeError, match="The 'autoevals' package is required"):
             SCORERS.create("autoevals", {"name": "ae", "scorer": "Levenshtein"})
+
+    def test_m2_edge_empty_output_scores_without_error(self) -> None:
+        s = SCORERS.create("autoevals", {"name": "ae", "scorer": "Levenshtein"})
+        r = s.score(ITEM_NORMAL, OUT_EMPTY, CTX)
+        assert isinstance(r.value, float)
+        assert 0.0 <= r.value <= 1.0
+
+    def test_m3_type_safety(self) -> None:
+        s = SCORERS.create("autoevals", {"name": "ae", "scorer": "Levenshtein"})
+        r = s.score(ITEM_NORMAL, OUT_NORMAL, CTX)
+        assert isinstance(r, ScoreResult)
+        assert isinstance(r.value, float)
+        assert isinstance(r.passed, bool)
+        assert isinstance(r.metadata, dict)
+
+    def test_m5_determinism(self) -> None:
+        s = SCORERS.create("autoevals", {"name": "ae", "scorer": "Levenshtein"})
+        results = [s.score(ITEM_NORMAL, OUT_MISMATCH, CTX).value for _ in range(10)]
+        assert len(set(results)) == 1
 
 
 # ============================================================================
@@ -745,6 +862,9 @@ class TestTrajectoryScorersShared:
 
 
 class TestInlineDataset:
+    MATRIX_KIND = "dataset"
+    MATRIX_COMPONENTS = ("inline",)
+
     def test_m1_correctness_loads(self) -> None:
         ds = DATASETS.create(
             "inline",
@@ -771,6 +891,9 @@ class TestInlineDataset:
 
 
 class TestJsonlDataset:
+    MATRIX_KIND = "dataset"
+    MATRIX_COMPONENTS = ("jsonl",)
+
     def test_m1_correctness(self, tmp_path: Path) -> None:
         p = tmp_path / "data.jsonl"
         p.write_text(
@@ -787,8 +910,23 @@ class TestJsonlDataset:
         ds = DATASETS.create("jsonl", {"path": str(p)})
         assert list(ds.load()) == []
 
+    def test_m3_type_safety(self, tmp_path: Path) -> None:
+        p = tmp_path / "data.jsonl"
+        p.write_text('{"id":"a","inputs":{"q":"hello"},"expected":"hi"}\n')
+        items = list(DATASETS.create("jsonl", {"path": str(p)}).load())
+        assert isinstance(items[0], EvalItem)
+        assert isinstance(items[0].id, str)
+
+    def test_m6_error_missing_file(self, tmp_path: Path) -> None:
+        ds = DATASETS.create("jsonl", {"path": str(tmp_path / "nope.jsonl")})
+        with pytest.raises(FileNotFoundError):
+            list(ds.load())
+
 
 class TestCsvDataset:
+    MATRIX_KIND = "dataset"
+    MATRIX_COMPONENTS = ("csv",)
+
     def test_m1_correctness(self, tmp_path: Path) -> None:
         p = tmp_path / "data.csv"
         p.write_text("id,question,expected\na,hello,hi\nb,bye,goodbye\n")
@@ -803,6 +941,20 @@ class TestCsvDataset:
         ds = DATASETS.create("csv", {"path": str(p), "input_columns": ["question"]})
         assert list(ds.load()) == []
 
+    def test_m3_type_safety(self, tmp_path: Path) -> None:
+        p = tmp_path / "data.csv"
+        p.write_text("id,question,expected\na,hello,hi\n")
+        items = list(DATASETS.create("csv", {"path": str(p), "input_columns": ["question"]}).load())
+        assert isinstance(items[0], EvalItem)
+        assert isinstance(items[0].inputs, dict)
+
+    def test_m6_error_missing_input_column(self, tmp_path: Path) -> None:
+        p = tmp_path / "data.csv"
+        p.write_text("id,question,expected\na,hello,hi\n")
+        ds = DATASETS.create("csv", {"path": str(p), "input_columns": ["nonexistent"]})
+        with pytest.raises(ValueError, match="missing required input column"):
+            list(ds.load())
+
 
 # ============================================================================
 # TARGETS
@@ -810,6 +962,9 @@ class TestCsvDataset:
 
 
 class TestEchoTarget:
+    MATRIX_KIND = "target"
+    MATRIX_COMPONENTS = ("echo",)
+
     def test_m1_correctness_full_echo(self) -> None:
         t = TARGETS.create("echo", {})
         out = t.run(ITEM_NORMAL)
@@ -862,6 +1017,9 @@ def _make_run_result() -> RunResult:
 
 
 class TestConsoleSink:
+    MATRIX_KIND = "sink"
+    MATRIX_COMPONENTS = ("console",)
+
     def test_m1_correctness_no_crash(self, capsys: pytest.CaptureFixture[str]) -> None:
         s = SINKS.create("console", {"verbose": False})
         s.emit(_make_run_result())
@@ -874,8 +1032,17 @@ class TestConsoleSink:
         captured = capsys.readouterr()
         assert len(captured.out) > 0
 
+    def test_m3_type_safety(self, capsys: pytest.CaptureFixture[str]) -> None:
+        s = SINKS.create("console", {})
+        assert s.emit(_make_run_result()) is None
+        assert all(isinstance(line, str) for line in s.lines)
+        capsys.readouterr()
+
 
 class TestJsonFileSink:
+    MATRIX_KIND = "sink"
+    MATRIX_COMPONENTS = ("json_file",)
+
     def test_m1_correctness_writes_json(self, tmp_path: Path) -> None:
         out_path = tmp_path / "result.json"
         s = SINKS.create("json_file", {"path": str(out_path)})
@@ -892,8 +1059,25 @@ class TestJsonFileSink:
         data = json.loads(out_path.read_text())
         assert isinstance(data, dict)
 
+    def test_m5_determinism_two_emits_byte_identical(self, tmp_path: Path) -> None:
+        run = _make_run_result()
+        a, b = tmp_path / "a.json", tmp_path / "b.json"
+        SINKS.create("json_file", {"path": str(a)}).emit(run)
+        SINKS.create("json_file", {"path": str(b)}).emit(run)
+        assert a.read_bytes() == b.read_bytes()
+
+    def test_m6_error_unwritable_path_raises(self, tmp_path: Path) -> None:
+        blocker = tmp_path / "blocker"
+        blocker.write_text("a file, not a directory")
+        s = SINKS.create("json_file", {"path": str(blocker / "out.json")})
+        with pytest.raises(OSError):
+            s.emit(_make_run_result())
+
 
 class TestHtmlFileSink:
+    MATRIX_KIND = "sink"
+    MATRIX_COMPONENTS = ("html_file",)
+
     def test_m1_correctness_writes_html(self, tmp_path: Path) -> None:
         out_path = tmp_path / "report.html"
         s = SINKS.create("html_file", {"path": str(out_path)})
@@ -909,6 +1093,27 @@ class TestHtmlFileSink:
         content = out_path.read_text()
         assert "My Report" in content
 
+    def test_m3_type_safety_render_is_str(self) -> None:
+        s = SINKS.create("html_file", {"path": "unused.html"})
+        rendered = s.render(_make_run_result())
+        assert isinstance(rendered, str)
+        assert rendered.startswith("<!DOCTYPE html>")
+
+    def test_m5_determinism_two_emits_byte_identical(self, tmp_path: Path) -> None:
+        """F-021 promises the report is a pure function of the RunResult."""
+        run = _make_run_result()
+        a, b = tmp_path / "a.html", tmp_path / "b.html"
+        SINKS.create("html_file", {"path": str(a)}).emit(run)
+        SINKS.create("html_file", {"path": str(b)}).emit(run)
+        assert a.read_bytes() == b.read_bytes()
+
+    def test_m6_error_unwritable_path_raises(self, tmp_path: Path) -> None:
+        blocker = tmp_path / "blocker"
+        blocker.write_text("a file, not a directory")
+        s = SINKS.create("html_file", {"path": str(blocker / "report.html")})
+        with pytest.raises(OSError):
+            s.emit(_make_run_result())
+
 
 # ============================================================================
 # GATING
@@ -916,6 +1121,8 @@ class TestHtmlFileSink:
 
 
 class TestGating:
+    MATRIX_KIND = "gating"
+
     def test_m1_correctness_gate_pass(self) -> None:
         from eval_harness.config.models import GateConfig
         from eval_harness.gating import evaluate_gate
@@ -946,6 +1153,25 @@ class TestGating:
 
         result = evaluate_gate(None, _make_run_result())
         assert result.passed is True
+
+    def test_m6_error_unknown_metric_rejected_at_parse(self) -> None:
+        """`metric` is a field_validator, not an enum — the rejection surfaces as a
+        pydantic.ValidationError through model_validate."""
+        import pydantic
+
+        from eval_harness.config.models import GateConfig
+
+        with pytest.raises(pydantic.ValidationError, match="metric"):
+            GateConfig.model_validate({"rules": [{"score": "em", "metric": "median", "min": 0.5}]})
+
+    def test_m6_error_absent_score_fails_the_gate_with_a_reason(self) -> None:
+        from eval_harness.config.models import GateConfig
+        from eval_harness.gating import evaluate_gate
+
+        gate = GateConfig.model_validate({"rules": [{"score": "no_such_score", "metric": "mean", "min": 0.5}]})
+        result = evaluate_gate(gate, _make_run_result())
+        assert result.passed is False
+        assert any("not present" in reason for reason in result.failures)
 
 
 # ============================================================================
@@ -1178,6 +1404,9 @@ MOCK_REGION = "us-west-2"
 
 
 class TestOpenAIJudge:
+    MATRIX_KIND = "judge"
+    MATRIX_COMPONENTS = ("openai",)
+
     def setup_class(self):
         pytest.importorskip("openai")
 
@@ -1229,27 +1458,66 @@ class TestOpenAIJudge:
             with pytest.raises(openai.RateLimitError):
                 j.evaluate(MOCK_PROMPT)
 
+    def test_m3_type_safety(self) -> None:
+        mock_openai = MagicMock()
+        mock_client = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock()]
+        mock_chunk.choices[0].delta.content = json.dumps({"score": MOCK_SCORE, "reasoning": MOCK_REASONING})
+        mock_chunk.choices[0].delta.reasoning_content = None
+        mock_client.chat.completions.create.return_value = [mock_chunk]
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            j = JUDGES.create("openai", {"model": MOCK_MODEL_ID_OPENAI, "api_key": MOCK_API_KEY})
+            v = j.evaluate(MOCK_PROMPT)
+        assert isinstance(v, JudgeVerdict)
+        assert isinstance(v.score, float)
+        assert isinstance(v.reasoning, str)
+        assert isinstance(v.raw, dict)
+
 
 class TestAnthropicJudge:
+    MATRIX_KIND = "judge"
+    MATRIX_COMPONENTS = ("anthropic",)
+
     def setup_class(self):
         pytest.importorskip("anthropic")
 
-    def test_m1_correctness(self) -> None:
+    @staticmethod
+    def _judge_with_response(text: str):
         mock_anthropic = MagicMock()
         mock_client = MagicMock()
         mock_anthropic.Anthropic.return_value = mock_client
         mock_msg = MagicMock()
         mock_block = MagicMock()
         mock_block.type = "text"
-        mock_block.text = json.dumps({"score": MOCK_SCORE, "reasoning": MOCK_REASONING})
+        mock_block.text = text
         mock_msg.content = [mock_block]
         mock_client.messages.create.return_value = mock_msg
-
         with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
-            j = JUDGES.create("anthropic", {"model": MOCK_MODEL_ID_ANTHROPIC, "api_key": MOCK_API_KEY})
-            v = j.evaluate(MOCK_PROMPT)
-            assert v.score == MOCK_SCORE
-            assert v.reasoning == MOCK_REASONING
+            judge = JUDGES.create("anthropic", {"model": MOCK_MODEL_ID_ANTHROPIC, "api_key": MOCK_API_KEY})
+        return judge
+
+    def test_m1_correctness(self) -> None:
+        j = self._judge_with_response(json.dumps({"score": MOCK_SCORE, "reasoning": MOCK_REASONING}))
+        v = j.evaluate(MOCK_PROMPT)
+        assert v.score == MOCK_SCORE
+        assert v.reasoning == MOCK_REASONING
+
+    def test_m2_edge_malformed_response_degrades_to_failure_verdict(self) -> None:
+        j = self._judge_with_response("no json here at all")
+        v = j.evaluate(MOCK_PROMPT)
+        assert v.score == 0.0
+        assert "Failed to parse" in v.reasoning
+
+    def test_m3_type_safety(self) -> None:
+        j = self._judge_with_response(json.dumps({"score": MOCK_SCORE, "reasoning": MOCK_REASONING}))
+        v = j.evaluate(MOCK_PROMPT)
+        assert isinstance(v, JudgeVerdict)
+        assert isinstance(v.score, float)
+        assert isinstance(v.reasoning, str)
+        assert isinstance(v.raw, dict)
 
     def test_m6_error_api(self) -> None:
         import anthropic
@@ -1267,53 +1535,105 @@ class TestAnthropicJudge:
 
 
 class TestBedrockJudge:
-    def setup_class(self):
-        pytest.importorskip("boto3")
+    """Fully mocked via sys.modules injection — no boto3, no skip (the old
+    `importorskip("boto3")` kept these cells from ever running in CI, where boto3
+    is not installed)."""
 
-    def test_m1_correctness(self) -> None:
+    MATRIX_KIND = "judge"
+    MATRIX_COMPONENTS = ("bedrock",)
+
+    @staticmethod
+    def _judge_with_body(payload: str):
         mock_boto3 = MagicMock()
         mock_client = MagicMock()
         mock_boto3.client.return_value = mock_client
-
-        import json
-
-        inner_json = json.dumps({"score": MOCK_SCORE, "reasoning": MOCK_REASONING})
-        payload = json.dumps({"content": [{"text": inner_json}]})
-
         mock_client.invoke_model.return_value = {"body": MagicMock(read=lambda: payload.encode("utf-8"))}
-
         with patch.dict("sys.modules", {"boto3": mock_boto3}):
-            j = JUDGES.create("bedrock", {"model_id": MOCK_MODEL_ID_BEDROCK, "region": MOCK_REGION})
-            v = j.evaluate(MOCK_PROMPT)
-            assert v.score == MOCK_SCORE
-            assert v.reasoning == MOCK_REASONING
+            judge = JUDGES.create("bedrock", {"model_id": MOCK_MODEL_ID_BEDROCK, "region": MOCK_REGION})
+        return judge
+
+    def test_m1_correctness(self) -> None:
+        inner_json = json.dumps({"score": MOCK_SCORE, "reasoning": MOCK_REASONING})
+        j = self._judge_with_body(json.dumps({"content": [{"text": inner_json}]}))
+        v = j.evaluate(MOCK_PROMPT)
+        assert v.score == MOCK_SCORE
+        assert v.reasoning == MOCK_REASONING
+
+    def test_m2_edge_malformed_model_output_raises(self) -> None:
+        """Unlike the OpenAI/Anthropic judges there is no degrade-to-0.0 guard here:
+        a malformed body raises, and the engine's per-item error handling owns it.
+        Pinned so the asymmetry is a recorded contract rather than a surprise."""
+        j = self._judge_with_body(json.dumps({"content": [{"text": "not json {{{"}]}))
+        with pytest.raises(json.JSONDecodeError):
+            j.evaluate(MOCK_PROMPT)
+
+    def test_m3_type_safety(self) -> None:
+        inner_json = json.dumps({"score": MOCK_SCORE, "reasoning": MOCK_REASONING})
+        j = self._judge_with_body(json.dumps({"content": [{"text": inner_json}]}))
+        v = j.evaluate(MOCK_PROMPT)
+        assert isinstance(v, JudgeVerdict)
+        assert isinstance(v.score, float)
+        assert isinstance(v.raw, dict)
+
+    def test_m6_error_missing_boto3_raises_install_hint(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setitem(sys.modules, "boto3", None)
+        with pytest.raises(RuntimeError, match="requires boto3"):
+            JUDGES.create("bedrock", {"model_id": MOCK_MODEL_ID_BEDROCK, "region": MOCK_REGION})
 
 
 class TestPhoenixEvalJudge:
-    def setup_class(self):
-        pass
+    MATRIX_KIND = "judge"
+    MATRIX_COMPONENTS = ("phoenix_evals",)
+
+    @staticmethod
+    def _judge_with_evaluator(mock_evaluator: MagicMock):
+        mock_px = MagicMock()
+        mock_px.LLM = MagicMock()
+        mock_px.ClassificationEvaluator = MagicMock(return_value=mock_evaluator)
+        with patch.dict("sys.modules", {"phoenix.evals": mock_px}):
+            judge = JUDGES.create("phoenix_evals", {"model": MOCK_MODEL_ID_OPENAI})
+        return judge
 
     def test_m1_correctness(self) -> None:
-        mock_px = MagicMock()
-        mock_llm = MagicMock()
-        mock_evaluator_cls = MagicMock()
-        mock_px.LLM = mock_llm
-        mock_px.ClassificationEvaluator = mock_evaluator_cls
-
         mock_evaluator = MagicMock()
-        mock_evaluator_cls.return_value = mock_evaluator
-
         mock_result = MagicMock()
         mock_result.label = "pass"
         mock_result.score = 1.0
         mock_result.explanation = "pass"
         mock_evaluator.evaluate.return_value = [mock_result]
 
-        with patch.dict("sys.modules", {"phoenix.evals": mock_px}):
-            j = JUDGES.create("phoenix_evals", {"model": MOCK_MODEL_ID_OPENAI})
-            v = j.evaluate("some prompt")
-            assert v.score == 1.0
-            assert v.reasoning == "pass"
+        j = self._judge_with_evaluator(mock_evaluator)
+        v = j.evaluate("some prompt")
+        assert v.score == 1.0
+        assert v.reasoning == "pass"
+
+    def test_m2_edge_evaluator_failure_degrades_to_failure_verdict(self) -> None:
+        """A judge outage must not crash the run: fail-safe 0.0 verdict with the cause."""
+        mock_evaluator = MagicMock()
+        mock_evaluator.evaluate.side_effect = RuntimeError("provider down")
+        j = self._judge_with_evaluator(mock_evaluator)
+        v = j.evaluate("some prompt")
+        assert v.score == 0.0
+        assert "phoenix-evals failed" in v.reasoning
+
+    def test_m3_type_safety(self) -> None:
+        mock_evaluator = MagicMock()
+        mock_result = MagicMock()
+        mock_result.label = "fail"
+        mock_result.score = None
+        mock_result.explanation = ""
+        mock_evaluator.evaluate.return_value = [mock_result]
+
+        j = self._judge_with_evaluator(mock_evaluator)
+        v = j.evaluate("some prompt")
+        assert isinstance(v, JudgeVerdict)
+        assert isinstance(v.score, float)  # label-mapped, not None
+        assert isinstance(v.raw, dict)
+
+    def test_m6_error_missing_sdk_raises_install_hint(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setitem(sys.modules, "phoenix.evals", None)
+        with pytest.raises(RuntimeError, match="requires arize-phoenix-evals"):
+            JUDGES.create("phoenix_evals", {"model": MOCK_MODEL_ID_OPENAI})
 
 
 # ----------------------------------------------------------------------------
@@ -1322,6 +1642,9 @@ class TestPhoenixEvalJudge:
 
 
 class TestParquetDataset:
+    MATRIX_KIND = "dataset"
+    MATRIX_COMPONENTS = ("parquet",)
+
     def setup_class(self):
         pytest.importorskip("pandas")
 
@@ -1336,6 +1659,25 @@ class TestParquetDataset:
         assert len(items) == 1
         assert items[0].id == "ds-1"
 
+    def test_m2_edge_empty_frame_yields_no_items(self, tmp_path) -> None:
+        import pandas as pd
+
+        df = pd.DataFrame({"id": [], "question": [], "expected": []})
+        p = tmp_path / "empty.parquet"
+        df.to_parquet(p)
+        ds = DATASETS.create("parquet", {"path": p.as_posix(), "input_columns": ["question"]})
+        assert list(ds.load()) == []
+
+    def test_m3_type_safety(self, tmp_path) -> None:
+        import pandas as pd
+
+        df = pd.DataFrame([{"id": "ds-1", "question": "q1", "expected": "a1"}])
+        p = tmp_path / "typed.parquet"
+        df.to_parquet(p)
+        items = list(DATASETS.create("parquet", {"path": p.as_posix(), "input_columns": ["question"]}).load())
+        assert isinstance(items[0], EvalItem)
+        assert isinstance(items[0].id, str)
+
     def test_m6_missing_file(self) -> None:
         ds = DATASETS.create("parquet", {"path": "invalid-path-123.parquet"})
         with pytest.raises(FileNotFoundError):
@@ -1343,27 +1685,55 @@ class TestParquetDataset:
 
 
 class TestLangfuseDataset:
-    def setup_class(self):
-        pytest.importorskip("langfuse")
+    """Fully mocked via the attach_client seam — no SDK, no skip (AGENTS.md offline-DI)."""
+
+    MATRIX_KIND = "dataset"
+    MATRIX_COMPONENTS = ("langfuse",)
 
     def test_m1_correctness(self) -> None:
-        mock_lf_mod = MagicMock()
         mock_client = MagicMock()
-        mock_lf_mod.Langfuse.return_value = mock_client
         mock_item = {"id": "lf-1", "inputs": {"q": "test"}, "expected": "ans"}
         mock_client.get_dataset_items.return_value = [mock_item]
 
-        with patch.dict("sys.modules", {"langfuse": mock_lf_mod}):
-            ds = DATASETS.create("langfuse", {"dataset_name": "test-langfuse-ds"})
-            ds.attach_client(mock_client)  # type: ignore[attr-defined]
-            items = list(ds.load())
-            assert len(items) == 1
-            assert items[0].id == "lf-1"
+        ds = DATASETS.create("langfuse", {"dataset_name": "test-langfuse-ds"})
+        ds.attach_client(mock_client)  # type: ignore[attr-defined]
+        items = list(ds.load())
+        assert len(items) == 1
+        assert items[0].id == "lf-1"
+
+    def test_m2_edge_empty_remote_dataset(self) -> None:
+        mock_client = MagicMock()
+        mock_client.get_dataset_items.return_value = []
+        ds = DATASETS.create("langfuse", {"dataset_name": "empty-ds"})
+        ds.attach_client(mock_client)  # type: ignore[attr-defined]
+        assert list(ds.load()) == []
+
+    def test_m3_type_safety(self) -> None:
+        mock_client = MagicMock()
+        mock_client.get_dataset_items.return_value = [{"id": None, "inputs": {"q": "x"}}]
+        ds = DATASETS.create("langfuse", {"dataset_name": "typed-ds"})
+        ds.attach_client(mock_client)  # type: ignore[attr-defined]
+        items = list(ds.load())
+        assert isinstance(items[0], EvalItem)
+        # A present-but-None id falls back to the positional index, not the string "None".
+        assert items[0].id == "0"
+
+    def test_m6_error_load_without_client(self) -> None:
+        ds = DATASETS.create("langfuse", {"dataset_name": "no-client-ds"})
+        with pytest.raises(RuntimeError, match="no client attached"):
+            list(ds.load())
 
 
 class TestBraintrustDataset:
-    def setup_class(self):
-        pytest.importorskip("braintrust")
+    """Fully mocked (sys.modules injection / the fetch seam) — no SDK, no skip.
+
+    The pre-matrix version of this class sat under `importorskip("braintrust")` — a
+    package deliberately absent from CI — and its one test omitted the required
+    `project_name` argument: a matrix cell that could never run and never passed.
+    """
+
+    MATRIX_KIND = "dataset"
+    MATRIX_COMPONENTS = ("braintrust",)
 
     def test_m1_correctness(self) -> None:
         mock_bt = MagicMock()
@@ -1372,10 +1742,31 @@ class TestBraintrustDataset:
         mock_ds.__iter__.return_value = [{"id": "bt-1", "input": {"q": "test"}, "expected": "ans"}]
 
         with patch.dict("sys.modules", {"braintrust": mock_bt}):
-            ds = DATASETS.create("braintrust", {"name": "test-braintrust-ds"})
+            ds = DATASETS.create("braintrust", {"project_name": "proj", "name": "test-braintrust-ds"})
             items = list(ds.load())
             assert len(items) == 1
             assert items[0].id == "bt-1"
+
+    def test_m2_edge_empty_remote_dataset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("eval_harness.datasets.fetch_dataset_items", lambda **kw: [])
+        ds = DATASETS.create("braintrust", {"project_name": "proj", "name": "empty-ds"})
+        assert list(ds.load()) == []
+
+    def test_m3_type_safety(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "eval_harness.datasets.fetch_dataset_items",
+            lambda **kw: [{"id": "bt-1", "inputs": {"q": "x"}, "expected": "y"}],
+        )
+        items = list(DATASETS.create("braintrust", {"project_name": "proj", "name": "typed-ds"}).load())
+        assert isinstance(items[0], EvalItem)
+        assert isinstance(items[0].id, str)
+
+    def test_m6_error_sdk_absent_fails_fast(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A dataset must not silently degrade to an empty eval when the SDK is missing."""
+        monkeypatch.setitem(sys.modules, "braintrust", None)
+        ds = DATASETS.create("braintrust", {"project_name": "proj", "name": "no-sdk-ds"})
+        with pytest.raises(RuntimeError, match="braintrust"):
+            list(ds.load())
 
 
 # ----------------------------------------------------------------------------
@@ -1384,11 +1775,33 @@ class TestBraintrustDataset:
 
 
 class TestCallableTarget:
+    MATRIX_KIND = "target"
+    MATRIX_COMPONENTS = ("callable",)
+
     def test_m1_correctness(self) -> None:
         t = TARGETS.create("callable", {"path": "json:dumps"})
         out = t.run(ITEM_NORMAL)
         assert out.output is not None
         assert isinstance(out.output, str)
+
+    def test_m2_edge_sut_exception_becomes_scored_error(self) -> None:
+        """A raising SUT is captured as TargetOutput.error, never a raised exception."""
+        t = TARGETS.create("callable", {"path": "tests._sut:boom"})
+        out = t.run(ITEM_NORMAL)
+        assert out.output is None
+        assert out.error is not None and "kaboom" in out.error
+
+    def test_m3_type_safety_targetoutput_passthrough(self) -> None:
+        """The F-051 seam: a callable returning its own TargetOutput passes through
+        unchanged (trajectory kept; a pre-measured latency is not overwritten)."""
+        t = TARGETS.create("callable", {"path": "tests._sut:preset_latency_output"})
+        out = t.run(ITEM_NORMAL)
+        assert isinstance(out, TargetOutput)
+        assert out.latency_ms == 123.5
+
+        t2 = TARGETS.create("callable", {"path": "tests._sut:trajectory_demo"})
+        out2 = t2.run(EvalItem(id="t", inputs={"question": "q"}))
+        assert out2.trajectory is not None
 
     def test_m6_error(self) -> None:
         t = TARGETS.create("callable", {"path": "nonexistent.module_xyz:func_abc"})
@@ -1397,6 +1810,9 @@ class TestCallableTarget:
 
 
 class TestModelTarget:
+    MATRIX_KIND = "target"
+    MATRIX_COMPONENTS = ("model",)
+
     def test_m1_correctness(self) -> None:
         mock_client = MagicMock()
         mock_chunk = MagicMock()
@@ -1411,6 +1827,49 @@ class TestModelTarget:
         out = t.run(ITEM_NORMAL)
         assert out.output == "mock answer"
 
+    def test_m2_edge_empty_stream_yields_empty_output(self) -> None:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = []
+        t = TARGETS.create(
+            "model",
+            {"model": MOCK_MODEL_ID_OPENAI, "provider": "openai", "client": mock_client, "prompt_template": "{q}"},
+        )
+        out = t.run(ITEM_NORMAL)
+        assert out.output == ""
+        assert out.error is None
+
+    def test_m3_type_safety(self) -> None:
+        mock_client = MagicMock()
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock()]
+        mock_chunk.choices[0].delta.content = "typed"
+        mock_client.chat.completions.create.return_value = [mock_chunk]
+        t = TARGETS.create(
+            "model",
+            {"model": MOCK_MODEL_ID_OPENAI, "provider": "openai", "client": mock_client, "prompt_template": "{q}"},
+        )
+        out = t.run(ITEM_NORMAL)
+        assert isinstance(out, TargetOutput)
+        assert isinstance(out.latency_ms, float)
+        assert out.metadata == {"provider": "openai", "model": MOCK_MODEL_ID_OPENAI}
+
+    def test_m6_error_unknown_provider_rejected(self) -> None:
+        with pytest.raises(ValueError, match="provider must be one of"):
+            TARGETS.create("model", {"model": MOCK_MODEL_ID_OPENAI, "provider": "bogus"})
+
+    def test_m6_error_transport_failure_becomes_scored_error(self) -> None:
+        """The riskiest surface in the kind: a live-API failure is captured as
+        TargetOutput.error, never an exception out of run()."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = ConnectionError("socket closed")
+        t = TARGETS.create(
+            "model",
+            {"model": MOCK_MODEL_ID_OPENAI, "provider": "openai", "client": mock_client, "prompt_template": "{q}"},
+        )
+        out = t.run(ITEM_NORMAL)
+        assert out.output is None
+        assert out.error is not None and "socket closed" in out.error
+
 
 # ----------------------------------------------------------------------------
 # 4. SINKS
@@ -1418,42 +1877,95 @@ class TestModelTarget:
 
 
 class TestLangfuseSink:
-    def setup_class(self):
-        pytest.importorskip("langfuse")
+    """Fully mocked via the attach_client seam — no SDK, no skip."""
+
+    MATRIX_KIND = "sink"
+    MATRIX_COMPONENTS = ("langfuse",)
 
     def test_m1_correctness_and_m5_lifecycle(self) -> None:
-        mock_lf_mod = MagicMock()
         mock_client = MagicMock()
-        mock_lf_mod.Langfuse.return_value = mock_client
-        with patch.dict("sys.modules", {"langfuse": mock_lf_mod}):
-            s = SINKS.create("langfuse", {})
-            s.attach_client(mock_client)  # type: ignore[attr-defined]
+        s = SINKS.create("langfuse", {})
+        s.attach_client(mock_client)  # type: ignore[attr-defined]
+        s.emit(_make_run_result())
+        mock_client.log_score.assert_called()
+        mock_client.flush.assert_called()
+
+    def test_m6_error_emit_without_client_fails_closed(self) -> None:
+        s = SINKS.create("langfuse", {})
+        with pytest.raises(RuntimeError, match="no client attached"):
             s.emit(_make_run_result())
-            mock_client.flush.assert_called()
 
 
 class TestPhoenixSink:
-    def setup_class(self):
-        pytest.importorskip("phoenix")
+    MATRIX_KIND = "sink"
+    MATRIX_COMPONENTS = ("phoenix",)
 
-    def test_m1_correctness(self) -> None:
-        mock_px = MagicMock()
-        with patch.dict("sys.modules", {"phoenix": mock_px}):
-            s = SINKS.create("phoenix", {})
-            s.emit(_make_run_result())
-            # If it doesn't crash, we're good
+    def test_m1_correctness_disabled_default_is_a_no_op(self) -> None:
+        """`enabled` defaults to False, so the sink emits through the no-op client —
+        the documented offline posture; nothing to patch and nothing crashes."""
+        s = SINKS.create("phoenix", {})
+        s.emit(_make_run_result())
+
+    def test_m6_error_enabled_without_sdk_degrades_to_no_op(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Export requested but the OTel SDK is absent: warn + no-op, never crash the run."""
+        import eval_harness.phoenix_client as phoenix_client
+
+        monkeypatch.setattr(phoenix_client, "_otel_tracer", lambda: None)
+        s = SINKS.create("phoenix", {"enabled": True})
+        s.emit(_make_run_result())
 
 
 class TestBraintrustSink:
-    def setup_class(self):
-        pytest.importorskip("braintrust")
+    """Fully mocked (sys.modules injection) — no SDK, no skip.
 
-    def test_m1_correctness(self) -> None:
+    The pre-matrix version of this class sat under `importorskip("braintrust")` and its
+    one test could never have passed: it asserted a flush on `init_logger` (a function
+    the sink never calls) and invoked a `close()` method the sink does not have —
+    another cell that never ran anywhere.
+    """
+
+    MATRIX_KIND = "sink"
+    MATRIX_COMPONENTS = ("braintrust",)
+
+    def test_m1_correctness_logs_each_item_and_flushes(self) -> None:
         mock_bt = MagicMock()
-        mock_logger = MagicMock()
-        mock_bt.init_logger.return_value = mock_logger
+        mock_experiment = MagicMock()
+        mock_bt.init.return_value = mock_experiment
         with patch.dict("sys.modules", {"braintrust": mock_bt}):
-            s = SINKS.create("braintrust", {})
+            s = SINKS.create("braintrust", {"enabled": True})
             s.emit(_make_run_result())
-            s.close()  # type: ignore[attr-defined]
-            mock_logger.flush.assert_called()
+        mock_bt.init.assert_called_once_with(project="eval-harness", experiment="test-run-001")
+        mock_experiment.log.assert_called_once()
+        mock_experiment.flush.assert_called_once()
+
+    def test_m6_error_enabled_without_sdk_degrades_to_no_op(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setitem(sys.modules, "braintrust", None)
+        s = SINKS.create("braintrust", {"enabled": True})
+        s.emit(_make_run_result())  # warns + no-ops; telemetry must not break the run
+
+
+class TestSinksShared:
+    """Cross-sink edge: emitting a zero-item run must not crash any sink."""
+
+    MATRIX_KIND = "sink"
+    MATRIX_COMPONENTS = ("console", "json_file", "html_file", "langfuse", "phoenix", "braintrust")
+
+    @pytest.mark.parametrize("name", MATRIX_COMPONENTS)
+    def test_m2_edge_empty_run_emits_without_error(self, name: str, tmp_path: Path) -> None:
+        from datetime import datetime
+
+        empty = RunResult(
+            run_id="empty-run",
+            config_name="empty",
+            items=[],
+            aggregate={},
+            started_at=datetime(2026, 1, 1, 0, 0, 0),
+            finished_at=datetime(2026, 1, 1, 0, 0, 1),
+        )
+        params: dict = {}
+        if name in ("json_file", "html_file"):
+            params["path"] = str(tmp_path / f"{name}.out")
+        sink = SINKS.create(name, params)
+        if name == "langfuse":
+            sink.attach_client(MagicMock())  # type: ignore[attr-defined]
+        sink.emit(empty)
