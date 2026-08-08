@@ -58,9 +58,12 @@ pwsh scripts/run_all_e2e.ps1 -Tiers offline -FailFast           # stop at first 
 - **Tier B — functionality gates (offline, always).** `scripts/validate.py -v` runs every
   `features.yaml` `validation_command` (the `F_*` gates — one per done + fast feature). Deferred features (e.g. **F-036**,
   which has no `F_036.py`) are skipped by design — that is expected, not a gap. **F-006/F-007** are
-  the slow ones (they materialize a git worktree baseline).
-- **Tier C — user-journey / CLI e2e (offline, always).** The three skill/hook `*e2e*`/
-  `test_end_to_end.py` files, plus every package CLI: `eval-harness`
+  the slow ones (they materialize a git worktree baseline). A dedicated
+  `matrix:coverage-check` step then runs `python tests/test_matrix_coverage.py --check`
+  (F-053): the generated `docs/matrix-coverage.md` must match a live regeneration —
+  registry census, per-kind dimension floors, and waiver/alias hygiene included.
+- **Tier C — user-journey / CLI e2e (offline, always).** The seven skill/hook e2e /
+  generator test files, plus every package CLI: `eval-harness`
   (`list-plugins`/`run`/`compare`/`campaign`), `bregress` (`python -m behavioral_regression`),
   `python -m agent_core.merge_gate_ci`, the read-only agent-core reporting CLIs
   (`merge_seed` -> `audit_sampler select --with-propensity` -> `record

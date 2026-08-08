@@ -42,6 +42,14 @@ determinism: ## Prove tool-call canonicalisation is stable across interpreter pr
 	python -m pytest tests/test_trajectory_contracts.py -q \
 		-k "stable_across_interpreter_processes or memory_address or sets_compare_equal"
 
+matrix-check: ## Verify docs/matrix-coverage.md matches a live regeneration (F-053)
+	@# Delegates to the CLI that owns the policy (census + floors + waiver/alias hygiene).
+	$(PYTHON) tests/test_matrix_coverage.py --check
+
+matrix-update: ## Regenerate docs/matrix-coverage.md from the live registry census (F-053)
+	@# Refuses to write while the matrix itself has holes -- fix the rows first.
+	$(PYTHON) tests/test_matrix_coverage.py --update
+
 build: ## Build distributables
 	$(PYTHON) -m build
 

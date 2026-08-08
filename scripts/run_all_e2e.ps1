@@ -5,7 +5,7 @@
   in the monorepo, and emit one aggregated pass/fail report.
 
 .DESCRIPTION
-  Orchestrates four tiers (see docs/e2e-runbook.md):
+  Orchestrates five tiers (see docs/e2e-runbook.md):
     A  Package pytest suites (offline)          - always
     B  Functionality gates via validate.py      - always
     C  User-journey / CLI e2e (offline)         - always
@@ -291,6 +291,10 @@ Write-Host "`n== Tier B: functionality gates (features.yaml) ==" -ForegroundColo
 # validate.py runs every done+fast feature's validation_command (all done features
 # are tier fast); deferred features (e.g. F-036) are skipped by design.
 Invoke-CmdStep 'B' 'features:validate.py' @('scripts/validate.py', '-v') $RepoRoot -TimeoutSec 1800
+# Matrix-completeness freshness gate (F-053): the generated docs/matrix-coverage.md must
+# match a live regeneration (registry census + per-kind floors + waiver/alias hygiene).
+# A plain CLI, not pytest — Invoke-PytestStep's junit ">0 tests" assertion would false-FAIL it.
+Invoke-CmdStep 'B' 'matrix:coverage-check' @('tests/test_matrix_coverage.py', '--check') $RepoRoot
 
 # ===========================================================================
 # TIER C - User-journey / CLI e2e (offline, always)
