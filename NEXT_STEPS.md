@@ -97,7 +97,15 @@
   `quality-gates.yml`'s `gates` job so a marker in any tracked file now fails CI. Also flipped
   F-048 (gitleaks, landed via #83) from `in_progress` to `done` with its `implemented_in` SHA,
   so `F_048.py` is actually enforced by `validate.py --tier fast` going forward.
-- [x] **Hardened matrix eval tools test suite** — eliminated fragile `try...except pass` swallows and hard-coded mocks in `tests/test_matrix_eval_tools.py`, replacing them with full offline dependency injection.
+- [x] **Matrix completeness (F-053, ADR 0032)** — the matrix's component axis is now derived
+  and enforced: a fresh-subprocess registry census + AST cell map + per-kind dim floors with
+  a two-way-hygienic waiver map (`tests/test_matrix_coverage.py`), an exact-equality
+  alias→canonical freeze, and a generated, freshness-gated `docs/matrix-coverage.md`. All 7
+  trajectory scorers gained full rows; every sparse cell was filled to its floor; the
+  shipped `config/trajectory_eval.yaml` (which failed its own gate) and two never-ran
+  braintrust matrix cells were fixed in-flight. This formalizes the earlier F-ID-less
+  "hardened matrix eval tools test suite" item (fragile `try...except pass` swallows and
+  hard-coded mocks replaced with full offline dependency injection).
 - [x] **Reasoning & Planning Skills** — added three composable reasoning skills to the marketplace (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`).
 - [x] **Dynamic drift guard script tech-debt resolution** — resolved tech debt in the dynamic drift guard scripts.
 - [x] **Proxy-correlation measurement, PPI++ report estimator & audit propensity (F-047,
@@ -148,7 +156,7 @@
   agent-confidence artifact the merge-gate soak item was waiting on. Remaining: accumulate the
   agent-domain HUMAN_AUDIT labels (the corpus now grows on every agent merge) before any agent
   domain can leave cold-start ESCALATE.
-- [x] **Skill Validation Assertion Registries & dataset-lint (F-045)** — Re-architected `validate_skill.py` to decouple assertion grading from validation loops using the `ASSERTION_GRADERS` registry (detailed in [ADR 0024](docs/decisions/0024-assertion-graders-registry.md)). Introduced a standalone `dataset-lint` skill capable of format-agnostic deep validation. Brought both components up to 100% test coverage and captured comprehensive testing matrices into `eval_test_matrix.xlsx`.
+- [x] **Skill Validation Assertion Registries & dataset-lint (F-045)** — Re-architected `validate_skill.py` to decouple assertion grading from validation loops using the `ASSERTION_GRADERS` registry (detailed in [ADR 0024](docs/decisions/0024-assertion-graders-registry.md)). Introduced a standalone `dataset-lint` skill capable of format-agnostic deep validation. Brought both components up to 100% test coverage. (An `eval_test_matrix.xlsx` companion workbook was described here but never committed on any ref — not to be confused with `experiments/backend-validation`'s *external* `Eval_Harness_Test_Matrix_v2.xlsx`; the canonical, generated coverage matrix is now `docs/matrix-coverage.md`, F-053.)
 - [x] **Merge-gate soak-stats (F-040)** — `agent_core.store_sync.soak_progress(records, target)`
   makes progress toward the ADR 0005 enablement threshold observable: a pure, read-only summary
   (total/pending/labeled, HUMAN_AUDIT count, per-domain cold-start keyed on

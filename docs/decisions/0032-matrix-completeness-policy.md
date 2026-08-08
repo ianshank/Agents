@@ -1,7 +1,9 @@
 # 0032 - Matrix-completeness policy: per-kind required dimensions, checked declarations, waivers, and a generated coverage artifact
 
-**Status**: Proposed — lands with `openspec/changes/add-eval-matrix-completeness/`
-(flipped to Accepted in that change's docs commit).
+**Status**: Accepted — lands with `openspec/changes/add-eval-matrix-completeness/` as
+F-053 (`implemented_in` recorded in `features.yaml`; the archive entry carries the
+landing SHA). Enforcement is live from the same change: the guard suite, the frozen
+alias maps, and the freshness-gated artifact all ship with it.
 **Date**: 2026-08-08
 
 Related: [ADR 0024](0024-assertion-graders-registry.md) (registry dispatch over hand-rolled

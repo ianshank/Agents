@@ -54,6 +54,7 @@ nav:
   - Architecture:
       - Charter: CHARTER.md
       - C4 architecture: c4_architecture.md
+      - Matrix coverage: matrix-coverage.md
   - Decisions:
       - Overview: decisions/README.md
   - Runbooks:

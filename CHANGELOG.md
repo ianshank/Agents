@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Matrix completeness: derived census, per-kind dim floors, generated coverage artifact
+  (F-053, ADR 0032).** The declared test matrix (`tests/test_matrix_eval_tools.py`) was
+  silently incomplete: the seven F-051 trajectory scorers had zero rows, `TestM7Registry`'s
+  hand-maintained lists were stale, 13 registered aliases were asserted nowhere, and nothing
+  failed when a new component registered rowless. Now the component census is derived from
+  the live registries in a fresh subprocess (a sixth registry — the queued `STATE_ADAPTERS`
+  — will be censused automatically and fail until it has rows and a policy entry), matrix
+  classes carry literal `MATRIX_KIND`/`MATRIX_COMPONENTS` *checked declarations*
+  cross-checked in both directions, per-kind dimension floors with a two-way-hygienic waiver
+  map are enforced by `tests/test_matrix_coverage.py`, the alias→canonical pairing per kind
+  is frozen by exact equality (`Registry._aliases` assignment has no duplicate guard — a
+  repointed alias still resolves), M8 pipelines live in an importable `PIPELINES` index
+  whose kinds are read from validated `EvalConfig` fields, and `docs/matrix-coverage.md` is
+  generated (`python tests/test_matrix_coverage.py --update`) and freshness-gated. All
+  seven trajectory scorers gained full matrix rows, and every sparse cell was filled to its
+  kind's floor (judges/datasets/targets M2/M3/M6, scorers M3/M5/M6, sinks empty-run M2 +
+  per-sink degrade/error M6, gating M6). Three shipped defects surfaced and fixed in-flight:
+  `config/trajectory_eval.yaml` failed its own gate (reference arguments never matched the
+  demo SUT; the covering test now runs it and asserts the gate PASSES); the braintrust
+  dataset/sink matrix tests sat under an `importorskip` for an SDK CI never installs and
+  could not have passed as written; `quality-gates.yml` carried a dead `--cov=F_052`.
 - **Agent trajectory evaluation (F-051, ADR 0031).** Every built-in scorer read
   `output.output` only, so an agent that returned plausible text by an invalid, wasteful,
   looping or policy-violating path scored identically to one that did the work. Langfuse
