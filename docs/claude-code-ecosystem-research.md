@@ -24,21 +24,29 @@ Every incorporation idea is evaluated against this repo's standing doctrine:
 
 - **Reversible adoption** ([docs/phoenix-spike.md](phoenix-spike.md)): SDK-optional,
   default-off, null-client test doubles, deletable in one commit.
-- **No hard-coded values** (ADR 0009): env-var credentials, config-schema defaults.
+- **No hard-coded values**
+  ([ADR 0009](decisions/0009-tech-debt-audit-and-compat-surface.md)): env-var credentials,
+  config-schema defaults.
 - **Offline-deterministic test suite**: nothing network-dependent in the default pytest path.
-- **Protected eval surfaces**: `features.yaml`, `scripts/validations/`, `.github/`, `tests/`
-  require the labeled-approval flow — several proposals below therefore *end* in an OpenSpec
-  package rather than a direct change.
+- **Protected eval surfaces**: [`features.yaml`](../features.yaml), `scripts/validations/`,
+  `.github/`, `tests/` require the labeled-approval flow (see
+  [`AGENTS.md`](../AGENTS.md)) — several proposals below therefore *end* in an
+  [OpenSpec](../openspec/README.md) package rather than a direct change.
+
+Before implementing any item below, run the repo's own collision predictor —
+`python skills/repo-invariant-review/scripts/check_invariants.py --repo . --base origin/main`
+([repo-invariant-review](../skills/repo-invariant-review/SKILL.md)) — which predicts
+protected-path, size-budget, airgap, and baseline failures before they reach CI.
 
 ## The landing zones (this repo's integration surfaces)
 
 | Surface | Where | What can land there |
 |---|---|---|
-| `claude-foundation` plugin | `claude-foundation/.claude-plugin/plugin.json`, `hooks/hooks.json`, `agents/`, `skills/` | Bundled MCP servers (no `.mcp.json` exists today — net-new and cleanly reversible), new hooks, a statusline component, new skills |
-| Skills marketplace | `skills/marketplace.yaml` (+ `marketplace.schema.json`, `scripts/skill_marketplace.py validate`) | New vendored skills (name/version/path/description/compatibility entries) |
-| Eval-harness registries | `src/eval_harness/` datasets / scorers / judges / sinks | New pluggable components behind the established null-client seam |
+| [`claude-foundation`](../claude-foundation/README.md) plugin | `claude-foundation/.claude-plugin/plugin.json`, `hooks/hooks.json`, `agents/`, `skills/` | Bundled MCP servers (no `.mcp.json` exists today — net-new and cleanly reversible), new hooks, a statusline component, new skills |
+| [Skills marketplace](../skills/README.md) | [`skills/marketplace.yaml`](../skills/marketplace.yaml) (+ `marketplace.schema.json`, `scripts/skill_marketplace.py validate`) | New vendored skills (name/version/path/description/compatibility entries) |
+| Eval-harness registries | [`src/eval_harness/`](../src/eval_harness/README.md) datasets / scorers / judges / sinks | New pluggable components behind the established null-client seam |
 | CI quality gates | `Makefile`, `scripts/quality-gate.sh`, feature validators | Deterministic budget/lint gates (changes touching protected paths go through OpenSpec + label) |
-| Docs & governance | `docs/decisions/`, `openspec/` | ADRs and OpenSpec packages for anything above |
+| Docs & governance | [`docs/decisions/`](decisions/README.md), [`openspec/`](../openspec/README.md) | ADRs and OpenSpec packages for anything above |
 
 ## Verdict summary
 
@@ -380,13 +388,17 @@ which is exactly where the P1 items below land.
 
 **P1 — do first (offline-safe, high leverage, no protected-path friction):**
 
-1. Repomix **CI token-budget gate** + `repo-pack` skill (repomix #1–2).
-2. **`eval-harness` MCP server** modeled on the reference servers (servers #1).
-3. **rtk paired-trial benchmark** via model-bench + Langfuse-measured tokens (rtk #1) —
-   publish the adopt/reject ADR either way.
-4. **Memory distillation** extension of `session-logger` (claude-mem #1).
-5. **Submit `claude-foundation` to awesome-claude-code** (awesome #1) — docs-only, plus a
-   pinned claude-hud recommendation in the plugin README (hud #1).
+1. Repomix **CI token-budget gate** + `repo-pack` skill (repomix #1–2), registered in
+   [`skills/marketplace.yaml`](../skills/marketplace.yaml).
+2. **`eval-harness` MCP server** modeled on the reference servers (servers #1), behind the
+   [phoenix-style SDK-optional seam](phoenix-spike.md).
+3. **rtk paired-trial benchmark** via [`model-bench`](../skills/model-bench/SKILL.md) +
+   Langfuse-measured tokens (rtk #1) — publish the adopt/reject ADR either way.
+4. **Memory distillation** extension of the
+   [`session-logger`](../claude-foundation/hooks/session_logger.py) hook (claude-mem #1).
+5. **Submit [`claude-foundation`](../claude-foundation/README.md) to awesome-claude-code**
+   (awesome #1) — docs-only, plus a pinned claude-hud recommendation in the plugin README
+   (hud #1).
 
 **P2 — pattern adoption and measurement (some need OpenSpec packages):**
 compression-fidelity judge and claude-mem dataset adapter (claude-mem #2–4); session-metrics

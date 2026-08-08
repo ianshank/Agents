@@ -18,6 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contradicts rtk's headline token-savings claim, so rtk is routed through a model-bench
   paired-trial measurement rather than adopted on reputation. Indexed in `docs/README.md`
   and the mkdocs nav.
+
+### Fixed
+- **Docs: eleven orphaned plan documents are now reachable.** `docs/README.md`'s "Plans"
+  section described the `plans/<topic>/{PLAN.md,REVIEW.md}` convention but linked a single
+  example, so a link-graph walk from the documented entry points (`README.md`, `AGENTS.md`,
+  `docs/README.md`, the mkdocs nav) reached 53 of 64 `docs/**/*.md` files — eleven plan
+  documents under `agent-eval-coverage`, `agent-record-decontamination`,
+  `agents-critical-path`, `claude-foundation`, and `real-data-activation` were unreachable
+  from anywhere. The section now carries a complete per-topic index; reachability is 64/64
+  and the repo-wide broken-relative-link count (the advisory `docs.yml` `links` job) is 0.
+  The research doc added in this release also gained 16 cross-links to the artifacts it
+  names (`features.yaml`, `AGENTS.md`, the marketplace, the foundation plugin, ADR 0009,
+  `session_logger.py`) per `docs/STYLE.md`'s relative-cross-link rule; these resolve on
+  GitHub and raise the known non-strict `mkdocs build` warning count for outside-`docs_dir`
+  targets from 52 to 65 (the accepted pattern `docs/CHARTER.md` already follows — see the
+  note in `mkdocs.yml`).
 - **Matrix completeness: derived census, per-kind dim floors, generated coverage artifact
   (F-053, ADR 0032).** The declared test matrix (`tests/test_matrix_eval_tools.py`) was
   silently incomplete: the seven F-051 trajectory scorers had zero rows, `TestM7Registry`'s
