@@ -1,9 +1,15 @@
-"""Smoke + coverage tests for the per-feature validation scripts (F_020..F_023).
+"""Smoke + coverage tests for the per-feature validation scripts.
 
 These scripts are run end-to-end by ``scripts/validate.py`` in CI, but were not
 coverage-measured. Importing each module and invoking ``main()`` here both
 asserts they still pass and brings them (and the shared ``_common`` helper) under
 the quality-gate tooling coverage floor.
+
+Registration is explicit (import + parametrize + ids — no discovery): a new
+validator must be added here AND to quality-gates.yml's ``--cov=`` list, or its
+coverage silently never counts. F_052 was exactly that gap: listed in ``--cov=``
+but imported by nothing here, so the step warned "Module F_052 was never
+imported" and measured nothing for it.
 """
 
 from __future__ import annotations
@@ -32,11 +38,13 @@ import F_039  # noqa: E402
 import F_041  # noqa: E402
 import F_045  # noqa: E402
 import F_050  # noqa: E402
+import F_052  # noqa: E402
+import F_053  # noqa: E402
 
 
 @pytest.mark.parametrize(
     "module",
-    [F_020, F_021, F_022, F_023, F_031, F_032, F_033, F_034, F_035, F_037, F_039, F_041, F_045, F_050],
+    [F_020, F_021, F_022, F_023, F_031, F_032, F_033, F_034, F_035, F_037, F_039, F_041, F_045, F_050, F_052, F_053],
     ids=[
         "F_020",
         "F_021",
@@ -52,6 +60,8 @@ import F_050  # noqa: E402
         "F_041",
         "F_045",
         "F_050",
+        "F_052",
+        "F_053",
     ],
 )
 def test_validator_main_passes(module):
