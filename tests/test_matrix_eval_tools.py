@@ -871,6 +871,16 @@ class TestTrajectoryScorersShared:
             # also pinned by test_trajectory_integration's strict-config test.
             ("trajectory_exact", {"not_a_param": 1}, TypeError),
         ],
+        # Explicit ids: the default `params0..params5` cannot say which bad config broke,
+        # and three of these cases share a scorer name.
+        ids=[
+            "step_efficiency-unknown-count-mode",
+            "step_efficiency-zero-budget",
+            "loop_detection-zero-max-repeats",
+            "exact-non-numeric-on-missing",
+            "exact-zero-max-depth",
+            "exact-unknown-kwarg",
+        ],
     )
     def test_m6_error_bad_config_is_rejected_at_construction(
         self, name: str, params: dict, exc: type[Exception]
