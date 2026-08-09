@@ -179,7 +179,7 @@ def _node_line_span(node: ast.stmt) -> int:
 
 def scan_file(path: Path, repo_root: Path) -> list[Finding]:
     """Collect every budget finding for a single source file."""
-    rel = str(path.relative_to(repo_root))
+    rel = path.relative_to(repo_root).as_posix()
     # A CI gate must survive a non-UTF-8 byte in some vendored/source file: decode with
     # errors="replace" so an undecodable file is still line-counted and (best-effort)
     # parsed instead of aborting the whole scan (mirrors the SyntaxError resilience below).
