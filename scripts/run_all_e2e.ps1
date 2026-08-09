@@ -12,10 +12,14 @@
     D  Live integrations (credential-gated)     - only with -Tiers live|all
     E  Enterprise live integration suite        - only with -IncludeEnterprise
 
-  No `pip install` is performed: the sibling packages are made importable via
-  PYTHONPATH (they cannot be installed here - PyPI is TLS-blocked and setuptools
-  is absent from the venv). A mandatory pre-flight import guard aborts if that
-  fails, so a broken PYTHONPATH can never masquerade as a green (0-test) run.
+  No `pip install` is performed: the runner consumes whatever `.venv` provides and
+  makes the sibling packages importable via PYTHONPATH. A mandatory pre-flight
+  import guard aborts if that fails, so a broken PYTHONPATH can never masquerade
+  as a green (0-test) run.
+
+  (This block previously claimed the siblings "cannot be installed here - PyPI is
+  TLS-blocked". That is not true: a fresh venv with every extra installs fine.
+  See docs/e2e-runbook.md for the two TLS caveats that do apply.)
 
 .PARAMETER Tiers
   offline (A-C) | live (A-D) | all (A-D). Default: all.

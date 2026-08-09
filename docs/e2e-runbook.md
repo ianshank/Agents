@@ -6,11 +6,24 @@ command, and writes one aggregated report to `artifacts/e2e-report/`.
 
 ## Prerequisites
 
-- The provisioned virtualenv at `.venv/` (Python 3.12). Every SDK is already installed;
-  **do not** run `pip install` (PyPI is TLS-blocked here and `setuptools` is absent).
+- A virtualenv at `.venv/` (Python 3.12) with every SDK installed. **A fresh one can be
+  built** — the previous "PyPI is TLS-blocked here" note was wrong, or has stopped being
+  true. Verified 2026-08-08: `pip` reaches PyPI unaided, and a full from-scratch install of
+  all extras plus the five sibling packages succeeds. Two caveats on a TLS-intercepting
+  host:
+  - **`uv` needs `--native-tls` on every invocation** (`uv venv --native-tls`,
+    `uv pip install --native-tls …`). Without it: `invalid peer certificate: UnknownIssuer`.
+    uv bundles its own roots and will not see a corporate CA; pip uses the OS store already.
+  - **SDKs that verify via `certifi` (Langfuse's httpx client) fail with
+    `CERTIFICATE_VERIFY_FAILED`.** `pip install truststore` and the affected code path can
+    route verification through the OS trust store. This is *stricter* than the workarounds
+    people reach for — it still verifies, just against the certificates the machine trusts.
 - Windows PowerShell 5.1 **or** PowerShell 7+ (the script is compatible with both).
+  **Launch from `powershell.exe`, not Git Bash** — `shutil.which("bash")` resolves
+  differently between them, which silently changes whether the 12 `_bash_works()`-gated
+  skill tests execute or skip.
 - For live tiers only: real credentials in `.env` (see below) and, for Phoenix, a running
-  collector.
+  collector. Set `LOCAL_MODEL_ID` to use a real model as the live target and judge (below).
 
 The sibling packages (`flow_protocol`, `flow_corpus`, `behavioral_regression`,
 `foundation_tools`, `agent_core`) are **not installed** — the runner makes them importable via
@@ -127,8 +140,25 @@ docker run -p 6006:6006 arizephoenix/phoenix
 
 ## Test status on this checkout
 
-A clean `-Tiers offline` run reports **28 PASS / 0 FAIL** (21 before the C5c reporting-CLI steps; each `Invoke-CmdStep` contributes one PASS, plus the `proxy_eval json-valid` guard, which now records an outcome whether the artifact is valid, invalid, or missing — previously a missing artifact recorded nothing, so the journey could pass without ever validating the JSON it exists to produce). Nine cross-platform root causes were
-found and fixed:
+A clean **`-Tiers all`** run reports **36 PASS / 0 FAIL / 2 SKIP** (38 steps: 1 pre-flight,
+7 Tier A, 2 Tier B, 21 Tier C, 7 Tier D). The only two SKIPs are `live:judge-anthropic` and
+`live:judge-bedrock`, which need cloud credentials; every other live step, including a real
+model round-trip, passes. `-Tiers offline` reports 29 PASS / 0 FAIL of 31 steps.
+
+**Assert the exact step list, not a count.** "step count ≥ 30" is satisfied by an offline
+run, which never executes the tier most worth exercising — the same false-green shape as
+D-2 below, reproduced in the success criteria.
+
+Suite sizes with every extra installed: root 1504, agent-core 790, behavioral-regression
+157, flow-corpus 163, flow-protocol 21, claude-foundation 136, skills+hooks 85,
+backend-validation 211. These are substantially higher than earlier records (root was 995)
+because a venv carrying every optional SDK stops `pytest.importorskip` from skipping —
+roughly 700 additional tests actually execute. A *flat* count after installing more extras
+means the install did not take.
+
+Twelve cross-platform root causes have been found and fixed. The first nine came from an
+earlier campaign; **W-01, W-02 and D-1/D-2/D-3 (2026-08-08) are new** and are listed after
+the original table.
 
 | Area | Root cause | Fix |
 |------|-----------|-----|
@@ -141,6 +171,49 @@ found and fixed:
 | `e2e:backend-validation` (0 tests collected) | `--junitxml` flag used PS 5.1 string concatenation (`'--junitxml=' + $var`) in `@()` array literal, silently splitting into two elements — pytest received the XML path as a test directory | Use string interpolation (`"--junitxml=$var"`) matching all other suites; also save/restore PYTHONPATH around the step |
 | `e2e:skills+hooks` (bash tests fail) | WSL bash (`C:\WINDOWS\system32\bash.EXE`) resolves on `shutil.which` but cannot handle Windows-native temp paths (exit 127); also `Path.symlink_to()` raises `WinError 1314` without elevation | `_bash_works()` probe creates a real temp script and verifies execution; `_can_symlink()` probe tests actual symlink creation; both skip cleanly |
 | `features:validate.py` / F-038 | `ModuleNotFoundError` for `eval_harness.braintrust_client` when running standalone (stale editable install) | Prepend `src/` to `sys.path` in the validation script's bootstrap |
+
+### 2026-08-08 campaign — fresh clone, all extras, live tier
+
+| ID | Area | Root cause | Fix |
+|----|------|-----------|-----|
+| W-01 | charter invariants (1 test) | `check_quality_gates_wired` was changed to emit `path.as_posix()` on 2026-08-06 (`6c507d8`); the test asserting that output was last touched 2026-07-31 and still built its expectation with `str(tmp_path / …)`. Identical strings on Linux, backslashes on Windows | build the expectation with `.as_posix()` |
+| W-02 | charter invariants (1 test) | `check_magic_number_defaults` interpolated `path.relative_to(root)` directly, emitting `flow-corpus\thing.py` — inconsistent with `.as_posix()` two functions away, and unmatched by any consumer keying on `/` | `.as_posix()` |
+| D-1 | Tier D (2 steps) | The langfuse/phoenix smoke steps invoked `artifacts/*_smoke.py`. Those scripts do not exist at origin and `artifacts/` is gitignored, so they could not exist in any clone | scripts written into tracked `tools/` (not `scripts/` — Tier A measures `--cov=scripts` at an 85% floor and live-network scripts have no offline tests) |
+| D-2 | Tier D (2 steps) | D-1 reported **SKIP**, not FAIL: a missing file makes python exit 2, and 2 was the declared skip code, so "broken" and "no credentials" were indistinguishable | skip code is now **78/EX_CONFIG**, which neither a missing file nor an `argparse` error can forge; `Assert-StepScript` added as a third anti-vacuous-pass guard |
+| D-3 | Tier D (3 steps) | The "live" journeys were mocked — `judge: {type: mock}` returned a constant 0.9 and `target: {type: echo}` never called a model, so no live step performed a real round-trip | both driven by `LOCAL_MODEL_ID` against any OpenAI-compatible endpoint; falls back to echo+mock when unset |
+
+**Both smokes needed two iterations to become non-vacuous** — each naive version passed
+against a dead backend, which is worth internalising before writing the next one:
+
+- **Phoenix**: OTLP export is fire-and-forget. With nothing listening, `register()` succeeds,
+  `force_flush()` reports no error, and the span is silently dropped. A TCP reachability
+  probe against the endpoint is required; `configure_tracing() is not None` is not enough
+  (it is contractually forbidden from raising, so it returns `None` on every failure).
+- **Langfuse**: `log_score`/`flush` route transport errors to the SDK's own logger and
+  return normally — the first version printed OK and exited 0 while the SDK emitted
+  "Unexpected error occurred" on every call. `Langfuse.auth_check()` is the only call that
+  actually reports failure.
+
+### Live target and judge (`LOCAL_MODEL_ID`)
+
+Set `LOCAL_MODEL_ID` to a model served by any OpenAI-compatible endpoint (LM Studio, Ollama,
+vLLM) and the Tier-D journeys use a real `model` target and a real `openai` judge instead of
+`echo`/`mock`. `OpenAIJudge` documents LM Studio support explicitly. Put the endpoint in the
+environment, not the fixture:
+
+```
+OPENAI_API_KEY=lm-studio          # any non-empty value; local servers ignore it
+OPENAI_BASE_URL=http://localhost:1234/v1
+OPENAI_JUDGE_MODEL=<model id>
+LOCAL_MODEL_ID=<model id>
+```
+
+Setting `OPENAI_BASE_URL` **without** `OPENAI_JUDGE_MODEL` is a trap: the existing
+`live:judge-openai` step defaults to `gpt-4o-mini`, so it would ask the local server for a
+model it does not have. Set all four together, and the *existing* judge step becomes a real
+local round-trip with no runner change. Keep `max_tokens` at the judge's 4096 default —
+a reasoning model given a small budget returns its output in `reasoning_content` and leaves
+`content` empty.
 
 Notes on protected/shared surfaces touched by these fixes (relevant on a PR):
 - The Phoenix fix edits three files under the **protected** root `tests/` path → needs the

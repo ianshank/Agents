@@ -20,6 +20,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the mkdocs nav.
 
 ### Fixed
+- **Tier D of the e2e runner could not pass, and could not report that it could not
+  pass.** Three compounding defects, all invisible because every recorded baseline used
+  `-Tiers offline`, which never executes Tier D. (1) The two smoke steps invoked
+  `artifacts/langfuse_smoke.py` and `artifacts/phoenix_smoke.py`; neither exists at origin
+  and `artifacts/` is gitignored, so they could not exist in any clone. (2) That was
+  reported as SKIP rather than FAIL — a missing file makes python exit 2, and 2 was the
+  declared skip code, making "this step is broken" indistinguishable from "no credentials
+  configured". (3) The live journeys were themselves mocked: `judge: {type: mock}` returned
+  a constant 0.9 and `target: {type: echo}` never called a model, so no live step ever
+  performed a real round-trip. The smokes now live in tracked `tools/`, the skip code is
+  `78`/`EX_CONFIG` (which neither a missing file nor an `argparse` error can forge), a new
+  `Assert-StepScript` guard joins the runner's other anti-vacuous-pass checks, and
+  `LOCAL_MODEL_ID` drives a real model target and judge against any OpenAI-compatible
+  endpoint (falling back to echo+mock when unset). A full `-Tiers all` run is now
+  36 PASS / 0 FAIL / 2 SKIP, the two skips being the cloud judges that need credentials.
+- **Charter-invariants guard emitted OS-native path separators.**
+  `check_magic_number_defaults` interpolated `path.relative_to(root)` directly, producing
+  `flow-corpus\thing.py` on Windows — inconsistent with the `.as_posix()` used two functions
+  away, and unmatched by any consumer keying on `/`. Separately, the test for
+  `check_quality_gates_wired` still built its expectation with `str(tmp_path / …)` after the
+  guard was changed to emit `.as_posix()` on 2026-08-06 (`6c507d8`). Both renderings are
+  byte-identical on Linux, so the CI matrix — which is entirely `ubuntu-latest` — could not
+  observe either bug.
 - **Docs: eleven orphaned plan documents are now reachable.** `docs/README.md`'s "Plans"
   section described the `plans/<topic>/{PLAN.md,REVIEW.md}` convention but linked a single
   example, so a link-graph walk from the documented entry points (`README.md`, `AGENTS.md`,
