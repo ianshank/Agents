@@ -135,6 +135,51 @@ class TestScriptEntryPoints:
         assert result.returncode != 2
 
 
+class TestRedaction:
+    """Exception text is untrusted data, not a trusted string.
+
+    An SDK, a proxy, or a URL carrying userinfo can echo a credential back inside the
+    message it raises, and these lines land in `artifacts/e2e-report/*.log`, which gets
+    copied around and quoted into PRs. gitleaks is CI-only and never reads those logs, so
+    redaction has to live in the formatter rather than in human discipline.
+    """
+
+    def test_replaces_every_secret_occurrence(self) -> None:
+        out = lib.redact("key=abc123 retry with abc123", ["abc123"])
+        assert "abc123" not in out
+        assert out.count(lib.REDACTION) == 2
+
+    def test_ignores_empty_and_blank_secrets(self) -> None:
+        """An unset credential is an empty string; substituting it would redact every
+        character boundary in the message and destroy the diagnostic."""
+        assert lib.redact("nothing secret here", ["", "   ", None or ""]) == "nothing secret here"
+
+    def test_no_secrets_is_a_passthrough(self) -> None:
+        assert lib.redact("plain", None) == "plain"
+        assert lib.redact("plain", []) == "plain"
+
+    def test_format_failure_redacts_a_secret_inside_the_exception(self) -> None:
+        out = lib.format_failure("x", RuntimeError("rejected token sk-live-123"), secrets=["sk-live-123"])
+        assert "sk-live-123" not in out
+        assert lib.REDACTION in out
+        assert "RuntimeError" in out, "the exception type must survive redaction"
+
+
+class TestSafeEndpoint:
+    def test_strips_userinfo_path_and_query(self) -> None:
+        out = lib.safe_endpoint("https://user:pa55w0rd@host.example:8443/v1/traces?token=abc")
+        assert out == "https://host.example:8443"
+        assert "pa55w0rd" not in out
+        assert "abc" not in out
+
+    def test_keeps_scheme_and_host_when_no_port(self) -> None:
+        assert lib.safe_endpoint("https://host.example") == "https://host.example"
+
+    def test_unparseable_url_redacts_entirely(self) -> None:
+        """Better to say nothing than to echo something we could not parse."""
+        assert lib.safe_endpoint("not-a-url") == lib.REDACTION
+
+
 class TestFormatters:
     def test_format_missing_names_every_variable(self) -> None:
         out = lib.format_missing("x-smoke", ["A", "B"])

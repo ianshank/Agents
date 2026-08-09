@@ -151,20 +151,22 @@ class _FakeTracer:
 
 
 class _FakeProvider:
-    def __init__(self, tracer: _FakeTracer, *, with_flush: bool = True, flush_raises=None) -> None:
+    def __init__(self, tracer: _FakeTracer, *, with_flush: bool = True, flush_raises=None, flush_result=None) -> None:
         self._tracer = tracer
         self.flushed = 0
         self._flush_raises = flush_raises
+        self._flush_result = flush_result
         if with_flush:
             self.force_flush = self._force_flush  # type: ignore[assignment]
 
     def get_tracer(self, _name: str) -> _FakeTracer:
         return self._tracer
 
-    def _force_flush(self) -> None:
+    def _force_flush(self):
         if self._flush_raises:
             raise self._flush_raises
         self.flushed += 1
+        return self._flush_result
 
 
 @pytest.fixture
@@ -257,6 +259,26 @@ class TestMain:
         fake_tracing(_FakeProvider(_FakeTracer(raise_on_span=RuntimeError("no tracer"))))
         assert ps.main() == lib.FAIL_EXIT_CODE
         assert "RuntimeError" in capsys.readouterr().out
+
+    def test_fails_when_force_flush_reports_incomplete(self, endpoint_env, reachable, fake_tracing, capsys) -> None:
+        """OpenTelemetry's force_flush returns False when the drain did not complete.
+        Ignoring that return value is a third way to report OK while the span went
+        nowhere -- the same false-green class as the missing reachability probe."""
+        endpoint_env()
+        fake_tracing(_FakeProvider(_FakeTracer(), flush_result=False))
+        assert ps.main() == lib.FAIL_EXIT_CODE
+        assert "incomplete drain" in capsys.readouterr().out
+
+    def test_none_from_force_flush_is_not_a_failure(self, endpoint_env, reachable, fake_tracing) -> None:
+        """Some providers return None rather than a bool; that is not a failure signal."""
+        endpoint_env()
+        fake_tracing(_FakeProvider(_FakeTracer(), flush_result=None))
+        assert ps.main() == lib.OK_EXIT_CODE
+
+    def test_true_from_force_flush_succeeds(self, endpoint_env, reachable, fake_tracing) -> None:
+        endpoint_env()
+        fake_tracing(_FakeProvider(_FakeTracer(), flush_result=True))
+        assert ps.main() == lib.OK_EXIT_CODE
 
     def test_fails_when_flush_raises(self, endpoint_env, reachable, fake_tracing, capsys) -> None:
         endpoint_env()

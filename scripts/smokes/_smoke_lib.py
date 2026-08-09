@@ -58,15 +58,62 @@ def use_os_trust_store() -> bool:
     return True
 
 
+#: Stand-in written over any secret found in output.
+REDACTION = "***"
+
+
+def redact(text: str, secrets: Iterable[str] | None = None) -> str:
+    """Replace every value in *secrets* found in *text* with :data:`REDACTION`.
+
+    Exception messages are attacker-adjacent data, not trusted strings: an SDK, a proxy, or
+    a URL carrying userinfo can embed a key in the text it raises. These smokes print that
+    text into `artifacts/e2e-report/*.log`, which gets copied around and quoted into PRs,
+    and the repo's gitleaks scan is CI-only and does not read those logs. So redaction has
+    to be a property of the formatter rather than a rule humans remember to follow.
+
+    Empty and whitespace-only entries are ignored — otherwise an unset credential would
+    turn every character of the output into a redaction marker.
+    """
+    if not secrets:
+        return text
+    for secret in secrets:
+        if secret and secret.strip():
+            text = text.replace(secret, REDACTION)
+    return text
+
+
+def safe_endpoint(url: str) -> str:
+    """A backend identifier safe to log: scheme, host and port only.
+
+    Drops userinfo (`https://user:pass@host`), path and query, any of which can carry a
+    credential. Knowing *which* backend was reached is the point of a smoke; the rest of
+    the URL is not needed to convey that.
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if not parsed.hostname:
+        return REDACTION
+    port = f":{parsed.port}" if parsed.port else ""
+    scheme = f"{parsed.scheme}://" if parsed.scheme else ""
+    return f"{scheme}{parsed.hostname}{port}"
+
+
 def format_missing(prefix: str, names: Iterable[str]) -> str:
     """SKIP line naming the unset variables. Names only — never values."""
     return f"{prefix}: SKIP, unset: {', '.join(names)}"
 
 
-def format_failure(prefix: str, exc: BaseException, hint: str = "") -> str:
+def format_failure(
+    prefix: str,
+    exc: BaseException,
+    hint: str = "",
+    secrets: Iterable[str] | None = None,
+) -> str:
     """FAIL line carrying the exception type and message, plus an optional actionable hint.
 
     Deliberately not a traceback: these run as one step in an aggregated report, where a
-    single readable line is worth more than a stack the reader has to scroll past.
+    single readable line is worth more than a stack the reader has to scroll past. Pass
+    *secrets* so any credential echoed back inside the exception message is redacted.
     """
-    return f"{prefix}: FAIL, {type(exc).__name__}: {exc}{hint}"
+    return f"{prefix}: FAIL, {type(exc).__name__}: {redact(str(exc), secrets)}{hint}"

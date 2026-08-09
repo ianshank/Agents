@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than a top-level `tools/` that all three would have skipped — with 58 tests at 96–100%
   coverage and a shared `_smoke_lib.py`. The skip code is
   `78`/`EX_CONFIG` (which neither a missing file nor an `argparse` error can forge), a new
-  `Assert-StepScript` guard joins the runner's other anti-vacuous-pass checks, and
+  `Test-StepScript` guard joins the runner's other anti-vacuous-pass checks, and
   `LOCAL_MODEL_ID` drives a real model target and judge against any OpenAI-compatible
   endpoint (falling back to echo+mock when unset). A full `-Tiers all` run is now
   36 PASS / 0 FAIL / 2 SKIP, the two skips being the cloud judges that need credentials.

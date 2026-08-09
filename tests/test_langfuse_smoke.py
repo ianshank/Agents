@@ -158,7 +158,7 @@ class TestSuccess:
         out = capsys.readouterr().out
         assert "OK" in out
         assert ls.SCORE_NAME in out
-        assert BASE_URL in out, "the host is not a secret and identifies which backend was reached"
+        assert lib.safe_endpoint(BASE_URL) in out, "the backend identity is the point of a smoke"
 
     def test_run_id_differs_between_invocations(self, creds, fake_langfuse, capsys) -> None:
         """Guards against someone replacing the uuid with a constant."""
@@ -213,7 +213,7 @@ class TestNoCredentialLeak:
         elif scenario == "auth_false":
             fake_langfuse(auth_check_result=False)
         elif scenario == "auth_raises":
-            fake_langfuse(auth_check_raises=RuntimeError(f"rejected key {SECRET_SENTINEL[:4]}..."))
+            fake_langfuse(auth_check_raises=RuntimeError(f"rejected key {SECRET_SENTINEL}"))
         else:
             fake_langfuse()
 
@@ -221,3 +221,32 @@ class TestNoCredentialLeak:
         out = capsys.readouterr().out
         assert SECRET_SENTINEL not in out
         assert PUBLIC_SENTINEL not in out
+
+    def test_a_secret_echoed_by_the_sdk_is_redacted(self, creds, fake_langfuse, capsys) -> None:
+        """The leak path the sentinel test above would have missed on its own: the SDK
+        raising an exception whose message contains the key verbatim. Redaction happens in
+        the formatter, so the diagnostic survives while the credential does not."""
+        fake_langfuse(auth_check_raises=RuntimeError(f"401 for key {SECRET_SENTINEL} at {BASE_URL}"))
+        assert ls.main() == lib.FAIL_EXIT_CODE
+        out = capsys.readouterr().out
+        assert SECRET_SENTINEL not in out
+        assert lib.REDACTION in out
+        assert "RuntimeError" in out, "redaction must not swallow the diagnostic"
+
+    def test_a_secret_echoed_during_the_score_write_is_redacted(self, creds, fake_langfuse, capsys) -> None:
+        fake_langfuse(score_raises=RuntimeError(f"rejected {PUBLIC_SENTINEL}"))
+        assert ls.main() == lib.FAIL_EXIT_CODE
+        out = capsys.readouterr().out
+        assert PUBLIC_SENTINEL not in out
+        assert lib.REDACTION in out
+
+    def test_url_userinfo_never_reaches_the_success_line(self, monkeypatch, fake_langfuse, capsys) -> None:
+        """A base URL carrying credentials must not be echoed verbatim on success."""
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", SECRET_SENTINEL)
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", PUBLIC_SENTINEL)
+        monkeypatch.setenv("LANGFUSE_BASE_URL", "https://u:pa55w0rd@langfuse.test/api")
+        fake_langfuse()
+        assert ls.main() == lib.OK_EXIT_CODE
+        out = capsys.readouterr().out
+        assert "pa55w0rd" not in out
+        assert "langfuse.test" in out

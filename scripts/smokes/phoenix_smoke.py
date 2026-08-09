@@ -115,12 +115,21 @@ def main() -> int:
         tracer = provider.get_tracer(__name__)
         with tracer.start_as_current_span(SPAN_NAME) as span:
             span.set_attribute("smoke", True)
-        # Drain deterministically rather than at interpreter exit. Note this does NOT
-        # report export failures -- verified: with no collector listening it returns
-        # cleanly and the span is dropped. That is why the reachability probe above is
-        # required rather than optional.
-        if hasattr(provider, "force_flush"):
-            provider.force_flush()
+        # Drain deterministically rather than at interpreter exit.
+        #
+        # Per the OpenTelemetry SDK contract that arize-phoenix-otel inherits, force_flush
+        # returns a bool: False means the flush did not complete. Honour it -- ignoring it
+        # is a third way for this step to report OK while the span went nowhere. Compared
+        # against False explicitly because some providers return None, which is not a
+        # failure signal.
+        #
+        # It is still not a substitute for the reachability probe: with no collector
+        # listening this returns cleanly (measured), because the exporter queues and drops
+        # rather than erroring.
+        # Short-circuit keeps the hasattr guard: force_flush is only called when present.
+        if hasattr(provider, "force_flush") and provider.force_flush() is False:
+            print(f"{_PREFIX}: FAIL, force_flush() reported an incomplete drain to {endpoint}")
+            return FAIL_EXIT_CODE
     except Exception as exc:
         print(format_failure(_PREFIX, exc))
         return FAIL_EXIT_CODE

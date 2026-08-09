@@ -42,6 +42,7 @@ from _smoke_lib import (  # noqa: E402
     format_failure,
     format_missing,
     missing_env,
+    safe_endpoint,
     use_os_trust_store,
 )
 
@@ -65,6 +66,10 @@ def main() -> int:
         print(format_missing(_PREFIX, missing))
         return SKIP_EXIT_CODE
 
+    # The key values, for redaction. An SDK or proxy can echo a credential back inside
+    # the exception it raises; these lines land in a report log that gets quoted onward.
+    secrets = (os.environ.get("LANGFUSE_SECRET_KEY", ""), os.environ.get("LANGFUSE_PUBLIC_KEY", ""))
+
     os_trust = use_os_trust_store()
 
     try:
@@ -82,7 +87,7 @@ def main() -> int:
             return FAIL_EXIT_CODE
     except Exception as exc:
         hint = _TLS_HINT if ("CERTIFICATE_VERIFY" in str(exc) and not os_trust) else ""
-        print(format_failure(f"{_PREFIX} auth_check", exc, hint))
+        print(format_failure(f"{_PREFIX} auth_check", exc, hint, secrets))
         return FAIL_EXIT_CODE
 
     run_id = f"e2e-smoke-{uuid.uuid4().hex[:12]}"
@@ -97,10 +102,10 @@ def main() -> int:
         )
         client.flush()
     except Exception as exc:
-        print(format_failure(_PREFIX, exc))
+        print(format_failure(_PREFIX, exc, secrets=secrets))
         return FAIL_EXIT_CODE
 
-    print(f"{_PREFIX}: OK, logged '{SCORE_NAME}' for run {run_id} to {os.environ['LANGFUSE_BASE_URL']}")
+    print(f"{_PREFIX}: OK, logged '{SCORE_NAME}' for run {run_id} to {safe_endpoint(os.environ['LANGFUSE_BASE_URL'])}")
     return OK_EXIT_CODE
 
 
