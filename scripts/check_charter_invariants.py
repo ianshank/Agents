@@ -347,7 +347,10 @@ def check_magic_number_defaults(root: Path) -> list[Finding]:
                         and not isinstance(default.value, bool)
                         and default.value not in _MAGIC_NUMBER_ALLOWLIST
                     ):
-                        rel = path.relative_to(root)
+                        # ``.as_posix()`` so the detail is portable: on Windows a bare
+                        # ``relative_to`` renders ``flow-corpus\thing.py``, which breaks any
+                        # consumer matching on ``/`` (and differs from Linux CI's output).
+                        rel = path.relative_to(root).as_posix()
                         findings.append(
                             Finding(
                                 "possible_magic_number_default",

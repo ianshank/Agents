@@ -12,10 +12,14 @@
     D  Live integrations (credential-gated)     - only with -Tiers live|all
     E  Enterprise live integration suite        - only with -IncludeEnterprise
 
-  No `pip install` is performed: the sibling packages are made importable via
-  PYTHONPATH (they cannot be installed here - PyPI is TLS-blocked and setuptools
-  is absent from the venv). A mandatory pre-flight import guard aborts if that
-  fails, so a broken PYTHONPATH can never masquerade as a green (0-test) run.
+  No `pip install` is performed: the runner consumes whatever `.venv` provides and
+  makes the sibling packages importable via PYTHONPATH. A mandatory pre-flight
+  import guard aborts if that fails, so a broken PYTHONPATH can never masquerade
+  as a green (0-test) run.
+
+  (This block previously claimed the siblings "cannot be installed here - PyPI is
+  TLS-blocked". That is not true: a fresh venv with every extra installs fine.
+  See docs/e2e-runbook.md for the two TLS caveats that do apply.)
 
 .PARAMETER Tiers
   offline (A-C) | live (A-D) | all (A-D). Default: all.
@@ -63,6 +67,18 @@ $Py = @(
     [System.IO.Path]::Combine($RepoRoot, '.venv', 'bin', 'python')
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $Py) { throw "venv python not found under $RepoRoot/.venv (expected a provisioned .venv)" }
+
+# Exit code a credential-gated step returns to mean "not configured -> SKIP".
+#
+# Deliberately NOT 2: python exits 2 for a missing file and argparse exits 2 for a bad
+# flag, so 2 cannot distinguish "not configured" from "this step is broken" -- which is
+# exactly how Tier D reported green while invoking scripts that did not exist. 78 is
+# EX_CONFIG from sysexits(3).
+#
+# Single source of truth is `SKIP_EXIT_CODE` in scripts/smokes/_smoke_lib.py; this literal is the
+# PowerShell mirror of it, and tests/test_smoke_tools.py asserts the two agree so they
+# cannot drift (same posture as check_skill_script_drift.py).
+$SkipExitCode = 78
 
 $Report = [System.IO.Path]::Combine($RepoRoot, 'artifacts', 'e2e-report')
 if (Test-Path $Report) { Remove-Item -Recurse -Force $Report }
@@ -248,6 +264,24 @@ function Invoke-CmdStep {
 }
 
 function Test-EnvSet { param([string[]]$Names) foreach ($n in $Names) { if (-not (Test-Path "Env:$n") -or -not (Get-Item "Env:$n").Value) { return $false } } return $true }
+
+# Third anti-vacuous-pass guard, alongside "exit 0 but 0 tests collected" and the
+# pre-flight import check. A step whose script is missing is a harness defect, not a
+# test outcome: python exits 2 for a missing file, so any step declaring 2 as a skip
+# code reports SKIP for a step that cannot possibly work.
+#
+# Records FAIL and returns $false rather than throwing. Throwing would abort before
+# `Write-Summary` (called once at the end, with no try/finally and no trap), so the
+# report this guard exists to write the failure into would never be produced -- and a
+# caller finding no report at all is worse off than one finding a wrong SKIP. Returning
+# false keeps the run going, keeps summary.md/summary.json intact, and still exits 1
+# because a FAIL is recorded.
+function Test-StepScript {
+    param([string]$Tier, [string]$Name, [string]$RelPath)
+    if (Test-Path -LiteralPath (Join-Path $RepoRoot $RelPath)) { return $true }
+    Add-Result $Tier $Name 'FAIL' "step script missing: $RelPath"
+    return $false
+}
 
 # ---------------------------------------------------------------------------
 # Pre-flight import guard (mandatory)
@@ -483,19 +517,49 @@ if ($Tiers -in @('live', 'all')) {
     Write-Host "`n== Tier D: live integrations (credential-gated) ==" -ForegroundColor Cyan
     Enable-LiveEnv   # only now inject .env creds/endpoints (kept out of Tiers A-C)
 
-    # Langfuse smoke (script itself exits 2 when creds missing -> SKIP)
-    if (Test-EnvSet @('LANGFUSE_SECRET_KEY', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_BASE_URL')) {
-        Invoke-CmdStep 'D' 'live:langfuse-smoke' @('artifacts/langfuse_smoke.py') $RepoRoot @(2)
+    # Langfuse smoke (script exits 78/EX_CONFIG when creds missing -> SKIP).
+    #
+    # The smokes live in tools/, not artifacts/: artifacts/ is gitignored, so the
+    # scripts these steps invoked never existed in any clone. Worse, a missing file
+    # makes python exit 2, and 2 was the declared skip code -- so a Tier D that could
+    # not possibly work reported SKIP, indistinguishable from "no credentials". Both
+    # halves are fixed here: a tracked path, and a skip code (78) that neither a
+    # missing file (2) nor an argparse error (2) can forge.
+    if (-not (Test-StepScript 'D' 'live:langfuse-smoke' 'scripts/smokes/langfuse_smoke.py')) { }
+    elseif (Test-EnvSet @('LANGFUSE_SECRET_KEY', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_BASE_URL')) {
+        Invoke-CmdStep 'D' 'live:langfuse-smoke' @('scripts/smokes/langfuse_smoke.py') $RepoRoot @($SkipExitCode)
     }
     else { Add-Result 'D' 'live:langfuse-smoke' 'SKIP' 'LANGFUSE_* not set' }
 
     # Phoenix smoke (needs a running collector)
-    if (Test-EnvSet @('PHOENIX_COLLECTOR_ENDPOINT')) {
-        Invoke-CmdStep 'D' 'live:phoenix-smoke' @('artifacts/phoenix_smoke.py') $RepoRoot @(2)
+    if (-not (Test-StepScript 'D' 'live:phoenix-smoke' 'scripts/smokes/phoenix_smoke.py')) { }
+    elseif (Test-EnvSet @('PHOENIX_COLLECTOR_ENDPOINT')) {
+        Invoke-CmdStep 'D' 'live:phoenix-smoke' @('scripts/smokes/phoenix_smoke.py') $RepoRoot @($SkipExitCode)
     }
     else { Add-Result 'D' 'live:phoenix-smoke' 'SKIP' 'PHOENIX_COLLECTOR_ENDPOINT not set' }
 
-    # Live judge journeys - real judge, offline echo target (bounds cost). One tiny item.
+    # Local OpenAI-compatible model (LM Studio / Ollama / any /v1 server). When set, the
+    # live journeys use a REAL model target instead of the `echo` stand-in, so the run
+    # exercises an actual generate -> score -> judge round-trip. base_url is deliberately
+    # NOT passed in the fixture: ModelTarget leaves it None and the openai SDK reads
+    # OPENAI_BASE_URL from the environment, keeping the endpoint out of committed YAML.
+    # Falls back to `echo` when no local model is configured, so credential-less hosts
+    # behave exactly as before.
+    $LocalModel = $env:LOCAL_MODEL_ID
+    if ($LocalModel) {
+        $LiveTarget = "{ type: model, params: { provider: openai, model: `"$LocalModel`" } }"
+        # A real judge too: `mock` returned a constant 0.9 regardless of the output, so
+        # the sink journeys were asserting that a hardcoded number reaches the backend.
+        $LiveJudge = "{ type: openai, params: { model: `"$LocalModel`" } }"
+        Write-Host "  live target/judge: model/$LocalModel (real round-trip)" -ForegroundColor DarkGray
+    }
+    else {
+        $LiveTarget = '{ type: echo, params: { output_key: question } }'
+        $LiveJudge = '{ type: mock, params: { default_score: 0.9 } }'
+        Write-Host "  live target/judge: echo+mock (set LOCAL_MODEL_ID for a real round-trip)" -ForegroundColor DarkGray
+    }
+
+    # Live judge journeys - real judge over a real (or echo) target. One tiny item.
     $liveJudges = @(
         @{ name = 'live:judge-openai';    env = @('OPENAI_API_KEY');    type = 'openai';    model = (Get-OrDefault $env:OPENAI_JUDGE_MODEL    'gpt-4o-mini') },
         @{ name = 'live:judge-anthropic'; env = @('ANTHROPIC_API_KEY'); type = 'anthropic'; model = (Get-OrDefault $env:ANTHROPIC_JUDGE_MODEL 'claude-haiku-4-5-20251001') },
@@ -512,7 +576,7 @@ dataset:
   params:
     items:
       - { id: q1, inputs: { question: "Reply with the single word: ok" }, expected: "ok" }
-target: { type: echo, params: { output_key: question } }
+target: $LiveTarget
 scorers:
   - type: llm_judge
     params: { name: helpfulness }
@@ -530,21 +594,21 @@ gate: { rules: [] }
     # Live Langfuse sink journey (writes scores to the backend)
     if (Test-EnvSet @('LANGFUSE_SECRET_KEY', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_BASE_URL')) {
         $lfCfg = Join-Path $Fixtures 'live_langfuse_sink.yaml'
-        @'
+        @"
 schema_version: "1.0"
 run: { name: live-langfuse-sink, seed: 7 }
 dataset:
   type: inline
   params:
     items: [ { id: q1, inputs: { question: "reset password" }, expected: "reset" } ]
-target: { type: echo, params: { output_key: question } }
+target: $LiveTarget
 scorers: [ { type: contains, params: { name: mentions_reset, substring: "reset" } } ]
-judge: { type: mock, params: { default_score: 0.9 } }
+judge: $LiveJudge
 sinks:
   - { type: console, params: { verbose: false } }
   - { type: langfuse }
 gate: { rules: [] }
-'@ | Set-Content -Encoding UTF8 -Path $lfCfg
+"@ | Set-Content -Encoding UTF8 -Path $lfCfg
         Invoke-CmdStep 'D' 'live:langfuse-sink' @('-m', 'eval_harness.cli', 'run', '--config', $lfCfg)
     }
     else { Add-Result 'D' 'live:langfuse-sink' 'SKIP' 'LANGFUSE_* not set' }
@@ -552,7 +616,7 @@ gate: { rules: [] }
     # Live Phoenix sink journey
     if (Test-EnvSet @('PHOENIX_COLLECTOR_ENDPOINT')) {
         $phCfg = Join-Path $Fixtures 'live_phoenix_sink.yaml'
-        @'
+        @"
 schema_version: "1.0"
 run: { name: live-phoenix-sink, seed: 7 }
 phoenix: { enabled: true, project_name: e2e-phoenix, tracing: true }
@@ -560,14 +624,14 @@ dataset:
   type: inline
   params:
     items: [ { id: q1, inputs: { question: "reset password" }, expected: "reset" } ]
-target: { type: echo, params: { output_key: question } }
+target: $LiveTarget
 scorers: [ { type: contains, params: { name: mentions_reset, substring: "reset" } } ]
-judge: { type: mock, params: { default_score: 0.9 } }
+judge: $LiveJudge
 sinks:
   - { type: console, params: { verbose: false } }
   - { type: phoenix, params: { enabled: true } }
 gate: { rules: [] }
-'@ | Set-Content -Encoding UTF8 -Path $phCfg
+"@ | Set-Content -Encoding UTF8 -Path $phCfg
         Invoke-CmdStep 'D' 'live:phoenix-sink' @('-m', 'eval_harness.cli', 'run', '--config', $phCfg)
     }
     else { Add-Result 'D' 'live:phoenix-sink' 'SKIP' 'PHOENIX_COLLECTOR_ENDPOINT not set' }
