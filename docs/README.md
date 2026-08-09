@@ -38,6 +38,8 @@ See that index for the full list and the (intentional) numbering gap.
 
 - [e2e-runbook.md](e2e-runbook.md) — running and reading the one-command
   end-to-end / user-journey harness.
+- [e2e-matrix/](e2e-matrix/README.md) — the generated test matrix for a full end-to-end
+  run (markdown, CSV and workbook renderings of one run report).
 
 ## Change proposals
 

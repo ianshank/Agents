@@ -564,10 +564,17 @@ if ($Tiers -in @('live', 'all')) {
     }
 
     # Live judge journeys - real judge over a real (or echo) target. One tiny item.
+    #
+    # `param` is the judge constructor's model keyword, and it is not uniform: OpenAIJudge
+    # and AnthropicJudge take `model`, BedrockJudge takes `model_id`. Emitting `model` for
+    # all three made live:judge-bedrock fail with a TypeError the moment it first ran --
+    # which took until an environment happened to carry AWS credentials, because until
+    # then the step only ever SKIPped and the mismatch stayed invisible. Keeping the
+    # keyword next to the model it applies to is what stops that recurring.
     $liveJudges = @(
-        @{ name = 'live:judge-openai';    env = @('OPENAI_API_KEY');    type = 'openai';    model = (Get-OrDefault $env:OPENAI_JUDGE_MODEL    'gpt-4o-mini') },
-        @{ name = 'live:judge-anthropic'; env = @('ANTHROPIC_API_KEY'); type = 'anthropic'; model = (Get-OrDefault $env:ANTHROPIC_JUDGE_MODEL 'claude-haiku-4-5-20251001') },
-        @{ name = 'live:judge-bedrock';   env = @('AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'); type = 'bedrock'; model = (Get-OrDefault $env:BEDROCK_JUDGE_MODEL 'anthropic.claude-3-haiku-20240307-v1:0') }
+        @{ name = 'live:judge-openai';    env = @('OPENAI_API_KEY');    type = 'openai';    param = 'model';    model = (Get-OrDefault $env:OPENAI_JUDGE_MODEL    'gpt-4o-mini') },
+        @{ name = 'live:judge-anthropic'; env = @('ANTHROPIC_API_KEY'); type = 'anthropic'; param = 'model';    model = (Get-OrDefault $env:ANTHROPIC_JUDGE_MODEL 'claude-haiku-4-5-20251001') },
+        @{ name = 'live:judge-bedrock';   env = @('AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'); type = 'bedrock'; param = 'model_id'; model = (Get-OrDefault $env:BEDROCK_JUDGE_MODEL 'anthropic.claude-3-haiku-20240307-v1:0') }
     )
     foreach ($j in $liveJudges) {
         if (-not (Test-EnvSet $j.env)) { Add-Result 'D' $j.name 'SKIP' ("{0} not set" -f ($j.env -join ',')); continue }
@@ -586,7 +593,7 @@ scorers:
     params: { name: helpfulness }
 judge:
   type: $($j.type)
-  params: { model: "$($j.model)" }
+  params: { $($j.param): "$($j.model)" }
 sinks:
   - { type: console, params: { verbose: false } }
 gate: { rules: [] }
