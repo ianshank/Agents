@@ -137,7 +137,12 @@ python_version = "3.10"
 #     fix — no per-file `__init__.py` shim or CI-flag workaround needed.
 #   * "scripts/validations" lets `mypy scripts` resolve the validation gates' runtime
 #     `from _common import ...` bootstrap imports.
-mypy_path = ["src", "scripts/validations"]
+#   * "scripts/smokes" does the same for the Tier-D smoke scripts' `from _smoke_lib
+#     import ...` bootstrap. Same situation, same fix: they are invoked as plain scripts
+#     by run_all_e2e.ps1, so there is no package context for a relative import, and
+#     without this mypy resolves the shared exit-code constants as Any and then flags
+#     every `return SKIP_EXIT_CODE` as no-any-return.
+mypy_path = ["src", "scripts/validations", "scripts/smokes"]
 explicit_package_bases = true
 warn_return_any = true
 warn_unused_configs = true

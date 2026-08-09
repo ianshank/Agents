@@ -238,7 +238,12 @@ def test_quality_gates_workflow_missing_is_hard_finding(tmp_path: Path) -> None:
     findings = guard.check_quality_gates_wired(tmp_path)
     assert findings == [
         guard.Finding(
-            "quality_gates_workflow_missing", str(tmp_path / ".github/workflows/quality-gates.yml"), hard=True
+            "quality_gates_workflow_missing",
+            # The guard emits ``.as_posix()`` (see check_quality_gates_wired); build the
+            # expectation the same way. ``str()`` renders backslashes on Windows, which
+            # only diverges off-Linux -- so CI could not catch the mismatch.
+            (tmp_path / ".github/workflows/quality-gates.yml").as_posix(),
+            hard=True,
         )
     ]
 
