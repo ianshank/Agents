@@ -20,6 +20,10 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / "scripts" / "smokes
 import _smoke_lib as lib
 import phoenix_smoke as ps
 
+#: A credential-shaped value that must never reach stdout. Distinctive enough that a
+#: substring assertion cannot pass by coincidence. Mirrors test_langfuse_smoke.py.
+SECRET_SENTINEL = "do-not-print-secret-9f3ac2"
+
 
 @pytest.fixture
 def endpoint_env(monkeypatch: pytest.MonkeyPatch):
@@ -285,3 +289,68 @@ class TestMain:
         fake_tracing(_FakeProvider(_FakeTracer(), flush_raises=RuntimeError("drain failed")))
         assert ps.main() == lib.FAIL_EXIT_CODE
         assert "drain failed" in capsys.readouterr().out
+
+
+class TestCredentialRedaction:
+    """`PHOENIX_COLLECTOR_ENDPOINT` can carry a credential -- in userinfo
+    (`https://user:key@host`) or a query (`?api_key=...`) -- and every line this script
+    prints is archived to `artifacts/e2e-report/*.log`, which is copied around and quoted
+    into PRs while the repo's gitleaks scan is CI-only and never reads it.
+
+    `langfuse_smoke` was hardened when redaction landed; this file was not, and printed the
+    endpoint verbatim on *three* separate paths. So each path gets its own guard rather than
+    one success-path test standing in for all of them -- a leak on the failure paths is if
+    anything likelier to be pasted into an issue, since that is when someone is debugging.
+
+    Each test also asserts the host survives: `safe_endpoint` is meant to keep *which*
+    backend was reached (the point of a smoke) while dropping the rest, so a redaction that
+    blanked the whole line would pass a `not in` assertion while destroying the diagnostic.
+    """
+
+    def test_userinfo_never_reaches_the_success_line(self, endpoint_env, reachable, fake_tracing, capsys) -> None:
+        endpoint_env(f"https://user:{SECRET_SENTINEL}@phoenix.test:6006/v1/traces")
+        fake_tracing(_FakeProvider(_FakeTracer()))
+        assert ps.main() == lib.OK_EXIT_CODE
+        out = capsys.readouterr().out
+        assert SECRET_SENTINEL not in out
+        assert "phoenix.test" in out, "redaction must not cost the backend identity"
+
+    def test_query_credential_never_reaches_the_success_line(self, endpoint_env, reachable, fake_tracing, capsys):
+        """A key in the query string leaks just as readily as one in userinfo."""
+        endpoint_env(f"https://phoenix.test:6006/v1/traces?api_key={SECRET_SENTINEL}")
+        fake_tracing(_FakeProvider(_FakeTracer()))
+        assert ps.main() == lib.OK_EXIT_CODE
+        out = capsys.readouterr().out
+        assert SECRET_SENTINEL not in out
+        assert "phoenix.test" in out
+
+    def test_userinfo_never_reaches_the_configure_tracing_failure_line(
+        self, endpoint_env, reachable, fake_tracing, capsys
+    ) -> None:
+        endpoint_env(f"https://user:{SECRET_SENTINEL}@phoenix.test:6006/v1/traces")
+        fake_tracing(None)
+        assert ps.main() == lib.FAIL_EXIT_CODE
+        out = capsys.readouterr().out
+        assert SECRET_SENTINEL not in out
+        assert "configure_tracing returned None" in out, "redaction must not swallow the diagnostic"
+
+    def test_userinfo_never_reaches_the_incomplete_drain_line(
+        self, endpoint_env, reachable, fake_tracing, capsys
+    ) -> None:
+        endpoint_env(f"https://user:{SECRET_SENTINEL}@phoenix.test:6006/v1/traces")
+        fake_tracing(_FakeProvider(_FakeTracer(), flush_result=False))
+        assert ps.main() == lib.FAIL_EXIT_CODE
+        out = capsys.readouterr().out
+        assert SECRET_SENTINEL not in out
+        assert "incomplete drain" in out, "redaction must not swallow the diagnostic"
+
+    def test_unparseable_endpoint_is_named_not_echoed(self, endpoint_env, capsys) -> None:
+        """The one path with no host to keep: `safe_endpoint` would yield only the redaction
+        marker, so the message names the variable instead -- which is the actionable half and
+        carries no value at all. No `reachable` fixture: the real probe must run to reach it.
+        """
+        endpoint_env(f"nonsense-{SECRET_SENTINEL}")
+        assert ps.main() == lib.FAIL_EXIT_CODE
+        out = capsys.readouterr().out
+        assert SECRET_SENTINEL not in out
+        assert ps.ENV_ENDPOINT in out, "name the variable so the failure is actionable"

@@ -76,8 +76,9 @@ if (-not $Py) { throw "venv python not found under $RepoRoot/.venv (expected a p
 # EX_CONFIG from sysexits(3).
 #
 # Single source of truth is `SKIP_EXIT_CODE` in scripts/smokes/_smoke_lib.py; this literal is the
-# PowerShell mirror of it, and tests/test_smoke_tools.py asserts the two agree so they
-# cannot drift (same posture as check_skill_script_drift.py).
+# PowerShell mirror of it, and
+# tests/test_smoke_lib.py::TestExitCodes::test_powershell_runner_mirrors_the_python_skip_code
+# asserts the two agree so they cannot drift (same posture as check_skill_script_drift.py).
 $SkipExitCode = 78
 
 $Report = [System.IO.Path]::Combine($RepoRoot, 'artifacts', 'e2e-report')
@@ -519,8 +520,11 @@ if ($Tiers -in @('live', 'all')) {
 
     # Langfuse smoke (script exits 78/EX_CONFIG when creds missing -> SKIP).
     #
-    # The smokes live in tools/, not artifacts/: artifacts/ is gitignored, so the
-    # scripts these steps invoked never existed in any clone. Worse, a missing file
+    # The smokes live in scripts/smokes/, not artifacts/: artifacts/ is gitignored, so the
+    # scripts these steps invoked never existed in any clone. (scripts/ rather than a
+    # top-level tools/ so they stay inside --cov=scripts, mypy scripts, and the charter's
+    # _MISSION_DIRS scan -- see the module docstring in scripts/smokes/_smoke_lib.py.)
+    # Worse, a missing file
     # makes python exit 2, and 2 was the declared skip code -- so a Tier D that could
     # not possibly work reported SKIP, indistinguishable from "no credentials". Both
     # halves are fixed here: a tracked path, and a skip code (78) that neither a

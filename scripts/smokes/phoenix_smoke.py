@@ -18,6 +18,14 @@ reports no error, and the span is silently dropped. An earlier version of this f
 against a dead collector for exactly that reason. Hence the reachability probe below --
 without it, the step is green whether or not Phoenix exists, which is the same false-green
 class the Tier-D repair exists to remove.
+
+**The endpoint is never printed raw.** `PHOENIX_COLLECTOR_ENDPOINT` can carry a credential
+in userinfo (`https://user:key@host`) or a query (`?api_key=...`), and every line below
+lands in `artifacts/e2e-report/*.log`, which is copied around and quoted into PRs while the
+repo's gitleaks scan is CI-only and never reads it. `_smoke_lib.safe_endpoint` reduces the
+URL to scheme/host/port -- the part that identifies *which* backend was reached, which is
+the whole point of a smoke -- and drops the rest. `langfuse_smoke.py` was hardened this way
+when redaction landed; this file was not, so it printed the raw endpoint on three paths.
 """
 
 from __future__ import annotations
@@ -36,7 +44,13 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-from _smoke_lib import FAIL_EXIT_CODE, OK_EXIT_CODE, SKIP_EXIT_CODE, format_failure  # noqa: E402
+from _smoke_lib import (  # noqa: E402
+    FAIL_EXIT_CODE,
+    OK_EXIT_CODE,
+    SKIP_EXIT_CODE,
+    format_failure,
+    safe_endpoint,
+)
 
 ENV_ENDPOINT = "PHOENIX_COLLECTOR_ENDPOINT"
 
@@ -63,7 +77,10 @@ def resolve_target(endpoint: str) -> tuple[str, int] | None:
     parsed = urlparse(endpoint)
     if not parsed.hostname:
         return None
-    return parsed.hostname, parsed.port or DEFAULT_PORTS.get(parsed.scheme, 80)
+    # An unrecognised scheme falls back to the plain-HTTP port, sourced from DEFAULT_PORTS
+    # rather than restated as a literal -- the same value under two spellings is exactly the
+    # drift the charter's no-magic-numbers invariant exists to prevent.
+    return parsed.hostname, parsed.port or DEFAULT_PORTS.get(parsed.scheme, DEFAULT_PORTS["http"])
 
 
 def collector_reachable(endpoint: str) -> tuple[bool, str]:
@@ -74,7 +91,10 @@ def collector_reachable(endpoint: str) -> tuple[bool, str]:
     """
     target = resolve_target(endpoint)
     if target is None:
-        return False, f"cannot parse a host out of {endpoint!r}"
+        # Names the variable rather than echoing its value: an unparseable endpoint is the
+        # case where safe_endpoint() cannot extract a host to keep, so there is no redacted
+        # form of it to print -- and the variable name is the actionable half anyway.
+        return False, f"cannot parse a host out of {ENV_ENDPOINT}"
     host, port = target
     try:
         with socket.create_connection((host, port), timeout=CONNECT_TIMEOUT_SECONDS):
@@ -108,7 +128,7 @@ def main() -> int:
 
     provider = configure_tracing(config)
     if provider is None:
-        print(f"{_PREFIX}: FAIL, configure_tracing returned None for {endpoint}")
+        print(f"{_PREFIX}: FAIL, configure_tracing returned None for {safe_endpoint(endpoint)}")
         return FAIL_EXIT_CODE
 
     try:
@@ -128,13 +148,13 @@ def main() -> int:
         # rather than erroring.
         # Short-circuit keeps the hasattr guard: force_flush is only called when present.
         if hasattr(provider, "force_flush") and provider.force_flush() is False:
-            print(f"{_PREFIX}: FAIL, force_flush() reported an incomplete drain to {endpoint}")
+            print(f"{_PREFIX}: FAIL, force_flush() reported an incomplete drain to {safe_endpoint(endpoint)}")
             return FAIL_EXIT_CODE
     except Exception as exc:
         print(format_failure(_PREFIX, exc))
         return FAIL_EXIT_CODE
 
-    print(f"{_PREFIX}: OK, emitted '{SPAN_NAME}' to {endpoint} (project={PROJECT_NAME})")
+    print(f"{_PREFIX}: OK, emitted '{SPAN_NAME}' to {safe_endpoint(endpoint)} (project={PROJECT_NAME})")
     return OK_EXIT_CODE
 
 
