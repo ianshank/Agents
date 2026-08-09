@@ -249,6 +249,20 @@ function Invoke-CmdStep {
 
 function Test-EnvSet { param([string[]]$Names) foreach ($n in $Names) { if (-not (Test-Path "Env:$n") -or -not (Get-Item "Env:$n").Value) { return $false } } return $true }
 
+# Third anti-vacuous-pass guard, alongside "exit 0 but 0 tests collected" and the
+# pre-flight import check. A step whose script is missing is a harness defect, not a
+# test outcome: python would exit 2 for the missing file, and any step declaring 2 as
+# a skip code would silently report SKIP. Fail loudly and immediately instead -- the
+# same posture the pre-flight guard takes, and for the same reason.
+function Assert-StepScript {
+    param([string]$Tier, [string]$Name, [string]$RelPath)
+    $full = Join-Path $RepoRoot $RelPath
+    if (-not (Test-Path -LiteralPath $full)) {
+        Add-Result $Tier $Name 'FAIL' "step script missing: $RelPath"
+        throw "Tier $Tier step '$Name' references a script that does not exist: $full"
+    }
+}
+
 # ---------------------------------------------------------------------------
 # Pre-flight import guard (mandatory)
 # ---------------------------------------------------------------------------
@@ -483,19 +497,49 @@ if ($Tiers -in @('live', 'all')) {
     Write-Host "`n== Tier D: live integrations (credential-gated) ==" -ForegroundColor Cyan
     Enable-LiveEnv   # only now inject .env creds/endpoints (kept out of Tiers A-C)
 
-    # Langfuse smoke (script itself exits 2 when creds missing -> SKIP)
+    # Langfuse smoke (script exits 78/EX_CONFIG when creds missing -> SKIP).
+    #
+    # The smokes live in tools/, not artifacts/: artifacts/ is gitignored, so the
+    # scripts these steps invoked never existed in any clone. Worse, a missing file
+    # makes python exit 2, and 2 was the declared skip code -- so a Tier D that could
+    # not possibly work reported SKIP, indistinguishable from "no credentials". Both
+    # halves are fixed here: a tracked path, and a skip code (78) that neither a
+    # missing file (2) nor an argparse error (2) can forge.
+    Assert-StepScript 'D' 'live:langfuse-smoke' 'tools/langfuse_smoke.py'
     if (Test-EnvSet @('LANGFUSE_SECRET_KEY', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_BASE_URL')) {
-        Invoke-CmdStep 'D' 'live:langfuse-smoke' @('artifacts/langfuse_smoke.py') $RepoRoot @(2)
+        Invoke-CmdStep 'D' 'live:langfuse-smoke' @('tools/langfuse_smoke.py') $RepoRoot @(78)
     }
     else { Add-Result 'D' 'live:langfuse-smoke' 'SKIP' 'LANGFUSE_* not set' }
 
     # Phoenix smoke (needs a running collector)
+    Assert-StepScript 'D' 'live:phoenix-smoke' 'tools/phoenix_smoke.py'
     if (Test-EnvSet @('PHOENIX_COLLECTOR_ENDPOINT')) {
-        Invoke-CmdStep 'D' 'live:phoenix-smoke' @('artifacts/phoenix_smoke.py') $RepoRoot @(2)
+        Invoke-CmdStep 'D' 'live:phoenix-smoke' @('tools/phoenix_smoke.py') $RepoRoot @(78)
     }
     else { Add-Result 'D' 'live:phoenix-smoke' 'SKIP' 'PHOENIX_COLLECTOR_ENDPOINT not set' }
 
-    # Live judge journeys - real judge, offline echo target (bounds cost). One tiny item.
+    # Local OpenAI-compatible model (LM Studio / Ollama / any /v1 server). When set, the
+    # live journeys use a REAL model target instead of the `echo` stand-in, so the run
+    # exercises an actual generate -> score -> judge round-trip. base_url is deliberately
+    # NOT passed in the fixture: ModelTarget leaves it None and the openai SDK reads
+    # OPENAI_BASE_URL from the environment, keeping the endpoint out of committed YAML.
+    # Falls back to `echo` when no local model is configured, so credential-less hosts
+    # behave exactly as before.
+    $LocalModel = $env:LOCAL_MODEL_ID
+    if ($LocalModel) {
+        $LiveTarget = "{ type: model, params: { provider: openai, model: `"$LocalModel`" } }"
+        # A real judge too: `mock` returned a constant 0.9 regardless of the output, so
+        # the sink journeys were asserting that a hardcoded number reaches the backend.
+        $LiveJudge = "{ type: openai, params: { model: `"$LocalModel`" } }"
+        Write-Host "  live target/judge: model/$LocalModel (real round-trip)" -ForegroundColor DarkGray
+    }
+    else {
+        $LiveTarget = '{ type: echo, params: { output_key: question } }'
+        $LiveJudge = '{ type: mock, params: { default_score: 0.9 } }'
+        Write-Host "  live target/judge: echo+mock (set LOCAL_MODEL_ID for a real round-trip)" -ForegroundColor DarkGray
+    }
+
+    # Live judge journeys - real judge over a real (or echo) target. One tiny item.
     $liveJudges = @(
         @{ name = 'live:judge-openai';    env = @('OPENAI_API_KEY');    type = 'openai';    model = (Get-OrDefault $env:OPENAI_JUDGE_MODEL    'gpt-4o-mini') },
         @{ name = 'live:judge-anthropic'; env = @('ANTHROPIC_API_KEY'); type = 'anthropic'; model = (Get-OrDefault $env:ANTHROPIC_JUDGE_MODEL 'claude-haiku-4-5-20251001') },
@@ -512,7 +556,7 @@ dataset:
   params:
     items:
       - { id: q1, inputs: { question: "Reply with the single word: ok" }, expected: "ok" }
-target: { type: echo, params: { output_key: question } }
+target: $LiveTarget
 scorers:
   - type: llm_judge
     params: { name: helpfulness }
@@ -530,21 +574,21 @@ gate: { rules: [] }
     # Live Langfuse sink journey (writes scores to the backend)
     if (Test-EnvSet @('LANGFUSE_SECRET_KEY', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_BASE_URL')) {
         $lfCfg = Join-Path $Fixtures 'live_langfuse_sink.yaml'
-        @'
+        @"
 schema_version: "1.0"
 run: { name: live-langfuse-sink, seed: 7 }
 dataset:
   type: inline
   params:
     items: [ { id: q1, inputs: { question: "reset password" }, expected: "reset" } ]
-target: { type: echo, params: { output_key: question } }
+target: $LiveTarget
 scorers: [ { type: contains, params: { name: mentions_reset, substring: "reset" } } ]
-judge: { type: mock, params: { default_score: 0.9 } }
+judge: $LiveJudge
 sinks:
   - { type: console, params: { verbose: false } }
   - { type: langfuse }
 gate: { rules: [] }
-'@ | Set-Content -Encoding UTF8 -Path $lfCfg
+"@ | Set-Content -Encoding UTF8 -Path $lfCfg
         Invoke-CmdStep 'D' 'live:langfuse-sink' @('-m', 'eval_harness.cli', 'run', '--config', $lfCfg)
     }
     else { Add-Result 'D' 'live:langfuse-sink' 'SKIP' 'LANGFUSE_* not set' }
@@ -552,7 +596,7 @@ gate: { rules: [] }
     # Live Phoenix sink journey
     if (Test-EnvSet @('PHOENIX_COLLECTOR_ENDPOINT')) {
         $phCfg = Join-Path $Fixtures 'live_phoenix_sink.yaml'
-        @'
+        @"
 schema_version: "1.0"
 run: { name: live-phoenix-sink, seed: 7 }
 phoenix: { enabled: true, project_name: e2e-phoenix, tracing: true }
@@ -560,14 +604,14 @@ dataset:
   type: inline
   params:
     items: [ { id: q1, inputs: { question: "reset password" }, expected: "reset" } ]
-target: { type: echo, params: { output_key: question } }
+target: $LiveTarget
 scorers: [ { type: contains, params: { name: mentions_reset, substring: "reset" } } ]
-judge: { type: mock, params: { default_score: 0.9 } }
+judge: $LiveJudge
 sinks:
   - { type: console, params: { verbose: false } }
   - { type: phoenix, params: { enabled: true } }
 gate: { rules: [] }
-'@ | Set-Content -Encoding UTF8 -Path $phCfg
+"@ | Set-Content -Encoding UTF8 -Path $phCfg
         Invoke-CmdStep 'D' 'live:phoenix-sink' @('-m', 'eval_harness.cli', 'run', '--config', $phCfg)
     }
     else { Add-Result 'D' 'live:phoenix-sink' 'SKIP' 'PHOENIX_COLLECTOR_ENDPOINT not set' }
