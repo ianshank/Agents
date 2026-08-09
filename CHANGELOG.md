@@ -20,6 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the mkdocs nav.
 
 ### Fixed
+- **`phoenix_smoke` printed the collector endpoint unredacted.** The redaction pass that
+  introduced `_smoke_lib.safe_endpoint` hardened `langfuse_smoke` but not its sibling, so
+  `PHOENIX_COLLECTOR_ENDPOINT` was echoed verbatim on three paths (the success line, the
+  `configure_tracing`-returned-`None` failure, and the incomplete-drain failure) plus the
+  unparseable-URL branch. An endpoint carrying a credential in userinfo
+  (`https://user:key@host`) or a query (`?api_key=…`) therefore landed in
+  `artifacts/e2e-report/*.log` — which is copied around and quoted into PRs, and which the
+  CI-only gitleaks scan never reads. All four now go through `safe_endpoint` (scheme/host/
+  port only), except the unparseable branch, which has no host to keep and so names
+  `PHOENIX_COLLECTOR_ENDPOINT` rather than echoing its value. `TestCredentialRedaction`
+  covers each path independently and each case was confirmed to fail against the unfixed
+  script; the tests also assert the host still appears, so a redaction that blanked the
+  whole diagnostic could not pass them. Also drops a literal `80` that restated
+  `DEFAULT_PORTS["http"]`, and corrects two `run_all_e2e.ps1` comments that pointed at a
+  non-existent `tests/test_smoke_tools.py` and claimed the smokes live in `tools/`.
 - **Tier D of the e2e runner could not pass, and could not report that it could not
   pass.** Three compounding defects, all invisible because every recorded baseline used
   `-Tiers offline`, which never executes Tier D. (1) The two smoke steps invoked
