@@ -53,7 +53,9 @@ def test_real_repo_protected_path_label_matches() -> None:
 def test_protected_changes_missing_is_hard_finding(tmp_path: Path) -> None:
     findings = guard.check_protected_path_label(tmp_path)
     assert findings == [
-        guard.Finding("protected_changes_missing", str(tmp_path / "scripts" / "check_protected_changes.py"), hard=True)
+        guard.Finding(
+            "protected_changes_missing", (tmp_path / "scripts" / "check_protected_changes.py").as_posix(), hard=True
+        )
     ]
 
 
@@ -72,7 +74,8 @@ def test_protected_changes_module_load_error_is_hard_finding(tmp_path: Path) -> 
     findings = guard.check_protected_path_label(tmp_path)
     assert len(findings) == 1
     assert findings[0].hard and findings[0].kind == "protected_changes_import_failed"
-    assert "boom" in findings[0].detail
+    expected_path = (tmp_path / "scripts" / "check_protected_changes.py").as_posix()
+    assert findings[0].detail == f"{expected_path}: boom"
 
 
 def test_matching_approval_label_is_clean(tmp_path: Path) -> None:
@@ -139,7 +142,9 @@ def test_agent_core_with_no_deps_is_clean(tmp_path: Path) -> None:
 def test_agent_core_pyproject_missing_is_hard_finding(tmp_path: Path) -> None:
     findings = guard.check_agent_core_zero_deps(tmp_path)
     assert findings == [
-        guard.Finding("agent_core_pyproject_missing", str(tmp_path / "agent-core" / "pyproject.toml"), hard=True)
+        guard.Finding(
+            "agent_core_pyproject_missing", (tmp_path / "agent-core" / "pyproject.toml").as_posix(), hard=True
+        )
     ]
 
 
@@ -152,6 +157,8 @@ def test_zero_schema_version_assignments_is_hard_finding(tmp_path: Path) -> None
     _write(tmp_path, "src/eval_harness/version.py", "OTHER = '1.0'\n")
     findings = guard.check_schema_version_single_source(tmp_path)
     assert findings and findings[0].hard
+    expected_path = (tmp_path / "src/eval_harness/version.py").as_posix()
+    assert findings[0].detail == f"found 0 SCHEMA_VERSION assignment(s) in {expected_path}"
 
 
 def test_duplicate_schema_version_assignments_is_hard_finding(tmp_path: Path) -> None:
@@ -167,7 +174,9 @@ def test_single_schema_version_assignment_is_clean(tmp_path: Path) -> None:
 
 def test_version_py_missing_is_hard_finding(tmp_path: Path) -> None:
     findings = guard.check_schema_version_single_source(tmp_path)
-    assert findings == [guard.Finding("version_py_missing", str(tmp_path / "src/eval_harness/version.py"), hard=True)]
+    assert findings == [
+        guard.Finding("version_py_missing", (tmp_path / "src/eval_harness/version.py").as_posix(), hard=True)
+    ]
 
 
 def test_version_py_syntax_error_is_hard_finding(tmp_path: Path) -> None:
@@ -175,6 +184,8 @@ def test_version_py_syntax_error_is_hard_finding(tmp_path: Path) -> None:
     findings = guard.check_schema_version_single_source(tmp_path)
     assert len(findings) == 1
     assert findings[0].hard and findings[0].kind == "version_py_unparseable"
+    expected_path = (tmp_path / "src/eval_harness/version.py").as_posix()
+    assert findings[0].detail.startswith(f"{expected_path}: ")
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +300,7 @@ def test_missing_interface_class_is_hard_finding(tmp_path: Path) -> None:
 def test_interfaces_py_missing_is_hard_finding(tmp_path: Path) -> None:
     findings = guard.check_protocol_interfaces(tmp_path)
     assert findings == [
-        guard.Finding("interfaces_py_missing", str(tmp_path / "src/eval_harness/core/interfaces.py"), hard=True)
+        guard.Finding("interfaces_py_missing", (tmp_path / "src/eval_harness/core/interfaces.py").as_posix(), hard=True)
     ]
 
 
@@ -298,6 +309,8 @@ def test_interfaces_py_syntax_error_is_hard_finding(tmp_path: Path) -> None:
     findings = guard.check_protocol_interfaces(tmp_path)
     assert len(findings) == 1
     assert findings[0].hard and findings[0].kind == "interfaces_py_unparseable"
+    expected_path = (tmp_path / "src/eval_harness/core/interfaces.py").as_posix()
+    assert findings[0].detail.startswith(f"{expected_path}: ")
 
 
 # ---------------------------------------------------------------------------
@@ -309,14 +322,24 @@ def test_fix_loop_enabled_is_hard_finding(tmp_path: Path) -> None:
     _write(tmp_path, "scripts/fix_loop.py", "FIX_ENABLED: bool = True\n")
     _write(tmp_path, ".github/workflows/calibrated-merge-gate.yml", "ENABLE_CALIBRATED_AUTOMERGE\n")
     findings = guard.check_default_off_flags(tmp_path)
-    assert [f for f in findings if f.kind == "fix_loop_not_disabled_by_default"]
+    matches = [f for f in findings if f.kind == "fix_loop_not_disabled_by_default"]
+    assert matches == [
+        guard.Finding("fix_loop_not_disabled_by_default", (tmp_path / "scripts/fix_loop.py").as_posix(), hard=True)
+    ]
 
 
 def test_merge_gate_without_env_flag_is_hard_finding(tmp_path: Path) -> None:
     _write(tmp_path, "scripts/fix_loop.py", "FIX_ENABLED: bool = False\n")
     _write(tmp_path, ".github/workflows/calibrated-merge-gate.yml", "no gate here\n")
     findings = guard.check_default_off_flags(tmp_path)
-    assert [f for f in findings if f.kind == "auto_merge_flag_not_gated"]
+    matches = [f for f in findings if f.kind == "auto_merge_flag_not_gated"]
+    assert matches == [
+        guard.Finding(
+            "auto_merge_flag_not_gated",
+            (tmp_path / ".github/workflows/calibrated-merge-gate.yml").as_posix(),
+            hard=True,
+        )
+    ]
 
 
 def test_flags_off_and_gated_is_clean(tmp_path: Path) -> None:
@@ -329,12 +352,20 @@ def test_fix_loop_missing_is_hard_finding(tmp_path: Path) -> None:
     _write(tmp_path, ".github/workflows/calibrated-merge-gate.yml", "ENABLE_CALIBRATED_AUTOMERGE\n")
     findings = guard.check_default_off_flags(tmp_path)
     assert {f.kind for f in findings} == {"fix_loop_missing"}
+    assert findings == [guard.Finding("fix_loop_missing", (tmp_path / "scripts/fix_loop.py").as_posix(), hard=True)]
 
 
 def test_calibrated_merge_gate_workflow_missing_is_hard_finding(tmp_path: Path) -> None:
     _write(tmp_path, "scripts/fix_loop.py", "FIX_ENABLED: bool = False\n")
     findings = guard.check_default_off_flags(tmp_path)
     assert {f.kind for f in findings} == {"calibrated_merge_gate_workflow_missing"}
+    assert findings == [
+        guard.Finding(
+            "calibrated_merge_gate_workflow_missing",
+            (tmp_path / ".github/workflows/calibrated-merge-gate.yml").as_posix(),
+            hard=True,
+        )
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -999,6 +999,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   byte-oriented (UTF-8 encode/decode), so `\n` stays `\n` on all platforms.
 - **`foundation_tools.validate`:** findings emitted OS-native `\` path separators; now
   `.as_posix()` so findings are deterministic (forward slashes) across platforms.
+- **`check_charter_invariants` / `check_size_budget`:** `Finding.detail`/`Finding.path`
+  mixed `.as_posix()` with `str(path)` and raw f-string `Path` interpolation, both of which
+  emit OS-native `\` on Windows — invisible in CI (Linux-only) because a native and a
+  portable separator produce byte-identical strings there. All remaining sites in both
+  gates now use `.as_posix()` uniformly; the corresponding tests assert the exact portable
+  string (several previously checked only `Finding.kind`, so a regression back to
+  `str(path)` would not have been caught).
 - **`skills/architecture-drift-guard` e2e test:** the generated manifest embedded a Windows
   `\` path inside a YAML double-quoted scalar (invalid escape sequences); it now uses forward
   slashes.

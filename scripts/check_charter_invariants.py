@@ -137,7 +137,7 @@ def check_agent_core_zero_deps(root: Path) -> list[Finding]:
     """Charter §2: agent-core has zero runtime dependencies."""
     path = root / "agent-core" / "pyproject.toml"
     if not path.is_file():
-        return [Finding("agent_core_pyproject_missing", str(path), hard=True)]
+        return [Finding("agent_core_pyproject_missing", path.as_posix(), hard=True)]
     project_section = _extract_toml_section(path.read_text(encoding="utf-8"), "project")
     match = re.search(r"^\s*dependencies\s*=\s*\[(.*?)\]", project_section, re.MULTILINE | re.DOTALL)
     if match and match.group(1).strip():
@@ -149,11 +149,11 @@ def check_schema_version_single_source(root: Path) -> list[Finding]:
     """Charter §4 invariant 2: SCHEMA_VERSION is single-sourced in version.py."""
     path = root / "src/eval_harness/version.py"
     if not path.is_file():
-        return [Finding("version_py_missing", str(path), hard=True)]
+        return [Finding("version_py_missing", path.as_posix(), hard=True)]
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
     except SyntaxError as exc:
-        return [Finding("version_py_unparseable", f"{path}: {exc}", hard=True)]
+        return [Finding("version_py_unparseable", f"{path.as_posix()}: {exc}", hard=True)]
     assignments = [
         target.id
         for node in ast.walk(tree)
@@ -165,7 +165,7 @@ def check_schema_version_single_source(root: Path) -> list[Finding]:
         return [
             Finding(
                 "schema_version_not_single_sourced",
-                f"found {len(assignments)} SCHEMA_VERSION assignment(s) in {path}",
+                f"found {len(assignments)} SCHEMA_VERSION assignment(s) in {path.as_posix()}",
                 hard=True,
             )
         ]
@@ -211,15 +211,15 @@ def check_protected_path_label(root: Path) -> list[Finding]:
     """
     path = root / "scripts" / "check_protected_changes.py"
     if not path.is_file():
-        return [Finding("protected_changes_missing", str(path), hard=True)]
+        return [Finding("protected_changes_missing", path.as_posix(), hard=True)]
     spec = importlib.util.spec_from_file_location("_check_protected_changes_probe", path)
     if spec is None or spec.loader is None:
-        return [Finding("protected_changes_import_failed", f"cannot load spec for {path}", hard=True)]
+        return [Finding("protected_changes_import_failed", f"cannot load spec for {path.as_posix()}", hard=True)]
     module = importlib.util.module_from_spec(spec)
     try:
         spec.loader.exec_module(module)
     except Exception as exc:  # any load failure (syntax error, missing import, ...) is itself the finding
-        return [Finding("protected_changes_import_failed", f"{path}: {exc}", hard=True)]
+        return [Finding("protected_changes_import_failed", f"{path.as_posix()}: {exc}", hard=True)]
     label = getattr(module, "DEFAULT_APPROVAL_LABEL", None)
     if label != CHARTER_APPROVAL_LABEL:
         return [
@@ -261,11 +261,11 @@ def check_protocol_interfaces(root: Path) -> list[Finding]:
     """
     path = root / "src/eval_harness/core/interfaces.py"
     if not path.is_file():
-        return [Finding("interfaces_py_missing", str(path), hard=True)]
+        return [Finding("interfaces_py_missing", path.as_posix(), hard=True)]
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
     except SyntaxError as exc:
-        return [Finding("interfaces_py_unparseable", f"{path}: {exc}", hard=True)]
+        return [Finding("interfaces_py_unparseable", f"{path.as_posix()}: {exc}", hard=True)]
     seen = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name in (*_PROTOCOL_INTERFACES, *_ABC_INTERFACES):
@@ -293,15 +293,15 @@ def check_default_off_flags(root: Path) -> list[Finding]:
 
     fix_loop = root / "scripts/fix_loop.py"
     if not fix_loop.is_file():
-        findings.append(Finding("fix_loop_missing", str(fix_loop), hard=True))
+        findings.append(Finding("fix_loop_missing", fix_loop.as_posix(), hard=True))
     elif not re.search(r"FIX_ENABLED\s*:?\s*(?:bool\s*)?=\s*False", fix_loop.read_text(encoding="utf-8")):
-        findings.append(Finding("fix_loop_not_disabled_by_default", str(fix_loop), hard=True))
+        findings.append(Finding("fix_loop_not_disabled_by_default", fix_loop.as_posix(), hard=True))
 
     merge_gate = root / ".github/workflows/calibrated-merge-gate.yml"
     if not merge_gate.is_file():
-        findings.append(Finding("calibrated_merge_gate_workflow_missing", str(merge_gate), hard=True))
+        findings.append(Finding("calibrated_merge_gate_workflow_missing", merge_gate.as_posix(), hard=True))
     elif "ENABLE_CALIBRATED_AUTOMERGE" not in merge_gate.read_text(encoding="utf-8"):
-        findings.append(Finding("auto_merge_flag_not_gated", str(merge_gate), hard=True))
+        findings.append(Finding("auto_merge_flag_not_gated", merge_gate.as_posix(), hard=True))
 
     return findings
 

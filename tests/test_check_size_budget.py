@@ -39,6 +39,14 @@ def test_file_at_limit_is_clean(tmp_path: Path) -> None:
     assert sb.scan_file(path, tmp_path) == []
 
 
+def test_finding_path_is_posix_even_when_nested(tmp_path: Path) -> None:
+    """Finding.path must use forward slashes regardless of OS (no native backslashes)."""
+    path = _write(tmp_path, "pkg/sub/big.py", _lines(sb.MAX_FILE_LINES + 1))
+    findings = sb.scan_file(path, tmp_path)
+    assert findings and findings[0].path == "pkg/sub/big.py"
+    assert "\\" not in findings[0].path
+
+
 # ---------------------------------------------------------------------------
 # scan_file: function-length and public-method warnings (non-blocking)
 # ---------------------------------------------------------------------------
