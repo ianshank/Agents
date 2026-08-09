@@ -1,0 +1,9 @@
+Unit,Coverage Floor (%),Floor Anchors,CI Workflows,Suite Step,Suite Status,Tests
+agent-core,95,pyproject.toml=95; quality-gate.sh=95,"agent-core-ci.yml, calibrated-merge-gate.yml",suite:agent-core,PASS,790
+behavioral-regression,95,pyproject.toml=95; quality-gate.sh=95,behavioral-regression-ci.yml,suite:behavioral-regression,PASS,157
+claude-foundation,85,pyproject.toml=85; quality-gate.sh=85,claude-foundation-ci.yml,suite:claude-foundation,PASS,136
+experiments/backend-validation,95,pyproject.toml=95; quality-gate.sh=95,,e2e:backend-validation,PASS,211
+flow-corpus,95,pyproject.toml=95; quality-gate.sh=95,flow-corpus-ci.yml,suite:flow-corpus,PASS,163
+flow-protocol,95,pyproject.toml=95; quality-gate.sh=95,flow-corpus-ci.yml,suite:flow-protocol,PASS,21
+root,96,pyproject.toml=96; quality-gate.sh=96,eval-harness-ci.yml,suite:root,PASS,1627
+scripts,85,scripts/.coveragerc=85,,suite:scripts-gate,PASS,1627

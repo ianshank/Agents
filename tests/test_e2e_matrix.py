@@ -121,6 +121,29 @@ class TestRunnerInventory:
         by_name = {step.name: step for step in declared}
         assert by_name["cli:eval-harness list-plugins"].command.startswith("python -m eval_harness.cli")
 
+    def test_commands_are_recovered_for_every_step_that_has_one(self, declared: tuple[em.DeclaredStep, ...]) -> None:
+        """Three declaration shapes each hid a command, and each needed its own fix.
+
+        A multi-line array (PowerShell keeps an expression open inside parens, with no
+        backtick), an array passed by variable through a loop, and a step whose first
+        textual mention is the SKIP branch that carries no arguments. Together they left
+        the Command column empty for 23 of 40 steps - the one datum a reader needs to
+        reproduce a step by hand.
+
+        The only steps legitimately without a command are the assertion-only ones, which
+        validate a file the previous step wrote rather than running anything.
+        """
+        by_name = {step.name: step for step in declared}
+        assert by_name["cli:eval-harness compare"].command.startswith("python -m eval_harness.cli compare")
+        assert by_name["suite:root"].command.startswith("python -m pytest")
+        assert by_name["live:judge-openai"].command.startswith("python -m eval_harness.cli run")
+        assert by_name["preflight-imports"].command.startswith("python -c import flow_protocol")
+
+        commandless = {name for name, step in by_name.items() if not step.command}
+        assert commandless == {"cli:bregress json-valid", "cli:proxy_eval json-valid"}, (
+            f"unexpected step(s) without a command: {sorted(commandless)}"
+        )
+
     def test_a_grammar_change_fails_loudly(self) -> None:
         with pytest.raises(em.MatrixError, match="call-site grammar"):
             em.parse_declared_steps("# a runner with no step calls at all\n")
@@ -188,6 +211,28 @@ class TestDerivation:
         packages = {pkg.name: pkg for pkg in em.derive_packages(ROOT, em.derive_workflows(ROOT))}
         assert packages["scripts"].floor is not None
         assert "coveragerc" in packages["scripts"].anchors[0]
+
+    def test_every_unit_resolves_to_the_suite_step_that_exercises_it(self, tmp_path: Path) -> None:
+        """A unit whose step name only *qualifies* its name must still be matched.
+
+        The tails are not uniform: `scripts` is exercised by `suite:scripts-gate` and
+        `experiments/backend-validation` by `e2e:backend-validation`. Matching on the tail
+        alone left both reading NOT-RUN on a run that had exercised them - a false negative
+        in exactly the column a reader would trust.
+        """
+        _write_report(
+            tmp_path,
+            [
+                _record("suite:scripts-gate", tier="A"),
+                _record("e2e:backend-validation", tier="C"),
+                _record("suite:root", tier="A"),
+            ],
+        )
+        grid = em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE)[2]
+        status = {row[0]: row[grid.columns.index("Suite Status")] for row in grid.rows}
+        assert status["scripts"] == "PASS"
+        assert status["experiments/backend-validation"] == "PASS"
+        assert status["root"] == "PASS"
 
     def test_workflows_map_to_real_files(self) -> None:
         for names in em.derive_workflows(ROOT).values():
@@ -391,6 +436,25 @@ class TestWorkbook:
         second = xw.write_workbook(sheets, tmp_path / "b.xlsx", stamp_iso=FIXED_STAMP)
         assert first.read_bytes() == second.read_bytes()
 
+    def test_document_modified_time_is_pinned_not_wall_clock(self, tmp_path: Path) -> None:
+        """openpyxl overwrites `dcterms:modified` at save time, ignoring what we set.
+
+        Comparing two workbooks written back to back does not reliably catch this - both
+        land in the same second most of the time, so the byte-equality test above passed
+        while the artifact churned whenever a regeneration straddled a second boundary.
+        Asserting the pinned value directly is timing-independent.
+        """
+        pytest.importorskip("openpyxl")
+        from tests import _e2e_matrix_xlsx as xw
+
+        path = xw.write_workbook(
+            [em.Sheet(name="S", columns=("A",), rows=(("1",),))], tmp_path / "a.xlsx", stamp_iso=FIXED_STAMP
+        )
+        with zipfile.ZipFile(path) as archive:
+            core = archive.read(xw.CORE_PROPERTIES_PART).decode("utf-8")
+        expected = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(*xw.parse_stamp(FIXED_STAMP))
+        assert f'<dcterms:modified xsi:type="dcterms:W3CDTF">{expected}</dcterms:modified>' in core
+
     def test_workbook_entries_carry_the_pinned_timestamp(self, tmp_path: Path) -> None:
         pytest.importorskip("openpyxl")
         from tests import _e2e_matrix_xlsx as xw
@@ -531,7 +595,6 @@ def main(argv: list[str] | None = None) -> int:
         sheets = em.build_sheets(
             args.report,
             provenance=_provenance(args.sha, args.timestamp),
-            env_present=sorted(_present_credentials()),
             scrub=scrub,
         )
     except em.MatrixError as exc:
@@ -558,16 +621,6 @@ def main(argv: list[str] | None = None) -> int:
     for path in written:
         print(path.relative_to(ROOT).as_posix())
     return 0
-
-
-def _present_credentials() -> set[str]:
-    """Which live-step variables this environment actually supplies. Names only."""
-    import os
-
-    required: set[str] = set()
-    for names in em.derive_live_credentials(ROOT).values():
-        required.update(names)
-    return {name for name in required if os.environ.get(name)}
 
 
 def _load_scrubber() -> Callable[[str], str] | None:

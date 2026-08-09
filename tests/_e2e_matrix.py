@@ -30,7 +30,7 @@ import json
 import logging
 import re
 import xml.etree.ElementTree as ET
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -261,6 +261,7 @@ _LITERAL_STEP_RE = re.compile(
 # e.g. `Invoke-PytestStep 'A' $s.name` with `foreach ($s in $suites)`.
 _VARIABLE_STEP_RE = re.compile(
     r"(?:Invoke-PytestStep|Invoke-CmdStep|Add-Result)\s+'(?P<tier>[A-Z]+)'\s+\$(?P<item>\w+)\.name"
+    r"(?:\s+\$(?P<args_var>\w+))?"
 )
 
 _FOREACH_RE = re.compile(r"foreach\s*\(\s*\$(?P<item>\w+)\s+in\s+\$(?P<collection>\w+)\s*\)")
@@ -288,16 +289,57 @@ def _join_continuations(text: str) -> str:
     return re.sub(r"`[ \t]*\r?\n[ \t]*", " ", text.replace("\r\n", "\n"))
 
 
-def _command_from(call_line: str, after: int) -> str:
-    """Render the python argument array following a step name as a readable command."""
-    match = _ARGS_RE.search(call_line, after)
-    if match is None:
+def _balanced_args(text: str, start: int) -> str | None:
+    """Inner text of the first ``@( ... )`` at or after *start*, spanning newlines.
+
+    A regex cannot do this. PowerShell keeps an expression open inside parentheses, so an
+    argument array is routinely written across several lines with no backtick continuation
+    -- and a ``@\\([^)]*\\)`` pattern stops at the first inner ``)`` anyway. Reading 57% of
+    the runner's steps as "no command" is what that costs, so the parens are matched.
+    """
+    open_at = text.find("@(", start)
+    if open_at == -1:
+        return None
+    depth = 0
+    for index in range(open_at + 1, len(text)):
+        char = text[index]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return text[open_at + 2 : index]
+    return None
+
+
+def _resolve_array_literal(text: str, variable: str) -> str | None:
+    """Inner text of ``$<variable> = @( ... )``, wherever it is indented."""
+    match = re.search(rf"\${re.escape(variable)}\s*=\s*(?=@\()", text)
+    return _balanced_args(text, match.end()) if match else None
+
+
+def _render_command(args_text: str | None) -> str:
+    """Render a PowerShell argument array as a readable ``python ...`` command line."""
+    if args_text is None:
         return ""
-    tokens = [tok if tok else "''" for tok in _QUOTED_RE.findall(match.group("args"))]
+    tokens = _QUOTED_RE.findall(args_text)
     if not tokens:
         # An all-variable array (e.g. @($SkipExitCode)) carries no readable literal.
         return ""
     return "python " + " ".join(tokens)
+
+
+def _command_from(text: str, after: int) -> str:
+    """Command for a step call, taken only from the array that *immediately* follows it.
+
+    The adjacency requirement is the whole point. Scanning ahead for the next ``@(`` instead
+    made ``Add-Result 'PRE' 'preflight-imports' 'PASS' '...'`` -- a call with no argument
+    array at all -- adopt the ``$suites`` literal declared further down the file, and report
+    it as that step's command. A step either has its arguments right there or has none.
+    """
+    if re.match(r"\s*(?=@\()", text[after:]) is None:
+        return ""
+    return _render_command(_balanced_args(text, after))
 
 
 def _array_blocks(text: str) -> dict[str, str]:
@@ -324,11 +366,24 @@ def parse_declared_steps(runner_text: str) -> tuple[DeclaredStep, ...]:
 
     declared: dict[str, DeclaredStep] = {}
 
+    def record(step: DeclaredStep) -> None:
+        """First declaration wins, but a later one may fill in a command it lacked.
+
+        A step is typically recorded twice: once on the branch that runs it and once on a
+        SKIP/failure branch that only calls ``Add-Result``. Whichever comes first in the file
+        is arbitrary, so plain first-wins left every judge step with an empty command.
+        """
+        existing = declared.get(step.name)
+        if existing is None:
+            declared[step.name] = step
+        elif step.command and not existing.command:
+            declared[step.name] = DeclaredStep(
+                tier=existing.tier, name=existing.name, command=step.command, workdir=existing.workdir
+            )
+
     for match in _LITERAL_STEP_RE.finditer(text):
         name = match.group("name")
-        line = text[match.start() : text.find("\n", match.start())]
-        command = _command_from(line, match.end() - match.start())
-        declared.setdefault(name, DeclaredStep(tier=match.group("tier"), name=name, command=command))
+        record(DeclaredStep(tier=match.group("tier"), name=name, command=_command_from(text, match.end())))
 
     for match in _VARIABLE_STEP_RE.finditer(text):
         collection = bindings.get(match.group("item"))
@@ -336,11 +391,30 @@ def parse_declared_steps(runner_text: str) -> tuple[DeclaredStep, ...]:
         if body is None:
             logger.warning("cannot resolve $%s.name to an array literal; steps may be missing", match.group("item"))
             continue
+        # The loop passes its argument array by variable (`... $s.name $suiteArgs ...`), so
+        # every step in the collection shares one command; resolve it once per loop.
+        shared = match.group("args_var")
+        command = _render_command(_resolve_array_literal(text, shared)) if shared else _command_from(text, match.end())
         for entry in _HASH_ENTRY_RE.finditer(body):
-            name = entry.group("name")
-            declared.setdefault(
-                name,
-                DeclaredStep(tier=match.group("tier"), name=name, workdir=_workdir_from(entry.group(0))),
+            record(
+                DeclaredStep(
+                    tier=match.group("tier"),
+                    name=entry.group("name"),
+                    command=command,
+                    workdir=_workdir_from(entry.group(0)),
+                )
+            )
+
+    # `Invoke-Py -Name 'x' -PyArgs @(...)` is a third form: the pre-flight guard runs through
+    # it and records its result separately, so the name is known but the command is not.
+    for match in re.finditer(r"Invoke-Py\s+-Name\s+'(?P<name>[^']+)'\s+-PyArgs\s*(?=@\()", text):
+        step = declared.get(match.group("name"))
+        if step is not None and not step.command:
+            declared[step.name] = DeclaredStep(
+                tier=step.tier,
+                name=step.name,
+                command=_render_command(_balanced_args(text, match.end())),
+                workdir=step.workdir,
             )
 
     if not declared:
@@ -657,7 +731,7 @@ COVERAGE_COLUMNS = (
     "Suite Status",
     "Tests",
 )
-CREDENTIAL_COLUMNS = ("Live Step", "Required Env Vars", "All Present In Run", "Run Outcome")
+CREDENTIAL_COLUMNS = ("Live Step", "Required Env Vars", "Run Outcome")
 PROVENANCE_COLUMNS = ("Field", "Value")
 
 #: JUnit stem -> step name is not declared anywhere machine-readable, so it is recovered by
@@ -669,8 +743,12 @@ def _junit_for(step_name: str, junit: Mapping[str, SuiteArtifact]) -> SuiteArtif
     """Best-effort JUnit lookup for a suite step, matched on the stem the runner chose."""
     if not step_name.startswith(_SUITE_PREFIXES):
         return None
+    # The runner names each JUnit file itself, and the stem does not always equal the step
+    # tail: `suite:scripts-gate` writes `scripts.xml`, and `e2e:skills+hooks` writes
+    # `e2e_journeys.xml`. Try the tail, its filename-safe form, then its leading segment
+    # before giving up, so a present count is never reported as absent.
     tail = step_name.split(":", 1)[1]
-    for candidate in (tail, tail.replace("+", "_"), safe_step_name(tail)):
+    for candidate in (tail, tail.replace("+", "_"), safe_step_name(tail), tail.split("-", 1)[0]):
         if candidate in junit:
             return junit[candidate]
     return None
@@ -740,7 +818,18 @@ def build_coverage_sheet(
     by_tail = {s.name.split(":", 1)[1]: s.name for s in declared if s.name.startswith(_SUITE_PREFIXES)}
     rows: list[tuple[str, ...]] = []
     for pkg in packages:
-        step_name = by_tail.get(pkg.name, by_tail.get("root" if pkg.name == "root" else pkg.name, ""))
+        # A unit is matched to its suite step by the step-name tail, then by two fallbacks,
+        # each of which exists because a row silently read NOT-RUN on a run that had in fact
+        # exercised it. The basename covers units named by path
+        # (`experiments/backend-validation` -> `e2e:backend-validation`); the leading-segment
+        # match covers a tail that qualifies the unit name (`scripts` -> `suite:scripts-gate`).
+        # Exact matches are tried for every unit first, so a qualified match can never steal a
+        # step from the unit that owns it outright.
+        step_name = (
+            by_tail.get(pkg.name)
+            or by_tail.get(pkg.name.rsplit("/", 1)[-1])
+            or next((full for tail, full in sorted(by_tail.items()) if tail.split("-", 1)[0] == pkg.name), "")
+        )
         result = observed.get(step_name) if step_name else None
         counts = _junit_for(step_name, junit) if step_name else None
         rows.append(
@@ -757,24 +846,19 @@ def build_coverage_sheet(
     return Sheet(name="Coverage Grid", columns=COVERAGE_COLUMNS, rows=tuple(rows))
 
 
-def build_credentials_sheet(
-    credentials: Mapping[str, tuple[str, ...]], run: Sequence[RunStep], present: Iterable[str]
-) -> Sheet:
-    """Live steps and the variables that gate them. Names only - never values."""
+def build_credentials_sheet(credentials: Mapping[str, tuple[str, ...]], run: Sequence[RunStep]) -> Sheet:
+    """Live steps and the variables that gate them. Names only - never values.
+
+    Deliberately records no "is this variable set here" column. That answer depends on the
+    machine doing the rendering, so committing it would make the artifact differ per host
+    and defeat the freshness gate - the same reason the coverage matrix never renders
+    importorskip outcomes. The step's own status already says whether it ran.
+    """
     observed = {step.name: step for step in run}
-    present_set = set(present)
     rows: list[tuple[str, ...]] = []
     for step_name in sorted(credentials):
-        required = credentials[step_name]
         result = observed.get(step_name)
-        rows.append(
-            (
-                step_name,
-                ", ".join(required),
-                "yes" if required and all(name in present_set for name in required) else "no",
-                result.status if result else NOT_RUN,
-            )
-        )
+        rows.append((step_name, ", ".join(credentials[step_name]), result.status if result else NOT_RUN))
     return Sheet(name="Credentials", columns=CREDENTIAL_COLUMNS, rows=tuple(rows))
 
 
@@ -807,7 +891,6 @@ def build_sheets(
     *,
     root: Path = _REPO_ROOT,
     provenance: Provenance,
-    env_present: Iterable[str] = (),
     scrub: Callable[[str], str] | None = None,
 ) -> tuple[Sheet, ...]:
     """Assemble every sheet from one run report. Raises :class:`MatrixError` on a policy failure.
@@ -835,7 +918,7 @@ def build_sheets(
         build_matrix_sheet(run, declared, junit, credentials, report_dir, scrub),
         build_summary_sheet(run, declared),
         build_coverage_sheet(packages, run, declared, junit),
-        build_credentials_sheet(credentials, run, env_present),
+        build_credentials_sheet(credentials, run),
         build_provenance_sheet(provenance),
     )
 

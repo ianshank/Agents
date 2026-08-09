@@ -1,0 +1,9 @@
+Field,Value
+Commit,3ba6461779324bcc26a37a583eaa75bc23275413
+Branch,claude/e2e-test-plan-matrix-u6c1en
+Generated at (UTC),2026-08-09T22:36:04+00:00
+Host,Linux-6.18.5-fc-v20-x86_64-with-glibc2.39
+Python,3.11.15
+Runner invocation,pwsh -NoProfile -File scripts/run_all_e2e.ps1 -Tiers all -HypothesisProfile ci
+Regenerate,python tests/test_e2e_matrix.py --update
+Policy,Generated artifact per ADR 0032/0033 - do not edit by hand.

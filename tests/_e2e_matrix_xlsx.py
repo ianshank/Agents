@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime as dt
 import io
 import logging
+import re
 import zipfile
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -98,6 +99,24 @@ def parse_stamp(iso_timestamp: str) -> tuple[int, int, int, int, int, int]:
     return (parsed.year, parsed.month, parsed.day, parsed.hour, parsed.minute, second)
 
 
+#: The OPC part carrying document metadata, and the element openpyxl stamps at save time.
+CORE_PROPERTIES_PART = "docProps/core.xml"
+_MODIFIED_RE = re.compile(rb"(<dcterms:modified[^>]*>)[^<]*(</dcterms:modified>)")
+
+
+def _pin_modified(raw: bytes, stamp: tuple[int, int, int, int, int, int]) -> bytes:
+    """Rewrite ``dcterms:modified`` in ``docProps/core.xml`` to the pinned stamp.
+
+    Setting ``workbook.properties.modified`` before saving does not survive: openpyxl
+    overwrites it with the wall clock as it writes. ``created`` *is* respected, so a workbook
+    saved twice from identical data differed in exactly one element -- enough to defeat the
+    byte comparison the freshness gate relies on. Patching the written part is the only
+    place the value can be pinned.
+    """
+    replacement = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(*stamp).encode()
+    return _MODIFIED_RE.sub(rb"\g<1>" + replacement + rb"\g<2>", raw)
+
+
 def _normalise_archive(raw: bytes, stamp: tuple[int, int, int, int, int, int]) -> bytes:
     """Rewrite every zip entry with a pinned timestamp, preserving order and content.
 
@@ -111,7 +130,10 @@ def _normalise_archive(raw: bytes, stamp: tuple[int, int, int, int, int, int]) -
         for name in source.namelist():
             info = zipfile.ZipInfo(name, date_time=stamp)
             info.compress_type = zipfile.ZIP_DEFLATED
-            target.writestr(info, source.read(name))
+            payload = source.read(name)
+            if name == CORE_PROPERTIES_PART:
+                payload = _pin_modified(payload, stamp)
+            target.writestr(info, payload)
     return buffer.getvalue()
 
 
