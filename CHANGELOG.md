@@ -29,7 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declared skip code, making "this step is broken" indistinguishable from "no credentials
   configured". (3) The live journeys were themselves mocked: `judge: {type: mock}` returned
   a constant 0.9 and `target: {type: echo}` never called a model, so no live step ever
-  performed a real round-trip. The smokes now live in tracked `tools/`, the skip code is
+  performed a real round-trip. The smokes now live in tracked `scripts/smokes/` — inside
+  the `--cov=scripts` floor, the `mypy scripts` target and the charter scan roots, rather
+  than a top-level `tools/` that all three would have skipped — with 58 tests at 96–100%
+  coverage and a shared `_smoke_lib.py`. The skip code is
   `78`/`EX_CONFIG` (which neither a missing file nor an `argparse` error can forge), a new
   `Assert-StepScript` guard joins the runner's other anti-vacuous-pass checks, and
   `LOCAL_MODEL_ID` drives a real model target and judge against any OpenAI-compatible

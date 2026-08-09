@@ -68,6 +68,18 @@ $Py = @(
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $Py) { throw "venv python not found under $RepoRoot/.venv (expected a provisioned .venv)" }
 
+# Exit code a credential-gated step returns to mean "not configured -> SKIP".
+#
+# Deliberately NOT 2: python exits 2 for a missing file and argparse exits 2 for a bad
+# flag, so 2 cannot distinguish "not configured" from "this step is broken" -- which is
+# exactly how Tier D reported green while invoking scripts that did not exist. 78 is
+# EX_CONFIG from sysexits(3).
+#
+# Single source of truth is `SKIP_EXIT_CODE` in scripts/smokes/_smoke_lib.py; this literal is the
+# PowerShell mirror of it, and tests/test_smoke_tools.py asserts the two agree so they
+# cannot drift (same posture as check_skill_script_drift.py).
+$SkipExitCode = 78
+
 $Report = [System.IO.Path]::Combine($RepoRoot, 'artifacts', 'e2e-report')
 if (Test-Path $Report) { Remove-Item -Recurse -Force $Report }
 New-Item -ItemType Directory -Force -Path $Report | Out-Null
@@ -255,16 +267,20 @@ function Test-EnvSet { param([string[]]$Names) foreach ($n in $Names) { if (-not
 
 # Third anti-vacuous-pass guard, alongside "exit 0 but 0 tests collected" and the
 # pre-flight import check. A step whose script is missing is a harness defect, not a
-# test outcome: python would exit 2 for the missing file, and any step declaring 2 as
-# a skip code would silently report SKIP. Fail loudly and immediately instead -- the
-# same posture the pre-flight guard takes, and for the same reason.
-function Assert-StepScript {
+# test outcome: python exits 2 for a missing file, so any step declaring 2 as a skip
+# code reports SKIP for a step that cannot possibly work.
+#
+# Records FAIL and returns $false rather than throwing. Throwing would abort before
+# `Write-Summary` (called once at the end, with no try/finally and no trap), so the
+# report this guard exists to write the failure into would never be produced -- and a
+# caller finding no report at all is worse off than one finding a wrong SKIP. Returning
+# false keeps the run going, keeps summary.md/summary.json intact, and still exits 1
+# because a FAIL is recorded.
+function Test-StepScript {
     param([string]$Tier, [string]$Name, [string]$RelPath)
-    $full = Join-Path $RepoRoot $RelPath
-    if (-not (Test-Path -LiteralPath $full)) {
-        Add-Result $Tier $Name 'FAIL' "step script missing: $RelPath"
-        throw "Tier $Tier step '$Name' references a script that does not exist: $full"
-    }
+    if (Test-Path -LiteralPath (Join-Path $RepoRoot $RelPath)) { return $true }
+    Add-Result $Tier $Name 'FAIL' "step script missing: $RelPath"
+    return $false
 }
 
 # ---------------------------------------------------------------------------
@@ -509,16 +525,16 @@ if ($Tiers -in @('live', 'all')) {
     # not possibly work reported SKIP, indistinguishable from "no credentials". Both
     # halves are fixed here: a tracked path, and a skip code (78) that neither a
     # missing file (2) nor an argparse error (2) can forge.
-    Assert-StepScript 'D' 'live:langfuse-smoke' 'tools/langfuse_smoke.py'
-    if (Test-EnvSet @('LANGFUSE_SECRET_KEY', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_BASE_URL')) {
-        Invoke-CmdStep 'D' 'live:langfuse-smoke' @('tools/langfuse_smoke.py') $RepoRoot @(78)
+    if (-not (Test-StepScript 'D' 'live:langfuse-smoke' 'scripts/smokes/langfuse_smoke.py')) { }
+    elseif (Test-EnvSet @('LANGFUSE_SECRET_KEY', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_BASE_URL')) {
+        Invoke-CmdStep 'D' 'live:langfuse-smoke' @('scripts/smokes/langfuse_smoke.py') $RepoRoot @($SkipExitCode)
     }
     else { Add-Result 'D' 'live:langfuse-smoke' 'SKIP' 'LANGFUSE_* not set' }
 
     # Phoenix smoke (needs a running collector)
-    Assert-StepScript 'D' 'live:phoenix-smoke' 'tools/phoenix_smoke.py'
-    if (Test-EnvSet @('PHOENIX_COLLECTOR_ENDPOINT')) {
-        Invoke-CmdStep 'D' 'live:phoenix-smoke' @('tools/phoenix_smoke.py') $RepoRoot @(78)
+    if (-not (Test-StepScript 'D' 'live:phoenix-smoke' 'scripts/smokes/phoenix_smoke.py')) { }
+    elseif (Test-EnvSet @('PHOENIX_COLLECTOR_ENDPOINT')) {
+        Invoke-CmdStep 'D' 'live:phoenix-smoke' @('scripts/smokes/phoenix_smoke.py') $RepoRoot @($SkipExitCode)
     }
     else { Add-Result 'D' 'live:phoenix-smoke' 'SKIP' 'PHOENIX_COLLECTOR_ENDPOINT not set' }
 
