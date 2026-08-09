@@ -83,7 +83,14 @@ def _require_openpyxl() -> Any:
 
 
 def parse_stamp(iso_timestamp: str) -> tuple[int, int, int, int, int, int]:
-    """An ISO-8601 UTC string as the six-tuple ``zipfile`` wants.
+    """An ISO-8601 timestamp as the six UTC components ``zipfile`` wants.
+
+    An offset-bearing input is converted to UTC first. The components this returns are
+    written into ``docProps/core.xml`` with a ``Z`` suffix, so taking them from a
+    ``-07:00`` stamp verbatim would relabel local time as UTC and move the instant by the
+    offset. That is not hypothetical: the provenance stamp comes from ``git log --format=%cI``,
+    which carries the committer's offset, so it is UTC only by accident of where it ran.
+    A naive stamp is treated as UTC, which is what the callers document it to be.
 
     Falls back to the ZIP epoch rather than the current time: a malformed stamp must not
     silently reintroduce the non-determinism this function exists to remove.
@@ -93,6 +100,8 @@ def parse_stamp(iso_timestamp: str) -> tuple[int, int, int, int, int, int]:
     except ValueError:
         logger.warning("unparseable provenance timestamp %r; pinning the archive to the ZIP epoch", iso_timestamp)
         return ZIP_EPOCH
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(dt.timezone.utc).replace(tzinfo=None)
     if parsed.year < ZIP_EPOCH[0]:
         return ZIP_EPOCH
     second = parsed.second - (parsed.second % ZIP_SECOND_GRANULARITY)
@@ -124,9 +133,11 @@ def _normalise_archive(raw: bytes, stamp: tuple[int, int, int, int, int, int]) -
     first by convention, and openpyxl already emits a deterministic order for identical
     input, so reordering would buy nothing and risk reader compatibility.
     """
-    source = zipfile.ZipFile(io.BytesIO(raw))
     buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as target:
+    with (
+        zipfile.ZipFile(io.BytesIO(raw)) as source,
+        zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as target,
+    ):
         for name in source.namelist():
             info = zipfile.ZipInfo(name, date_time=stamp)
             info.compress_type = zipfile.ZIP_DEFLATED

@@ -25,6 +25,11 @@ python tests/test_e2e_matrix.py --check       # exit 1 if it is stale
 The workbook needs the optional extra: `pip install -e ".[e2e-matrix]"`. Without it the
 markdown and CSVs are still written and the command still exits 0.
 
+`--check` compares the derived content and deliberately ignores the **Provenance** section.
+That section records the commit SHA at generation time, and committing the artifact creates a
+new commit — so judging staleness on it would leave the check permanently red on the very
+commit that carries the artifact. A change to any other sheet still reports stale.
+
 ## What the columns mean
 
 Every value is derived, never restated in the generator (see

@@ -639,7 +639,7 @@ def _judge_credentials(root: Path) -> dict[str, tuple[str, ...]]:
 
 
 def runner_judge_specs() -> dict[str, dict[str, str]]:
-    """``$liveJudges`` entries as ``{step name: {type, param, model}}``.
+    """``$liveJudges`` entries as ``{step name: {type, param}}``.
 
     ``param`` is the judge constructor's model keyword. It is per-entry rather than fixed
     because the judges disagree: two take ``model`` and one takes ``model_id``. Exposed so
@@ -996,13 +996,31 @@ def write_artifacts(sheets: Sequence[Sheet], out_dir: Path) -> list[Path]:
 # ---------------------------------------------------------------------------
 
 
+#: Heading of the section excluded from the staleness comparison (see :func:`comparable`).
+PROVENANCE_SHEET_NAME = "Provenance"
+
+
+def comparable(document: str) -> str:
+    """The part of the artifact whose staleness is meaningful.
+
+    Everything above the Provenance section. That section records *when and where the
+    artifact was generated*, including the commit SHA at generation time -- and committing
+    the artifact necessarily creates a new commit, so that SHA is one behind the instant it
+    lands. A gate that compared it could never be green on the very commit carrying the
+    artifact, which is worse than no gate: a check that is always red teaches people to
+    ignore it. Provenance is metadata about the generation event, not content derived from
+    the run, so staleness is judged on the derived content alone.
+    """
+    return document.split(f"\n## {PROVENANCE_SHEET_NAME}\n", 1)[0]
+
+
 def artifact_is_fresh(sheets: Sequence[Sheet], out_dir: Path) -> tuple[bool, str]:
     """(fresh?, rendered markdown). A missing committed document counts as stale."""
     rendered = render_markdown(sheets)
     doc = out_dir / "e2e-matrix.md"
     if not doc.is_file():
         return (False, rendered)
-    return (doc.read_text(encoding="utf-8") == rendered, rendered)
+    return (comparable(doc.read_text(encoding="utf-8")) == comparable(rendered), rendered)
 
 
 def freshness_failure_message(rendered: str, out_dir: Path) -> str:
@@ -1010,11 +1028,11 @@ def freshness_failure_message(rendered: str, out_dir: Path) -> str:
     doc = out_dir / "e2e-matrix.md"
     if not doc.is_file():
         return f"{doc.as_posix()} does not exist - {REGEN_HINT}"
-    committed = doc.read_text(encoding="utf-8").splitlines()
+    committed = comparable(doc.read_text(encoding="utf-8")).splitlines()
     diff = list(
         difflib.unified_diff(
             committed,
-            rendered.splitlines(),
+            comparable(rendered).splitlines(),
             fromfile=f"{doc.name} (committed)",
             tofile=f"{doc.name} (regenerated)",
             lineterm="",

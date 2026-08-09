@@ -16,11 +16,13 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import platform
 import subprocess
 import sys
 import zipfile
 from collections.abc import Callable
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -395,6 +397,21 @@ class TestRedaction:
         rendered = em.render_markdown(sheets) + "".join(em.render_csv(s) for s in sheets)
         assert secret not in rendered
 
+    def test_every_live_step_variable_counts_as_a_secret(self) -> None:
+        """A suffix heuristic alone left the Bedrock key id unredacted.
+
+        `AWS_ACCESS_KEY_ID` ends in `_ID`, so it matched none of the `_KEY`/`_SECRET`/
+        `_TOKEN`/`_PASSWORD`/`_BASE_URL` suffixes -- and it is precisely the variable the
+        Bedrock step gates on. The policy now also covers every variable the live steps
+        declare, so a new live step is protected when it is added rather than when someone
+        remembers to extend the suffix list.
+        """
+        assert _is_secret_name("AWS_ACCESS_KEY_ID"), "the Bedrock key id must be redacted"
+        for names in em.derive_live_credentials(ROOT).values():
+            for name in names:
+                assert _is_secret_name(name), f"{name} gates a live step but its value is not redacted"
+        assert not _is_secret_name("PATH"), "the policy must not redact ordinary variables"
+
 
 # ---------------------------------------------------------------------------
 # Workbook
@@ -478,6 +495,20 @@ class TestWorkbook:
         assert loaded.sheetnames == ["Test Matrix"]
         assert [cell.value for cell in loaded["Test Matrix"][1]] == ["Step", "Status"]
 
+    def test_an_offset_stamp_is_converted_to_utc(self) -> None:
+        """The pinned components are written with a `Z`, so they must actually be UTC.
+
+        The provenance stamp comes from `git log --format=%cI`, which carries the
+        committer's offset - it is UTC only where the commit happened to be made. Taking
+        the components verbatim would relabel local time as UTC and move the recorded
+        instant by the offset.
+        """
+        from tests import _e2e_matrix_xlsx as xw
+
+        assert xw.parse_stamp("2026-08-09T12:00:00-07:00") == (2026, 8, 9, 19, 0, 0)
+        assert xw.parse_stamp("2026-08-09T19:00:00+00:00") == (2026, 8, 9, 19, 0, 0)
+        assert xw.parse_stamp("2026-08-09T19:00:00") == (2026, 8, 9, 19, 0, 0), "a naive stamp is treated as UTC"
+
     def test_an_unparseable_stamp_falls_back_to_the_zip_epoch(self, caplog: pytest.LogCaptureFixture) -> None:
         from tests import _e2e_matrix_xlsx as xw
 
@@ -515,6 +546,39 @@ def test_freshness_reports_a_missing_document_as_stale(tmp_path: Path) -> None:
     fresh, rendered = em.artifact_is_fresh([em.Sheet(name="S", columns=("A",))], tmp_path)
     assert not fresh
     assert "does not exist" in em.freshness_failure_message(rendered, tmp_path)
+
+
+def test_provenance_drift_alone_does_not_make_the_artifact_stale(tmp_path: Path) -> None:
+    """Committing the artifact moves HEAD, so its recorded SHA is instantly one behind.
+
+    Judging staleness on that would leave the gate permanently red on the very commit that
+    carries the artifact - a check that can never pass teaches people to ignore it. Only
+    the derived content counts.
+    """
+    _write_report(tmp_path, [_record("suite:root", tier="A"), _record("cli:bregress")])
+    first = em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE)
+    em.write_artifacts(first, tmp_path / "out")
+
+    moved_on = em.Provenance(
+        sha="f" * 40,
+        branch=FIXED_PROVENANCE.branch,
+        generated_at="2027-09-09T09:09:09+00:00",
+        host="a-different-host",
+        python_version="3.12.1",
+        runner_invocation=FIXED_PROVENANCE.runner_invocation,
+    )
+    fresh, _ = em.artifact_is_fresh(em.build_sheets(tmp_path, provenance=moved_on), tmp_path / "out")
+    assert fresh, "only provenance changed; the artifact is not stale"
+
+
+def test_a_content_change_still_makes_the_artifact_stale(tmp_path: Path) -> None:
+    """The provenance exemption must not swallow a real change in the derived content."""
+    _write_report(tmp_path, [_record("suite:root", tier="A"), _record("cli:bregress")])
+    em.write_artifacts(em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE), tmp_path / "out")
+
+    _write_report(tmp_path, [_record("suite:root", tier="A", status="FAIL"), _record("cli:bregress")])
+    fresh, _ = em.artifact_is_fresh(em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE), tmp_path / "out")
+    assert not fresh, "a status flip must be reported as stale"
 
 
 def test_freshness_diff_is_bounded(tmp_path: Path) -> None:
@@ -632,13 +696,32 @@ def _load_scrubber() -> Callable[[str], str] | None:
         import _smoke_lib
     except ImportError:  # pragma: no cover - the smokes ship with the repo
         return None
-    secrets = [value for name, value in __import__("os").environ.items() if _is_secret_name(name) and value]
+    secrets = [value for name, value in os.environ.items() if _is_secret_name(name) and value]
     return lambda text: _smoke_lib.redact(text, secrets)
 
 
+#: Suffixes that mark a variable's *value* as unsafe to render, for variables the matrix
+#: does not otherwise know about.
+_SECRET_NAME_SUFFIXES = ("_KEY", "_SECRET", "_TOKEN", "_PASSWORD", "_BASE_URL")
+
+
 def _is_secret_name(name: str) -> bool:
-    """Environment variables whose *values* must never appear in a committed cell."""
-    return name.endswith(("_KEY", "_SECRET", "_TOKEN", "_PASSWORD")) or name.endswith("_BASE_URL")
+    """Whether this variable's *value* must never appear in a committed cell.
+
+    The suffix list alone is not enough, and the gap was real: ``AWS_ACCESS_KEY_ID`` ends in
+    ``_ID``, so a heuristic-only policy left the one credential the Bedrock step gates on
+    unredacted. Every variable named by a live step is therefore treated as sensitive too --
+    derived from the same declarations the Credentials sheet is built from, so a new live
+    step is covered the moment it is added rather than whenever someone remembers to extend
+    a suffix list.
+    """
+    return name.endswith(_SECRET_NAME_SUFFIXES) or name in _live_step_variables()
+
+
+@lru_cache(maxsize=1)
+def _live_step_variables() -> frozenset[str]:
+    """Every environment variable a live step gates on, from the code that declares them."""
+    return frozenset(name for names in em.derive_live_credentials(ROOT).values() for name in names)
 
 
 if __name__ == "__main__":
