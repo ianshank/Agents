@@ -42,6 +42,14 @@ anthropic = ["anthropic>=0.40"]
 # grimp is pinned so the extracted import graph — and therefore the gate — is
 # reproducible across runs.
 archguard = ["grimp==3.14"]
+# Workbook export for the generated e2e test matrix (tests/test_e2e_matrix.py --update).
+# Reporting-only: kept OUT of `dev` so the offline test job and every CI matrix leg stay
+# unaffected, mirroring the `docs` extra's rationale. Pinned rather than floored because
+# the committed .xlsx is byte-compared by the freshness gate, and a writer upgrade can
+# change the bytes of an otherwise identical workbook -- same reproducibility argument as
+# the `grimp` pin above. openpyxl pulls only et-xmlfile (no numpy/pandas), so it is safe
+# to install alongside `dev` when regenerating the artifact.
+e2e-matrix = ["openpyxl==3.1.5"]
 parquet = ["pyarrow>=14,<20"]
 # Arize Phoenix tracing spike (optional, self-hosted, air-gap-isolated). Kept OUT of
 # `dev` so the offline test job never needs these — the seam degrades to a no-op when

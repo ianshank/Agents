@@ -125,6 +125,23 @@ docker run -p 6006:6006 arizephoenix/phoenix
 # then set PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006 in .env
 ```
 
+## Test matrix artifact
+
+`artifacts/e2e-report/` is gitignored and recreated per run, so it cannot be reviewed or
+compared over time. `docs/e2e-matrix/` is the committed rendering of one run:
+
+```bash
+python tests/test_e2e_matrix.py --update      # regenerate from artifacts/e2e-report/
+python tests/test_e2e_matrix.py --check       # exit 1 if the committed artifact is stale
+```
+
+It emits markdown, one CSV per sheet, and (with `pip install -e ".[e2e-matrix]"`) an
+`.xlsx` workbook. The step list is parsed from this runner rather than restated, so adding
+a step here puts it in the matrix automatically — and a step that appears in a run report
+but not in the parse is a hard error. See
+[ADR 0033](decisions/0033-generated-e2e-matrix-workbook.md) and
+[docs/e2e-matrix/README.md](e2e-matrix/README.md).
+
 ## Reading the report
 
 `artifacts/e2e-report/` (recreated each run) contains:

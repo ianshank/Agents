@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0-dev] — Unreleased
 
 ### Added
+- **Generated end-to-end test matrix (`docs/e2e-matrix/`, `tests/_e2e_matrix.py`).** A full
+  `run_all_e2e.ps1` run now renders to a reviewable artifact: markdown, one CSV per sheet,
+  and an optional `.xlsx` workbook (new pinned extra `e2e-matrix = ["openpyxl==3.1.5"]`,
+  kept out of `dev`). Five sheets — test matrix, summary, coverage grid, credentials,
+  provenance. Nothing is restated in the generator: the step inventory is parsed from the
+  runner, results from `summary.json` and the per-suite JUnit XML, coverage floors from each
+  unit's `pyproject.toml`/`quality-gate.sh`/`.coveragerc`, live-step credentials from the
+  smokes' own declarations and `$liveJudges`, so a step added to the runner appears with no
+  code change and a step in a report that the parser cannot see is a hard error. The render
+  is byte-reproducible — `openpyxl` stamps `dcterms:created`/`modified` with the wall clock
+  and `zipfile` stamps each archive entry, and both are pinned to the run's provenance
+  timestamp — and freshness-gated by `tests/test_e2e_matrix.py --check` wherever a run report
+  exists. Rationale and the amendment to ADR 0032 in
+  [ADR 0033](docs/decisions/0033-generated-e2e-matrix-workbook.md).
+
+### Fixed
+- **The e2e interpreter shim printed a breadcrumb into every child process off Windows.**
+  `scripts/e2e_shims/sitecustomize.py` warned whenever `platform._wmi_query` was absent — but
+  that symbol only ever exists on Windows, so on Linux the message went to the stderr of
+  *every* interpreter started with the shim on `PYTHONPATH`, i.e. every step of a run. It
+  polluted each step log and broke `test_cli_version`, which asserts a subprocess prints the
+  version string and nothing else; that failure took down both `suite:root` and
+  `suite:scripts-gate`. The breadcrumb is now Windows-only, where the WMI hang it diagnoses
+  can actually occur.
+- **`live:judge-bedrock` could never have passed.** The runner emitted
+  `judge.params.model` for all three live judges, but `BedrockJudge.__init__` takes
+  `model_id` (only `OpenAIJudge`/`AnthropicJudge` take `model`), so the step raised
+  `TypeError: unexpected keyword argument 'model'` the first time it actually executed. It
+  had only ever SKIPped for want of AWS credentials, so the mismatch stayed invisible — the
+  same false-green shape as the D-1/D-2 Tier-D defects. The keyword is now declared per judge
+  in `$liveJudges`, and `tests/test_e2e_matrix.py` checks each declared keyword against the
+  real constructor signature so signature drift fails in the test suite rather than in
+  Tier D.
 - **Docs: Claude Code ecosystem research (`docs/claude-code-ecosystem-research.md`).**
   Survey of the seven ecosystem repos popularized by the "7 GitHub Repos That Made Me
   Addicted to Building with Claude AI" article — repomix, the MCP reference servers,

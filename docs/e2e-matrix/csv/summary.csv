@@ -1,0 +1,12 @@
+Metric,Value
+Declared steps,40
+Observed steps,38
+Not reached,2
+Status PASS,31
+Status SKIP,7
+Tier A,PASS 7
+Tier B,PASS 2
+Tier C,PASS 21
+Tier D,SKIP 7
+Tier E,not exercised in this run
+Tier PRE,PASS 1

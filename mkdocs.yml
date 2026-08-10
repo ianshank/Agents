@@ -59,6 +59,7 @@ nav:
       - Overview: decisions/README.md
   - Runbooks:
       - End-to-end harness: e2e-runbook.md
+      - End-to-end test matrix: e2e-matrix/README.md
   - Spikes:
       - Phoenix seam: phoenix-spike.md
       - BrainTrust seam: braintrust-spike.md

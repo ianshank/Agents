@@ -16,6 +16,7 @@ from __future__ import annotations
 
 try:
     import platform
+    import sys
 
     def _wmi_query_disabled(*_args, **_kwargs):
         raise OSError("WMI disabled by e2e harness (query hangs on this host)")
@@ -23,11 +24,16 @@ try:
     # Only patch if the hanging symbol exists (Python >= 3.12 on Windows). If a
     # future CPython renames/removes it, leave a stderr breadcrumb so a returning
     # startup hang is diagnosable instead of silently un-shimmed.
+    #
+    # The breadcrumb is Windows-only on purpose. `_wmi_query` never exists off
+    # Windows, so an unconditional `else` printed on *every* interpreter started with
+    # this directory on PYTHONPATH -- which is every step of a Linux e2e run. That
+    # polluted the stdout/stderr of each child process and broke the one test that
+    # asserts a subprocess prints exactly the version string and nothing else. There
+    # is no WMI to shim off Windows, so there is nothing to warn about there.
     if hasattr(platform, "_wmi_query"):
         platform._wmi_query = _wmi_query_disabled  # type: ignore[attr-defined]
-    else:
-        import sys
-
+    elif sys.platform == "win32":
         print(
             "sitecustomize(e2e_shims): platform._wmi_query not found; WMI shim inactive",
             file=sys.stderr,
