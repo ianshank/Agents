@@ -47,8 +47,12 @@ The end-to-end matrix is generated, and the workbook is one rendering of it.
    clean sheet for a run that never happened.
 
 3. **The diffable rendering is the reviewable one.** `docs/e2e-matrix/e2e-matrix.md` and
-   `docs/e2e-matrix/csv/*.csv` are plain text, and the freshness gate compares the markdown.
-   Review happens against those. The workbook adds presentation, not content.
+   `docs/e2e-matrix/csv/*.csv` are plain text, and the freshness gate compares both: the
+   markdown, and every CSV mirror. The Provenance section is excluded from that comparison
+   because it records the commit SHA at generation time, and committing the artifact creates
+   a new commit -- gating it would leave the check permanently red on the very commit that
+   carries the artifact. Review happens against those two renderings; the workbook adds
+   presentation, not content.
 
 4. **The workbook is byte-reproducible, so it cannot drift silently.** Two sources of
    nondeterminism were found and pinned: `openpyxl` stamps `dcterms:created`/`modified` with
@@ -56,7 +60,10 @@ The end-to-end matrix is generated, and the workbook is one rendering of it.
    Both are set from the run's own provenance timestamp, and the writer is version-pinned
    (`e2e-matrix = ["openpyxl==3.1.5"]`) because a writer upgrade can change the bytes of an
    otherwise identical workbook. Regenerating from unchanged inputs produces an identical
-   file, which is what makes committing it defensible.
+   file, which is what makes committing it defensible. The workbook itself is *not*
+   byte-compared by the gate -- it cannot be written at all without the optional extra, so
+   gating it would fail for anyone who has not installed one -- and its reproducibility is
+   asserted by the test suite instead.
 
 5. **The freshness gate is honest about where it can run.** CI never executes the e2e runner,
    so no run report exists there and the gate skips rather than pretending to verify. It is

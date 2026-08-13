@@ -22,7 +22,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exists. Rationale and the amendment to ADR 0032 in
   [ADR 0033](docs/decisions/0033-generated-e2e-matrix-workbook.md).
 
+- **Docs: Claude Code ecosystem research (`docs/claude-code-ecosystem-research.md`).**
+  Survey of the seven ecosystem repos popularized by the "7 GitHub Repos That Made Me
+  Addicted to Building with Claude AI" article — repomix, the MCP reference servers,
+  claude-mem, claude-hud, claude-context, rtk, and awesome-claude-code — verified against
+  live GitHub/npm sources on 2026-08-08. Each repo gets an adoption verdict against the
+  repo's reversible-adoption / offline-determinism doctrine, concrete integration points
+  (claude-foundation plugin, `skills/marketplace.yaml`, harness registries, CI gates), and
+  a P1–P3 incorporation roadmap; notable finding: an independent JetBrains benchmark
+  contradicts rtk's headline token-savings claim, so rtk is routed through a model-bench
+  paired-trial measurement rather than adopted on reputation. Indexed in `docs/README.md`
+  and the mkdocs nav.
+
 ### Fixed
+- **The generated e2e matrix asserted values that were not true.** A gap analysis of the
+  merged artifact found the generator guessing facts `run_all_e2e.ps1` already declares:
+  `e2e:skills+hooks` shipped blank test counts because its JUnit file (`e2e_journeys.xml`)
+  could never match a stem guessed from the step name; the Workdir column claimed `.` for
+  `e2e:backend-validation`, which actually runs in `experiments/backend-validation`; the
+  Command column dropped every non-quoted token, rendering `compare --config` with no value;
+  and an all-errored suite read as clean because JUnit `errors` was parsed and never shown.
+  All four are now read from the runner's own declarations, and a path that cannot be
+  resolved renders blank rather than guessed. Guards were tightened alongside: the freshness
+  check now covers the CSV mirrors (Provenance exempted on both sides), `--update` and the
+  freshness test share one builder so redaction cannot make an artifact permanently "stale",
+  the exit-code contract is a typed `MatrixConfigError` instead of a substring match on the
+  message text, and `scripts/e2e_shims/sitecustomize.py` finally has a test — it is never
+  imported, so it does not even appear in the `--cov=scripts` report. The smoke-module to
+  step-name table is gone: credentials come from the `Test-EnvSet` gate guarding each live
+  step. Coverage 90% -> 99% and 96% -> 98%, zero missed statements, with a dedicated CI
+  floor so the modules are no longer absorbed by a ~40-module aggregate.
 - **The e2e interpreter shim printed a breadcrumb into every child process off Windows.**
   `scripts/e2e_shims/sitecustomize.py` warned whenever `platform._wmi_query` was absent — but
   that symbol only ever exists on Windows, so on Linux the message went to the stderr of
@@ -40,19 +69,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in `$liveJudges`, and `tests/test_e2e_matrix.py` checks each declared keyword against the
   real constructor signature so signature drift fails in the test suite rather than in
   Tier D.
-- **Docs: Claude Code ecosystem research (`docs/claude-code-ecosystem-research.md`).**
-  Survey of the seven ecosystem repos popularized by the "7 GitHub Repos That Made Me
-  Addicted to Building with Claude AI" article — repomix, the MCP reference servers,
-  claude-mem, claude-hud, claude-context, rtk, and awesome-claude-code — verified against
-  live GitHub/npm sources on 2026-08-08. Each repo gets an adoption verdict against the
-  repo's reversible-adoption / offline-determinism doctrine, concrete integration points
-  (claude-foundation plugin, `skills/marketplace.yaml`, harness registries, CI gates), and
-  a P1–P3 incorporation roadmap; notable finding: an independent JetBrains benchmark
-  contradicts rtk's headline token-savings claim, so rtk is routed through a model-bench
-  paired-trial measurement rather than adopted on reputation. Indexed in `docs/README.md`
-  and the mkdocs nav.
-
-### Fixed
 - **`phoenix_smoke` printed the collector endpoint unredacted.** The redaction pass that
   introduced `_smoke_lib.safe_endpoint` hardened `langfuse_smoke` but not its sibling, so
   `PHOENIX_COLLECTOR_ENDPOINT` was echoed verbatim on three paths (the success line, the

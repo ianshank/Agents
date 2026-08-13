@@ -43,9 +43,10 @@ Every value is derived, never restated in the generator (see
   taken); `SKIP` means the runner reached it and declined to execute it.
 - **Tests / Failures / Skipped** - from the per-suite JUnit XML, which carries more than the
   runner's own prose summary.
-- **Required Credentials** - variable *names* only, read from the smokes' own declarations
-  and the runner's `$liveJudges` array. Values never appear here: cells are passed through
-  the smokes' redaction helper before rendering.
+- **Required Credentials** - variable *names* only, derived from the `Test-EnvSet` gate the
+  runner guards each live step with, plus its `$liveJudges` array. No value is ever read, so
+  none can be printed. Separately, the **Detail** column carries text produced by the run
+  itself, and that column is passed through the smokes' redaction helper before rendering.
 - **Coverage floors** - read from each unit's `pyproject.toml`, its generated
   `quality-gate.sh`, and `scripts/.coveragerc`. The test suite asserts the anchors agree.
 
