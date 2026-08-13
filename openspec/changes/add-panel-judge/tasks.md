@@ -17,6 +17,9 @@ Coverage floor: **96%** (root `eval_harness`).
 - [ ] `[P]` Member exceptions excluded and recorded in `raw["failed_members"]`; a panel
       outage yields a fail-safe verdict, never a crashed run.
 - [ ] `[P]` `attach_client` fan-out to every member.
+- [ ] `[P]` Module-level `logger = logging.getLogger(__name__)` (no `basicConfig`); `debug`
+      per member call, `warning` on member failure and on abstention — see `design.md`
+      "Logging". Test with `pytest -o log_cli=true --log-cli-level=DEBUG`.
 - [ ] All config values are constructor params with documented defaults on the field — no
       call-site literals.
 

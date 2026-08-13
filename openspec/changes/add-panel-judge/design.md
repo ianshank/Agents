@@ -97,6 +97,27 @@ lives and where `LLMJudgeScorer` and the `agent_core_adapter` loop already consu
 Weights are also deliberately absent from the panel: a weighted panel is a panel whose
 disagreement can be tuned away, which defeats the instrument.
 
+## Logging
+
+Following the house convention (`AGENTS.md` "Logging"; precedent in
+`src/eval_harness/judges/__init__.py`): a module-level `logger =
+logging.getLogger(__name__)`, no `logging.basicConfig` in library code. `PanelJudge` logs:
+
+- `logger.debug` per member call — member name and the type it resolved to, matching
+  `OpenAIJudge`'s `logger.debug("Calling OpenAI API: ...")` (`judges/__init__.py:150`).
+- `logger.warning` on a member exception, mirroring the existing
+  `logger.warning("Returning default failure verdict due to parsing error: %s", exc)`
+  pattern (`judges/__init__.py:191`, `:291`) — a member failure is handled, not silent.
+- `logger.warning` on abstention (disagreement-threshold or below-quorum), once per
+  `evaluate()` call, naming the spread/survivor count already carried in `raw` — so an
+  operator scanning logs sees a panel losing confidence without opening the run artifact.
+- `logger.info` is reserved for once-per-run summaries, per the house convention; a panel
+  has no natural once-per-run event of its own (`evaluate()` is per-item), so this level is
+  not used by the component itself.
+
+No new logging seam is introduced; this is the same `logging` module every other component
+in the package uses, tested the same way (`pytest -o log_cli=true --log-cli-level=DEBUG`).
+
 ## Calibration obligations
 
 A panel is a judge and inherits a judge's burden of proof. Aligned with

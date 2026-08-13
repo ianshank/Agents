@@ -41,6 +41,20 @@
   **blocked** pending a CHARTER §3 Ratified Amendment: a production ingestion pipeline is a
   scope expansion, not merely a change.
 
+- [ ] **Panel/council judge (`openspec/changes/add-panel-judge/`, PR #142)** — a separate
+  proposal, not part of the four above: a `panel` judge that aggregates N member judges
+  under an explicit strategy (`median`/`mean`/`majority`), surfacing per-member verdicts and
+  disagreement spread in `JudgeVerdict.raw` and abstaining above a configured threshold
+  rather than reporting a synthetic consensus — the same `cant_tell`/indeterminate→audit
+  posture used elsewhere in the tree. The self-review found a real budget-accounting gap:
+  `BudgetedJudge` reserves cost once per `evaluate()` call
+  (`src/eval_harness/agent_core_adapter/__init__.py:326`), so a naive N-member panel would
+  under-charge `judge_budget` and the F-030 rate window by factor N; the proposed fix is a
+  duck-typed `calls_per_evaluate` read, additive in `agent_core_adapter`. Also specifies
+  panel-level and pairwise member-redundancy κ (correlated members ⇒ effective panel size
+  ≈ 1), aligned with `extend-judge-calibration`'s advisory-unless-named-artifact gating
+  rule. Ships as a reviewed proposal only; no code, config, or protected paths touched.
+
 - [x] **Merge-gate calibrator-health integrity (F-049, ADR 0029)** — an independent
   re-verification of `docs/gap-analysis-merge-gate-2026-07-24.md`
   (`openspec/changes/archive/merge-gate-health-integrity/review.md`) confirmed its G1/G2/G3 but found
