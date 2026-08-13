@@ -2,8 +2,10 @@
 
 **Status:** proposed · **Date:** 2026-08-13 · **Author track:** `claude/` agent lane
 **Motivated by:** a council-of-agents review of how the harness's own eval tools are
-validated — and the grep-verified fact that no panel/consensus/quorum concept exists
-anywhere in the tree.
+validated — and the grep-verified fact that no panel/consensus/quorum concept exists in the
+implementation (`grep -riE 'panel|consensus|quorum|committee|council|arbiter'` over `src/`
+and `tests/` Python returns nothing; scoped to implementation deliberately, since these
+proposal documents introduce the vocabulary themselves).
 **Compiles down to:** a `docs/plans/` PLAN + F-IDs (claimed at land) + a design ADR.
 
 ## Why
@@ -31,8 +33,11 @@ than a guess.
   config via the same registry the engine uses and aggregates their verdicts under an
   explicit, enumerated strategy (`median` default, `mean`, `majority`).
 - Surface per-member verdicts and spread statistics in `JudgeVerdict.raw`; above a
-  configured disagreement threshold, the panel abstains with the documented fail-safe score
-  instead of reporting a synthetic consensus.
+  configured disagreement threshold, the panel abstains instead of reporting a synthetic
+  consensus.
+- Give `LLMJudgeScorer` an abstention-aware path so an abstention reaches results as
+  `passed=None` rather than `passed=False`. Without it the panel's central signal inverts
+  into a confident negative at the scorer boundary — see "The abstention seam" below.
 - Degrade member failures to abstention: a raising member is recorded and excluded, and a
   panel below quorum abstains rather than fabricating agreement from the survivors.
 - Make panel cost accounting honest: extend `build_budgeted_judge`
@@ -59,11 +64,12 @@ than a guess.
   and the engine item loop are untouched; the panel satisfies the existing `Judge` Protocol
   (`src/eval_harness/core/interfaces.py:66-70`). CHARTER §4 invariant 1 holds without
   invoking the ADR 0031 exception.
-- **Non-goal: threading per-member detail into `ScoreResult`.** `LLMJudgeScorer` keeps only
+- **Non-goal: threading per-member *detail* into `ScoreResult`.** `LLMJudgeScorer` keeps only
   `verdict.score` and `verdict.reasoning` today
-  (`src/eval_harness/scorers/__init__.py:208-218`); `verdict.raw` — where the panel
-  breakdown lives — is dropped before results. Widening that seam is deliberate follow-up
-  surface for the implementation change, not smuggled in here.
+  (`src/eval_harness/scorers/__init__.py:208-218`); `verdict.raw` — where the per-member
+  breakdown lives — is dropped before results. Surfacing that breakdown downstream is
+  deliberate follow-up surface, not smuggled in here. **The abstention *signal* is a
+  different matter and is in scope** — see below.
 - **Non-goal: a registry alias.** `FROZEN_ALIAS_MAP["judge"]` is asserted by exact equality
   (`tests/_matrix_coverage.py`), so `panel` ships alias-free; `council` as an alias would be
   a red gate until frozen deliberately, and earns nothing.
@@ -84,6 +90,22 @@ exposes `calls_per_evaluate = len(members)`. This also documents *why the panel 
 and not a scorer*: components that call providers outside the `Judge` seam run outside the
 `judge_budget`/rate-limit guard entirely, as `AutoevalsScorer` already warns
 (`src/eval_harness/scorers/__init__.py:242-245`).
+
+## The abstention seam
+
+A panel that abstains is making the claim "we cannot tell". Today that claim cannot survive
+the trip to a result: `LLMJudgeScorer.score` sets `passed=verdict.score >= self.threshold`
+(`src/eval_harness/scorers/__init__.py:214-217`) with no `None` path, so an abstention lands
+as `passed=False` — indistinguishable from a confident judgement that the output was bad.
+That inverts the signal this component exists to produce.
+
+Everything downstream is already built for it, which is why the fix is small rather than
+structural: `ScoreResult.passed` is `bool | None` (`core/types.py:129`), `AutoevalsScorer`
+already emits `value=self.on_skip, passed=None` when its evaluator declines
+(`scorers/__init__.py:307-313`), `EvalEngine._aggregate` already excludes `None` from
+`pass_rate` and returns `None` when every verdict is `None` (`engine.py:210-211`), and
+`CompositeScorer` already ignores `None` children rather than failing on them. One scorer is
+the sole blocker, and it is a protected path.
 
 ## Impact
 

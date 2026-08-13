@@ -35,14 +35,36 @@ strategy, and the abstention flag. `raw` is the only home available — `JudgeVe
 `score / reasoning / raw` with no metadata field (`core/types.py:134-140`) — and the core
 model is deliberately not extended.
 
-**Abstention is the point.** With `disagreement_threshold` set (default `None` = never
-abstain) and spread above it, the panel returns the configured `abstain_score` (default
-`0.0` — the same fail-safe the OpenAI/Anthropic/Phoenix judges return for an unparseable
-response and `BudgetedJudge.skip_score` returns on exhaustion), a reasoning string naming
-the spread and threshold, and `raw["abstained"] = True`. A disagreeing panel that averages
-anyway is strictly worse than a single judge: it launders uncertainty into false precision.
-The abstention mirrors `CANT_TELL` / `cant_tell` / `OracleResult.verdict = None` — the house
-answer to "the measurement stopped working" is to say so.
+**Abstention is the point — and it must survive the scorer boundary.** With
+`disagreement_threshold` set (default `None` = never abstain) and spread above it, the panel
+returns the configured `on_skip` value, a reasoning string naming the spread and threshold,
+and `raw["abstained"] = True`. The field is named `on_skip` because that is already this
+package's name for "the value recorded when this evaluator declined to score"
+(`AutoevalsScorer.on_skip`, `scorers/__init__.py:307-313`); a second name for one concept is
+how two vocabularies start. A disagreeing panel that averages anyway is strictly worse than
+a single judge: it launders uncertainty into false precision.
+
+The claim that this "mirrors `CANT_TELL` / `cant_tell` / `OracleResult.verdict = None`" is
+only true once one more thing changes, and the first draft of this design was wrong to
+assume otherwise (review C5). `LLMJudgeScorer.score` sets
+`passed=verdict.score >= self.threshold` (`scorers/__init__.py:214-217`) with no `None`
+path, so an abstention scored `0.0` arrives as `passed=False` — a confident negative, which
+is the failure this whole component exists to prevent.
+
+The rest of the stack is already built for abstention, which is what makes this a small fix
+rather than a redesign:
+
+- `ScoreResult.passed` is `bool | None` (`core/types.py:129`).
+- `AutoevalsScorer` already emits `value=self.on_skip, passed=None, comment=...` when its
+  evaluator declines (`scorers/__init__.py:307-313`).
+- `EvalEngine._aggregate` already excludes `None` from `pass_rate` and returns `None` when
+  every verdict is `None` (`engine.py:210-211`).
+- `CompositeScorer` already ignores `None` child verdicts rather than treating them as
+  failures (`scorers/__init__.py:172-175`).
+
+`LLMJudgeScorer` is therefore the sole reason an abstention cannot reach results, and giving
+it an abstention-aware path is a required part of this change — a protected-path edit
+(`src/eval_harness/scorers/**`), not the follow-up the first draft called it.
 
 ## Member failure and quorum
 
@@ -54,15 +76,39 @@ majority of the configured members), the panel abstains with a reasoning string 
 survivor count. A panel outage therefore degrades exactly like a single-judge outage — a
 fail-safe verdict, never a crashed run — while remaining distinguishable in `raw`.
 
+## Edge cases and degenerate configurations
+
+Each was executed against the stdlib rather than reasoned about, because `statistics` is what
+an implementer reaches for and is already this package's aggregation dependency
+(`engine.py:12`, `fmean` at `:214`). Reuse it; do not hand-roll a median.
+
+| Case | Observed behaviour | Decision |
+|---|---|---|
+| `median` with even N | `statistics.median([0.2, 1.0]) == 0.6` — the mean of the middle two | Documented, not silently inherited. At N=2 the default strategy *is* `mean`, erasing the outlier-robustness that justified the default. `statistics.median_low` is named as the alternative that preserves it |
+| One-member panel | `pstdev([0.9]) == 0.0`; spread is always 0, `disagreement_threshold` is inert | Rejected at construction — a one-member panel is a judge with extra cost and a disabled safety mechanism |
+| `majority` output space | Three members each scoring 0.6 give `median == 0.6` but `majority == 1.0` | `majority` returns a pass *fraction*, not a score in the members' space, yet both are compared against one `LLMJudgeScorer.threshold`. Documented per strategy |
+| Quorum denominator | "simple majority" was ambiguous between configured and surviving members | Fixed to **configured** members; a survivor-relative quorum is trivially self-satisfying |
+| Member call order | Required for the determinism guarantee, previously unstated | Sequential, in declaration order. If parallelism is ever wanted, `EvalEngine._run_parallel`'s submission-order reassembly is the precedent to copy |
+
 ## Budget and rate accounting
 
 `BudgetedJudge.evaluate` reserves once per call (`agent_core_adapter/__init__.py:326`), so a
 naive N-member panel under-charges the budget and the F-030 rate window by a factor of N.
 `build_budgeted_judge` gains one additive behaviour: read `getattr(inner,
-"calls_per_evaluate", 1)` and reserve `cost_per_call × calls_per_evaluate` (and N rate-limit
-slots) per evaluation. `PanelJudge` exposes `calls_per_evaluate = len(members)`. Every
-existing judge lacks the attribute and keeps factor 1; no signature changes, no config
-migration.
+"calls_per_evaluate", 1)` and reserve `cost_per_call × calls_per_evaluate` (and that many
+rate-limit slots) per evaluation. Every existing judge lacks the attribute and keeps factor
+1; no signature changes, no config migration.
+
+The panel's own value **must be computed, not counted** (review C6). `len(members)` is wrong
+the moment a member is itself a panel — legal by construction, since members are built by
+`JUDGES.create` and `panel` is registered in `JUDGES` — because that member performs its own
+N calls, not one. Counting members instead of calls would recreate the exact under-charge
+this section exists to fix, one level up. The correct value is therefore recursive, using the
+same duck-typed read:
+
+```
+calls_per_evaluate = sum(getattr(m, "calls_per_evaluate", 1) for m in members)
+```
 
 Two consequences worth stating plainly:
 
@@ -75,10 +121,18 @@ Two consequences worth stating plainly:
 ## Tracing
 
 `attach_client` is a duck-typed, optional hook — not on the `Judge` Protocol — that the
-engine calls when a component exposes it. The panel forwards it to every member, exactly as
-`BudgetedJudge` forwards to its inner judge (`agent_core_adapter/__init__.py:334-338`);
-without the fan-out, Langfuse tracing silently dies for members while the panel itself
-appears traced.
+engine calls on `[dataset, judge, *sinks]` when a component exposes it
+(`engine.py:113-117`). The panel forwards it to every member; without that fan-out, Langfuse
+tracing silently dies for members while the panel itself appears traced.
+
+The first draft cited `BudgetedJudge.attach_client` (`agent_core_adapter/__init__.py:334-338`)
+as the precedent for this delegation. That citation was wrong and is withdrawn (review C9):
+the engine attaches the client at `engine.py:113-117` and only *then* replaces `judge` with
+the `BudgetedJudge` wrapper at `engine.py:127`, so the wrapper's delegating `attach_client`
+is never invoked on the engine path. The panel is unaffected — it *is* the top-level `judge`
+object at line 115, so it receives the call its members never would — but the delegation it
+imitates is dead code, and that is a pre-existing defect of the tree rather than a pattern to
+follow. Recorded in `review.md`; not fixed by this change.
 
 ## What is reused, and what is not
 
@@ -128,6 +182,12 @@ A panel is a judge and inherits a judge's burden of proof. Aligned with
 - **Member redundancy.** Pairwise member–member κ is computed and reported. High
   inter-member agreement means correlated errors and an effective panel size near one — N
   API bills for one opinion. The report states it; policy decides what to do about it.
+  **This is work, not reuse** (review C8): `cohen_kappa` is
+  `(r1: Sequence[int], r2: Sequence[int]) -> float`
+  (`agent-core/agent_core/golden.py:144`) — *integer* labels, exactly *two* raters. Panel
+  redundancy over N members needs N(N-1)/2 invocations plus a float-score→label
+  discretisation step that does not exist in the tree. The function is reused unchanged; the
+  discretisation rule and the pairing loop are new and must be specified, not assumed.
 - **Diversity is config, reported.** Member model families are declared and carried into
   the calibration artifact, so "three members, one family" is visible rather than implied.
 - **Abstention rate is reported.** A panel that abstains constantly is not measuring; the

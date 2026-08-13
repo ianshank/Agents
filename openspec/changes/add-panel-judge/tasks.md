@@ -12,8 +12,20 @@ Coverage floor: **96%** (root `eval_harness`).
       (binarised at `member_pass_threshold`, default on the field).
 - [ ] `[P]` Per-member breakdown, spread, stdev, strategy and abstention flag in
       `JudgeVerdict.raw`; no core-model change.
-- [ ] `[P]` Abstention on spread > `disagreement_threshold` and on below-quorum survival;
-      abstain verdict uses the fail-safe `abstain_score` default and names its reason.
+- [ ] `[P]` Abstention on spread > `disagreement_threshold` and on below-quorum survival
+      (quorum denominator = **configured** members); abstain verdict uses the `on_skip`
+      config field — the existing name for "this evaluator declined to score"
+      (`AutoevalsScorer.on_skip`) — and names its reason.
+- [ ] `[P]` **Abstention must survive the scorer boundary** (review C5): `LLMJudgeScorer`
+      gains an abstention-aware path emitting `passed=None`, mirroring
+      `AutoevalsScorer`'s skip branch (`scorers/__init__.py:307-313`). Without this an
+      abstention arrives as `passed=False` and the component is worse than useless.
+      `src/eval_harness/scorers/**` is protected.
+- [ ] `[P]` Reject a single-member panel at construction (spread is structurally 0).
+- [ ] `[P]` Aggregate via `statistics` (`median`/`fmean`/`pstdev`) — already this package's
+      dependency (`engine.py:12`); do not hand-roll. Document even-N `median` behaviour.
+- [ ] `[P]` Members evaluated sequentially in declaration order (the determinism guarantee
+      depends on it).
 - [ ] `[P]` Member exceptions excluded and recorded in `raw["failed_members"]`; a panel
       outage yields a fail-safe verdict, never a crashed run.
 - [ ] `[P]` `attach_client` fan-out to every member.
@@ -27,7 +39,9 @@ Coverage floor: **96%** (root `eval_harness`).
 
 - [ ] `build_budgeted_judge` / `BudgetedJudge` read duck-typed `calls_per_evaluate`
       (absent → 1) and reserve cost and rate-window slots per member call.
-- [ ] `PanelJudge.calls_per_evaluate = len(members)`.
+- [ ] `PanelJudge.calls_per_evaluate = sum(getattr(m, "calls_per_evaluate", 1) for m in
+      members)` — **not** `len(members)`, which under-charges nested panels by the same
+      mechanism this task exists to fix (review C6).
 - [ ] Assert an N-member panel under a cap sized for fewer than N calls trips the budget on
       the first evaluation — the under-charge regression test.
 
@@ -36,6 +50,17 @@ Coverage floor: **96%** (root `eval_harness`).
 - [ ] `[P]` Matrix rows for kind `judge` to the M1/M2/M3/M6 floor
       (`tests/_matrix_coverage.py`), declared with literal `MATRIX_KIND`/`MATRIX_COMPONENTS`,
       exercised via the registered-name path with `MockJudge` members only.
+- [ ] `[P]` **M5 (determinism) rows too, above the floor.** `REQUIRED_DIMS["judge"]` excludes
+      M5 because "verdict determinism is the provider's" — that rationale does not hold for a
+      panel, whose aggregation, quorum and abstention logic are repo-owned. The policy
+      comment explicitly welcomes subset-meaningful dims as extra rows.
+- [ ] `[P]` Add the `add-panel-judge` row to `FOLLOW_ON` in `tests/_matrix_coverage.py`
+      alongside the three sibling changes, and regenerate `docs/matrix-coverage.md`. Must be
+      added **while `panel` is still unregistered** — the guard fails a FOLLOW_ON row whose
+      component already exists in the census.
+- [ ] Add `panel` to the judges list in **both** `README.md` and
+      `src/eval_harness/README.md` — the advisory `registry-drift` job in `docs.yml` compares
+      registered names against both.
 - [ ] `[P]` Regenerate `tests/plugin_registry_baseline.json` and
       `tests/public_surface_baseline.json`; `python tests/test_matrix_coverage.py --update`
       for `docs/matrix-coverage.md`.
@@ -68,7 +93,14 @@ Coverage floor: **96%** (root `eval_harness`).
 
 ## 7. Verification
 
-- [ ] Full gate suite (`make check-all`); matrix freshness green.
-- [ ] End-to-end offline: a three-`MockJudge` panel is byte-deterministic; a disagreeing
-      panel abstains rather than averaging; a below-quorum panel abstains; an N-member panel
-      consumes N budget reservations.
+- [ ] Full gate suite (`make check-all`) **plus** the `quality-gates.yml` tail that
+      `check-all` does not cover: `scripts/validate.py --tier fast --strict`,
+      `check_size_budget.py`, `check_guard_reachability.py`, `check_charter_drift.py`,
+      `check_charter_invariants.py`, `check_skill_script_drift.py`. Matrix freshness green.
+- [ ] End-to-end offline, one assertion per edge case found in review:
+      a three-`MockJudge` panel is byte-deterministic and calls members in declaration order;
+      a disagreeing panel abstains rather than averaging, and that abstention reaches the
+      result as `passed=None` (not `False`); a below-quorum panel abstains; an N-member panel
+      consumes N budget reservations and a **nested** panel consumes its members' members;
+      a one-member panel is rejected at construction; `median` over an even-sized panel is
+      documented as the mean of the middle two.
