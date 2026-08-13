@@ -112,9 +112,10 @@ jobs:
       # archguard pulls grimp (pinned): F-011's airgap negative test shells out to
       # drift_check.py, which needs grimp to build the import graph. (F-011..F-015 add
       # flow-protocol/flow-corpus to sys.path themselves, so no editable install needed.)
-      # e2e-matrix pulls openpyxl (pinned, no numpy/pandas): the tooling-coverage step below
-      # measures tests._e2e_matrix_xlsx, whose writer would otherwise importorskip and report
-      # as uncovered -- the vacuous-coverage shape this repo already fixed once for parquet.
+      # e2e-matrix pulls openpyxl (pinned, no numpy/pandas): the "E2E-matrix generator
+      # coverage" step further below measures tests._e2e_matrix_xlsx, whose writer would
+      # otherwise importorskip and report as uncovered -- the vacuous-coverage shape this
+      # repo already fixed once for parquet.
       - run: pip install -e ".[dev,langfuse,openai,archguard,parquet,e2e-matrix]"
       # Feature ledger: schema + DAG + git provenance + tier-fast validation commands.
       # --strict makes an unresolvable `implemented_in` an ERROR, not a warning. Without it

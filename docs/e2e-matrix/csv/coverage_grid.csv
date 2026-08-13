@@ -5,5 +5,5 @@ claude-foundation,85,pyproject.toml=85; quality-gate.sh=85,claude-foundation-ci.
 experiments/backend-validation,95,pyproject.toml=95; quality-gate.sh=95,,e2e:backend-validation,PASS,211
 flow-corpus,95,pyproject.toml=95; quality-gate.sh=95,flow-corpus-ci.yml,suite:flow-corpus,PASS,163
 flow-protocol,95,pyproject.toml=95; quality-gate.sh=95,flow-corpus-ci.yml,suite:flow-protocol,PASS,21
-root,96,pyproject.toml=96; quality-gate.sh=96,eval-harness-ci.yml,suite:root,PASS,1627
+root,96,pyproject.toml=96; quality-gate.sh=96,"architecture-drift.yml, docs.yml, eval-harness-ci.yml, merge-gate-audit.yml, merge-gate-seed.yml, merge-gate-verdict.yml, outcome-labeller.yml, phoenix-live.yml, quality-gates.yml",suite:root,PASS,1627
 scripts,85,scripts/.coveragerc=85,,suite:scripts-gate,PASS,1627

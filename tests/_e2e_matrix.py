@@ -44,8 +44,13 @@ DEFAULT_REPORT_DIR = _REPO_ROOT / "artifacts" / "e2e-report"
 #: Where the committed artifact lives.
 DEFAULT_OUT_DIR = _REPO_ROOT / "docs" / "e2e-matrix"
 
+#: The runner's path relative to a repo root. Every ``derive_*`` helper resolves this
+#: against its own ``root`` parameter, so passing a non-default root is honored for the
+#: runner file too, not just for the facts derived from it.
+RUNNER_RELATIVE_PATH = Path("scripts") / "run_all_e2e.ps1"
+
 #: The runner whose step inventory this matrix mirrors.
-RUNNER_PATH = _REPO_ROOT / "scripts" / "run_all_e2e.ps1"
+RUNNER_PATH = _REPO_ROOT / RUNNER_RELATIVE_PATH
 
 #: PowerShell writes ``summary.json`` with ``Set-Content -Encoding UTF8``, which emits a
 #: BOM on Windows PowerShell 5.1. ``json.load`` rejects a BOM under plain utf-8, so every
@@ -56,6 +61,12 @@ RUNNER_TEXT_ENCODING = "utf-8-sig"
 #: conditional branch not taken). Deliberately distinct from SKIP, which the runner emits
 #: for a step it *did* reach and consciously declined to execute.
 NOT_RUN = "NOT-RUN"
+
+#: The runner's own vocabulary for a step it did reach, from ``Add-Result``. This module is
+#: their one Python-side owner; nothing else in the engine or the xlsx writer respells them.
+STATUS_PASS = "PASS"
+STATUS_FAIL = "FAIL"
+STATUS_SKIP = "SKIP"
 
 #: Name the matrix gives the repository-root package, which is not a workspace member.
 ROOT_UNIT_NAME = "root"
@@ -72,17 +83,32 @@ REPO_ROOT_MARKER = "."
 #: Filename of the reviewable rendering inside the output directory.
 ARTIFACT_DOC_NAME = "e2e-matrix.md"
 
+#: Filename of the workbook rendering inside the output directory. Not freshness-gated
+#: (ADR 0033 §4) but reproducibility is asserted by the test suite; kept beside
+#: ``ARTIFACT_DOC_NAME`` since both name the same output directory's two renderings.
+WORKBOOK_FILENAME = "e2e-test-matrix.xlsx"
+
 #: Subdirectory holding the per-sheet CSV mirrors.
 CSV_DIR_NAME = "csv"
+
+#: Filename the runner writes its per-step results to, inside a report directory.
+SUMMARY_FILENAME = "summary.json"
+
+#: Directory holding the runner's smoke scripts, relative to the repo root.
+SMOKES_DIR_NAME = "scripts/smokes"
 
 #: Bounded diff emitted when the committed artifact is stale.
 MAX_DIFF_LINES = 40
 
-REGEN_HINT = "regenerate and commit: python tests/test_e2e_matrix.py --update"
+#: The one spelling of the regeneration command; every hint/banner/row that tells a reader
+#: how to regenerate the artifact is built from this instead of retyping it.
+REGEN_COMMAND = "python tests/test_e2e_matrix.py --update"
+
+REGEN_HINT = f"regenerate and commit: {REGEN_COMMAND}"
 
 GENERATED_BANNER = (
     "GENERATED FILE - do not edit by hand.\n"
-    "Regenerate: python tests/test_e2e_matrix.py --update\n"
+    f"Regenerate: {REGEN_COMMAND}\n"
     "Freshness-gated by tests/test_e2e_matrix.py::test_matrix_artifact_is_fresh."
 )
 
@@ -135,6 +161,17 @@ class DeclaredStep:
     def area(self) -> str:
         """The step-name prefix (``suite``, ``cli``, ``live``, ...); the whole name if bare."""
         return self.name.split(":", 1)[0] if ":" in self.name else self.name
+
+    @property
+    def tail(self) -> str:
+        """The step-name suffix after the first ``:``; empty for a bare name.
+
+        Guards the same split ``.area`` guards. An earlier unguarded
+        ``name.split(":", 1)[1]`` at a coverage-sheet lookup site raised ``IndexError`` for
+        any declared step whose name has no colon -- safe only because every step name in
+        the real runner happens to contain one.
+        """
+        return self.name.split(":", 1)[1] if ":" in self.name else ""
 
 
 @dataclass(frozen=True)
@@ -191,12 +228,16 @@ def load_run_steps(report_dir: Path) -> tuple[RunStep, ...]:
     real (a failed pre-flight aborts immediately), and silently returning no rows for it
     would be the vacuous pass this artifact exists to prevent.
     """
-    path = report_dir / "summary.json"
+    path = report_dir / SUMMARY_FILENAME
     if not path.is_file():
         raise MatrixConfigError(f"no run report at {path.as_posix()} - run scripts/run_all_e2e.ps1 first")
     try:
         payload = json.loads(path.read_text(encoding=RUNNER_TEXT_ENCODING))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        # UnicodeDecodeError is a ValueError, not an OSError, and was previously uncaught
+        # here -- a byte the encoding can't decode (e.g. a smart quote saved as cp1252 by an
+        # editor on the Windows host that runs the harness) crashed with a raw traceback
+        # instead of the documented config-error contract.
         raise MatrixConfigError(f"cannot read {path.as_posix()}: {exc}") from exc
 
     records = [payload] if isinstance(payload, dict) else payload
@@ -245,7 +286,14 @@ def load_junit(report_dir: Path) -> dict[str, SuiteArtifact]:
         except (OSError, ET.ParseError) as exc:
             logger.warning("unreadable JUnit file %s (%s); counts omitted", path.name, exc)
             continue
-        suites = list(root.iter("testsuite"))
+        # Matched by local tag name, not `root.iter("testsuite")`: ElementTree's tag search
+        # is exact-string, so a namespaced document (`<testsuites xmlns="...">`) whose real
+        # tag is `{uri}testsuite` never matches and the file silently counts as zero tests --
+        # a specific, false number, worse than the blank a genuinely-absent file gets.
+        suites = [elem for elem in root.iter() if elem.tag.rsplit("}", 1)[-1] == "testsuite"]
+        if not suites:
+            logger.warning("no <testsuite> element found in %s; counts omitted", path.name)
+            continue
         artifacts[path.stem] = SuiteArtifact(
             tests=sum(_as_int(s.get("tests")) for s in suites),
             failures=sum(_as_int(s.get("failures")) for s in suites),
@@ -283,8 +331,13 @@ def evidence_for(step_name: str, report_dir: Path) -> str:
 # Steps recorded with a literal tier and a literal name. Not line-anchored: several sites
 # sit inside `catch { ... }` / `else { ... }` on the same physical line.
 _LITERAL_STEP_RE = re.compile(
-    r"(?:Invoke-PytestStep|Invoke-CmdStep|Add-Result)\s+'(?P<tier>[A-Z]+)'\s+'(?P<name>[^']+)'"
+    r"(?P<verb>Invoke-PytestStep|Invoke-CmdStep|Add-Result)\s+'(?P<tier>[A-Z]+)'\s+'(?P<name>[^']+)'"
 )
+
+#: Only this verb's third trailing positional is a JUnit path. `Invoke-CmdStep`'s third
+#: positional is `SkipCodes`, an inline `@(...)` array that the positional-token regex
+#: never matches -- safe by accident until a bare-variable `SkipCodes` argument appeared.
+_JUNIT_BEARING_VERB = "Invoke-PytestStep"
 
 # Steps whose name comes from a hashtable element of an array the runner loops over,
 # e.g. `Invoke-PytestStep 'A' $s.name` with `foreach ($s in $suites)`.
@@ -426,13 +479,17 @@ def _render_command(args_text: str | None) -> str:
 _TRAILING_POSITIONAL_LIMIT = 2
 
 
-def _call_details(text: str, after: int) -> dict[str, str]:
+def _call_details(text: str, after: int, verb: str) -> dict[str, str]:
     """Command, working directory and JUnit path for a step call, all read from the call site.
 
-    The array must be adjacent to the step name (see :func:`_command_from`); the two
-    positional arguments that follow it are the runner's ``WorkDir`` and ``Junit``. A call
-    that omits them genuinely runs at the repo root and writes no JUnit, which is the
-    function's own documented default -- so the fallback here is a fact, not a guess.
+    The array must be adjacent to the step name (see :func:`_command_from`); the first
+    positional argument that follows it is the runner's ``WorkDir`` for every verb. The
+    *second* positional differs by verb: ``Invoke-PytestStep``'s is ``Junit``, but
+    ``Invoke-CmdStep``'s is ``SkipCodes`` -- reading it as a JUnit path was safe only by
+    accident, because every real ``Invoke-CmdStep`` call passes ``SkipCodes`` as an inline
+    ``@(...)`` array that the positional-token regex does not match. A call that omits the
+    positionals genuinely runs at the repo root and writes no JUnit, which is the function's
+    own documented default -- so the fallback here is a fact, not a guess.
     """
     span = _balanced_args_span(text, after) if re.match(r"\s*(?=@\()", text[after:]) else None
     if span is None:
@@ -440,10 +497,11 @@ def _call_details(text: str, after: int) -> dict[str, str]:
     args_text, end = span
     tokens = _trailing_positionals(text, end, _TRAILING_POSITIONAL_LIMIT)
     resolved = [_resolve_path_literal(text, token) for token in tokens]
+    junit = resolved[1] if verb == _JUNIT_BEARING_VERB and len(resolved) > 1 else ""
     return {
         "command": _render_command(args_text),
         "workdir": resolved[0] if resolved else REPO_ROOT_MARKER,
-        "junit": resolved[1] if len(resolved) > 1 else "",
+        "junit": junit,
     }
 
 
@@ -505,13 +563,20 @@ def parse_declared_steps(runner_text: str) -> tuple[DeclaredStep, ...]:
 
     for match in _LITERAL_STEP_RE.finditer(text):
         name = match.group("name")
-        record(DeclaredStep(tier=match.group("tier"), name=name, **_call_details(text, match.end())))
+        record(
+            DeclaredStep(tier=match.group("tier"), name=name, **_call_details(text, match.end(), match.group("verb")))
+        )
 
     for match in _VARIABLE_STEP_RE.finditer(text):
         collection = bindings.get(match.group("item"))
         body = blocks.get(collection or "")
         if body is None:
             logger.warning("cannot resolve $%s.name to an array literal; steps may be missing", match.group("item"))
+            continue
+        if not body.strip():
+            logger.warning(
+                "$%s is an empty array literal; no steps recorded for $%s.name", collection, match.group("item")
+            )
             continue
         # The loop passes its argument array by variable (`... $s.name $suiteArgs ...`), so
         # every step in the collection shares one command; resolve it once per loop.
@@ -544,6 +609,20 @@ def parse_declared_steps(runner_text: str) -> tuple[DeclaredStep, ...]:
         raise MatrixError(f"no steps parsed from {RUNNER_PATH.name}; the call-site grammar has changed")
     logger.info("declared: %d step(s) parsed from %s", len(declared), RUNNER_PATH.name)
     return tuple(sorted(declared.values(), key=lambda s: (s.tier, s.name)))
+
+
+# Known, deliberately deferred parser limitations (none occur in the real runner today, so
+# hardening against them would be a lexer with no live defect to guard):
+#   * A nested hashtable inside a ``$suites``/``$liveJudges`` entry (a value that is itself
+#     ``@{ ... }``) would confuse ``_HASH_ENTRY_RE``'s field matching.
+#   * An unbalanced parenthesis inside a single-quoted string argument would desynchronize
+#     ``_balanced_args_span``.
+#   * PowerShell's ``''`` escape for a literal single quote inside a quoted string is not
+#     unescaped by ``_QUOTED_RE``.
+#   * A double-quoted hashtable field name (``"name" = 'x'``) is not matched; every real
+#     entry uses bare or single-quoted keys.
+#   * A pipeline-closed array block (``@( ... ) | Sort-Object``) immediately followed by
+#     another ``@( ... )`` could let ``_ARRAY_BLOCK_RE`` swallow the second block.
 
 
 _HASH_XML_RE = re.compile(r"\bxml\s*=\s*'(?P<xml>[^']+)'")
@@ -589,16 +668,35 @@ def derive_members(root: Path) -> tuple[str, ...]:
     return tuple(str(member) for member in facts.members)
 
 
+def _read_text_or_none(path: Path) -> str | None:
+    """UTF-8 text of *path*, or ``None`` if it is missing or undecodable.
+
+    Every derivation in this module treats an absent input file as "nothing to derive" and
+    already handled that gracefully; a file that exists but can't be decoded (a byte the
+    Windows host that runs the harness saved in cp1252, say) previously crashed uncaught at
+    each read site instead of degrading the same way. One helper, one behaviour, and it
+    collapses what used to be a repeated ``if not path.is_file(): return X`` guard at every
+    call site into a single check.
+    """
+    if not path.is_file():
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        logger.warning("cannot read %s (%s); treating it as absent", path.as_posix(), exc)
+        return None
+
+
 def makefile_check_members(root: Path) -> tuple[str, ...]:
     """Members named by the Makefile's ``check-all`` prerequisites.
 
     A second, independent anchor for the member list. The two are asserted equal by the
     test suite, which is how a Makefile regenerated against a changed tree gets noticed.
     """
-    makefile = root / "Makefile"
-    if not makefile.is_file():
+    text = _read_text_or_none(root / "Makefile")
+    if text is None:
         return ()
-    for line in makefile.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         if line.startswith("check-all:"):
             body = line.split(":", 1)[1].split("##", 1)[0]
             return tuple(sorted(tok[len("check-") :] for tok in body.split() if tok.startswith("check-")))
@@ -612,9 +710,9 @@ def _floor_from_pyproject(path: Path) -> int | None:
     must work on the CI floor of Python 3.10, where ``tomllib`` is absent and ``scripts/``
     deliberately carries no ``tomli`` dependency.
     """
-    if not path.is_file():
+    text = _read_text_or_none(path)
+    if text is None:
         return None
-    text = path.read_text(encoding="utf-8")
     section = re.search(r"^\[tool\.coverage\.report\](?P<body>.*?)(?=^\[|\Z)", text, re.MULTILINE | re.DOTALL)
     if section is None:
         return None
@@ -624,9 +722,10 @@ def _floor_from_pyproject(path: Path) -> int | None:
 
 def _floor_from_gate_script(path: Path) -> int | None:
     """``COV_FAIL_UNDER="${COV_FAIL_UNDER:-N}"`` from a generated quality-gate script."""
-    if not path.is_file():
+    text = _read_text_or_none(path)
+    if text is None:
         return None
-    match = re.search(r"COV_FAIL_UNDER=\"\$\{COV_FAIL_UNDER:-(?P<n>\d+)\}\"", path.read_text(encoding="utf-8"))
+    match = re.search(r"COV_FAIL_UNDER=\"\$\{COV_FAIL_UNDER:-(?P<n>\d+)\}\"", text)
     return int(match.group("n")) if match else None
 
 
@@ -657,11 +756,12 @@ def derive_packages(root: Path, workflows: Mapping[str, tuple[str, ...]]) -> tup
     # Units that are gated but are not workspace members: discovered by looking for the
     # marker every gated unit carries (its own pyproject) under the experiments tree, rather
     # than naming `experiments/backend-validation` here. A second experiment acquiring a
-    # coverage floor then appears on its own.
+    # coverage floor then appears on its own, at any depth -- not just a direct child of
+    # `experiments/`, since a manifest one level deeper than today's single example would
+    # otherwise be silently absent from the Coverage Grid.
     roots += [
-        (path.relative_to(root).as_posix(), path)
-        for path in sorted((root / EXPERIMENTS_DIR_NAME).glob("*"))
-        if (path / "pyproject.toml").is_file()
+        (manifest.parent.relative_to(root).as_posix(), manifest.parent)
+        for manifest in sorted((root / EXPERIMENTS_DIR_NAME).rglob("pyproject.toml"))
     ]
 
     for name, base in roots:
@@ -698,21 +798,32 @@ def derive_packages(root: Path, workflows: Mapping[str, tuple[str, ...]]) -> tup
 def derive_workflows(root: Path) -> dict[str, tuple[str, ...]]:
     """Map a gated unit to the CI workflows that run it.
 
-    Derived from each workflow's ``working-directory:`` values; a workflow that sets none
-    but invokes the shared quality-gate action is running at the repo root, which is what
-    the action's own default says.
+    Derived from each workflow's ``working-directory:`` values. A workflow with none at all
+    runs at the repo root by GitHub Actions' own default -- this used to require the text to
+    also mention the shared quality-gate action, an incidental heuristic from when every
+    bare-root workflow happened to use it. ``quality-gates.yml`` has inline steps and never
+    matched, so it was invisible in the Coverage Grid despite being the workflow that runs
+    this very generator's own coverage floor.
+
+    Known limitation, not fixed here: a unit gated only by a *named step* inside an otherwise
+    working-directory-free workflow (e.g. the ``scripts`` coverage step in
+    ``quality-gates.yml``) is not attributed to that unit specifically -- only to
+    :data:`ROOT_UNIT_NAME`. Deeper per-step workflow-body scanning is out of scope; see
+    ``docs/e2e-matrix/README.md``.
     """
     mapping: dict[str, set[str]] = {}
     workflow_dir = root / ".github" / "workflows"
     if not workflow_dir.is_dir():
         return {}
-    for path in sorted(workflow_dir.glob("*.yml")):
-        text = path.read_text(encoding="utf-8")
+    for path in sorted({*workflow_dir.glob("*.yml"), *workflow_dir.glob("*.yaml")}):
+        text = _read_text_or_none(path)
+        if text is None:
+            continue
         dirs = {m.group("d").strip().strip("\"'") for m in re.finditer(r"working-directory:\s*(?P<d>\S+)", text)}
-        if not dirs and "run-quality-gate" in text:
-            dirs = {"root"}
+        if not dirs:
+            dirs = {ROOT_UNIT_NAME}
         for directory in dirs:
-            key = "root" if directory in {".", "root"} else directory
+            key = ROOT_UNIT_NAME if directory in {REPO_ROOT_MARKER, ROOT_UNIT_NAME} else directory
             mapping.setdefault(key, set()).add(path.name)
     return {key: tuple(sorted(names)) for key, names in mapping.items()}
 
@@ -722,7 +833,7 @@ def derive_workflows(root: Path) -> dict[str, tuple[str, ...]]:
 _ENV_GATE_RE = re.compile(r"Test-EnvSet\s+@\((?P<env>[^)]*)\)")
 
 #: Smoke scripts a step invokes, e.g. ``scripts/smokes/langfuse_smoke.py``.
-_SMOKE_SCRIPT_RE = re.compile(r"scripts/smokes/(?P<module>\w+)\.py")
+_SMOKE_SCRIPT_RE = re.compile(re.escape(SMOKES_DIR_NAME) + r"/(?P<module>\w+)\.py")
 
 
 def derive_live_credentials(root: Path = _REPO_ROOT) -> dict[str, tuple[str, ...]]:
@@ -739,7 +850,7 @@ def derive_live_credentials(root: Path = _REPO_ROOT) -> dict[str, tuple[str, ...
     :func:`smoke_credentials`, not as the source of the matrix.
     """
     creds = runner_env_gates(root)
-    creds.update(_judge_credentials(root / "scripts" / "run_all_e2e.ps1"))
+    creds.update(_judge_credentials(root / RUNNER_RELATIVE_PATH))
     return creds
 
 
@@ -751,10 +862,10 @@ def runner_env_gates(root: Path = _REPO_ROOT) -> dict[str, tuple[str, ...]]:
     the file follows that shape. A step with no preceding literal gate (the judges, which
     gate on a variable) is simply absent, and picked up from ``$liveJudges`` instead.
     """
-    runner = root / "scripts" / "run_all_e2e.ps1"
-    if not runner.is_file():
+    raw = _read_text_or_none(root / RUNNER_RELATIVE_PATH)
+    if raw is None:
         return {}
-    text = _join_continuations(runner.read_text(encoding="utf-8"))
+    text = _join_continuations(raw)
     gates = [(m.start(), tuple(_QUOTED_RE.findall(m.group("env")))) for m in _ENV_GATE_RE.finditer(text)]
     gates = [(pos, names) for pos, names in gates if names]
 
@@ -782,15 +893,15 @@ def smoke_credentials(root: Path = _REPO_ROOT) -> dict[str, tuple[str, ...]]:
     """
     import sys
 
-    smokes_dir = root / "scripts" / "smokes"
+    smokes_dir = root / SMOKES_DIR_NAME
     if str(smokes_dir) not in sys.path:
         sys.path.append(str(smokes_dir))
 
-    runner = root / "scripts" / "run_all_e2e.ps1"
-    if not runner.is_file():
+    raw = _read_text_or_none(root / RUNNER_RELATIVE_PATH)
+    if raw is None:
         return {}
     creds: dict[str, tuple[str, ...]] = {}
-    for step in parse_declared_steps(runner.read_text(encoding="utf-8")):
+    for step in parse_declared_steps(raw):
         found = _SMOKE_SCRIPT_RE.search(step.command)
         if found is None:
             continue
@@ -807,16 +918,30 @@ def smoke_credentials(root: Path = _REPO_ROOT) -> dict[str, tuple[str, ...]]:
     return creds
 
 
+#: The runner's own name for the array of live-judge declarations.
+LIVE_JUDGES_ARRAY_NAME = "liveJudges"
+
+
+def _live_judge_entries(runner_path: Path) -> list[re.Match[str]]:
+    """Raw ``$liveJudges`` hashtable-entry matches, or ``[]`` if the runner/array is absent.
+
+    Shared by :func:`_judge_credentials` and :func:`runner_judge_specs`, which used to be
+    the same six-line body (file check, join continuations, locate the array, iterate
+    entries) differing only in which fields each pulled out of the matched text.
+    """
+    raw = _read_text_or_none(runner_path)
+    if raw is None:
+        return []
+    body = _array_blocks(_join_continuations(raw)).get(LIVE_JUDGES_ARRAY_NAME)
+    if body is None:
+        return []
+    return list(_HASH_ENTRY_RE.finditer(body))
+
+
 def _judge_credentials(runner_path: Path = RUNNER_PATH) -> dict[str, tuple[str, ...]]:
     """``$liveJudges`` name/env pairs from the runner."""
-    if not runner_path.is_file():
-        return {}
-    text = _join_continuations(runner_path.read_text(encoding="utf-8"))
-    body = _array_blocks(text).get("liveJudges")
-    if body is None:
-        return {}
     out: dict[str, tuple[str, ...]] = {}
-    for entry in _HASH_ENTRY_RE.finditer(body):
+    for entry in _live_judge_entries(runner_path):
         env_match = re.search(r"\benv\s*=\s*@\((?P<env>[^)]*)\)", entry.group(0))
         names = tuple(_QUOTED_RE.findall(env_match.group("env"))) if env_match else ()
         out[entry.group("name")] = names
@@ -830,13 +955,8 @@ def runner_judge_specs(runner_path: Path = RUNNER_PATH) -> dict[str, dict[str, s
     because the judges disagree: two take ``model`` and one takes ``model_id``. Exposed so
     a test can check each declared keyword against the real signature.
     """
-    if not runner_path.is_file():
-        return {}
-    body = _array_blocks(_join_continuations(runner_path.read_text(encoding="utf-8"))).get("liveJudges")
-    if body is None:
-        return {}
     specs: dict[str, dict[str, str]] = {}
-    for entry in _HASH_ENTRY_RE.finditer(body):
+    for entry in _live_judge_entries(runner_path):
         fields = {key: value for key, value in re.findall(r"\b(type|param)\s*=\s*'([^']+)'", entry.group(0))}
         specs[entry.group("name")] = fields
     return specs
@@ -857,13 +977,31 @@ def policy_problems(run: Sequence[RunStep], declared: Sequence[DeclaredStep]) ->
     problems: list[str] = []
     if not run:
         problems.append("the run report contains no steps; a matrix rendered from it would be vacuous")
-    known = {step.name for step in declared}
+
+    seen_names: set[str] = set()
     for step in run:
-        if step.name not in known:
+        if step.name in seen_names:
+            problems.append(
+                f"step {step.name!r} appears more than once in the run report; the Summary "
+                f"sheet's counts would silently stop matching the Test Matrix rows"
+            )
+        seen_names.add(step.name)
+
+    by_name = {step.name: step for step in declared}
+    for step in run:
+        declared_step = by_name.get(step.name)
+        if declared_step is None:
             problems.append(
                 f"step {step.name!r} appears in the run report but is not declared in "
                 f"{RUNNER_PATH.name}; the parser is stale"
             )
+        elif declared_step.tier != step.tier:
+            problems.append(
+                f"step {step.name!r} was observed under tier {step.tier!r} but is declared "
+                f"under tier {declared_step.tier!r}; the Test Matrix and Summary sheets "
+                f"would disagree about which tier ran it"
+            )
+
     observed_tiers = {step.tier for step in run}
     for tier in sorted(observed_tiers):
         if not any(step.tier == tier for step in declared):
@@ -986,7 +1124,7 @@ def build_coverage_sheet(
     """Gated unit against the suite step that exercised it in this run."""
     observed = {step.name: step for step in run}
     by_step = {s.name: s for s in declared}
-    by_tail = {s.name.split(":", 1)[1]: s.name for s in declared if s.junit}
+    by_tail = {s.tail: s.name for s in declared if s.junit and s.tail}
     rows: list[tuple[str, ...]] = []
     for pkg in packages:
         # A unit is matched to its suite step by the step-name tail, then by two fallbacks,
@@ -999,7 +1137,10 @@ def build_coverage_sheet(
         step_name = (
             by_tail.get(pkg.name)
             or by_tail.get(pkg.name.rsplit("/", 1)[-1])
-            or next((full for tail, full in sorted(by_tail.items()) if tail.split("-", 1)[0] == pkg.name), "")
+            or next(
+                (full for tail, full in sorted(by_tail.items()) if tail.startswith(pkg.name + "-")),
+                "",
+            )
         )
         result = observed.get(step_name) if step_name else None
         counts = _junit_for(by_step[step_name], junit) if step_name in by_step else None
@@ -1042,7 +1183,7 @@ def build_provenance_sheet(prov: Provenance) -> Sheet:
         ("Host", prov.host),
         ("Python", prov.python_version),
         ("Runner invocation", prov.runner_invocation),
-        ("Regenerate", "python tests/test_e2e_matrix.py --update"),
+        ("Regenerate", REGEN_COMMAND),
         ("Policy", "Generated artifact per ADR 0032/0033 - do not edit by hand."),
     ]
     return Sheet(name="Provenance", columns=PROVENANCE_COLUMNS, rows=tuple(rows))
@@ -1068,9 +1209,10 @@ def build_sheets(
     policy, then the sheet model. Ordering is fixed so the workbook's tabs and the CSV set
     are stable across runs.
     """
-    if not RUNNER_PATH.is_file():
-        raise MatrixConfigError(f"runner not found at {RUNNER_PATH.as_posix()}")
-    runner_text = RUNNER_PATH.read_text(encoding="utf-8")
+    runner_path = root / RUNNER_RELATIVE_PATH
+    runner_text = _read_text_or_none(runner_path)
+    if runner_text is None:
+        raise MatrixConfigError(f"runner not found at {runner_path.as_posix()}")
 
     run = load_run_steps(report_dir)
     declared = parse_declared_steps(runner_text)
@@ -1194,9 +1336,14 @@ def stale_csv_mirrors(sheets: Sequence[Sheet], out_dir: Path) -> list[str]:
     The markdown was previously the only gated output, so a CSV could drift from the run it
     claims to describe and still be reported fresh. The CSVs are the diffable rendering that
     review actually reads, which makes an ungated CSV the worst of the three to let rot.
+
+    Also flags an *orphan*: a CSV on disk with no corresponding current sheet, e.g. left
+    behind by a sheet rename. Checking only the current sheets' own paths, as the original
+    version of this function did, can never notice a file it never looks for.
     """
     csv_dir = out_dir / CSV_DIR_NAME
     stale: list[str] = []
+    expected_names: set[str] = set()
     for sheet in sheets:
         # The Provenance exemption has to hold here too. Gating its CSV would reintroduce
         # exactly the defect `comparable()` exists to prevent: the recorded SHA is one commit
@@ -1204,9 +1351,17 @@ def stale_csv_mirrors(sheets: Sequence[Sheet], out_dir: Path) -> list[str]:
         # the commit that carries it.
         if sheet.name == PROVENANCE_SHEET_NAME:
             continue
-        path = csv_dir / csv_filename(sheet)
+        name = csv_filename(sheet)
+        expected_names.add(name)
+        path = csv_dir / name
         if not path.is_file() or path.read_text(encoding="utf-8") != render_csv(sheet):
             stale.append(path.name)
+    if csv_dir.is_dir():
+        # The Provenance CSV is exempt above even when a caller passes that sheet, so it must
+        # be exempt from the orphan sweep too, or every fresh check would flag it as orphaned.
+        provenance_name = csv_filename(Sheet(name=PROVENANCE_SHEET_NAME, columns=()))
+        orphans = {p.name for p in csv_dir.glob("*.csv")} - expected_names - {provenance_name}
+        stale.extend(orphans)
     return sorted(stale)
 
 
@@ -1227,8 +1382,14 @@ def artifact_is_fresh(sheets: Sequence[Sheet], out_dir: Path) -> tuple[bool, str
     return (not stale_csv_mirrors(sheets, out_dir), rendered)
 
 
-def freshness_failure_message(rendered: str, out_dir: Path, sheets: Sequence[Sheet] = ()) -> str:
-    """Why the committed artifact is stale, not merely that it is."""
+def freshness_failure_message(rendered: str, out_dir: Path, sheets: Sequence[Sheet]) -> str:
+    """Why the committed artifact is stale, not merely that it is.
+
+    ``sheets`` has no default: a caller that forgets it silently gets "the markdown is
+    stale" for what may actually be a stale *CSV* mirror only, since ``stale_csv_mirrors``
+    needs the current sheet set to know which CSVs should exist. A signature that invites
+    the wrong call is itself the defect an earlier ``sheets=()`` default here caused.
+    """
     doc = out_dir / ARTIFACT_DOC_NAME
     if not doc.is_file():
         return f"{doc.as_posix()} does not exist - {REGEN_HINT}"

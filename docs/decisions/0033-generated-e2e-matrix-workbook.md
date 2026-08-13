@@ -85,4 +85,8 @@ couples the artifact to a pinned openpyxl; bumping the pin rewrites the committe
 **Neutral.** The generator lives under `tests/` following the F-053 precedent
 (`tests/_matrix_coverage.py` + a `--check`/`--update` CLI), so it is coverage-measured by
 name rather than falling into the whole-directory `--cov=scripts` denominator. It is not a
-blocking CI gate, because the input it needs does not exist in CI.
+blocking CI gate, because the input it needs does not exist in CI. The same placement also
+exempts `tests/_e2e_matrix.py` from `check_size_budget.py`'s 500-line hard cap, since that
+gate's `EXCLUDED_DIR_NAMES` skips `tests/` wholesale -- a deliberate trade for coverage
+measurement, not an oversight, but worth naming rather than leaving for a reader to discover
+by running the gate.

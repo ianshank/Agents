@@ -75,7 +75,7 @@
 | experiments/backend-validation | 95 | pyproject.toml=95; quality-gate.sh=95 |  | e2e:backend-validation | PASS | 211 |
 | flow-corpus | 95 | pyproject.toml=95; quality-gate.sh=95 | flow-corpus-ci.yml | suite:flow-corpus | PASS | 163 |
 | flow-protocol | 95 | pyproject.toml=95; quality-gate.sh=95 | flow-corpus-ci.yml | suite:flow-protocol | PASS | 21 |
-| root | 96 | pyproject.toml=96; quality-gate.sh=96 | eval-harness-ci.yml | suite:root | PASS | 1627 |
+| root | 96 | pyproject.toml=96; quality-gate.sh=96 | architecture-drift.yml, docs.yml, eval-harness-ci.yml, merge-gate-audit.yml, merge-gate-seed.yml, merge-gate-verdict.yml, outcome-labeller.yml, phoenix-live.yml, quality-gates.yml | suite:root | PASS | 1627 |
 | scripts | 85 | scripts/.coveragerc=85 |  | suite:scripts-gate | PASS | 1627 |
 
 ## Credentials
@@ -94,9 +94,9 @@
 
 | Field | Value |
 |---|---|
-| Commit | 1314e120ebadbc89341da664e3eb4cfd6fafdc4b |
+| Commit | e899249a070b1537bfd714669bc2b0adaef0573a |
 | Branch | claude/e2e-test-plan-matrix-u6c1en |
-| Generated at (UTC) | 2026-08-09T20:02:41-04:00 |
+| Generated at (UTC) | 2026-08-13T21:45:54+00:00 |
 | Host | Linux-6.18.5-fc-v20-x86_64-with-glibc2.39 |
 | Python | 3.11.15 |
 | Runner invocation | pwsh -NoProfile -File scripts/run_all_e2e.ps1 -Tiers all -HypothesisProfile ci |
