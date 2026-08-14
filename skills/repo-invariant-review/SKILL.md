@@ -71,8 +71,12 @@ python skills/repo-invariant-review/scripts/check_invariants.py --repo <path> --
 Unlike a subjective review skill, this one has a real gate:
 
 ```bash
-python scripts/validate_skill.py --skill . --tier standard
+python scripts/validate_skill.py --skill . --tier structural,behavioral
 ```
+
+Those are the only two tiers the validator implements, and they are exactly what CI runs.
+An unrecognised tier is **not** an error — it simply matches no branch and exits `0`, so a
+typo here reports success having executed nothing.
 
 The evals in `evals/evals.json` run the checker against committed fixtures — one clean tree and
 one that violates several invariants at once — and assert both the exit code and the specific

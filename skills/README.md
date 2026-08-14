@@ -25,10 +25,20 @@ the marketplace itself doesn't provide.
 | [`hierarchical-recursive-brainstorm`](hierarchical-recursive-brainstorm/) | 1.0.0 | Decompose a topic into a pruned, recursively-expanded hierarchy and synthesize upward |
 | [`openspec-quality-plan`](openspec-quality-plan/) | 1.0.0 | Generate a complete OpenSpec change package (proposal, design, tasks, spec deltas) |
 | [`openspec-peer-review`](openspec-peer-review/) | 1.1.0 | Emit objective peer-review findings and rewrite an OpenSpec package to meet quality standards |
+| [`repo-invariant-review`](repo-invariant-review/) | 1.0.0 | Predict CI collisions with this repo's enforced invariants (protected paths, airgap, size budget, frozen baselines, CHARTER invariant 1) before pushing |
+| [`common`](common/) | 1.0.0 | Shared skill validator and utility library — a library, not a standalone skill (no evals; `EXEMPT` in `skills-ci.yml`'s registration guard) |
 
 ## Three kinds of skill
 
+(Plus `common`, which is a shared library rather than a skill: it backs every vendored
+`validate_skill.py` and is exempted from the registration guard in `skills-ci.yml`.)
+
 - **Inference skills** consume a model (e.g. `openai-judge`, `model-bench`).
+- **Guard/review skills** (`architecture-drift-guard`, `dataset-lint`,
+  `repo-invariant-review`) mechanically check a tree or a dataset against rules that already
+  exist, so a finding predicts a concrete failure rather than expressing an opinion. They
+  carry the full CI contract — library code, tests at the coverage floor, and behavioral
+  evals against committed fixtures.
 - **Deterministic generator skills** (`project-setup`, `quality-gate`, `deploy`)
   emit committed artifacts (Makefiles, gate scripts) and contain **no**
   model-backed logic — see [ADR 0020](../docs/decisions/0020-deterministic-generator-skills.md)

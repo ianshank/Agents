@@ -33,13 +33,59 @@ _GIT_ENV = {
 
 #: Enough of the real repo's sources of truth for the checker to read them, so the fixture
 #: exercises the same code path as a real run rather than the fallback constants.
-_PROTECTED_PATHS_STUB = '''"""Stub of the repo's protected-path source of truth."""
+_PROTECTED_PATHS_STUB = '''"""Stub of the repo's protected-path source of truth.
+
+Mirrors the real module's *interface*, not just its data: the skill loads ``is_protected``
+from here and uses it directly, so a stub exposing only ``PROTECTED_PATTERNS`` would push
+every test down the fallback path and leave the real matcher untested. The mid-path
+wildcard below is deliberate — it is the case prefix-matching gets wrong.
+"""
+
+import re
 
 PROTECTED_PATTERNS = (
     "features.yaml",
     "src/eval_harness/scorers/**",
     "tests/**",
+    "skills/*/tests/**",
 )
+
+
+def _glob_to_regex(pattern):
+    out = []
+    i = 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+        elif pattern.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif pattern[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif pattern[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(pattern[i]))
+            i += 1
+    return re.compile("^" + "".join(out) + "$")
+
+
+_COMPILED = tuple(_glob_to_regex(p) for p in PROTECTED_PATTERNS)
+
+
+def is_protected(path):
+    # Mirrors the real _normalise exactly. `lstrip("./")` would be wrong: it strips any
+    # leading "." or "/" character rather than the "./" prefix, so "../features.yaml"
+    # becomes "features.yaml" and ".hidden/x.py" becomes "hidden/x.py" — a stub that
+    # normalises differently from the guard silently weakens every test built on it.
+    norm = path.strip().replace("\\\\", "/")
+    while norm.startswith("./"):
+        norm = norm[2:]
+    norm = norm.lstrip("/")
+    return any(rx.match(norm) for rx in _COMPILED)
 '''
 
 _SIZE_BUDGET_STUB = '''"""Stub of the repo's size-budget gate."""
