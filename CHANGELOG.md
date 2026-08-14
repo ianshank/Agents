@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Docs
+- **OpenSpec change proposal: `add-panel-judge`
+  (`openspec/changes/add-panel-judge/`).** Proposes a `panel` judge — one registered
+  component fanning an evaluation out to N member judges and aggregating under an explicit
+  strategy (`median`/`mean`/`majority`), with disagreement surfaced in `JudgeVerdict.raw`
+  and abstention above a configured spread instead of a synthetic consensus. The package
+  specifies per-member budget accounting (a naive panel under-charges `judge_budget` and the
+  F-030 rate window by factor N, because `BudgetedJudge` reserves once per `evaluate()`) and
+  the calibration obligations — panel-level κ, pairwise member-redundancy κ, reported
+  abstention rate, named-artifact gating — that keep a panel advisory until it earns trust.
+  Ships as a reviewed proposal only: no code, config, or protected paths change.
+
 ### Added
 - **Generated end-to-end test matrix (`docs/e2e-matrix/`, `tests/_e2e_matrix.py`).** A full
   `run_all_e2e.ps1` run now renders to a reviewable artifact: markdown, one CSV per sheet,
