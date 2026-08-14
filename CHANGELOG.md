@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — two guards that did not do what they appeared to do
+- **`BudgetedJudge.attach_client` was unreachable from the engine.** `from_config`
+  injected the Langfuse client into `[dataset, judge, *sinks]` and only *then* replaced
+  `judge` with the `BudgetedJudge` wrapper, so the wrapper's delegating `attach_client` was
+  never invoked on the only path that constructs it — while `agent_core_adapter` reported
+  **100% coverage**, because a unit test called the method directly. Tested, and
+  production-unreachable: the same false-green shape as F-052's dead `--cov=` targets and
+  F-053's never-run parquet cells. Tracing was not broken, but only by accident —
+  `OpenAIJudge.attach_client` mutates its own client, so attaching to the raw judge
+  happened to survive the swap; a wrapper holding client state of its own, or a judge that
+  builds members lazily, would have been silently skipped. The wrap now precedes injection,
+  which is behaviour-identical for every existing judge (the wrapper delegates inward) and
+  makes the delegation live. The regression test spies on the **wrapper**, not the inner
+  judge: an inner-only assertion passes under the old ordering too — verified by
+  re-introducing it — which is exactly how the gap survived.
+- **`check_size_budget.py` failed locally on generated artifacts CI never sees.** The walk
+  prunes by directory name and does not consult gitignore, so `.skill-validation/` — the
+  fixture repos `validate_skill.py --tier behavioral` materialises, which deliberately
+  contain over-long files — was scanned and hard-failed the gate. Running the *documented*
+  local sequence (behavioral validation, then the size budget) therefore produced a failure
+  that CI cannot reproduce, because CI runs the two in separate jobs with fresh checkouts.
+  `.skill-validation` now sits in `EXCLUDED_DIR_NAMES` beside `build`, `dist` and
+  `.pytest_cache`, the same category of generated directory.
+
 ### Added
 - **Generated end-to-end test matrix (`docs/e2e-matrix/`, `tests/_e2e_matrix.py`).** A full
   `run_all_e2e.ps1` run now renders to a reviewable artifact: markdown, one CSV per sheet,
