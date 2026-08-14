@@ -45,9 +45,11 @@ archguard = ["grimp==3.14"]
 # Workbook export for the generated e2e test matrix (tests/test_e2e_matrix.py --update).
 # Reporting-only: kept OUT of `dev` so the offline test job and every CI matrix leg stay
 # unaffected, mirroring the `docs` extra's rationale. Pinned rather than floored because
-# the committed .xlsx is byte-compared by the freshness gate, and a writer upgrade can
-# change the bytes of an otherwise identical workbook -- same reproducibility argument as
-# the `grimp` pin above. openpyxl pulls only et-xmlfile (no numpy/pandas), so it is safe
+# the committed .xlsx must regenerate byte-identically, and a writer upgrade changes the
+# bytes of an otherwise identical workbook -- same reproducibility argument as the `grimp`
+# pin above. (The freshness gate compares the markdown and CSVs; the workbook's
+# reproducibility is asserted by the test suite, since it cannot be written without this
+# extra installed.) openpyxl pulls only et-xmlfile (no numpy/pandas), so it is safe
 # to install alongside `dev` when regenerating the artifact.
 e2e-matrix = ["openpyxl==3.1.5"]
 parquet = ["pyarrow>=14,<20"]

@@ -14,6 +14,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import logging
 import os
@@ -22,6 +23,7 @@ import subprocess
 import sys
 import zipfile
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -37,10 +39,32 @@ if __package__ in (None, ""):
 
 from tests import _e2e_matrix as em
 
+logger = logging.getLogger(__name__)
+
 ROOT = Path(__file__).resolve().parent.parent
 
 #: A provenance stamp fixed for tests, so rendering stays a pure function of the inputs.
 FIXED_STAMP = "2026-01-02T03:04:05+00:00"
+
+#: Exit codes, per the module docstring's contract.
+EXIT_OK = 0
+EXIT_PROBLEM = 1
+EXIT_USAGE_ERROR = 2
+
+
+@dataclass(frozen=True)
+class SubprocessConfig:
+    """Timeouts for this module's own subprocess calls (AGENTS.md: no hard-coded numeric
+    defaults at call sites)."""
+
+    #: `git` should answer near-instantly; generous only to tolerate a slow CI runner.
+    git_timeout_seconds: int = 30
+    #: The shim-silence probe (`test_sitecustomize_is_silent_off_windows`) starts a bare
+    #: interpreter, which is slower to spin up under load than the `git` calls above.
+    shim_probe_timeout_seconds: int = 60
+
+
+DEFAULT_SUBPROCESS_CONFIG = SubprocessConfig()
 
 FIXED_PROVENANCE = em.Provenance(
     sha="0" * 40,
@@ -62,7 +86,7 @@ def _write_report(report_dir: Path, records: list[dict[str, object]], *, bom: bo
     report_dir.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(records if len(records) != 1 else records[0], indent=2)
     encoding = "utf-8-sig" if bom else "utf-8"
-    path = report_dir / "summary.json"
+    path = report_dir / em.SUMMARY_FILENAME
     path.write_text(payload, encoding=encoding, newline="\n")
     return path
 
@@ -146,6 +170,45 @@ class TestRunnerInventory:
             f"unexpected step(s) without a command: {sorted(commandless)}"
         )
 
+    def test_invoke_cmdstep_does_not_misread_skipcodes_as_a_junit_path(self) -> None:
+        """`Invoke-CmdStep`'s third positional is `SkipCodes`, not `Junit`.
+
+        `_call_details` used to apply `Invoke-PytestStep`'s (WorkDir, Junit) signature to
+        every verb, safe today only because every real `Invoke-CmdStep` call passes
+        `SkipCodes` as an inline `@(...)` array the positional-token regex does not match. A
+        bare-variable `SkipCodes` argument -- which resolves to a real string -- must still
+        not be read as a JUnit filename.
+        """
+        source = (
+            "$skipCodes = 'notreallyajunitfile.xml'\n"
+            "Invoke-CmdStep 'C' 'cli:example' @('-m', 'x') 'experiments/backend-validation' $skipCodes\n"
+        )
+        declared = em.parse_declared_steps(source)
+        step = next(s for s in declared if s.name == "cli:example")
+        assert step.workdir == "experiments/backend-validation"
+        assert step.junit == ""
+
+    def test_no_declared_step_is_dropped_by_the_parser(self, runner_text: str) -> None:
+        """Sweep the runner independently of the call-site grammar and reconcile.
+
+        The other guards here assert that a handful of known names are present, which cannot
+        notice a step added through a call shape the parser does not understand. This scans
+        for every ``area:rest`` token in the file instead, so a new step declared any way at
+        all has to show up in the inventory or fail here.
+
+        The one non-step token of that shape is a pytest plugin spec (``-p no:cacheprovider``),
+        excluded by the flag that precedes it rather than by name.
+        """
+        import re
+
+        plugin_specs = set(re.findall(r"'-p',\s*'([^']+)'", runner_text))
+        swept = {tok for tok in re.findall(r"'([a-z][a-z0-9_-]*:[^']*)'", runner_text)} - plugin_specs
+        declared_names = {step.name for step in em.parse_declared_steps(runner_text)}
+        assert swept - declared_names == set(), (
+            f"the runner declares step(s) the parser never produced: {sorted(swept - declared_names)}"
+        )
+        assert "preflight-imports" in declared_names, "the pre-flight guard step vanished"
+
     def test_a_grammar_change_fails_loudly(self) -> None:
         with pytest.raises(em.MatrixError, match="call-site grammar"):
             em.parse_declared_steps("# a runner with no step calls at all\n")
@@ -180,10 +243,13 @@ class TestRunnerInventory:
         guarded. A rename on either side used to slip through as a step that silently
         skipped forever.
         """
-        asserted = {frozenset(names) for names in em.runner_env_assertions(runner_text)}
-        derived = {frozenset(names) for names in em.smoke_credentials(ROOT).values() if names}
-        missing = derived - asserted
-        assert not missing, f"the runner gates on no such variable set: {sorted(map(sorted, missing))}"
+        gates = em.runner_env_gates(ROOT)
+        declared_by_smokes = em.smoke_credentials(ROOT)
+        assert declared_by_smokes, "no smoke-backed live step was discovered from the runner's commands"
+        for step, required in sorted(declared_by_smokes.items()):
+            assert set(required) == set(gates.get(step, ())), (
+                f"{step}: the smoke declares {sorted(required)} but the runner gates on {sorted(gates.get(step, ()))}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +344,7 @@ class TestCensusParsing:
             em.load_run_steps(tmp_path)
 
     def test_malformed_json_names_the_file(self, tmp_path: Path) -> None:
-        (tmp_path / "summary.json").write_text("{not json", encoding="utf-8")
+        (tmp_path / em.SUMMARY_FILENAME).write_text("{not json", encoding="utf-8")
         with pytest.raises(em.MatrixError, match="cannot read"):
             em.load_run_steps(tmp_path)
 
@@ -300,6 +366,30 @@ class TestCensusParsing:
         with caplog.at_level(logging.WARNING, logger="tests._e2e_matrix"):
             assert em.load_junit(tmp_path) == {}
         assert any("unreadable JUnit" in r.getMessage() for r in caplog.records)
+
+    def test_a_namespaced_testsuite_element_still_parses(self, tmp_path: Path) -> None:
+        """`root.iter("testsuite")` misses a namespaced `{uri}testsuite`; local-tag matching must not."""
+        (tmp_path / "root.xml").write_text(
+            '<ns:testsuites xmlns:ns="urn:example">'
+            '<ns:testsuite tests="3" failures="0" errors="0" skipped="0"/></ns:testsuites>',
+            encoding="utf-8",
+        )
+        artifact = em.load_junit(tmp_path)["root"]
+        assert artifact.tests == 3
+
+    def test_a_junit_file_with_no_testsuite_element_is_omitted_not_zero(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A well-formed file with zero `<testsuite>` elements must warn and be dropped.
+
+        `SuiteArtifact(0, 0, 0, 0)` is truthy, so recording it for a file that never
+        actually reported test counts would render a specific false "0" -- worse than a
+        blank cell -- for what may have been a large suite.
+        """
+        (tmp_path / "empty.xml").write_text("<testsuites></testsuites>", encoding="utf-8")
+        with caplog.at_level(logging.WARNING, logger="tests._e2e_matrix"):
+            assert em.load_junit(tmp_path) == {}
+        assert any("no <testsuite> element found" in r.getMessage() for r in caplog.records)
 
     def test_evidence_is_empty_when_the_runner_wrote_no_log(self, tmp_path: Path) -> None:
         assert em.evidence_for("cli:nothing", tmp_path) == ""
@@ -329,6 +419,32 @@ class TestPolicy:
     def test_a_clean_run_has_no_problems(self, declared: tuple[em.DeclaredStep, ...]) -> None:
         run = [em.RunStep(step.tier, step.name, "PASS", "ok", 1) for step in declared]
         assert em.policy_problems(run, declared) == []
+
+    def test_a_step_observed_under_the_wrong_tier_is_a_policy_problem(
+        self, declared: tuple[em.DeclaredStep, ...]
+    ) -> None:
+        """A step recorded under a tier other than the one it is declared under must fail.
+
+        Otherwise the Test Matrix row (declared tier) and the Summary sheet's per-tier
+        counts (observed tier) would silently disagree about which tier ran the step.
+        """
+        step = declared[0]
+        wrong_tier = next(t for t in ("PRE", "A", "B", "C", "D") if t != step.tier)
+        problems = em.policy_problems([em.RunStep(wrong_tier, step.name, "PASS", "", 1)], declared)
+        assert any("declared under tier" in p for p in problems)
+
+    def test_a_duplicate_step_name_in_the_run_report_is_a_policy_problem(
+        self, declared: tuple[em.DeclaredStep, ...]
+    ) -> None:
+        """Two records for the same step silently drop one from a `{name: step}` dict-build.
+
+        The Summary sheet's declared/observed/not-reached counts would stop adding up with
+        no warning if this were not caught here.
+        """
+        step = declared[0]
+        run = [em.RunStep(step.tier, step.name, "PASS", "", 1), em.RunStep(step.tier, step.name, "FAIL", "", 2)]
+        problems = em.policy_problems(run, declared)
+        assert any("appears more than once" in p for p in problems)
 
     def test_build_sheets_refuses_a_report_with_an_unknown_step(self, tmp_path: Path) -> None:
         _write_report(tmp_path, [_record("cli:brand-new"), _record("suite:root", tier="A")])
@@ -509,6 +625,15 @@ class TestWorkbook:
         assert xw.parse_stamp("2026-08-09T19:00:00+00:00") == (2026, 8, 9, 19, 0, 0)
         assert xw.parse_stamp("2026-08-09T19:00:00") == (2026, 8, 9, 19, 0, 0), "a naive stamp is treated as UTC"
 
+    def test_a_stamp_outside_the_zip_range_falls_back_to_the_epoch(self, caplog: pytest.LogCaptureFixture) -> None:
+        """ZIP packs the year into 7 bits from 1980, so 2108 raises deep inside `zipfile`."""
+        from tests import _e2e_matrix_xlsx as xw
+
+        with caplog.at_level(logging.WARNING, logger="tests._e2e_matrix_xlsx"):
+            assert xw.parse_stamp("2200-01-01T00:00:00+00:00") == xw.ZIP_EPOCH
+            assert xw.parse_stamp("1970-01-01T00:00:00+00:00") == xw.ZIP_EPOCH
+        assert any("outside the ZIP range" in r.getMessage() for r in caplog.records)
+
     def test_an_unparseable_stamp_falls_back_to_the_zip_epoch(self, caplog: pytest.LogCaptureFixture) -> None:
         from tests import _e2e_matrix_xlsx as xw
 
@@ -543,9 +668,10 @@ def test_nothing_is_logged_at_the_default_level(tmp_path: Path, caplog: pytest.L
 
 
 def test_freshness_reports_a_missing_document_as_stale(tmp_path: Path) -> None:
-    fresh, rendered = em.artifact_is_fresh([em.Sheet(name="S", columns=("A",))], tmp_path)
+    sheets = [em.Sheet(name="S", columns=("A",))]
+    fresh, rendered = em.artifact_is_fresh(sheets, tmp_path)
     assert not fresh
-    assert "does not exist" in em.freshness_failure_message(rendered, tmp_path)
+    assert "does not exist" in em.freshness_failure_message(rendered, tmp_path, sheets)
 
 
 def test_provenance_drift_alone_does_not_make_the_artifact_stale(tmp_path: Path) -> None:
@@ -586,13 +712,13 @@ def test_freshness_diff_is_bounded(tmp_path: Path) -> None:
     sheet = em.Sheet(name="S", columns=("A",), rows=tuple((str(n),) for n in range(200)))
     em.write_artifacts([em.Sheet(name="S", columns=("A",))], tmp_path)
     _, rendered = em.artifact_is_fresh([sheet], tmp_path)
-    message = em.freshness_failure_message(rendered, tmp_path)
+    message = em.freshness_failure_message(rendered, tmp_path, [sheet])
     assert "truncated" in message
     assert len(message.splitlines()) <= em.MAX_DIFF_LINES + 2
 
 
 @pytest.mark.skipif(
-    not (em.DEFAULT_REPORT_DIR / "summary.json").is_file(),
+    not (em.DEFAULT_REPORT_DIR / em.SUMMARY_FILENAME).is_file(),
     reason="no e2e run report present; the artifact can only be verified after a run",
 )
 def test_matrix_artifact_is_fresh() -> None:
@@ -602,9 +728,331 @@ def test_matrix_artifact_is_fresh() -> None:
     e2e runner is a local/Windows operation and CI never produces a report to compare
     against. The guard is meaningful exactly where a report exists.
     """
-    sheets = em.build_sheets(provenance=_provenance())
+    sheets, _ = build_committed_sheets()
     fresh, rendered = em.artifact_is_fresh(sheets, em.DEFAULT_OUT_DIR)
-    assert fresh, em.freshness_failure_message(rendered, em.DEFAULT_OUT_DIR)
+    assert fresh, em.freshness_failure_message(rendered, em.DEFAULT_OUT_DIR, sheets)
+
+
+@pytest.mark.skipif(
+    not (em.DEFAULT_REPORT_DIR / em.SUMMARY_FILENAME).is_file(),
+    reason="no e2e run report present; the artifact can only be verified after a run",
+)
+def test_workbook_from_the_real_report_is_byte_reproducible(tmp_path: Path) -> None:
+    """The committed `.xlsx` has zero freshness coverage from `artifact_is_fresh` by design
+    (ADR 0033 §4: it cannot be written without the optional extra, so byte-gating it would
+    fail for anyone without openpyxl). README.md nonetheless calls it "byte-reproducible" --
+    this asserts that claim against the real report's sheets, not just a synthetic fixture
+    (`TestWorkbook.test_workbook_is_byte_reproducible` already covers the synthetic case).
+
+    Deliberately does *not* compare against the currently committed `.xlsx`: that file's
+    pinned timestamp was derived from `git log` at a commit that no longer exists once this
+    change is itself committed -- the same chicken-and-egg problem ADR 0033 exempts the
+    Provenance section from for the markdown/CSV comparison. A fixed, explicit provenance
+    sidesteps it entirely instead of needing an equivalent exemption for a binary format.
+    """
+    xw = pytest.importorskip("tests._e2e_matrix_xlsx")
+    if not (em.DEFAULT_REPORT_DIR / em.SUMMARY_FILENAME).is_file():
+        pytest.skip("no e2e run report present; the artifact can only be verified after a run")
+
+    sheets, _ = build_committed_sheets(sha="0" * 40, stamp=FIXED_STAMP)
+    first = xw.write_workbook(sheets, tmp_path / "first.xlsx", stamp_iso=FIXED_STAMP)
+    second = xw.write_workbook(sheets, tmp_path / "second.xlsx", stamp_iso=FIXED_STAMP)
+    assert first.read_bytes() == second.read_bytes()
+
+
+# ---------------------------------------------------------------------------
+# Degraded inputs: every derivation must fail soft or fail loudly, never silently
+# ---------------------------------------------------------------------------
+
+
+class TestDegradedInputs:
+    """Each derive_* reads a file that can be absent or malformed on a real machine.
+
+    These paths were the bulk of the module's uncovered lines. They are not defensive
+    boilerplate: a missing Makefile or an unreadable coveragerc silently blanks a column
+    that a reader would otherwise trust, so each one needs to be pinned deliberately.
+    """
+
+    def test_a_non_array_report_is_rejected(self, tmp_path: Path) -> None:
+        (tmp_path / em.SUMMARY_FILENAME).write_text("42", encoding="utf-8")
+        with pytest.raises(em.MatrixError, match="neither an object nor an array"):
+            em.load_run_steps(tmp_path)
+
+    def test_a_non_object_result_is_rejected(self, tmp_path: Path) -> None:
+        (tmp_path / em.SUMMARY_FILENAME).write_text('["not-an-object", 1]', encoding="utf-8")
+        with pytest.raises(em.MatrixError, match="non-object result"):
+            em.load_run_steps(tmp_path)
+
+    def test_a_null_duration_becomes_zero(self, tmp_path: Path) -> None:
+        """`_as_int` must reject non-numeric types, not just unparseable strings."""
+        _write_report(tmp_path, [_record("suite:root", tier="A") | {"duration_ms": None}, _record("cli:bregress")])
+        assert em.load_run_steps(tmp_path)[0].duration_ms == 0
+
+    def test_a_missing_report_directory_yields_no_junit(self, tmp_path: Path) -> None:
+        assert em.load_junit(tmp_path / "absent") == {}
+
+    def test_evidence_outside_the_repo_is_reported_absolutely(self, tmp_path: Path) -> None:
+        (tmp_path / "cli_x.log").write_text("", encoding="utf-8")
+        assert em.evidence_for("cli:x", tmp_path).startswith("/")
+
+    def test_a_missing_makefile_yields_no_members(self, tmp_path: Path) -> None:
+        assert em.makefile_check_members(tmp_path) == ()
+
+    def test_a_makefile_without_check_all_yields_no_members(self, tmp_path: Path) -> None:
+        (tmp_path / "Makefile").write_text("test:\n\techo hi\n", encoding="utf-8")
+        assert em.makefile_check_members(tmp_path) == ()
+
+    def test_undecodable_bytes_are_treated_as_absent_not_a_crash(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """`UnicodeDecodeError` is a `ValueError`, not an `OSError` -- uncaught, it would
+        escape as a raw traceback instead of the documented soft-degrade every other
+        missing-file case gets."""
+        (tmp_path / "Makefile").write_bytes(b"check-all: check-\xff\ntest:\n")
+        with caplog.at_level(logging.WARNING, logger="tests._e2e_matrix"):
+            assert em.makefile_check_members(tmp_path) == ()
+        assert any("treating it as absent" in r.getMessage() for r in caplog.records)
+
+    def test_each_absent_floor_anchor_yields_none(self, tmp_path: Path) -> None:
+        assert em._floor_from_pyproject(tmp_path / "pyproject.toml") is None
+        assert em._floor_from_gate_script(tmp_path / "quality-gate.sh") is None
+        assert em._floor_from_coveragerc(tmp_path / ".coveragerc") is None
+        (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+        assert em._floor_from_pyproject(tmp_path / "pyproject.toml") is None
+        (tmp_path / "quality-gate.sh").write_text("#!/bin/sh\necho hi\n", encoding="utf-8")
+        assert em._floor_from_gate_script(tmp_path / "quality-gate.sh") is None
+
+    def test_an_unreadable_coveragerc_warns_and_yields_none(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        (tmp_path / ".coveragerc").write_text("[report]\nfail_under = not-a-number\n", encoding="utf-8")
+        with caplog.at_level(logging.WARNING, logger="tests._e2e_matrix"):
+            assert em._floor_from_coveragerc(tmp_path / ".coveragerc") is None
+        assert any("coverage floor" in r.getMessage() for r in caplog.records)
+
+    def test_a_missing_workflow_directory_yields_no_mapping(self, tmp_path: Path) -> None:
+        assert em.derive_workflows(tmp_path) == {}
+
+    def test_credential_derivations_need_the_runner(self, tmp_path: Path) -> None:
+        """Every runner-derived helper degrades to empty rather than raising."""
+        assert em.runner_env_gates(tmp_path) == {}
+        assert em.smoke_credentials(tmp_path) == {}
+        assert em._judge_credentials(tmp_path / "absent.ps1") == {}
+
+    def test_a_runner_without_live_judges_yields_no_specs(self, tmp_path: Path) -> None:
+        runner = tmp_path / "run.ps1"
+        runner.write_text("Add-Result 'A' 'suite:x' 'PASS'\n", encoding="utf-8")
+        assert em._judge_credentials(runner) == {}
+
+    def test_build_sheets_without_a_runner_is_a_config_error(self, tmp_path: Path) -> None:
+        _write_report(tmp_path, [_record("suite:root", tier="A"), _record("cli:bregress")])
+        with pytest.raises(em.MatrixConfigError, match="runner not found"):
+            em.build_sheets(tmp_path, root=tmp_path, provenance=FIXED_PROVENANCE)
+
+    def test_build_sheets_honors_a_custom_root_for_the_runner_too(self, tmp_path: Path, monkeypatch) -> None:
+        """`root` must govern which runner is parsed, not just credentials/workflows/packages."""
+        _write_report(tmp_path, [_record("suite:x", tier="C")])
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+        (scripts_dir / "run_all_e2e.ps1").write_text("Add-Result 'C' 'suite:x' 'PASS'\n", encoding="utf-8")
+        monkeypatch.setattr(em, "derive_live_credentials", lambda root: {})
+        monkeypatch.setattr(em, "derive_workflows", lambda root: {})
+        monkeypatch.setattr(em, "derive_packages", lambda root, workflows: ())
+        sheets = em.build_sheets(tmp_path, root=tmp_path, provenance=FIXED_PROVENANCE)
+        matrix = next(s for s in sheets if s.name == "Test Matrix")
+        assert any(row[2] == "suite:x" for row in matrix.rows)
+
+    def test_an_unresolvable_loop_variable_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A `$x.name` loop whose collection cannot be found must say so, not drop steps."""
+        source = "Add-Result 'A' 'suite:x' 'PASS'\nInvoke-CmdStep 'C' $q.name @('-m', 'x')\n"
+        with caplog.at_level(logging.WARNING, logger="tests._e2e_matrix"):
+            em.parse_declared_steps(source)
+        assert any("cannot resolve" in r.getMessage() for r in caplog.records)
+
+    def test_an_empty_resolved_array_body_warns_and_yields_no_steps(self, caplog: pytest.LogCaptureFixture) -> None:
+        """`$suites = @(\\n)` resolves (unlike an unresolvable collection) but is empty.
+
+        A resolvable-but-empty collection previously produced zero steps from that loop with
+        no diagnostic at all -- distinct from (and easier to miss than) the unresolvable case
+        above, which already warned.
+        """
+        source = "Add-Result 'A' 'suite:x' 'PASS'\n$suites = @(\n)\nforeach ($s in $suites) {\n    Invoke-PytestStep 'A' $s.name\n}\n"
+        with caplog.at_level(logging.WARNING, logger="tests._e2e_matrix"):
+            declared = em.parse_declared_steps(source)
+        assert any("empty array literal" in r.getMessage() for r in caplog.records)
+        assert {step.name for step in declared} == {"suite:x"}
+
+    def test_an_orphan_tier_is_a_policy_problem(self, declared: tuple[em.DeclaredStep, ...]) -> None:
+        problems = em.policy_problems([em.RunStep("Z", declared[0].name, "PASS", "", 1)], declared)
+        assert any("no declared step belongs to it" in p for p in problems)
+
+    def test_parser_primitives_degrade_to_empty(self) -> None:
+        """Every primitive returns a falsy value rather than raising on input it cannot read."""
+        assert em._balanced_args_span("no array at all", 0) is None
+        assert em._balanced_args_span("@( unterminated", 0) is None
+        assert em._balanced_args("no array at all", 0) is None
+        assert em._resolve_array_literal("nothing here", "missing") is None
+        assert em._render_command(None) == ""
+        assert em._render_command("$onlyVars") == "python $onlyVars"
+        assert em._render_command("   ") == ""
+
+    def test_judge_specs_need_the_runner(self, tmp_path: Path) -> None:
+        assert em.runner_judge_specs(tmp_path / "absent.ps1") == {}
+        empty = tmp_path / "run.ps1"
+        empty.write_text("Add-Result 'A' 'suite:x' 'PASS'\n", encoding="utf-8")
+        assert em.runner_judge_specs(empty) == {}
+
+    def test_an_unparseable_positional_token_yields_blank(self) -> None:
+        """A path built by something other than Join-Path must not be guessed at."""
+        assert em._resolve_path_literal("$x = [IO.Path]::Combine($d, 'tests', 'integration')", "$x") == ""
+        assert em._resolve_path_literal("", "$never_declared") == ""
+        assert em._resolve_path_literal("anything", "'literal-value'") == "literal-value"
+
+
+# ---------------------------------------------------------------------------
+# The committed artifact's other renderings
+# ---------------------------------------------------------------------------
+
+
+def test_a_stale_csv_mirror_is_reported(tmp_path: Path) -> None:
+    """The markdown used to be the only gated output, so a CSV could rot unnoticed."""
+    _write_report(tmp_path, [_record("suite:root", tier="A"), _record("cli:bregress")])
+    sheets = em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE)
+    out = tmp_path / "out"
+    em.write_artifacts(sheets, out)
+    target = out / em.CSV_DIR_NAME / em.csv_filename(sheets[0])
+    target.write_text("Tier,Area\ntampered,row\n", encoding="utf-8")
+
+    fresh, rendered = em.artifact_is_fresh(sheets, out)
+    assert not fresh
+    assert target.name in em.freshness_failure_message(rendered, out, sheets)
+
+
+def test_an_orphan_csv_is_reported_stale(tmp_path: Path) -> None:
+    """A CSV left behind by a renamed/removed sheet must not go undetected forever.
+
+    `stale_csv_mirrors` used to iterate only the *current* sheets, never the directory, so
+    it could never notice a file it never looked for.
+    """
+    _write_report(tmp_path, [_record("suite:root", tier="A"), _record("cli:bregress")])
+    sheets = em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE)
+    out = tmp_path / "out"
+    em.write_artifacts(sheets, out)
+    orphan = out / em.CSV_DIR_NAME / "renamed_sheet.csv"
+    orphan.write_text("stale content\n", encoding="utf-8")
+
+    assert "renamed_sheet.csv" in em.stale_csv_mirrors(sheets, out)
+
+
+def test_stale_csv_mirrors_skips_the_orphan_sweep_when_no_csv_directory_exists(tmp_path: Path) -> None:
+    """Nothing has been written yet: the orphan sweep must not try to glob a missing directory.
+
+    The sheet's own CSV is still correctly reported stale (it does not exist); only the
+    *orphan* half of the check -- which globs `csv_dir` -- has anything to skip.
+    """
+    assert em.stale_csv_mirrors([em.Sheet(name="S", columns=("A",))], tmp_path) == ["s.csv"]
+
+
+def test_control_characters_never_reach_a_cell() -> None:
+    """openpyxl rejects them outright, so one stray byte would break the whole workbook."""
+    assert em.safe_cell("a\x00b\x1bc") == "a b c"
+
+
+# ---------------------------------------------------------------------------
+# The interpreter shim (no test existed; it broke two Tier-A steps once)
+# ---------------------------------------------------------------------------
+
+
+def test_sitecustomize_is_silent_off_windows() -> None:
+    """The shim must print nothing on a platform that has no WMI to shim.
+
+    It once warned unconditionally when `platform._wmi_query` was absent - which is every
+    non-Windows interpreter - so its breadcrumb landed in the output of every child process
+    the runner started, and broke a test asserting a subprocess prints only its version.
+    Nothing else in the repo covers this file: it is never imported, so it does not even
+    appear in the `--cov=scripts` report.
+    """
+    shim_dir = ROOT / "scripts" / "e2e_shims"
+    env = {**os.environ, "PYTHONPATH": str(shim_dir)}
+    result = subprocess.run(
+        [sys.executable, "-c", "print('only-this')"],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=DEFAULT_SUBPROCESS_CONFIG.shim_probe_timeout_seconds,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "only-this"
+    assert result.stderr == "", f"the shim wrote to stderr: {result.stderr!r}"
+
+
+# ---------------------------------------------------------------------------
+# CLI: the entry point CI measures but nothing exercised
+# ---------------------------------------------------------------------------
+
+
+class TestCommandLine:
+    """`main()` had no tests at all, despite being inside the coverage target CI enforces."""
+
+    @staticmethod
+    def _seed(tmp_path: Path) -> tuple[Path, Path]:
+        report, out = tmp_path / "report", tmp_path / "out"
+        _write_report(report, [_record("suite:root", tier="A"), _record("cli:bregress")])
+        return report, out
+
+    def test_update_writes_the_artifact_and_check_then_passes(self, tmp_path: Path, capsys) -> None:
+        report, out = self._seed(tmp_path)
+        assert main(["--update", "--report", str(report), "--out", str(out)]) == EXIT_OK
+        assert (out / em.ARTIFACT_DOC_NAME).is_file()
+        capsys.readouterr()
+        assert main(["--check", "--report", str(report), "--out", str(out)]) == EXIT_OK
+        assert "is fresh" in capsys.readouterr().out
+
+    def test_check_reports_a_stale_artifact(self, tmp_path: Path, capsys) -> None:
+        report, out = self._seed(tmp_path)
+        main(["--update", "--report", str(report), "--out", str(out)])
+        (out / em.ARTIFACT_DOC_NAME).write_text("# tampered\n", encoding="utf-8")
+        capsys.readouterr()
+        assert main(["--check", "--report", str(report), "--out", str(out)]) == EXIT_PROBLEM
+        assert "stale" in capsys.readouterr().err
+
+    def test_a_missing_report_is_a_usage_error(self, tmp_path: Path, capsys) -> None:
+        """Exit 2 must come from the exception's type, not from matching its prose."""
+        assert main(["--check", "--report", str(tmp_path / "absent"), "--out", str(tmp_path)]) == EXIT_USAGE_ERROR
+        assert "no run report" in capsys.readouterr().err
+
+    def test_an_undeclared_step_is_a_problem_not_a_usage_error(self, tmp_path: Path, capsys) -> None:
+        report, out = tmp_path / "report", tmp_path / "out"
+        _write_report(report, [_record("cli:invented"), _record("suite:root", tier="A")])
+        assert main(["--update", "--report", str(report), "--out", str(out)]) == EXIT_PROBLEM
+        assert "not declared" in capsys.readouterr().err
+
+    def test_verbose_enables_debug_logging(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        report, out = self._seed(tmp_path)
+        with caplog.at_level(logging.DEBUG, logger="tests._e2e_matrix"):
+            main(["--update", "--report", str(report), "--out", str(out), "-v"])
+        assert any(r.levelno == logging.DEBUG for r in caplog.records)
+
+    def test_the_committed_builder_is_what_the_cli_uses(self, tmp_path: Path) -> None:
+        """One builder for `--update`, `--check` and the freshness test, redaction included."""
+        report, _ = self._seed(tmp_path)
+        sheets, _ = build_committed_sheets(report, sha="0" * 40, stamp=FIXED_STAMP)
+        assert sheets[0].name == "Test Matrix"
+
+    def test_a_z_suffixed_committer_timestamp_does_not_crash_the_build(self, tmp_path: Path) -> None:
+        """A CI git for a committer in the UTC zone emits `...T22:45:39Z`, not `+00:00`.
+
+        `datetime.fromisoformat` only accepts a trailing `Z` from Python 3.11 -- this repo's
+        floor is 3.10 -- so `_to_utc_iso` must normalize it by hand rather than lean on the
+        newer stdlib parser. Caught by CI's own py3.10 leg, not by a local 3.11 venv.
+        """
+        report, out = self._seed(tmp_path)
+        assert (
+            main(["--update", "--report", str(report), "--out", str(out), "--timestamp", "2026-08-13T22:45:39Z"])
+            == EXIT_OK
+        )
+        assert "2026-08-13T22:45:39+00:00" in (out / em.ARTIFACT_DOC_NAME).read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -612,14 +1060,71 @@ def test_matrix_artifact_is_fresh() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _display_path(path: Path) -> str:
+    """Repo-relative when the path is inside the repo, absolute otherwise.
+
+    `--out` may point anywhere; a bare `relative_to` raised `ValueError` and took the whole
+    command down after it had already written every file.
+    """
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def build_committed_sheets(
+    report_dir: Path = em.DEFAULT_REPORT_DIR, *, sha: str | None = None, stamp: str | None = None
+) -> tuple[tuple[em.Sheet, ...], em.Provenance]:
+    """The sheets exactly as the committed artifact is written, with the provenance used.
+
+    One entry point on purpose. `--update` used to build *with* the redaction callable while
+    the freshness test built *without* it, so an artifact that had genuinely redacted a
+    credential would compare unequal and report stale forever. Anything that renders the
+    committed artifact must go through here.
+
+    The provenance is returned alongside the sheets so a caller that also needs its
+    ``generated_at`` (the xlsx writer's pinned timestamp, say) can use the value that was
+    actually rendered instead of re-deriving it or scraping it back out of a rendered row.
+    """
+    provenance = _provenance(sha, stamp)
+    return em.build_sheets(report_dir, provenance=provenance, scrub=_load_scrubber()), provenance
+
+
 def _git(*args: str) -> str:
     """A git value for provenance, or an empty string outside a checkout."""
     try:
         return subprocess.run(
-            ["git", *args], cwd=ROOT, capture_output=True, text=True, timeout=30, check=False
+            ["git", *args],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=DEFAULT_SUBPROCESS_CONFIG.git_timeout_seconds,
+            check=False,
         ).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.debug("git %s failed (%s); provenance field left blank", " ".join(args), exc)
         return ""
+
+
+def _to_utc_iso(stamp: str) -> str:
+    """Normalize an ISO 8601 timestamp to a UTC offset, preserving precision.
+
+    ``git log --format=%cI`` carries the *committer's* local offset (e.g. ``-04:00``), not
+    UTC, even though the Provenance sheet labels this column "Generated at (UTC)" and
+    ``_e2e_matrix_xlsx.parse_stamp`` derives the workbook's pinned ZIP/``docProps``
+    timestamps from this same string. Normalizing once here, at the source, means both
+    consumers get a value that matches its own label instead of each needing its own fix.
+
+    ``datetime.fromisoformat`` only accepts a trailing ``Z`` from Python 3.11 -- this repo's
+    floor is 3.10 (``pyproject.toml``'s ``requires-python``), and a CI git can legitimately
+    emit ``...T22:45:39Z`` for a committer in the UTC zone, so ``Z`` is normalized to
+    ``+00:00`` by hand before parsing rather than relying on the newer stdlib behaviour.
+    """
+    if not stamp:
+        return stamp
+    if stamp.endswith("Z"):
+        stamp = stamp[:-1] + "+00:00"
+    return dt.datetime.fromisoformat(stamp).astimezone(dt.timezone.utc).isoformat()
 
 
 def _provenance(sha: str | None = None, stamp: str | None = None) -> em.Provenance:
@@ -627,7 +1132,7 @@ def _provenance(sha: str | None = None, stamp: str | None = None) -> em.Provenan
     return em.Provenance(
         sha=sha or _git("rev-parse", "HEAD"),
         branch=_git("rev-parse", "--abbrev-ref", "HEAD"),
-        generated_at=stamp or _git("log", "-1", "--format=%cI"),
+        generated_at=_to_utc_iso(stamp or _git("log", "-1", "--format=%cI")),
         host=platform.platform(),
         python_version=platform.python_version(),
         runner_invocation="pwsh -NoProfile -File scripts/run_all_e2e.ps1 -Tiers all -HypothesisProfile ci",
@@ -654,47 +1159,45 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO, format="%(levelname)-8s %(name)s: %(message)s"
     )
 
-    scrub = _load_scrubber()
     try:
-        sheets = em.build_sheets(
-            args.report,
-            provenance=_provenance(args.sha, args.timestamp),
-            scrub=scrub,
-        )
+        sheets, provenance = build_committed_sheets(args.report, sha=args.sha, stamp=args.timestamp)
     except em.MatrixError as exc:
-        logging.getLogger(__name__).error("%s", exc)
         print(f"e2e-matrix: {exc}", file=sys.stderr)
-        return 2 if "no run report" in str(exc) or "runner not found" in str(exc) else 1
+        return EXIT_USAGE_ERROR if isinstance(exc, em.MatrixConfigError) else EXIT_PROBLEM
 
     if args.check:
         fresh, rendered = em.artifact_is_fresh(sheets, args.out)
         if not fresh:
-            print(em.freshness_failure_message(rendered, args.out), file=sys.stderr)
-            return 1
-        print(f"{(args.out / 'e2e-matrix.md').as_posix()} is fresh")
-        return 0
+            print(em.freshness_failure_message(rendered, args.out, sheets), file=sys.stderr)
+            return EXIT_PROBLEM
+        print(f"{(args.out / em.ARTIFACT_DOC_NAME).as_posix()} is fresh")
+        return EXIT_OK
 
     written = em.write_artifacts(sheets, args.out)
-    stamp = next(row[1] for row in sheets[-1].rows if row[0] == "Generated at (UTC)")
     try:
         from tests import _e2e_matrix_xlsx as xw
 
-        written.append(xw.write_workbook(sheets, args.out / "e2e-test-matrix.xlsx", stamp_iso=stamp))
+        written.append(xw.write_workbook(sheets, args.out / em.WORKBOOK_FILENAME, stamp_iso=provenance.generated_at))
     except ImportError as exc:
-        logging.getLogger(__name__).warning("workbook not written: %s", exc)
+        logger.warning("workbook not written: %s", exc)
     for path in written:
-        print(path.relative_to(ROOT).as_posix())
-    return 0
+        print(_display_path(path))
+    return EXIT_OK
 
 
 def _load_scrubber() -> Callable[[str], str] | None:
     """Reuse the smokes' redaction so committed cells cannot carry a credential."""
-    smokes = ROOT / "scripts" / "smokes"
+    smokes = ROOT / em.SMOKES_DIR_NAME
     if str(smokes) not in sys.path:
         sys.path.append(str(smokes))
     try:
         import _smoke_lib
-    except ImportError:  # pragma: no cover - the smokes ship with the repo
+    except ImportError as exc:  # pragma: no cover - the smokes ship with the repo
+        # A silent None here means build_committed_sheets renders the run's raw output --
+        # including anything a live step printed -- into a *committed* file with no
+        # redaction at all. em.derive_live_credentials degrades the same way and already
+        # warns; this path must too.
+        logger.warning("redaction unavailable (%s); committed cells will not be scrubbed", exc)
         return None
     secrets = [value for name, value in os.environ.items() if _is_secret_name(name) and value]
     return lambda text: _smoke_lib.redact(text, secrets)

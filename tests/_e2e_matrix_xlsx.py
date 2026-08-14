@@ -24,7 +24,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from tests._e2e_matrix import Sheet, safe_cell
+from tests._e2e_matrix import (
+    NOT_RUN,
+    STATUS_COLUMN,
+    STATUS_FAIL,
+    STATUS_PASS,
+    STATUS_SKIP,
+    Sheet,
+    safe_cell,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +41,10 @@ INSTALL_HINT = "Install with: pip install 'langfuse-eval-harness[e2e-matrix]'"
 
 #: Earliest timestamp the ZIP format can represent; the floor for a pinned stamp.
 ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
+
+#: Latest timestamp the ZIP format can represent: its DOS date packs the year into 7 bits
+#: counting from 1980. Without a ceiling a far-future stamp raises deep inside `zipfile`.
+ZIP_MAX_YEAR = 2107
 
 #: ZIP stores times in MS-DOS format, which encodes seconds as seconds/2 - odd seconds are
 #: not representable and get truncated on write. Flooring to even here means the value this
@@ -57,11 +69,13 @@ class WorkbookStyle:
     first_data_row: int = 2
     header_fill: str = "FF2F3E4E"
     header_font: str = "FFFFFFFF"
+    #: Fill per status. Every key comes from the engine rather than being respelled here: a
+    #: rename there would otherwise leave this table silently matching nothing.
     status_fills: tuple[tuple[str, str], ...] = (
-        ("PASS", "FFD5EFD8"),
-        ("FAIL", "FFF6CFCF"),
-        ("SKIP", "FFFBEFCB"),
-        ("NOT-RUN", "FFE6E6E6"),
+        (STATUS_PASS, "FFD5EFD8"),
+        (STATUS_FAIL, "FFF6CFCF"),
+        (STATUS_SKIP, "FFFBEFCB"),
+        (NOT_RUN, "FFE6E6E6"),
     )
 
 
@@ -102,7 +116,8 @@ def parse_stamp(iso_timestamp: str) -> tuple[int, int, int, int, int, int]:
         return ZIP_EPOCH
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(dt.timezone.utc).replace(tzinfo=None)
-    if parsed.year < ZIP_EPOCH[0]:
+    if parsed.year < ZIP_EPOCH[0] or parsed.year > ZIP_MAX_YEAR:
+        logger.warning("provenance timestamp %r is outside the ZIP range; pinning to the epoch", iso_timestamp)
         return ZIP_EPOCH
     second = parsed.second - (parsed.second % ZIP_SECOND_GRANULARITY)
     return (parsed.year, parsed.month, parsed.day, parsed.hour, parsed.minute, second)
@@ -159,24 +174,29 @@ def _write_sheet(worksheet: Any, sheet: Sheet, style: WorkbookStyle) -> None:
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
 
+    # Scrubbed once per cell and reused below for the append, the column-width measurement,
+    # and the status-colour lookup -- previously each ran its own `safe_cell` pass over every
+    # row, doing the same scrub up to three times per cell.
+    safe_rows = [[safe_cell(cell) for cell in row] for row in sheet.rows]
+
     worksheet.append(list(sheet.columns))
-    for row in sheet.rows:
-        worksheet.append([safe_cell(cell) for cell in row])
+    for row in safe_rows:
+        worksheet.append(row)
 
     for cell in worksheet[style.header_row]:
         cell.font = Font(bold=True, color=style.header_font)
         cell.fill = PatternFill(fill_type="solid", start_color=style.header_fill)
 
     for index, column in enumerate(sheet.columns, start=1):
-        values = [safe_cell(row[index - 1]) for row in sheet.rows]
+        values = [row[index - 1] for row in safe_rows]
         worksheet.column_dimensions[get_column_letter(index)].width = _column_width(column, values, style)
 
-    if "Status" in sheet.columns:
-        status_index = sheet.columns.index("Status")
+    if STATUS_COLUMN in sheet.columns:
+        status_index = sheet.columns.index(STATUS_COLUMN)
         colours = dict(style.status_fills)
         letter = get_column_letter(status_index + 1)
-        for offset, row in enumerate(sheet.rows):
-            colour = colours.get(safe_cell(row[status_index]))
+        for offset, row in enumerate(safe_rows):
+            colour = colours.get(row[status_index])
             if colour:
                 worksheet[f"{letter}{style.first_data_row + offset}"].fill = PatternFill(
                     fill_type="solid", start_color=colour

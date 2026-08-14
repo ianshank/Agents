@@ -112,9 +112,10 @@ jobs:
       # archguard pulls grimp (pinned): F-011's airgap negative test shells out to
       # drift_check.py, which needs grimp to build the import graph. (F-011..F-015 add
       # flow-protocol/flow-corpus to sys.path themselves, so no editable install needed.)
-      # e2e-matrix pulls openpyxl (pinned, no numpy/pandas): the tooling-coverage step below
-      # measures tests._e2e_matrix_xlsx, whose writer would otherwise importorskip and report
-      # as uncovered -- the vacuous-coverage shape this repo already fixed once for parquet.
+      # e2e-matrix pulls openpyxl (pinned, no numpy/pandas): the "E2E-matrix generator
+      # coverage" step further below measures tests._e2e_matrix_xlsx, whose writer would
+      # otherwise importorskip and report as uncovered -- the vacuous-coverage shape this
+      # repo already fixed once for parquet.
       - run: pip install -e ".[dev,langfuse,openai,archguard,parquet,e2e-matrix]"
       # Feature ledger: schema + DAG + git provenance + tier-fast validation commands.
       # --strict makes an unresolvable `implemented_in` an ERROR, not a warning. Without it
@@ -162,7 +163,6 @@ jobs:
           tests/test_audit_issue_sync.py tests/test_check_size_budget.py
           tests/test_check_charter_drift.py tests/test_check_charter_invariants.py
           tests/test_check_guard_reachability.py tests/test_matrix_coverage.py
-          tests/test_e2e_matrix.py
           --override-ini addopts=""
           --cov=regression_gate --cov=eval_protected_paths
           --cov=check_protected_changes --cov=fix_loop
@@ -175,8 +175,16 @@ jobs:
           --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037
           --cov=F_039 --cov=F_041 --cov=F_045 --cov=F_050 --cov=F_052 --cov=F_053
           --cov=tests._matrix_coverage
-          --cov=tests._e2e_matrix --cov=tests._e2e_matrix_xlsx
           --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
+      # Dedicated floor for the e2e-matrix generator. Deliberately its own step: folded into
+      # the aggregate above it would sit among ~40 modules, where a regression in it is
+      # absorbed by everything else's headroom. Runs in about a second.
+      - name: E2E-matrix generator coverage (>=97%)
+        run: >-
+          python -m pytest tests/test_e2e_matrix.py
+          --override-ini addopts=""
+          --cov=tests._e2e_matrix --cov=tests._e2e_matrix_xlsx
+          --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=97
       # Net-new lint/test regressions vs the PR base (or main on push). Blocks on net-new.
       - name: Regression gate
         run: >-
