@@ -44,6 +44,13 @@ before that guard existed.
   Answers the external analysis's "judge calibration: Not Covered" grade, which is refuted —
   Cohen's κ with a statistical-power floor already ships — and scopes what is genuinely
   missing on top of it.
+- [`changes/add-panel-judge/`](changes/add-panel-judge/) — *proposed.* A `panel` judge: one
+  registered component fanning an evaluation out to N member judges and aggregating under an
+  explicit strategy, surfacing disagreement instead of averaging it away and abstaining
+  rather than guessing. Specifies per-member budget accounting (a naive panel under-charges
+  `judge_budget` by factor N) and the calibration obligations — panel κ, pairwise member
+  redundancy κ, named-artifact gating — that keep a council advisory until it earns trust.
+  Aligned with `extend-judge-calibration`.
 - [`changes/add-repeat-reliability-metrics/`](changes/add-repeat-reliability-metrics/) —
   *proposed.* `pass^k` over k independent attempts per item. Depends on
   `add-agent-trajectory-evaluation` (landed); authorised by ADR 0031.

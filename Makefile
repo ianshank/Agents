@@ -55,6 +55,14 @@ matrix-update: ## Regenerate docs/matrix-coverage.md from the live registry cens
 	@# Refuses to write while the matrix itself has holes -- fix the rows first.
 	$(PYTHON) tests/test_matrix_coverage.py --update
 
+.PHONY: e2e-matrix-check e2e-matrix-update
+
+e2e-matrix-check: ## Verify docs/e2e-matrix/ matches a live regeneration (ADR 0033)
+	$(PYTHON) tests/test_e2e_matrix.py --check
+
+e2e-matrix-update: ## Regenerate docs/e2e-matrix/ from artifacts/e2e-report/ (ADR 0033)
+	$(PYTHON) tests/test_e2e_matrix.py --update
+
 build: ## Build distributables
 	$(PYTHON) -m build
 

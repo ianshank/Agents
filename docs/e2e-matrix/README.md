@@ -35,17 +35,19 @@ commit that carries the artifact. A change to any other sheet still reports stal
 Every value is derived, never restated in the generator (see
 [ADR 0033](../decisions/0033-generated-e2e-matrix-workbook.md)):
 
-- **Tier / Step / Command / Workdir** - parsed from `scripts/run_all_e2e.ps1`. A step added
-  to the runner appears here with no code change; a step in a run report that the parser
-  cannot see is a hard error rather than a missing row.
+- **Tier / Area / Step / Command / Workdir** - parsed from `scripts/run_all_e2e.ps1`. A step
+  added to the runner appears here with no code change; a step in a run report that the
+  parser cannot see is a hard error rather than a missing row. Area is the step name's
+  prefix (`suite`, `cli`, `live`, ...).
 - **Status / Detail / Duration** - from `artifacts/e2e-report/summary.json`. `NOT-RUN` means
   the step was never reached (its tier was not selected, or a conditional branch was not
   taken); `SKIP` means the runner reached it and declined to execute it.
-- **Tests / Failures / Skipped** - from the per-suite JUnit XML, which carries more than the
-  runner's own prose summary.
-- **Required Credentials** - variable *names* only, read from the smokes' own declarations
-  and the runner's `$liveJudges` array. Values never appear here: cells are passed through
-  the smokes' redaction helper before rendering.
+- **Tests / Failures / Errors / Skipped** - from the per-suite JUnit XML, which carries more
+  than the runner's own prose summary.
+- **Required Credentials** - variable *names* only, derived from the `Test-EnvSet` gate the
+  runner guards each live step with, plus its `$liveJudges` array. No value is ever read, so
+  none can be printed. Separately, the **Detail** column carries text produced by the run
+  itself, and that column is passed through the smokes' redaction helper before rendering.
 - **Coverage floors** - read from each unit's `pyproject.toml`, its generated
   `quality-gate.sh`, and `scripts/.coveragerc`. The test suite asserts the anchors agree.
 
