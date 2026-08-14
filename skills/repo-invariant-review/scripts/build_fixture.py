@@ -77,7 +77,14 @@ _COMPILED = tuple(_glob_to_regex(p) for p in PROTECTED_PATTERNS)
 
 
 def is_protected(path):
-    norm = path.strip().replace("\\\\", "/").lstrip("./").lstrip("/")
+    # Mirrors the real _normalise exactly. `lstrip("./")` would be wrong: it strips any
+    # leading "." or "/" character rather than the "./" prefix, so "../features.yaml"
+    # becomes "features.yaml" and ".hidden/x.py" becomes "hidden/x.py" — a stub that
+    # normalises differently from the guard silently weakens every test built on it.
+    norm = path.strip().replace("\\\\", "/")
+    while norm.startswith("./"):
+        norm = norm[2:]
+    norm = norm.lstrip("/")
     return any(rx.match(norm) for rx in _COMPILED)
 '''
 

@@ -149,8 +149,10 @@ def _real_matcher(repo: Path) -> Callable[[str], bool] | None:
 
     Importing beats re-implementing for the reason ``check_guard_reachability.py`` gives
     about the pattern list itself: a second copy recreates the divergence the guard exists
-    to prevent. Returns ``None`` when the module is absent (running outside the repo), in
-    which case the caller falls back to prefix matching over ``FALLBACK_PROTECTED``.
+    to prevent. Returns ``None`` when the module is absent (running outside the repo),
+    unloadable, or predates ``is_protected`` — in which case the caller falls back to
+    :func:`_matches_protected` over :func:`_protected_patterns`, i.e. the patterns scraped
+    from the guard when it is readable and ``FALLBACK_PROTECTED`` only when it is not.
     """
     source = repo / "scripts" / "eval_protected_paths.py"
     if not source.is_file():

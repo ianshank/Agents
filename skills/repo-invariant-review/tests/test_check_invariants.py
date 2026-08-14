@@ -90,6 +90,29 @@ def test_protected_finding_uses_the_real_matcher_end_to_end(violating_repo: Path
     assert "skills/foo/tests/test_x.py" in findings[0].detail
 
 
+def test_fixture_guard_normalises_paths_the_way_the_real_one_does(violating_repo: Path):
+    """The stub must not be laxer than the guard it stands in for.
+
+    `lstrip("./")` strips any leading "." or "/" character rather than the "./" prefix, so
+    "../features.yaml" would normalise to "features.yaml" and match a pattern the real
+    guard does not — a fixture that answers differently from the guard silently weakens
+    every test built on it.
+    """
+    matcher = _real_matcher_or_skip(violating_repo)
+
+    assert matcher("features.yaml") is True
+    assert matcher("./features.yaml") is True, "a './' prefix is stripped, as the guard does"
+    assert matcher("../features.yaml") is False, "'../' is not a './' prefix and must not be stripped"
+
+
+def _real_matcher_or_skip(repo: Path):
+    from check_invariants import _real_matcher
+
+    matcher = _real_matcher(repo)
+    assert matcher is not None
+    return matcher
+
+
 def test_real_matcher_is_absent_outside_the_repo(tmp_path: Path):
     """No guard module (running the skill on some other tree) → fall back, don't crash."""
     from check_invariants import _real_matcher
