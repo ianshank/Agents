@@ -110,14 +110,15 @@ class EvalEngine:
             judge = JUDGES.create(config.judge.type, judge_params)
         sinks = [SINKS.create(s.type, s.params) for s in config.sinks]
 
-        # Inject the Langfuse client into any client-aware component.
-        if langfuse_client is not None:
-            for component in [dataset, judge, *sinks]:
-                if component is not None and hasattr(component, "attach_client"):
-                    component.attach_client(langfuse_client)
-
         # Wrap the judge with a cost cap when enabled (F-022). Imported lazily so
         # the offline path never pulls in agent_core unless budgeting is on.
+        #
+        # This must precede client injection below. When it ran *after*, the loop
+        # attached to the raw judge and the wrapper then replaced it, so
+        # BudgetedJudge.attach_client — which exists to delegate inward — was never
+        # reached on this path: unit-tested, production-unreachable. Tracing still
+        # worked only because OpenAIJudge.attach_client mutates its own client, an
+        # accident that would not survive a wrapper holding client state of its own.
         judge_budget = getattr(config, "judge_budget", None)
         if judge is not None and judge_budget is not None and judge_budget.enabled:
             adapter = import_module("eval_harness.agent_core_adapter")
@@ -125,6 +126,13 @@ class EvalEngine:
             if build_budgeted_judge is None:  # pragma: no cover - defensive compatibility guard
                 raise RuntimeError("eval_harness.agent_core_adapter.build_budgeted_judge is unavailable")
             judge = build_budgeted_judge(judge, judge_budget)
+
+        # Inject the Langfuse client into any client-aware component. `judge` is now
+        # whatever the engine will actually call, wrapper included.
+        if langfuse_client is not None:
+            for component in [dataset, judge, *sinks]:
+                if component is not None and hasattr(component, "attach_client"):
+                    component.attach_client(langfuse_client)
 
         engine = cls(
             config,

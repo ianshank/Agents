@@ -179,6 +179,54 @@ def test_attach_client_delegates_to_inner():
     assert inner.attached == "client-x"
 
 
+def test_engine_attaches_the_client_through_the_wrapper_to_the_inner_judge(monkeypatch):
+    """The wrapper's `attach_client` must be *reachable*, not merely correct in isolation.
+
+    `test_attach_client_delegates_to_inner` calls the wrapper directly, so it passed while
+    the engine never invoked it: `from_config` attached to the raw judge and then replaced
+    it with the wrapper. Coverage read 100% on a method production could not reach. This
+    asserts the real path — engine → wrapper → inner — so the ordering cannot silently
+    regress.
+
+    The recorder is injected by monkeypatching `JUDGES.create` rather than registering a
+    double, because a third test-double registration would perturb the public-surface and
+    plugin-registry baselines and the matrix census.
+    """
+    from eval_harness.plugins import JUDGES
+
+    class _Recorder(MockJudge):
+        def __init__(self):
+            super().__init__()
+            self.attached = None
+
+        def attach_client(self, client):
+            self.attached = client
+
+    inner = _Recorder()
+    monkeypatch.setattr(JUDGES, "create", lambda *a, **k: inner)
+
+    # Spy on the WRAPPER. Asserting only that `inner` received the client cannot
+    # distinguish the orderings — under the old one the engine attached to the raw judge
+    # directly, so the inner assertion held while the wrapper was bypassed. Verified by
+    # re-introducing the old ordering: an inner-only assertion still passed.
+    through_wrapper: list[object] = []
+    original = BudgetedJudge.attach_client
+
+    def _spy(self, client):
+        through_wrapper.append(client)
+        return original(self, client)
+
+    monkeypatch.setattr(BudgetedJudge, "attach_client", _spy)
+
+    sentinel = object()
+    engine = EvalEngine.from_config(_engine_cfg(judge_budget=_budget(cap=5.0)), langfuse_client=sentinel)
+
+    assert isinstance(engine.judge, BudgetedJudge), "precondition: the judge is wrapped"
+    assert engine.judge._inner is inner
+    assert through_wrapper == [sentinel], "the engine must attach through the wrapper, not around it"
+    assert inner.attached is sentinel, "and the wrapper must delegate inward"
+
+
 def test_attach_client_noop_when_inner_lacks_it():
     # MockJudge has no attach_client; wrapper must silently no-op (no crash).
     j = build_budgeted_judge(MockJudge(), _budget(cap=1.0))
