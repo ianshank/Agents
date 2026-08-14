@@ -120,6 +120,22 @@ def test_excluded_dirs_are_skipped(tmp_path: Path) -> None:
     assert names == {"mod.py"}
 
 
+def test_skill_validation_artifacts_are_skipped(tmp_path: Path) -> None:
+    """`validate_skill.py --tier behavioral` materialises fixture repos containing
+    deliberately over-long files under `<skill>/.skill-validation/`. They are gitignored,
+    but this walk does not consult gitignore — so before the exclusion, running the
+    documented local validation and then this gate produced a hard failure on generated
+    artifacts that CI never sees (separate jobs, fresh checkouts).
+    """
+    _write(tmp_path, "skills/demo/scripts/run.py", "x = 1\n")
+    _write(tmp_path, "skills/demo/.skill-validation/violating/huge.py", _lines(sb.MAX_FILE_LINES + 101))
+
+    assert {p.name for p in sb.iter_source_files([tmp_path], tmp_path)} == {"run.py"}
+    assert not [f for f in sb.scan([tmp_path], repo_root=tmp_path) if f.hard], (
+        "generated fixtures must not fail the gate"
+    )
+
+
 def test_in_tree_virtualenv_is_skipped(tmp_path: Path) -> None:
     _write(tmp_path, "mod.py", "x = 1\n")
     _write(tmp_path, ".venv/lib/site-packages/huge.py", _lines(sb.MAX_FILE_LINES + 50))
