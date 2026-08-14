@@ -151,6 +151,7 @@ Self-guarded: a row whose component appears in the census fails the guard as
 
 | change | note |
 |---|---|
+| `add-panel-judge` | a `panel` judge aggregating N member judges: registering it owes the judge floor M1/M2/M3/M6, plus M5 voluntarily — the floor excludes M5 because 'verdict determinism is the provider's', which does not hold for a panel whose aggregation, quorum and abstention logic are repo-owned. Its registered name must also land in both READMEs for the registry-drift guard, and any alias in FROZEN_ALIAS_MAP. Unlike the rows below this one names a component, so this guard auto-catches it: the row fails as satisfied the moment `panel` enters the census. |
 | `add-repeat-reliability-metrics` | gate rules for pass_at_k / pass_power_k inherit the enforced gating floor; ReliabilityAggregator needs M5; repetitions>1 needs an M8 pipeline. No new registry, so the census cannot auto-catch this change. |
 | `add-stateful-outcome-evaluation` | STATE_ADAPTERS is a sixth registry: the census discovers it automatically and this guard fails until it has a REQUIRED_DIMS row plus rows for the four local adapters and the two state scorers (whose registered names must also land in both READMEs for the registry-drift guard). |
 | `extend-judge-calibration` | bias-probe math lands in agent_core (airgap-preserving); the agent-core matrix suite gains probe rows in the fleet phase. Not auto-caught by this census. |
