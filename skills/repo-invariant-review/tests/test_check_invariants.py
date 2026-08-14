@@ -54,6 +54,87 @@ def test_protected_matching_handles_globs_and_boundaries(path, pattern, expected
     assert _matches_protected(path, pattern) is expected
 
 
+def test_the_repos_own_matcher_is_loaded_when_present(violating_repo: Path):
+    """The skill must match with the guard's code, not an approximation of it."""
+    from check_invariants import _real_matcher
+
+    matcher = _real_matcher(violating_repo)
+    assert matcher is not None
+    assert matcher("tests/test_x.py") is True
+    assert matcher("docs/notes.md") is False
+
+
+def test_real_matcher_catches_the_mid_path_glob_the_fallback_silently_misses(violating_repo: Path):
+    """The regression this import exists to prevent.
+
+    ``skills/*/tests/**`` strips to ``/tests`` under prefix matching, which matches nothing
+    — a false *negative*, so the skill would report "no protected files" for a change CI
+    still blocks. Asserting both directions keeps the fallback honest about being weaker.
+    """
+    from check_invariants import _real_matcher
+
+    path, pattern = "skills/foo/tests/test_x.py", "skills/*/tests/**"
+    matcher = _real_matcher(violating_repo)
+    assert matcher is not None
+
+    assert matcher(path) is True, "the real guard protects this path"
+    assert _matches_protected(path, pattern) is False, "the fallback misses it — the divergence being closed"
+
+
+def test_protected_finding_uses_the_real_matcher_end_to_end(violating_repo: Path):
+    """A mid-path-glob hit must reach the finding, not just the matcher."""
+    from check_invariants import check_protected_paths
+
+    findings = check_protected_paths(violating_repo, ["skills/foo/tests/test_x.py"], has_label=False)
+    assert findings, "the real guard protects this path, so the check must fire"
+    assert "skills/foo/tests/test_x.py" in findings[0].detail
+
+
+def test_real_matcher_is_absent_outside_the_repo(tmp_path: Path):
+    """No guard module (running the skill on some other tree) → fall back, don't crash."""
+    from check_invariants import _real_matcher
+
+    assert _real_matcher(tmp_path) is None
+
+
+def test_real_matcher_is_absent_when_the_guard_predates_is_protected(violating_repo: Path):
+    """Backward compatibility: an older guard exposing only PROTECTED_PATTERNS."""
+    from check_invariants import _real_matcher
+
+    (violating_repo / "scripts" / "eval_protected_paths.py").write_text(
+        'PROTECTED_PATTERNS = ("features.yaml",)\n', encoding="utf-8"
+    )
+    assert _real_matcher(violating_repo) is None
+
+
+def test_real_matcher_is_absent_when_no_import_spec_can_be_built(violating_repo: Path, monkeypatch: pytest.MonkeyPatch):
+    """Defensive branch: importlib declining to produce a spec must degrade, not raise."""
+    import check_invariants
+
+    monkeypatch.setattr(check_invariants.importlib.util, "spec_from_file_location", lambda *a, **k: None)
+    assert check_invariants._real_matcher(violating_repo) is None
+
+
+def test_loading_the_guard_does_not_write_bytecode_into_the_reviewed_tree(violating_repo: Path):
+    """Executing the guard must leave no trace: __pycache__ would land in `changed_files`
+    and break the byte-stability contract on the second run."""
+    from check_invariants import _real_matcher
+
+    assert _real_matcher(violating_repo) is not None
+    assert not (violating_repo / "scripts" / "__pycache__").exists()
+
+
+def test_falls_back_to_prefix_matching_when_the_guard_is_unloadable(violating_repo: Path):
+    """A syntactically broken guard must degrade to the fallback, never crash the skill."""
+    from check_invariants import _real_matcher
+
+    (violating_repo / "scripts" / "eval_protected_paths.py").write_text("def (\n", encoding="utf-8")
+    assert _real_matcher(violating_repo) is None
+
+    report = review(violating_repo, "HEAD", has_label=False)
+    assert [f for f in report.findings if f.check == "protected_paths"]
+
+
 def test_protected_paths_fire_on_a_violating_tree(violating_repo: Path):
     report = review(violating_repo, "HEAD", has_label=False)
     hits = [f for f in report.findings if f.check == "protected_paths"]

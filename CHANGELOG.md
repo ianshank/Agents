@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — `repo-invariant-review` predicted the protected-path guard with an approximation of it
+- **The skill now loads the repo's own `is_protected` instead of re-deriving it.**
+  `check_invariants.py` scraped `PROTECTED_PATTERNS` out of
+  `scripts/eval_protected_paths.py` with a regex and then matched with its own prefix
+  matcher, which stripped glob metacharacters down to a directory prefix. That is not
+  equivalent to the real matcher, and it fails in the dangerous direction: a mid-path
+  wildcard such as `skills/*/tests/**` strips to `/tests` and matches **nothing**, so the
+  skill would report "no protected files changed" for a change CI still blocks — a false
+  negative from the tool whose entire job is predicting that block. It now imports the
+  guard's own `is_protected` (the single-sourcing principle `check_guard_reachability.py`
+  states about the pattern list, applied to the matching logic too), falling back to the
+  documented prefix behaviour only when the module is absent, unloadable, or predates
+  `is_protected`. Loading runs under `sys.dont_write_bytecode` so executing the guard
+  cannot write `__pycache__` into the tree under review — that leaked into `git status`,
+  then into `changed_files`, and broke the skill's own byte-stability postcondition on the
+  second run.
+- **`SKILL.md` documented a validation gate that ran nothing.** It instructed
+  `validate_skill.py --skill . --tier standard`; the validator only branches on
+  `structural` and `behavioral`, and an unrecognised tier is not an error — it matches no
+  branch and exits 0. The skill whose stated purpose is having "a real gate" documented a
+  vacuous one, while CI ran the correct tiers, so the divergence was invisible. Audited
+  every other skill's `SKILL.md`: this was the only offender.
+- **`skills/README.md`'s registered-skills table was stale**, omitting `repo-invariant-review`
+  and `common` — both registered in `marketplace.yaml` and present on disk. Nothing compares
+  the table to the registry, which is why it drifted; the table is corrected and `common` is
+  now described as the shared library it is rather than left unexplained.
+
 ### Added
 - **Generated end-to-end test matrix (`docs/e2e-matrix/`, `tests/_e2e_matrix.py`).** A full
   `run_all_e2e.ps1` run now renders to a reviewable artifact: markdown, one CSV per sheet,

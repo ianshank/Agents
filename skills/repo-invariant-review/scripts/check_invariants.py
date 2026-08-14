@@ -29,11 +29,13 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import logging
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -142,14 +144,57 @@ def _max_file_lines(repo: Path) -> int:
     return DEFAULT_MAX_FILE_LINES
 
 
-def _matches_protected(path: str, pattern: str) -> bool:
-    """Whether *path* falls under a protected *pattern*.
+def _real_matcher(repo: Path) -> Callable[[str], bool] | None:
+    """Load the repo's own ``is_protected`` so this skill matches exactly what CI matches.
 
-    Patterns are written as globs (``tests/**``, ``config/**``) or bare paths
-    (``features.yaml``). Glob metacharacters and trailing separators are stripped to a
-    directory prefix, because every protected pattern in this repo is either an exact
-    file or a whole subtree — matching the prefix is equivalent and avoids a
-    glob-translation layer that would have to stay in step with the real guard.
+    Importing beats re-implementing for the reason ``check_guard_reachability.py`` gives
+    about the pattern list itself: a second copy recreates the divergence the guard exists
+    to prevent. Returns ``None`` when the module is absent (running outside the repo), in
+    which case the caller falls back to prefix matching over ``FALLBACK_PROTECTED``.
+    """
+    source = repo / "scripts" / "eval_protected_paths.py"
+    if not source.is_file():
+        logger.debug("eval_protected_paths.py not found; falling back to prefix matching")
+        return None
+    # Executing the guard must not mutate the tree being reviewed: bytecode written into
+    # <repo>/scripts/__pycache__/ shows up in `git status`, lands in `changed_files`, and
+    # breaks this skill's byte-stability contract on the second run.
+    previous = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec = importlib.util.spec_from_file_location("_rir_eval_protected_paths", source)
+        if spec is None or spec.loader is None:
+            logger.debug("could not build an import spec for %s", source)
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        matcher = getattr(module, "is_protected", None)
+    except Exception as exc:
+        logger.warning("failed to load the repo's is_protected (%s); falling back to prefix matching", exc)
+        return None
+    finally:
+        sys.dont_write_bytecode = previous
+    if not callable(matcher):
+        logger.debug("eval_protected_paths.py exposes no callable is_protected")
+        return None
+
+    def _match(path: str) -> bool:
+        # Coerce: the loaded module is untyped, and a guard returning a truthy non-bool
+        # must not leak `Any` into the caller's protected/unprotected decision.
+        return bool(matcher(path))
+
+    return _match
+
+
+def _matches_protected(path: str, pattern: str) -> bool:
+    """Fallback matcher, used only when the repo's own ``is_protected`` is unavailable.
+
+    Patterns are globs (``tests/**``) or bare paths (``features.yaml``); metacharacters
+    and trailing separators are stripped to a directory prefix. This is **not** equivalent
+    to the real guard and must not be used when the real one can be loaded: a mid-path
+    wildcard such as ``skills/*/tests/**`` strips to ``/tests`` and then matches nothing,
+    so the skill would silently stop predicting a gate that still fires. That is the
+    false-negative direction, which is why `_real_matcher` is preferred.
     """
     prefix = pattern.replace("**", "").replace("*", "").rstrip("/")
     if not prefix:
@@ -158,8 +203,12 @@ def _matches_protected(path: str, pattern: str) -> bool:
 
 
 def check_protected_paths(repo: Path, files: list[str], has_label: bool) -> list[Finding]:
-    patterns = _protected_patterns(repo)
-    hits = sorted({f for f in files for p in patterns if _matches_protected(f, p)})
+    matcher = _real_matcher(repo)
+    if matcher is not None:
+        hits = sorted({f for f in files if matcher(f)})
+    else:
+        patterns = _protected_patterns(repo)
+        hits = sorted({f for f in files for p in patterns if _matches_protected(f, p)})
     if not hits or has_label:
         return []
     return [
