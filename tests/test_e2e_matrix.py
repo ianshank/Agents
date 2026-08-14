@@ -737,20 +737,27 @@ def test_matrix_artifact_is_fresh() -> None:
     not (em.DEFAULT_REPORT_DIR / em.SUMMARY_FILENAME).is_file(),
     reason="no e2e run report present; the artifact can only be verified after a run",
 )
-def test_committed_workbook_is_byte_reproducible(tmp_path: Path) -> None:
+def test_workbook_from_the_real_report_is_byte_reproducible(tmp_path: Path) -> None:
     """The committed `.xlsx` has zero freshness coverage from `artifact_is_fresh` by design
     (ADR 0033 §4: it cannot be written without the optional extra, so byte-gating it would
     fail for anyone without openpyxl). README.md nonetheless calls it "byte-reproducible" --
-    this is the test that makes that a checked claim rather than an assertion nothing enforces.
+    this asserts that claim against the real report's sheets, not just a synthetic fixture
+    (`TestWorkbook.test_workbook_is_byte_reproducible` already covers the synthetic case).
+
+    Deliberately does *not* compare against the currently committed `.xlsx`: that file's
+    pinned timestamp was derived from `git log` at a commit that no longer exists once this
+    change is itself committed -- the same chicken-and-egg problem ADR 0033 exempts the
+    Provenance section from for the markdown/CSV comparison. A fixed, explicit provenance
+    sidesteps it entirely instead of needing an equivalent exemption for a binary format.
     """
     xw = pytest.importorskip("tests._e2e_matrix_xlsx")
-    committed = em.DEFAULT_OUT_DIR / em.WORKBOOK_FILENAME
-    if not committed.is_file():
-        pytest.skip("no committed workbook to compare against")
+    if not (em.DEFAULT_REPORT_DIR / em.SUMMARY_FILENAME).is_file():
+        pytest.skip("no e2e run report present; the artifact can only be verified after a run")
 
-    sheets, provenance = build_committed_sheets()
-    regenerated = xw.write_workbook(sheets, tmp_path / em.WORKBOOK_FILENAME, stamp_iso=provenance.generated_at)
-    assert regenerated.read_bytes() == committed.read_bytes()
+    sheets, _ = build_committed_sheets(sha="0" * 40, stamp=FIXED_STAMP)
+    first = xw.write_workbook(sheets, tmp_path / "first.xlsx", stamp_iso=FIXED_STAMP)
+    second = xw.write_workbook(sheets, tmp_path / "second.xlsx", stamp_iso=FIXED_STAMP)
+    assert first.read_bytes() == second.read_bytes()
 
 
 # ---------------------------------------------------------------------------
@@ -1033,6 +1040,20 @@ class TestCommandLine:
         sheets, _ = build_committed_sheets(report, sha="0" * 40, stamp=FIXED_STAMP)
         assert sheets[0].name == "Test Matrix"
 
+    def test_a_z_suffixed_committer_timestamp_does_not_crash_the_build(self, tmp_path: Path) -> None:
+        """A CI git for a committer in the UTC zone emits `...T22:45:39Z`, not `+00:00`.
+
+        `datetime.fromisoformat` only accepts a trailing `Z` from Python 3.11 -- this repo's
+        floor is 3.10 -- so `_to_utc_iso` must normalize it by hand rather than lean on the
+        newer stdlib parser. Caught by CI's own py3.10 leg, not by a local 3.11 venv.
+        """
+        report, out = self._seed(tmp_path)
+        assert (
+            main(["--update", "--report", str(report), "--out", str(out), "--timestamp", "2026-08-13T22:45:39Z"])
+            == EXIT_OK
+        )
+        assert "2026-08-13T22:45:39+00:00" in (out / em.ARTIFACT_DOC_NAME).read_text(encoding="utf-8")
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -1093,9 +1114,16 @@ def _to_utc_iso(stamp: str) -> str:
     ``_e2e_matrix_xlsx.parse_stamp`` derives the workbook's pinned ZIP/``docProps``
     timestamps from this same string. Normalizing once here, at the source, means both
     consumers get a value that matches its own label instead of each needing its own fix.
+
+    ``datetime.fromisoformat`` only accepts a trailing ``Z`` from Python 3.11 -- this repo's
+    floor is 3.10 (``pyproject.toml``'s ``requires-python``), and a CI git can legitimately
+    emit ``...T22:45:39Z`` for a committer in the UTC zone, so ``Z`` is normalized to
+    ``+00:00`` by hand before parsing rather than relying on the newer stdlib behaviour.
     """
     if not stamp:
         return stamp
+    if stamp.endswith("Z"):
+        stamp = stamp[:-1] + "+00:00"
     return dt.datetime.fromisoformat(stamp).astimezone(dt.timezone.utc).isoformat()
 
 
