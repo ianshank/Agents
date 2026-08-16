@@ -202,3 +202,15 @@ def test_pin_dockerfile_skips_multistage_stage_references(tmp_path: Path) -> Non
     body = path.read_text(encoding="utf-8")
     assert f"FROM python:3.11-slim@{_DIGEST} AS base\n" in body
     assert "FROM base AS runtime\n" in body  # untouched
+
+
+def test_pin_dockerfile_pins_a_stage_whose_alias_equals_its_image_name(tmp_path: Path) -> None:
+    # `FROM alpine AS alpine`: the line's OWN alias must not satisfy the prior-stage
+    # check, or a real registry image silently escapes pinning (CodeRabbit review;
+    # dockerfile_pinned uses the same check-before-register order).
+    path = _dockerfile(tmp_path, "FROM alpine AS alpine\nFROM alpine AS runtime\n")
+    pinned = pin_dockerfile(path, ManifestRunner())
+    assert pinned == [("alpine", _DIGEST)]  # first line resolved; second is a prior-stage ref
+    body = path.read_text(encoding="utf-8")
+    assert f"FROM alpine@{_DIGEST} AS alpine\n" in body
+    assert "FROM alpine AS runtime\n" in body  # references the stage, untouched

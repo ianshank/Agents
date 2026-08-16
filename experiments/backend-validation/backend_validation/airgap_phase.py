@@ -333,7 +333,7 @@ def dockerfile_pinned(dockerfile_path: Path) -> list[str]:
     try:
         text = dockerfile_path.read_text(encoding="utf-8")
     except OSError as exc:
-        return [f"prober Dockerfile unreadable at {dockerfile_path}: {exc}"]
+        return [f"prober Dockerfile unreadable at {dockerfile_path.as_posix()}: {exc}"]
     refs: list[str] = []
     stages: set[str] = set()  # earlier `FROM ... AS <name>` stages are refs, not images
     for line in text.splitlines():
@@ -469,17 +469,17 @@ def check_overlay(base_path: Path, overlay_path_: Path, subtree_root: Path) -> l
     try:
         base_data = yaml.safe_load(base_path.read_text(encoding="utf-8"))
     except OSError as exc:
-        return [f"cannot read base compose {base_path}: {exc}"]
+        return [f"cannot read base compose {base_path.as_posix()}: {exc}"]
     except yaml.YAMLError as exc:
-        return [f"base compose {base_path} is not valid YAML: {exc}"]
+        return [f"base compose {base_path.as_posix()} is not valid YAML: {exc}"]
     try:
         overlay_data = load_overlay(overlay_path_)
     except OSError as exc:
-        return [f"cannot read air-gap overlay {overlay_path_}: {exc}"]
+        return [f"cannot read air-gap overlay {overlay_path_.as_posix()}: {exc}"]
     except yaml.YAMLError as exc:
-        return [f"air-gap overlay {overlay_path_} is not valid YAML: {exc}"]
+        return [f"air-gap overlay {overlay_path_.as_posix()} is not valid YAML: {exc}"]
     if not isinstance(base_data, dict):
-        return [f"base compose {base_path} must be a mapping"]
+        return [f"base compose {base_path.as_posix()} must be a mapping"]
     name = overlay_path_.name
     violations = _network_violations(overlay_data, base_data, name)
     witness_ip = overlay_witness_ip(overlay_data)
@@ -721,10 +721,22 @@ def _persist_verdicts(verdicts_path: Path, verdicts: list[AirgapVerdict]) -> lis
         except (OSError, ValueError, KeyError, TypeError):
             merged = {}  # corrupt prior file: rewrite from this run's verdicts alone
     merged.update({verdict.backend: verdict.to_dict() for verdict in verdicts})
-    ordered = [merged[backend] for backend in sorted(merged)]
+    # Rebuild every merged entry BEFORE persisting: a prior-file entry that carries
+    # `backend` but lacks the run payloads would otherwise KeyError here — after all
+    # docker work succeeded — and cost this run its report. Unusable prior entries are
+    # dropped exactly like a corrupt prior file; current-run entries always round-trip.
+    rebuilt: list[AirgapVerdict] = []
+    ordered: list[dict[str, object]] = []
+    for backend in sorted(merged):
+        entry = merged[backend]
+        try:
+            rebuilt.append(AirgapVerdict.from_dict(entry))
+        except (KeyError, TypeError, ValueError):
+            continue
+        ordered.append(entry)
     payload = {"schema_version": 1, "verdicts": ordered}
     verdicts_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return [AirgapVerdict.from_dict(entry) for entry in ordered]
+    return rebuilt
 
 
 def _verdict_phrase(verdict: AirgapVerdict) -> str:

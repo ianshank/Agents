@@ -31,6 +31,11 @@ _API = "/api/v1/private"
 _ALERT_SINK_URL = "http://127.0.0.1:9/bv-sink"
 _JUDGE_RULE_NAME = "bv-judge-rule"
 _JUDGE_PROVIDER_NAME = "bv-local-judge"
+# Probe-protocol constants, deliberately NOT configurable: the rule must sample the
+# trigger trace with certainty (anything below 1.0 silently breaks run_judge_eval's
+# evidence), and the PII threshold is a neutral fixture value, not an operational knob.
+_JUDGE_RULE_SAMPLING_RATE = 1.0
+_GUARDRAIL_PII_THRESHOLD = 0.5
 # The SDK's default project (config.OPIK_PROJECT_DEFAULT_NAME): handle-created traces land
 # there, so judge rules armed against it score exactly the traces the probes create.
 _DEFAULT_PROJECT = "Default Project"
@@ -314,20 +319,30 @@ class OpikProbeClient(DispatchProbeClient):
             return self._post(f"{_API}/automations/evaluators", {"model": {"baseUrl": judge_url}})
         project_name = self._project_name()
         project = projects.retrieve_project(name=project_name)  # the SDK's own name->id resolver
+        # api_key is ALWAYS supplied: older fern generations (1.7.x) require it, newer
+        # ones accept it — the placeholder is fine for an unauthenticated local judge.
         key_kwargs: dict[str, Any] = {
             "provider": "custom-llm",
             "provider_name": _JUDGE_PROVIDER_NAME,
             "base_url": judge_url,
+            "api_key": self._judge_api_key or "unused",
         }
-        if self._judge_api_key:
-            key_kwargs["api_key"] = self._judge_api_key
-        provider_keys.store_llm_provider_api_key(**key_kwargs)
+        try:
+            provider_keys.store_llm_provider_api_key(**key_kwargs)
+            provider_tier = "custom-llm"
+        except TypeError:
+            # Older fern signature (no provider_name/custom-llm literal): retry with the
+            # subset every generation accepts rather than losing the whole configure op.
+            provider_keys.store_llm_provider_api_key(
+                provider="custom-llm", api_key=key_kwargs["api_key"], base_url=judge_url
+            )
+            provider_tier = "custom-llm-compat"
         evaluators.create_automation_rule_evaluator(request=self._judge_rule(str(project.id)))
         self._armed_project = project_name
         return OpDraft(
             artifact_ids=(_JUDGE_RULE_NAME,),
             response_excerpt=(
-                f"evaluator={_JUDGE_RULE_NAME} sampling=1.0 provider={_JUDGE_PROVIDER_NAME} "
+                f"evaluator={_JUDGE_RULE_NAME} sampling={_JUDGE_RULE_SAMPLING_RATE} provider={provider_tier} "
                 f"base_url={judge_url} project={project_name}"
             ),
         )
@@ -340,7 +355,7 @@ class OpikProbeClient(DispatchProbeClient):
             "action": "evaluator",
             "name": _JUDGE_RULE_NAME,
             "project_id": project_id,
-            "sampling_rate": 1.0,
+            "sampling_rate": _JUDGE_RULE_SAMPLING_RATE,
             "code": {
                 "model": {"name": model_name, "temperature": 0.0},
                 "messages": [
@@ -447,7 +462,14 @@ class OpikProbeClient(DispatchProbeClient):
         text = str(payload.get("text", "probe"))
         # Validation entry mirrors opik.guardrails.guards.PII.get_validation_configs.
         validations: list[dict[str, Any]] = [
-            {"type": "PII", "config": {"entities": ["US_SSN", "PHONE_NUMBER"], "language": "en", "threshold": 0.5}}
+            {
+                "type": "PII",
+                "config": {
+                    "entities": ["US_SSN", "PHONE_NUMBER"],
+                    "language": "en",
+                    "threshold": _GUARDRAIL_PII_THRESHOLD,
+                },
+            }
         ]
         draft = self._guardrails_via_sdk(text, validations)
         if draft is not None:

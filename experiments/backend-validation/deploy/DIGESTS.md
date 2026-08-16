@@ -36,5 +36,21 @@ newer tags is a deliberate, reviewed PR — never an implicit side effect of dep
 | python (prober base) | 3.11-slim | `sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1` | 2026-08-16 | registry manifest API (see note below) |
 | coredns/coredns (airgap DNS witness) | 1.12.1 | `sha256:e8c262566636e6bc340ece6473b0eed193cad045384401529721ddbe6463d31c` | 2026-08-16 | registry manifest API (see note below) |
 
+**Note — "registry manifest API":** the 2026-08-16 pins were resolved in an environment
+whose proxy blocks the blob fetches `docker manifest inspect` performs, so each digest
+came straight from the registry HTTP API — the same manifest-LIST digest the docker
+command would pin. Reproduce for any row with:
+
+```
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:<owner/name>:pull" | jq -r .token)
+#   (docker.io: https://auth.docker.io/token?service=registry.docker.io&scope=repository:<library/name>:pull)
+curl -sI -H "Authorization: Bearer $TOKEN" \
+  -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json" \
+  "https://<registry>/v2/<owner/name>/manifests/<tag>" | grep -i docker-content-digest
+```
+
+`make pin-digests` (`docker manifest inspect --verbose`) resolves the identical digest
+where it can run; either method is a valid Command entry for future rows.
+
 The judge model (`${BV_JUDGE_MODEL:-llama3.2:3b}`) is pulled by tag into the named
 volume at deploy time; its digest is recorded in `effort_metrics.json` at that moment.

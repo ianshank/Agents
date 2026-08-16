@@ -582,7 +582,7 @@ def test_opik_configure_judge_arms_rule_via_fern_chain() -> None:
     configured = client.execute("configure_judge", {"judge_url": CONTAINER_JUDGE.base_url})
     assert configured.status == "ok"
     assert "evaluator=bv-judge-rule" in configured.response_excerpt
-    assert "provider=bv-local-judge" in configured.response_excerpt
+    assert "provider=custom-llm" in configured.response_excerpt  # full-kwargs tier succeeded
     assert handle.rest_client.projects.retrieved == ["Default Project"]
     (stored,) = handle.rest_client.llm_provider_key.stored
     # Server-side evaluators dial from INSIDE the backend container: container URL, not loopback.
@@ -605,7 +605,9 @@ def test_opik_configure_judge_omits_absent_api_key_and_honors_handle_project() -
     client = _opik_client(handle, judge=JUDGE)
     assert client.execute("configure_judge", {}).status == "ok"
     (stored,) = handle.rest_client.llm_provider_key.stored
-    assert "api_key" not in stored  # self-hosted judge without a key: field omitted, not empty
+    # api_key is ALWAYS supplied (older fern generations require it); the placeholder
+    # stands in for an unauthenticated local judge.
+    assert stored["api_key"] == "unused"
     assert stored["base_url"] == JUDGE.base_url  # empty container_base_url falls back to base_url
     assert handle.rest_client.projects.retrieved == ["bv-project"]
 
@@ -1069,3 +1071,27 @@ def test_build_client_threads_op_timeout(monkeypatch: pytest.MonkeyPatch) -> Non
 
     default_client = build_client(spec, env={"BV_LF_SK": "s", "BV_LF_PK": "p"})
     assert default_client._timeout == DEFAULT_OP_TIMEOUT_SECONDS  # type: ignore[attr-defined]
+
+
+def test_opik_configure_judge_retries_provider_key_on_older_fern_signature() -> None:
+    # Older fern generations reject provider_name (and require api_key): the first call
+    # TypeErrors and the compat retry with the universal subset must still arm the rule
+    # (CodeRabbit review).
+    handle = _FakeOpikHandle()
+
+    original = handle.rest_client.llm_provider_key.store_llm_provider_api_key
+
+    def _old_signature(**kwargs: Any) -> None:
+        if "provider_name" in kwargs:
+            raise TypeError("store_llm_provider_api_key() got an unexpected keyword argument 'provider_name'")
+        original(**kwargs)
+
+    handle.rest_client.llm_provider_key.store_llm_provider_api_key = _old_signature  # type: ignore[method-assign]
+    client = _opik_client(handle, judge=JUDGE)
+    configured = client.execute("configure_judge", {})
+    assert configured.status == "ok"
+    assert "provider=custom-llm-compat" in configured.response_excerpt
+    (stored,) = handle.rest_client.llm_provider_key.stored
+    assert stored == {"provider": "custom-llm", "api_key": "unused", "base_url": JUDGE.base_url}
+    assert handle.rest_client.automation_rule_evaluators.requests  # rule still armed
+    assert client.execute("run_judge_eval", {"trace_id": "t-1"}).status == "ok"

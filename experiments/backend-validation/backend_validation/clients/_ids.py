@@ -23,7 +23,11 @@ def uuid7(
     now_ms: Callable[[], int] = _unix_ms,
     rand_bytes: Callable[[int], bytes] = os.urandom,
 ) -> uuid.UUID:
-    """A UUIDv7 per RFC 9562: 48-bit unix-ms timestamp, then version/variant/random bits."""
+    """A UUIDv7 per RFC 9562: 48-bit unix-ms timestamp, then version/variant/random bits.
+
+    The standard library only grows ``uuid.uuid7`` in Python 3.14; this local
+    implementation exists for the project's 3.10 floor and stays injectable for tests.
+    """
     timestamp = now_ms() & ((1 << 48) - 1)
     rand = rand_bytes(10)  # 12 bits rand_a + 62 bits rand_b, masked below
     value = timestamp << 80

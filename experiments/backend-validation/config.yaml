@@ -56,6 +56,12 @@ judge:
 timeouts:
   op_seconds: ${BV_OP_TIMEOUT_SECONDS:-30}
   probe_budget_seconds: ${BV_PROBE_BUDGET_SECONDS:-300}
+  # Docker-infrastructure budgets. The judge model pull is the one worth tuning on a
+  # slow link; the rest bound quick docker CLI calls.
+  docker_probe_seconds: ${BV_DOCKER_PROBE_SECONDS:-30}
+  network_op_seconds: ${BV_NETWORK_OP_SECONDS:-60}
+  container_ls_seconds: ${BV_CONTAINER_LS_SECONDS:-60}
+  model_pull_seconds: ${BV_MODEL_PULL_SECONDS:-3600}
 
 retries:
   # Idempotent (read/health) operations only; writes are never retried.

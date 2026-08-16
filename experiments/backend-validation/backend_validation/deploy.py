@@ -233,9 +233,13 @@ def pin_dockerfile(dockerfile_path: Path, runner: CommandRunner) -> list[tuple[s
             continue
         ref = match.group("ref")
         suffix_match = match.group("suffix")
+        # Check against PRIOR stages before registering this line's own alias: in
+        # `FROM alpine AS alpine` the alias equals the image ref, and register-first
+        # would skip a real registry image (dockerfile_pinned uses the same order).
+        is_stage_ref = ref.lower() in stages
         if suffix_match:
             stages.add(suffix_match.split()[-1].lower())
-        if ref.lower() in stages:
+        if is_stage_ref:
             continue  # multi-stage reference to a prior stage — nothing to resolve
         base = ref.split("@", 1)[0]
         if _DIGEST_RE.search(ref):

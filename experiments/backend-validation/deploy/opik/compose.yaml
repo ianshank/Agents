@@ -131,6 +131,10 @@ services:
     depends_on:
       opik-backend: {condition: service_healthy}
       opik-python-backend: {condition: service_healthy}
+      # nginx resolves the static `guardrails:5000` upstream ONCE at config load; if the
+      # guardrails container (multi-GB image) has no DNS record yet, nginx exits with
+      # "host not found in upstream" and the frontend healthcheck can never pass.
+      guardrails: {condition: service_started}
     ports:
       - "127.0.0.1:${BV_OPIK_PORT:-18322}:5173"
     volumes:

@@ -32,6 +32,13 @@ class TimeoutSpec(BaseModel):
 
     op_seconds: float = Field(gt=0)
     probe_budget_seconds: float = Field(gt=0)
+    # Docker-infrastructure budgets (defaulted: absent from older configs). The model
+    # pull is the operationally significant one — a slow judge-model download must be
+    # tunable without a code change; the rest bound quick docker CLI calls.
+    docker_probe_seconds: float = Field(default=30, gt=0)
+    network_op_seconds: float = Field(default=60, gt=0)
+    container_ls_seconds: float = Field(default=60, gt=0)
+    model_pull_seconds: float = Field(default=3600, gt=0)
 
 
 class RetrySpec(BaseModel):

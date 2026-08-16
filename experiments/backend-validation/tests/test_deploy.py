@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from backend_validation.deploy import (
+    _FROM_LINE,
     DeployError,
     bind_mounts_inside,
     compose_argv,
@@ -252,6 +253,9 @@ def test_opik_compose_declares_guardrails_and_python_health() -> None:
     assert "OPIK_USAGE_REPORT_ENABLED" not in services["opik-python-backend"].get("environment", {})
     frontend = services["opik-frontend"]
     assert "opik-python-backend" in frontend["depends_on"]
+    # nginx resolves the static guardrails upstream at config load: the container must
+    # at least be created (DNS record) before the frontend starts.
+    assert frontend["depends_on"].get("guardrails") == {"condition": "service_started"}
     assert any(
         volume.startswith("./nginx_guardrails_local.conf:/etc/nginx/conf.d/default.conf")
         for volume in frontend["volumes"]
@@ -332,17 +336,32 @@ def test_digests_table_covers_every_deployable_image() -> None:
     prober Dockerfile's FROM — a new image without a row would silently escape the
     pin-digests audit trail (spec R11).
     """
-    image_line = re.compile(r"^\s*(?:image:|FROM)\s+(?P<name>[^@\s]+)(?:@\S+)?\s*$")
+    image_line = re.compile(r"^\s*image:\s+(?P<name>[^@\s]+)(?:@\S+)?\s*$")
     deployable: set[tuple[str, str]] = set()
-    sources = [*sorted((SUBTREE / "deploy").glob("*/compose.yaml"))]
-    sources += sorted((SUBTREE / "deploy").glob("*/compose.airgap.yaml"))
-    sources.append(SUBTREE / "deploy" / "prober" / "Dockerfile")
-    for source in sources:
+    compose_sources = [*sorted((SUBTREE / "deploy").glob("*/compose.yaml"))]
+    compose_sources += sorted((SUBTREE / "deploy").glob("*/compose.airgap.yaml"))
+    for source in compose_sources:
         for line in source.read_text(encoding="utf-8").splitlines():
             match = image_line.match(line)
             if match:
                 name, _, tag = match.group("name").rpartition(":")
                 deployable.add((name, tag))
+    # Dockerfile FROM lines go through the real parser so `--platform` and `AS <stage>`
+    # shapes are covered, and prior-stage references are not mistaken for images.
+    stages: set[str] = set()
+    for line in (SUBTREE / "deploy" / "prober" / "Dockerfile").read_text(encoding="utf-8").splitlines():
+        from_match = _FROM_LINE.match(line.rstrip())
+        if not from_match:
+            continue
+        ref = from_match.group("ref")
+        is_stage_ref = ref.lower() in stages
+        if from_match.group("suffix"):
+            stages.add(from_match.group("suffix").split()[-1].lower())
+        if is_stage_ref:
+            continue
+        base = ref.split("@", 1)[0]
+        name, _, tag = base.rpartition(":")
+        deployable.add((name, tag))
     assert deployable, "image sweep found nothing — the regex or layout drifted"
 
     rows: set[tuple[str, str]] = set()

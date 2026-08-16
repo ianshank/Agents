@@ -598,13 +598,13 @@ def _prep(tmp_subtree: Path, *, overlays: bool = True, pin_bases: bool = True, p
                 f'      - "127.0.0.1:1:{port}"\n',
                 encoding="utf-8",
             )
-        overlay_path = tmp_subtree / "deploy" / backend / "compose.airgap.yaml"
+        overlay_file = tmp_subtree / "deploy" / backend / "compose.airgap.yaml"
         if overlays:
-            overlay_path.write_text(_overlay_text(backend, service), encoding="utf-8")
+            overlay_file.write_text(_overlay_text(backend, service), encoding="utf-8")
         else:
             # The committed tree ships real overlays (tmp_subtree copies them); the
             # missing-overlay scenario must remove them explicitly.
-            overlay_path.unlink(missing_ok=True)
+            overlay_file.unlink(missing_ok=True)
     if pin_dockerfile:
         (tmp_subtree / "deploy" / "prober" / "Dockerfile").write_text(
             f"FROM python:3.11-slim@sha256:{'a' * 64}\n", encoding="utf-8"
@@ -900,3 +900,18 @@ def test_dockerfile_pinned_accepts_multistage_stage_references(tmp_path: Path) -
     )
     violations = dockerfile_pinned(dockerfile)
     assert violations and "ubuntu:24.04" in violations[0]
+
+
+def test_persist_verdicts_drops_malformed_prior_entries_without_losing_the_report(tmp_subtree: Path) -> None:
+    # A prior verdicts.json entry with `backend` but no run payloads must not KeyError
+    # AFTER all docker work — it is dropped like a corrupt file; this run's verdicts and
+    # the report both survive (CodeRabbit review).
+    settings = _prep(tmp_subtree)
+    verdicts_path = tmp_subtree / "artifacts" / "r" / "airgap" / "verdicts.json"
+    verdicts_path.parent.mkdir(parents=True, exist_ok=True)
+    verdicts_path.write_text(json.dumps({"schema_version": 1, "verdicts": [{"backend": "opik"}]}), encoding="utf-8")
+    result = run_airgap(tmp_subtree, settings, _io(FlowRunner())[0], env={}, run_id="r", only_backend="langfuse")
+    assert result.status == STATUS_OK, result.reason
+    payload = json.loads(verdicts_path.read_text(encoding="utf-8"))
+    assert [entry["backend"] for entry in payload["verdicts"]] == ["langfuse"]  # malformed opik entry dropped
+    assert "langfuse" in (tmp_subtree / "reports" / "airgap_report.md").read_text(encoding="utf-8")

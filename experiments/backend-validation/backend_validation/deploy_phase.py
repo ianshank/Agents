@@ -46,14 +46,15 @@ _JUDGE_OLLAMA_SERVICE = "ollama"
 JUDGE_NETWORK = "bv-judge-net"
 
 
-def ensure_judge_network(runner: CommandRunner) -> None:
+def ensure_judge_network(runner: CommandRunner, *, timeout: float = 60.0) -> None:
     """Idempotently create ``bv-judge-net`` BEFORE any stack comes up.
 
     All three compose files declare it ``external: true``, so an ``up`` without it fails
     hard. "Already exists" is success; any other create failure raises ``DeployError``
     (-> BLOCKED) rather than letting every subsequent ``up`` fail with a worse message.
+    ``timeout`` comes from ``TimeoutSpec.network_op_seconds`` on the settings-driven path.
     """
-    result = runner.run(["docker", "network", "create", JUDGE_NETWORK], timeout=60)
+    result = runner.run(["docker", "network", "create", JUDGE_NETWORK], timeout=timeout)
     if result.ok or "already exists" in (result.stderr or "").lower():
         return
     raise DeployError(
@@ -129,7 +130,7 @@ def deploy_judge(
             compose_path, JUDGE_ID, "exec", "-T", _JUDGE_OLLAMA_SERVICE, "ollama", "pull", settings.judge.model
         ),
         env=dict(env),
-        timeout=3600,
+        timeout=settings.timeouts.model_pull_seconds,
     )
     if not pull.ok:
         raise DeployError(
@@ -164,7 +165,7 @@ def run_deploy(
             return PhaseResult("deploy", STATUS_FAIL, f"backend {only_backend!r} is not configured")
 
     try:
-        ensure_judge_network(runner)
+        ensure_judge_network(runner, timeout=settings.timeouts.network_op_seconds)
     except DeployError as exc:
         report = write_blocked_report(
             artifacts_dir,
@@ -281,7 +282,7 @@ def run_down(
     # Best-effort removal of the shared judge network (external: compose never removes
     # it). Failure is expected and ignored when containers are still attached after a
     # failed teardown, a --backend-scoped down, or when the network never existed.
-    runner.run(["docker", "network", "rm", JUDGE_NETWORK], timeout=60)
+    runner.run(["docker", "network", "rm", JUDGE_NETWORK], timeout=settings.timeouts.network_op_seconds)
     if failed:
         return PhaseResult("down", STATUS_FAIL, f"teardown failed for: {', '.join(failed)}")
     return PhaseResult("down", STATUS_OK, f"tore down {len(specs)} stack(s)")
@@ -300,7 +301,7 @@ def run_status(
     3), never an argparse error or a fake `0 containers` reading.
     """
     runner = runner if runner is not None else SubprocessRunner()
-    probe = runner.run(["docker", "--version"], timeout=30)
+    probe = runner.run(["docker", "--version"], timeout=settings.timeouts.docker_probe_seconds)
     if not probe.ok:
         detail = (probe.stderr or probe.stdout).strip().splitlines()
         return PhaseResult(
@@ -320,7 +321,7 @@ def run_status(
                 "--format",
                 "{{.Names}}\t{{.Status}}",
             ],
-            timeout=60,
+            timeout=settings.timeouts.container_ls_seconds,
         )
         if not listing.ok:
             return PhaseResult(

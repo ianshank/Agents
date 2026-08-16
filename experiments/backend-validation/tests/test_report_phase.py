@@ -154,30 +154,7 @@ def test_all_chains_through_report_when_signed(tmp_subtree: Path, monkeypatch: p
 
     # Fake the environment as ready so preflight passes; keep L1 with failing controls so it
     # records evidence without HALTing (default-fail Null client via the real build_client).
-    import backend_validation.phases as phases
-
-    def _ready_io(*_a: object, **_k: object) -> phases.PhaseIO:
-        from backend_validation.clients import NullProbeClient
-
-        def _factory(spec: object, judge: object = None, **_kw: object) -> NullProbeClient:
-            return NullProbeClient(
-                backend_id=getattr(spec, "id", "x"),
-                script={
-                    op: OpOutcome(operation=op, status="error", latency_ms=1.0)
-                    for op in ("probe_endpoint", "invoke_redteam", "invoke_guardrail")
-                },
-            )
-
-        return phases.PhaseIO(
-            runner_run=lambda _argv: (True, "ok"),
-            disk_free_gb=lambda _p: 999.0,
-            port_is_free=lambda _p: True,
-            client_factory=_factory,
-            now_fn=lambda: _NOW,
-        )
-
-    monkeypatch.setattr(phases, "default_phase_io", _ready_io)
-    monkeypatch.setattr("backend_validation.report_phase.default_phase_io", _ready_io)
+    _patch_ready_io(monkeypatch, also_phases=True)
 
     def _l2(*_args: object, **_kwargs: object) -> PhaseResult:
         return PhaseResult("l2", STATUS_BLOCKED, "harness not installed in this unit env")
@@ -221,7 +198,7 @@ def test_all_stops_when_l1_halts(tmp_subtree: Path, monkeypatch: pytest.MonkeyPa
 
 
 # ------------------------------------------------------------- airgap seam (P4)
-def _patch_ready_io(monkeypatch: pytest.MonkeyPatch) -> None:
+def _patch_ready_io(monkeypatch: pytest.MonkeyPatch, *, also_phases: bool = False) -> None:
     """Ready environment + evidence-recording (non-HALTing) L1, as in the chain test."""
     import backend_validation.phases as phases
 
@@ -246,6 +223,8 @@ def _patch_ready_io(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
     monkeypatch.setattr("backend_validation.report_phase.default_phase_io", _ready_io)
+    if also_phases:
+        monkeypatch.setattr(phases, "default_phase_io", _ready_io)
 
 
 def test_all_with_blocked_airgap_still_renders_report(tmp_subtree: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -318,29 +297,7 @@ def test_all_without_airgap_runner_is_unchanged(tmp_subtree: Path, monkeypatch: 
 def test_all_stops_when_l2_hard_fails(tmp_subtree: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _sign(tmp_subtree)
     settings = _settings(tmp_subtree)
-    import backend_validation.phases as phases
-
-    def _ready_io(*_a: object, **_k: object) -> phases.PhaseIO:
-        from backend_validation.clients import NullProbeClient
-
-        def _factory(spec: object, judge: object = None, **_kw: object) -> NullProbeClient:
-            return NullProbeClient(
-                backend_id=getattr(spec, "id", "x"),
-                script={
-                    op: OpOutcome(operation=op, status="error", latency_ms=1.0)
-                    for op in ("probe_endpoint", "invoke_redteam", "invoke_guardrail")
-                },
-            )
-
-        return phases.PhaseIO(
-            runner_run=lambda _argv: (True, "ok"),
-            disk_free_gb=lambda _p: 999.0,
-            port_is_free=lambda _p: True,
-            client_factory=_factory,
-            now_fn=lambda: _NOW,
-        )
-
-    monkeypatch.setattr("backend_validation.report_phase.default_phase_io", _ready_io)
+    _patch_ready_io(monkeypatch)
 
     def _l2_fail(*_a: object, **_k: object) -> PhaseResult:
         return PhaseResult("l2", STATUS_FAIL, "Opik sink is not conformant")
