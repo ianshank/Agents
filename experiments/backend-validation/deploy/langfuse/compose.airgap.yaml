@@ -36,7 +36,10 @@ services:
       bv-dns-witness: {condition: service_started}
 
   langfuse-worker:
-    networks: [bv-internal]
+    # `!override` (not a plain list): the base attaches this service to the shared
+    # bv-judge-net as well, and compose UNIONS explicit network lists on merge — a
+    # plain [bv-internal] here would leave a non-internal egress path into the seal.
+    networks: !override [bv-internal]
     dns: [172.31.100.53]
     depends_on:
       bv-dns-witness: {condition: service_started}

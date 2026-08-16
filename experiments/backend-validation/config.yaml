@@ -48,8 +48,10 @@ judge:
   model: "${BV_JUDGE_MODEL:-llama3.2:3b}"
   api_key_env: "BV_JUDGE_API_KEY"
   # What SERVER-SIDE evaluators (Opik online rules, Langfuse evals) must dial: the
-  # judge as seen from inside backend containers, via the host gateway alias.
-  container_base_url: "${BV_JUDGE_CONTAINER_URL:-http://host.docker.internal:18323/v1}"
+  # judge as seen from inside backend containers, over the shared bv-judge-net docker
+  # network (`bv-judge` is the ollama service's alias there). A host-gateway alias
+  # cannot work — the judge's host port binds to 127.0.0.1 only (loopback-ports rule).
+  container_base_url: "${BV_JUDGE_CONTAINER_URL:-http://bv-judge:11434/v1}"
 
 timeouts:
   op_seconds: ${BV_OP_TIMEOUT_SECONDS:-30}

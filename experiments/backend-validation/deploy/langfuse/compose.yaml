@@ -68,10 +68,14 @@ services:
       clickhouse: {condition: service_healthy}
       redis: {condition: service_healthy}
       minio: {condition: service_healthy}
-    extra_hosts:
-      # Langfuse v3 executes evals (LLM-as-judge) in the worker; the judge stack
-      # publishes on the docker host's loopback, so map the host gateway in-container.
-      - "host.docker.internal:host-gateway"
+    networks:
+      # Langfuse v3 executes evals (LLM-as-judge) in the worker; it dials the judge
+      # over the shared bv-judge-net network (http://bv-judge:11434). A host-gateway
+      # alias would not work — the judge publishes on the host's 127.0.0.1 only.
+      # run_deploy ensure-creates the external network; the airgap overlay `!override`s
+      # this list so the sealed stack never touches it.
+      - default
+      - judge-net
     environment: &langfuse-env
       DATABASE_URL: postgresql://langfuse:${BV_LANGFUSE_PG_PASSWORD:?}@postgres:5432/langfuse
       SALT: ${BV_LANGFUSE_SALT:?set in .env.local}
@@ -121,3 +125,11 @@ volumes:
   pg-data:
   ch-data:
   minio-data:
+
+networks:
+  # Shared with the judge stack (deploy/judge/compose.yaml) so the worker's server-side
+  # evals can reach the judge container-to-container. External: created by run_deploy
+  # (idempotent `docker network create bv-judge-net`), owned by no compose project.
+  judge-net:
+    name: bv-judge-net
+    external: true

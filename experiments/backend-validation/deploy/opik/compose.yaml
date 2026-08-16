@@ -74,10 +74,15 @@ services:
       # to OPIK_USAGE_REPORT_URL, default https://stats.comet.com/notify/event/ — the
       # exact egress the P4 witness expects to record in as-shipped mode.
       OPIK_USAGE_REPORT_ENABLED: ${BV_OPIK_USAGE_REPORT:-true}
-    extra_hosts:
-      # Server-side evaluators must reach the judge stack published on the docker
-      # host's loopback (JudgeSpec.container_base_url); maps the host gateway in-container.
-      - "host.docker.internal:host-gateway"
+    networks:
+      # Server-side evaluators (online judge rules) dial the judge over the shared
+      # bv-judge-net docker network (JudgeSpec.container_base_url -> http://bv-judge:11434).
+      # A host-gateway alias would NOT work: the judge publishes on the host's 127.0.0.1
+      # only, which is unreachable from containers by design (loopback-ports rule).
+      # run_deploy ensure-creates the external network before any stack comes up; the
+      # airgap overlay `!override`s this list so the sealed stack never touches it.
+      - default
+      - judge-net
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health-check || exit 1"]
       interval: 10s
@@ -143,3 +148,11 @@ services:
 volumes:
   mysql-data:
   opik-ch-data:
+
+networks:
+  # Shared with the judge stack (deploy/judge/compose.yaml) so server-side evaluators can
+  # reach the judge container-to-container. External: created by run_deploy (idempotent
+  # `docker network create bv-judge-net`), owned by no compose project.
+  judge-net:
+    name: bv-judge-net
+    external: true
