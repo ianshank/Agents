@@ -78,6 +78,10 @@ def test_otlp_probe_builds_body_and_reuses_trace_id() -> None:
     assert "resourceSpans" in str(export_payload["otlp_body"])
     assert export_payload["trace_id"] == fetch_payload["trace_id"]
     assert len(str(export_payload["trace_id"])) == 32  # OTLP hex id, non-vendor construction
+    # The run-scoped span name is both IN the exported body and handed to the fetch:
+    # backends that reassign OTLP ids (Opik) recover the trace by name search.
+    assert export_payload["span_name"] == fetch_payload["span_name"] == "bv-otlp-m1"
+    assert "bv-otlp-m1" in str(export_payload["otlp_body"])
 
 
 def test_prompt_cycle_notes_latest_match() -> None:
@@ -89,6 +93,10 @@ def test_prompt_cycle_notes_latest_match() -> None:
     assert _extra(observables, "fetch_prompt")["fetched_latest_matches"] is True
     operations = [operation for operation, _payload in client.calls]
     assert operations == ["create_prompt", "create_prompt_version", "fetch_prompt", "rollback_prompt"]
+    rollback_payload = client.calls[-1][1]
+    # `version` drives Langfuse's label move; `text` (the v1 body) drives Opik's verified
+    # recreate-as-latest rollback — both keys ride the same payload.
+    assert rollback_payload["version"] == 1 and rollback_payload["text"] == "v1"
 
 
 def test_dataset_probe_chains_item_and_trace_ids() -> None:

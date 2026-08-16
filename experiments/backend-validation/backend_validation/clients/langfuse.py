@@ -13,16 +13,11 @@ from collections.abc import Mapping
 from typing import Any
 
 from backend_validation.clients import DEFAULT_OP_TIMEOUT_SECONDS, MissingCredentialsError
-from backend_validation.clients._dispatch import DispatchProbeClient, OpDraft, OpHandler
-from backend_validation.clients._rest import RestResult, RestTransport, UrllibRest, basic_auth_header
+from backend_validation.clients._dispatch import DispatchProbeClient, OpDraft, OpHandler, draft_from_rest
+from backend_validation.clients._rest import RestTransport, UrllibRest, basic_auth_header
 from backend_validation.settings import BackendSpec, JudgeSpec
 
 _OTLP_PATH = "/api/public/otel/v1/traces"
-
-
-def _draft(result: RestResult) -> OpDraft:
-    status = "ok" if result.ok else "error"
-    return OpDraft(status=status, response_excerpt=f"HTTP {result.status_code}: {result.body_excerpt}"[:220])
 
 
 class LangfuseProbeClient(DispatchProbeClient):
@@ -88,13 +83,13 @@ class LangfuseProbeClient(DispatchProbeClient):
             flush()
 
     def _get(self, path: str) -> OpDraft:
-        return _draft(self._rest.call("GET", self._base_url + path, headers=self._auth, timeout=self._timeout))
+        return draft_from_rest(self._rest.call("GET", self._base_url + path, headers=self._auth, timeout=self._timeout))
 
     def _post(self, path: str, body: dict[str, object]) -> OpDraft:
         result = self._rest.call(
             "POST", self._base_url + path, headers=self._auth, json_body=body, timeout=self._timeout
         )
-        return _draft(result)
+        return draft_from_rest(result)
 
     # ----------------------------------------------------------- SDK operations
     def _op_create_trace(self, payload: Mapping[str, object]) -> OpDraft:
@@ -130,7 +125,7 @@ class LangfuseProbeClient(DispatchProbeClient):
             json_body={"newLabels": ["production"]},
             timeout=self._timeout,
         )
-        return _draft(result)
+        return draft_from_rest(result)
 
     def _op_create_dataset(self, payload: Mapping[str, object]) -> OpDraft:
         self._handle.create_dataset(name=str(payload["name"]))
@@ -186,7 +181,7 @@ class LangfuseProbeClient(DispatchProbeClient):
             json_body=body if isinstance(body, dict) else {"resourceSpans": []},
             timeout=self._timeout,
         )
-        return _draft(result)
+        return draft_from_rest(result)
 
     def _op_fetch_otel_trace(self, payload: Mapping[str, object]) -> OpDraft:
         return self._op_fetch_trace(payload)
@@ -239,7 +234,7 @@ class LangfuseProbeClient(DispatchProbeClient):
 
     def _op_probe_endpoint(self, payload: Mapping[str, object]) -> OpDraft:
         result = self._rest.call("GET", str(payload["url"]), timeout=min(self._timeout, 5.0))
-        return _draft(result)
+        return draft_from_rest(result)
 
     def _ops(self) -> Mapping[str, OpHandler]:
         return {name.removeprefix("_op_"): getattr(self, name) for name in dir(self) if name.startswith("_op_")}
