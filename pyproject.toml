@@ -167,6 +167,13 @@ ignore_missing_imports = true
 # phoenix-evals (`pip install -e ".[dev,langfuse,openai,parquet]"`), so mypy stays
 # green in CI. For local mypy runs with the full extras, either pin the mypy venv
 # to CI's install set or bump python_version to 3.12 (revisit after 3.10 EOL).
+#
+# Second known limitation: `trace.get_tracer` in `src/eval_harness/phoenix_client/__init__.py`
+# fails type-check locally when opentelemetry is present transitively via unpinned
+# langfuse>=2, but passes in CI because eval-harness-ci.yml's test job does not install
+# the phoenix extra (which would pull opentelemetry). Identifying which langfuse major
+# introduces the transitive opentelemetry dependency requires live testing; do not guess
+# a version pin without verifying which major it started in.
 
 [tool.coverage.run]
 branch = true

@@ -2,7 +2,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](pyproject.toml)
-[![Coverage](https://img.shields.io/badge/branch%20coverage-%E2%89%A595%25-brightgreen.svg)](#test)
+[![Coverage](https://img.shields.io/badge/branch%20coverage-%E2%89%A596%25-brightgreen.svg)](#test)
 [![CI](https://github.com/ianshank/Agents/actions/workflows/eval-harness-ci.yml/badge.svg)](https://github.com/ianshank/Agents/actions/workflows/eval-harness-ci.yml)
 
 A dynamic, modular, backwards-compatible enterprise LLM evaluation harness with
@@ -458,7 +458,7 @@ docs/
 ```yaml
 # GitHub Actions example
 - name: Test
-  run: pytest --cov=eval_harness --cov-report=term-missing --cov-fail-under=85
+  run: pytest --cov=eval_harness --cov-report=term-missing --cov-fail-under=96
 
 - name: Lint
   run: ruff check src/ tests/
