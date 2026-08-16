@@ -335,6 +335,15 @@ jobs:
       # previously only the 8 skills with a dedicated job below triggered any check at all.
       - name: Skill-script drift guard
         run: python scripts/check_skill_script_drift.py
+      # Shared skill-validator module coverage (>= 95%). Runs directly in root since
+      # skill_validator.py is shared, unvendored infrastructure (unlike the per-skill
+      # validate_skill.py wrappers).
+      - name: Skill validator coverage (>=95%)
+        run: >-
+          pip install pytest pytest-cov &&
+          python -m pytest skills/common/tests/test_skill_validator.py
+          --cov=skills.common.skill_validator --cov-branch
+          --cov-report=term-missing --cov-fail-under=95
       # Every skills/*/ directory must be registered in marketplace.yaml, and must have
       # either a dedicated job in this file or a documented EXEMPT entry. Structured on the
       # docs.yml component-README guard: a derived list plus a dict[name, reason] EXEMPT, not
