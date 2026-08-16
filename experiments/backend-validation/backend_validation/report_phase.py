@@ -7,15 +7,19 @@ in preflight or L1 — the phases that gate whether meaningful evidence exists. 
 deliberate exception is a BLOCKED L2 (the eval harness is not installed): L2 measures
 adapter delta, not L1 evidence, so the chain records the BLOCKED phase, surfaces its
 non-zero exit (the CLI returns the max exit code across phases), and still renders the
-report from the L1 observables. A hard L2 FAIL stops the chain. No OK verdict ever papers
-over a real failure.
+report from the L1 observables. A hard L2 FAIL stops the chain. An optionally injected
+airgap runner (``all --with-airgap``) slots between L2 and the report under the same law:
+BLOCKED continues to the report, FAIL/HALT stops. No OK verdict ever papers over a real
+failure.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 
+from backend_validation.airgap import AirgapVerdict
 from backend_validation.logging_util import get_logger
 from backend_validation.observables import ObservableLog
 from backend_validation.phases import (
@@ -28,7 +32,12 @@ from backend_validation.phases import (
     run_preflight,
 )
 from backend_validation.registry import RegistryError, load_probes_spec
-from backend_validation.report import build_cell_reports, render_claimed_vs_observed, write_report
+from backend_validation.report import (
+    build_cell_reports,
+    render_airgap_report,
+    render_claimed_vs_observed,
+    write_report,
+)
 from backend_validation.rubric import RubricError, load_rubric, verify_signoff
 from backend_validation.settings import Settings
 
@@ -66,6 +75,19 @@ def run_report(
     reports = build_cell_reports(spec, rules, observables)
     text = render_claimed_vs_observed(reports)
     out_path = write_report(reports_dir / "claimed_vs_observed.md", text)
+    # Re-render the air-gap report from persisted P4 verdicts when this run has them, so
+    # `report --run-id <old>` reproduces the FULL evidence set without re-running docker.
+    airgap_artifacts: tuple[str, ...] = ()
+    verdicts_path = artifacts_dir / run_id / "airgap" / "verdicts.json"
+    if verdicts_path.exists():
+        try:
+            payload = json.loads(verdicts_path.read_text(encoding="utf-8"))
+            verdicts = [AirgapVerdict.from_dict(entry) for entry in payload["verdicts"]]
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            # Corrupt persisted evidence must fail LOUD, never render a partial report.
+            return PhaseResult("report", STATUS_FAIL, f"airgap verdicts unreadable at {verdicts_path}: {exc}")
+        airgap_path = write_report(reports_dir / "airgap_report.md", render_airgap_report(verdicts))
+        airgap_artifacts = (str(airgap_path),)
     unresolved = [report for report in reports if report.observed in ("BLOCKED", "not-probed")]
     logger.info(
         "report: %d cell rows from %d observables (%d unprobed/blocked)",
@@ -77,7 +99,7 @@ def run_report(
         "report",
         STATUS_OK,
         f"rendered {len(reports)} cell rows ({len(unresolved)} unprobed/blocked); evidence only, no platform selection",
-        artifacts=(str(out_path),),
+        artifacts=(str(out_path), *airgap_artifacts),
     )
 
 
@@ -88,12 +110,16 @@ def run_all(
     run_id: str,
     now_fn: Callable[[], str],
     l2_runner: Callable[..., PhaseResult],
+    airgap_runner: Callable[..., PhaseResult] | None = None,
 ) -> list[PhaseResult]:
-    """Chain P0 -> P2 -> P3 -> P5, stopping at the first non-OK phase.
+    """Chain P0 -> P2 -> P3 [-> P4] -> P5, stopping at the first non-OK phase.
 
-    Deploy (P1) and air-gap (P4) require live docker and are NOT part of the offline chain;
-    they are driven explicitly. ``l2_runner`` is injected to avoid importing the harness at
-    module load (harness-independence).
+    Deploy (P1) requires live docker and is NOT part of the offline chain; air-gap (P4)
+    joins only when ``airgap_runner`` is injected (``all --with-airgap``) — with the
+    default ``None`` the chain is byte-identical to before. ``l2_runner`` is injected to
+    avoid importing the harness at module load (harness-independence). A BLOCKED airgap
+    (docker/overlays not ready) still renders the report from the L1 observables — the
+    same law as a BLOCKED L2 — while FAIL/HALT stops the chain.
     """
     io = default_phase_io()
     results: list[PhaseResult] = []
@@ -113,6 +139,12 @@ def run_all(
     if l2.status not in (STATUS_OK, STATUS_BLOCKED):
         # BLOCKED L2 (harness absent) is an allowed, recorded outcome; a hard FAIL stops.
         return results
+
+    if airgap_runner is not None:
+        airgap = airgap_runner(subtree_root, settings, run_id=run_id, now_fn=now_fn)
+        results.append(airgap)
+        if airgap.status not in (STATUS_OK, STATUS_BLOCKED):
+            return results
 
     results.append(run_report(subtree_root, settings, run_id=run_id, now_fn=now_fn))
     return results

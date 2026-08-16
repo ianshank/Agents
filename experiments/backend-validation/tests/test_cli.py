@@ -7,13 +7,22 @@ from pathlib import Path
 import pytest
 
 from backend_validation import cli
+from backend_validation.phases import PhaseResult
 from backend_validation.procrun import CompletedCommand, SubprocessRunner
+from backend_validation.settings import load_settings
 
 
 @pytest.fixture()
 def cli_subtree(tmp_subtree: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(cli, "SUBTREE_ROOT", tmp_subtree)
     return tmp_subtree
+
+
+class NoDocker(SubprocessRunner):
+    """Every external command fails as if docker were absent from the host."""
+
+    def run(self, argv: list[str], **kwargs: object) -> CompletedCommand:
+        return CompletedCommand(tuple(argv), returncode=127, stderr="docker: command not found")
 
 
 def test_schema_only_preflight_is_green(cli_subtree: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -102,3 +111,79 @@ def test_down_via_cli(cli_subtree: Path, monkeypatch: pytest.MonkeyPatch, capsys
     code = cli.main(["down", "--config", str(cli_subtree / "config.yaml")])
     assert code == 0
     assert "backend-validation[down]: OK" in capsys.readouterr().out
+
+
+def test_airgap_blocks_without_docker_via_cli(
+    cli_subtree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # exit 3 with a blocked report — never argparse exit 2 (the Makefile target contract).
+    monkeypatch.setattr(cli, "SubprocessRunner", NoDocker)
+    code = cli.main(["airgap", "--run-id", "run-cli-ag", "--config", str(cli_subtree / "config.yaml")])
+    out = capsys.readouterr().out
+    assert code == 3
+    assert "backend-validation[airgap]: BLOCKED — docker is not available" in out
+    assert "evidence:" in out
+    assert (cli_subtree / "artifacts" / "run-cli-ag" / "blocked_report.md").exists()
+
+
+def test_status_blocks_without_docker_via_cli(
+    cli_subtree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr("backend_validation.deploy_phase.SubprocessRunner", NoDocker)
+    code = cli.main(["status", "--config", str(cli_subtree / "config.yaml")])
+    out = capsys.readouterr().out
+    assert code == 3
+    assert "backend-validation[status]: BLOCKED — docker is not available" in out
+
+
+def test_status_ok_via_cli(
+    cli_subtree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class QuietDocker(SubprocessRunner):
+        def run(self, argv: list[str], **kwargs: object) -> CompletedCommand:
+            return CompletedCommand(tuple(argv), returncode=0, stdout="")
+
+    monkeypatch.setattr("backend_validation.deploy_phase.SubprocessRunner", QuietDocker)
+    code = cli.main(["status", "--config", str(cli_subtree / "config.yaml")])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "bv-langfuse: 0 container(s)" in out and "bv-opik-airgap: 0 container(s)" in out
+
+
+def test_plain_all_chain_has_no_airgap_phase(cli_subtree: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Without --with-airgap the chain is byte-identical to before: the unsigned tmp tree
+    # blocks at preflight and no airgap verdict line ever appears.
+    code = cli.main(["all", "--config", str(cli_subtree / "config.yaml")])
+    out = capsys.readouterr().out
+    assert code == 3
+    assert "backend-validation[preflight]: BLOCKED" in out
+    assert "[airgap]" not in out
+
+
+def test_all_with_airgap_threads_the_adapter(
+    cli_subtree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recorded: dict[str, object] = {}
+
+    def fake_run_all(*_args: object, **kwargs: object) -> list[PhaseResult]:
+        recorded.update(kwargs)
+        return [PhaseResult("preflight", "OK", "stubbed")]
+
+    monkeypatch.setattr(cli, "run_all", fake_run_all)
+    assert cli.main(["all", "--with-airgap", "--config", str(cli_subtree / "config.yaml")]) == 0
+    threaded = recorded.pop("airgap_runner")
+    assert threaded is cli._airgap_runner  # the seam is threaded...
+    assert cli.main(["all", "--config", str(cli_subtree / "config.yaml")]) == 0
+    defaulted = recorded.pop("airgap_runner")
+    assert defaulted is None  # ...and absent by default
+    capsys.readouterr()
+
+
+def test_airgap_runner_adapter_returns_phase_result(cli_subtree: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The adapter the chain injects builds real IO around run_airgap; under a docker-less
+    # runner it produces the same BLOCKED PhaseResult the standalone subcommand would.
+    monkeypatch.setattr(cli, "SubprocessRunner", NoDocker)
+    settings = load_settings(cli_subtree / "config.yaml", env={})
+    result = cli._airgap_runner(cli_subtree, settings, run_id="run-adapter", now_fn=lambda: "t")
+    assert result.phase == "airgap" and result.status == "BLOCKED"
+    assert "docker is not available" in result.reason

@@ -10,16 +10,35 @@ degradation (no iptables, witness-only) is RECORDED, never silently assumed away
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 from backend_validation.logging_util import get_logger
 
 logger = get_logger(__name__)
 
+# Witness-liveness canary (peer review B1): docker's embedded DNS answers service-name
+# lookups locally and only forwards EXTERNAL names, so a genuinely clean opt-out run
+# leaves the witness log empty — indistinguishable from a dead sidecar. The orchestrator
+# fires one lookup for this reserved-TLD name before each observed run; its query line
+# proves the witness was capturing (``_witness_is_live``) without ever counting as egress.
+CANARY_DOMAIN = "bv-witness-canary.invalid"
+
 # Hostnames that are part of the local stack — a lookup for these is NOT egress.
 _INTERNAL_SUFFIXES = (".internal", ".local", "localhost")
+# BIND/dnsmasq-style query log: `... query: stats.comet.com IN A ...`.
 _QUERY_LINE = re.compile(r"query:\s+(?P<domain>[A-Za-z0-9._-]+)\s+IN\s+", re.IGNORECASE)
+# CoreDNS log-plugin format: `[INFO] 172.31.101.7:34567 - 12345 "A IN stats.comet.com. udp
+# 45 false 512" NXDOMAIN ...` — the quoted section is `<TYPE> <CLASS> <FQDN.> <proto> ...`.
+_COREDNS_QUERY_LINE = re.compile(r'"[A-Za-z0-9]+\s+IN\s+(?P<domain>[A-Za-z0-9._-]+)\s')
+
+
+def _query_domains(witness_log: str) -> Iterator[str]:
+    """Every queried domain (lowercased, root dot stripped) across BOTH log dialects."""
+    for pattern in (_QUERY_LINE, _COREDNS_QUERY_LINE):
+        for match in pattern.finditer(witness_log):
+            yield match.group("domain").rstrip(".").lower()
 
 
 @dataclass(frozen=True)
@@ -40,13 +59,39 @@ class EgressObservation:
     usable: bool  # can this observation support a trustworthy "zero egress" claim?
     notes: str = ""
 
+    def to_dict(self) -> dict[str, object]:
+        """JSON-shaped view for ``verdicts.json`` (P4 evidence persistence)."""
+        return {
+            "mechanism": self.mechanism,
+            "attempted_domains": list(self.attempted_domains),
+            "degraded": self.degraded,
+            "egress_detected": self.egress_detected,
+            "usable": self.usable,
+            "notes": self.notes,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> EgressObservation:
+        return cls(
+            mechanism=str(data["mechanism"]),
+            attempted_domains=tuple(str(domain) for domain in data["attempted_domains"]),
+            degraded=bool(data["degraded"]),
+            egress_detected=bool(data["egress_detected"]),
+            usable=bool(data["usable"]),
+            notes=str(data.get("notes", "")),
+        )
+
 
 def classify_dns_queries(witness_log: str) -> tuple[str, ...]:
-    """Extract external (non-stack) domains from a coredns/dnsmasq query log."""
+    """Extract external (non-stack) domains from a coredns/dnsmasq query log.
+
+    The liveness canary is excluded here — it is fired BY the harness, so counting it
+    would turn every proven-live witness into a false egress detection — but its query
+    line still satisfies ``_witness_is_live`` (that is its whole job, peer review B1).
+    """
     domains: set[str] = set()
-    for match in _QUERY_LINE.finditer(witness_log):
-        domain = match.group("domain").rstrip(".").lower()
-        if not domain or domain.endswith(_INTERNAL_SUFFIXES) or _is_service_name(domain):
+    for domain in _query_domains(witness_log):
+        if not domain or domain == CANARY_DOMAIN or domain.endswith(_INTERNAL_SUFFIXES) or _is_service_name(domain):
             continue
         domains.add(domain)
     return tuple(sorted(domains))
@@ -60,12 +105,12 @@ def _is_service_name(domain: str) -> bool:
 def _witness_is_live(witness_log: str) -> bool:
     """True if the witness logged ANY DNS query (internal or external).
 
-    A live witness that saw only in-network baseline lookups (postgres, clickhouse) proves
-    it was capturing, so an absence of EXTERNAL queries is meaningful. A witness log with no
-    query lines at all is indistinguishable from a sidecar that never attached — it cannot
-    support an air-gap confirmation.
+    A live witness that saw only in-network baseline lookups (postgres, clickhouse) or the
+    harness's own canary proves it was capturing, so an absence of EXTERNAL queries is
+    meaningful. A witness log with no query lines at all is indistinguishable from a
+    sidecar that never attached — it cannot support an air-gap confirmation.
     """
-    return _QUERY_LINE.search(witness_log) is not None
+    return next(_query_domains(witness_log), None) is not None
 
 
 def observe_egress(
@@ -124,6 +169,8 @@ def _domains_from_container_logs(container_logs: str) -> set[str]:
     domains: set[str] = set()
     for match in _LOG_HOST.finditer(container_logs):
         domain = match.group(1).rstrip(".").lower()
+        if domain == CANARY_DOMAIN:  # the harness's own liveness probe is never egress
+            continue
         if not domain.endswith(_INTERNAL_SUFFIXES) and not _is_service_name(domain):
             domains.add(domain)
     return domains
@@ -153,6 +200,24 @@ class AirgapRun:
     def observation_usable(self) -> bool:
         return self.observation is not None and self.observation.usable
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "backend": self.backend,
+            "config_label": self.config_label,
+            "env": dict(self.env),
+            "observation": self.observation.to_dict() if self.observation is not None else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> AirgapRun:
+        raw_observation = data.get("observation")
+        return cls(
+            backend=str(data["backend"]),
+            config_label=str(data["config_label"]),
+            env={str(key): str(value) for key, value in dict(data.get("env") or {}).items()},
+            observation=EgressObservation.from_dict(raw_observation) if raw_observation is not None else None,
+        )
+
 
 @dataclass
 class AirgapVerdict:
@@ -180,6 +245,25 @@ class AirgapVerdict:
         """The opt-out observation could not support a verdict either way (spec fail-safe:
         this should route to a human / BLOCK, never silently read as confirmed)."""
         return not self.opt_out.observation_usable
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-shaped view for ``verdicts.json``. The derived verdict properties are
+        included so the evidence file reads standalone; ``from_dict`` recomputes them from
+        the structural fields and never trusts the stored copies."""
+        return {
+            "backend": self.backend,
+            "as_shipped": self.as_shipped.to_dict(),
+            "opt_out": self.opt_out.to_dict(),
+            "air_gapped_confirmed": self.air_gapped_confirmed,
+            "leaks_as_shipped": self.leaks_as_shipped,
+            "unconfirmed": self.unconfirmed,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> AirgapVerdict:
+        as_shipped = AirgapRun.from_dict(data["as_shipped"])
+        opt_out = AirgapRun.from_dict(data["opt_out"])
+        return cls(backend=str(data["backend"]), as_shipped=as_shipped, opt_out=opt_out, runs=[as_shipped, opt_out])
 
 
 def dual_score(

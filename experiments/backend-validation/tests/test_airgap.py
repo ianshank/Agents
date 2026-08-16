@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from backend_validation.airgap import (
+    CANARY_DOMAIN,
+    AirgapRun,
+    AirgapVerdict,
     EgressObservation,
+    _witness_is_live,
     classify_dns_queries,
     dual_score,
     observe_egress,
@@ -121,3 +125,79 @@ def test_dual_score_unconfirmed_when_optout_observation_unusable() -> None:
     verdict = dual_score("opik", {}, {}, lambda _label, _env: _obs(usable=False, degraded=True))
     assert verdict.air_gapped_confirmed is False
     assert verdict.unconfirmed is True  # cannot make the call -> routes to a human
+
+
+# ------------------------------------------------------- CoreDNS format + canary (B1)
+_COREDNS_LOG = """
+witness-1  | [INFO] 172.31.101.7:34567 - 12345 "A IN stats.comet.com. udp 45 false 512" NXDOMAIN qr,aa,rd 106 0.000123s
+witness-1  | [INFO] 172.31.101.8:53001 - 12346 "AAAA IN postgres. udp 37 false 512" NXDOMAIN qr,aa,rd 98 0.000101s
+witness-1  | [INFO] 172.31.101.9:41210 - 12347 "A IN bv-witness-canary.invalid. udp 54 false 512" NXDOMAIN qr,aa,rd 110 0.000099s
+"""
+
+_CANARY_ONLY_COREDNS = (
+    '[INFO] 172.31.101.9:41210 - 7 "A IN bv-witness-canary.invalid. udp 54 false 512" NXDOMAIN qr,aa,rd 110 0.0001s\n'
+)
+
+
+def test_classify_parses_coredns_log_format() -> None:
+    # CoreDNS quotes `<TYPE> IN <fqdn.>`; single-label service lookups stay internal.
+    assert classify_dns_queries(_COREDNS_LOG) == ("stats.comet.com",)
+
+
+def test_canary_domain_is_excluded_from_egress_but_proves_liveness() -> None:
+    # B1: the harness's own canary query must never read as egress...
+    assert classify_dns_queries(_CANARY_ONLY_COREDNS) == ()
+    # ...yet its query line proves the witness was capturing.
+    assert _witness_is_live(_CANARY_ONLY_COREDNS) is True
+    assert _witness_is_live("") is False
+
+
+def test_canary_only_witness_supports_zero_egress_verdict() -> None:
+    # End-to-end B1 fix: a clean opt-out run whose ONLY witness line is the canary is a
+    # USABLE zero-egress observation — before the canary it read as a dead witness.
+    observation = observe_egress(_CANARY_ONLY_COREDNS, iptables_available=False)
+    assert observation.usable is True and observation.egress_detected is False
+    assert observation.attempted_domains == ()
+
+
+def test_bind_style_canary_line_is_also_excluded() -> None:
+    log = f"15:00:01 query: {CANARY_DOMAIN} IN A + (172.31.101.9)\n"
+    assert classify_dns_queries(log) == ()
+    assert _witness_is_live(log) is True
+
+
+def test_container_log_canary_mention_is_not_egress() -> None:
+    logs = f"prober | connect to {CANARY_DOMAIN} refused\nweb | connect to minio.internal timed out"
+    observation = observe_egress("", iptables_available=False, container_logs=logs)
+    assert observation.attempted_domains == ()  # neither the canary nor an internal host
+    assert observation.egress_detected is False
+
+
+# ------------------------------------------------------------- dict round-trips (P4)
+def test_egress_observation_dict_round_trip() -> None:
+    observation = observe_egress(_COREDNS_LOG, iptables_available=True, iptables_hits=3)
+    rebuilt = EgressObservation.from_dict(observation.to_dict())
+    assert rebuilt == observation
+
+
+def test_airgap_run_dict_round_trip_with_and_without_observation() -> None:
+    run = AirgapRun("langfuse", "opt-out", {"BV_LANGFUSE_TELEMETRY": "false"})
+    assert AirgapRun.from_dict(run.to_dict()) == run  # observation=None survives
+    run.observation = observe_egress("", iptables_available=True, iptables_hits=0)
+    assert AirgapRun.from_dict(run.to_dict()) == run
+
+
+def test_airgap_verdict_dict_round_trip_preserves_verdict_properties() -> None:
+    def observe(label: str, _env: dict[str, str]) -> EgressObservation:
+        if label == "as-shipped":
+            return _obs(domains=("stats.comet.com",))
+        return _obs(usable=True, degraded=True)
+
+    verdict = dual_score("opik", {"BV_OPIK_USAGE_REPORT": "true"}, {"BV_OPIK_USAGE_REPORT": "false"}, observe)
+    payload = verdict.to_dict()
+    # The evidence file is self-describing: derived properties are serialized...
+    assert payload["air_gapped_confirmed"] is True and payload["leaks_as_shipped"] is True
+    rebuilt = AirgapVerdict.from_dict(payload)
+    # ...but from_dict recomputes them from structure (never trusts the stored copies).
+    assert rebuilt == verdict
+    assert rebuilt.air_gapped_confirmed and rebuilt.leaks_as_shipped and not rebuilt.unconfirmed
