@@ -187,3 +187,18 @@ def test_pin_digests_cli_skips_absent_overlays_and_dockerfile(
     code = cli.main(["pin-digests", "--config", str(tmp_subtree / "config.yaml")])
     assert code == 0
     assert "backend-validation[pin-digests]: OK" in capsys.readouterr().out
+
+
+def test_pin_dockerfile_skips_multistage_stage_references(tmp_path: Path) -> None:
+    # `FROM base` names the earlier stage — resolving it against a registry would fail
+    # on a nonexistent image; only real image refs are pinned.
+    path = _dockerfile(
+        tmp_path,
+        "FROM python:3.11-slim@TODO_PIN AS base\nFROM base AS runtime\nCOPY . .\n",
+    )
+    runner = ManifestRunner()
+    pinned = pin_dockerfile(path, runner)
+    assert pinned == [("python:3.11-slim", _DIGEST)]
+    body = path.read_text(encoding="utf-8")
+    assert f"FROM python:3.11-slim@{_DIGEST} AS base\n" in body
+    assert "FROM base AS runtime\n" in body  # untouched

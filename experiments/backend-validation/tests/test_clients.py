@@ -632,6 +632,11 @@ def test_opik_run_judge_eval_creates_trigger_trace_in_armed_project() -> None:
     (trace_kwargs,) = handle.traces
     assert trace_kwargs["project_name"] == "Default Project"  # the armed rule's project
     assert trace_kwargs["name"] == "bv-judge-eval-t-9"
+    # Same id as the probe's trace so fetch_judge_scores polls the SCORED trace, and
+    # real input/output fields so the rule's {{input}}/{{output}} variables map onto
+    # something the evaluator can actually judge (empty traces score nothing).
+    assert trace_kwargs["id"] == "t-9"
+    assert trace_kwargs["input"] and trace_kwargs["output"]
     assert handle.flushed == 1  # the arriving trace IS the online rule's trigger
 
 

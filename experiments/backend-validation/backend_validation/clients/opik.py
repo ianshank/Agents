@@ -363,10 +363,18 @@ class OpikProbeClient(DispatchProbeClient):
                 response_excerpt="no armed judge rule",
                 stderr="configure_judge did not arm an online rule; a server-side eval has no trigger",
             )
-        # Online rules score traces AS THEY ARRIVE — a fresh trace in the armed project
-        # is the platform's real trigger, not a bespoke run endpoint.
+        # Online rules score traces AS THEY ARRIVE — re-sending the probe's OWN trace id
+        # with scoreable input/output is the platform's real trigger, not a bespoke run
+        # endpoint. Same id on purpose: the probe's fetch_judge_scores polls exactly this
+        # trace, and the armed rule's {{input}}/{{output}} variables need real fields to
+        # map onto (an empty trace gives the evaluator nothing to score).
+        trace_id = str(payload.get("trace_id", "")) or None
         trace = self._handle.trace(
-            name=f"bv-judge-eval-{payload.get('trace_id', 'trace')}", project_name=self._armed_project
+            id=trace_id,
+            name=f"bv-judge-eval-{trace_id or 'trace'}",
+            project_name=self._armed_project,
+            input={"input": "What color is the clear daytime sky?"},
+            output={"output": "The clear daytime sky is blue."},
         )
         self._handle.flush()
         return OpDraft(
@@ -467,23 +475,26 @@ class OpikProbeClient(DispatchProbeClient):
             httpx_module: Any = importlib.import_module("httpx")  # ships with the opik extra
         except ImportError:
             return None
-        api = client_cls(
-            httpx_client=httpx_module.Client(timeout=self._timeout),
-            # Mirror config.guardrails_backend_host: scheme://netloc + "guardrails/".
-            host_url=f"{self._origin}/guardrails/",
-        )
-        try:
-            response = api.validate(text, validations=validations)
-        except Exception as exc:
-            code = getattr(exc, "status_code", None)
-            if code is None:
-                raise  # not an API error; dispatch records it honestly
-            body_excerpt = json.dumps(getattr(exc, "body", None))[:160]
-            return OpDraft(
-                status="error",
-                response_excerpt=f"HTTP {code}: {body_excerpt}"[:220],
-                stderr=f"http_status={code}",
+        # Context-managed so every probe invocation closes its connection pool (k=3
+        # repetitions plus retries would otherwise leak sockets until GC).
+        with httpx_module.Client(timeout=self._timeout) as httpx_client:
+            api = client_cls(
+                httpx_client=httpx_client,
+                # Mirror config.guardrails_backend_host: scheme://netloc + "guardrails/".
+                host_url=f"{self._origin}/guardrails/",
             )
+            try:
+                response = api.validate(text, validations=validations)
+            except Exception as exc:
+                code = getattr(exc, "status_code", None)
+                if code is None:
+                    raise  # not an API error; dispatch records it honestly
+                body_excerpt = json.dumps(getattr(exc, "body", None))[:160]
+                return OpDraft(
+                    status="error",
+                    response_excerpt=f"HTTP {code}: {body_excerpt}"[:220],
+                    stderr=f"http_status={code}",
+                )
         verdict = {"validation_passed": bool(getattr(response, "validation_passed", False))}
         # The SDK client returns only on 200, so the structured-evidence prefix is truthful.
         return OpDraft(response_excerpt=f"HTTP 200: {json.dumps(verdict)[:200]}")

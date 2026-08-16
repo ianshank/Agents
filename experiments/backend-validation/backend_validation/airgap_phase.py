@@ -334,7 +334,17 @@ def dockerfile_pinned(dockerfile_path: Path) -> list[str]:
         text = dockerfile_path.read_text(encoding="utf-8")
     except OSError as exc:
         return [f"prober Dockerfile unreadable at {dockerfile_path}: {exc}"]
-    refs = [match.group("ref") for match in (_FROM_LINE.match(line.strip()) for line in text.splitlines()) if match]
+    refs: list[str] = []
+    stages: set[str] = set()  # earlier `FROM ... AS <name>` stages are refs, not images
+    for line in text.splitlines():
+        match = _FROM_LINE.match(line.strip())
+        if not match:
+            continue
+        if match.group("ref").lower() not in stages:
+            refs.append(match.group("ref"))
+        suffix = match.group("suffix")
+        if suffix:
+            stages.add(suffix.split()[-1].lower())
     if not refs:
         return [f"{dockerfile_path.name}: no FROM line found — not a buildable Dockerfile"]
     return [
@@ -698,6 +708,25 @@ def _environment_reasons(io: AirgapIO) -> list[str]:
     return reasons
 
 
+def _persist_verdicts(verdicts_path: Path, verdicts: list[AirgapVerdict]) -> list[AirgapVerdict]:
+    """Write verdicts.json, merging by backend so a ``--backend``-scoped re-run under the
+    same run id refreshes that backend's verdict without discarding the other backend's
+    persisted P4 evidence. Returns the full merged set for the report render."""
+    verdicts_path.parent.mkdir(parents=True, exist_ok=True)
+    merged: dict[str, dict[str, object]] = {}
+    if verdicts_path.is_file():
+        try:
+            existing = json.loads(verdicts_path.read_text(encoding="utf-8"))
+            merged = {str(entry["backend"]): dict(entry) for entry in existing.get("verdicts", [])}
+        except (OSError, ValueError, KeyError, TypeError):
+            merged = {}  # corrupt prior file: rewrite from this run's verdicts alone
+    merged.update({verdict.backend: verdict.to_dict() for verdict in verdicts})
+    ordered = [merged[backend] for backend in sorted(merged)]
+    payload = {"schema_version": 1, "verdicts": ordered}
+    verdicts_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return [AirgapVerdict.from_dict(entry) for entry in ordered]
+
+
 def _verdict_phrase(verdict: AirgapVerdict) -> str:
     if verdict.air_gapped_confirmed:
         suffix = " (as-shipped egress recorded)" if verdict.leaks_as_shipped else ""
@@ -808,10 +837,8 @@ def run_airgap(
             return PhaseResult("airgap", STATUS_BLOCKED, str(exc), artifacts=(str(report), *exc.artifacts))
 
     verdicts_path = artifacts_dir / run_id / "airgap" / "verdicts.json"
-    verdicts_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"schema_version": 1, "verdicts": [verdict.to_dict() for verdict in verdicts]}
-    verdicts_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    report_path = write_report(reports_dir / "airgap_report.md", render_airgap_report(verdicts))
+    merged_verdicts = _persist_verdicts(verdicts_path, verdicts)
+    report_path = write_report(reports_dir / "airgap_report.md", render_airgap_report(merged_verdicts))
 
     unconfirmed = [verdict.backend for verdict in verdicts if verdict.unconfirmed]
     if unconfirmed:

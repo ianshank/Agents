@@ -226,11 +226,17 @@ def pin_dockerfile(dockerfile_path: Path, runner: CommandRunner) -> list[tuple[s
     """
     lines = dockerfile_path.read_text(encoding="utf-8").splitlines(keepends=True)
     pinned: list[tuple[str, str]] = []
+    stages: set[str] = set()  # earlier `FROM ... AS <name>` stages are refs, not images
     for index, line in enumerate(lines):
         match = _FROM_LINE.match(line.rstrip("\n"))
         if not match:
             continue
         ref = match.group("ref")
+        suffix_match = match.group("suffix")
+        if suffix_match:
+            stages.add(suffix_match.split()[-1].lower())
+        if ref.lower() in stages:
+            continue  # multi-stage reference to a prior stage — nothing to resolve
         base = ref.split("@", 1)[0]
         if _DIGEST_RE.search(ref):
             continue  # already pinned

@@ -868,3 +868,35 @@ def test_run_airgap_iptables_none_degrades_to_witness_only(tmp_subtree: Path) ->
     observation = payload["verdicts"][0]["opt_out"]["observation"]
     assert observation["mechanism"] == "dns-witness" and observation["degraded"] is True
     assert "iptables unavailable" in observation["notes"]
+
+
+def test_run_airgap_scoped_rerun_merges_verdicts_instead_of_overwriting(tmp_subtree: Path) -> None:
+    # A --backend re-run under the same run id refreshes that backend's verdict only;
+    # the other backend's persisted P4 evidence must survive (evidence-loss regression).
+    settings = _prep(tmp_subtree)
+    first = run_airgap(tmp_subtree, settings, _io(FlowRunner())[0], env={}, run_id="r", only_backend="langfuse")
+    assert first.status == STATUS_OK
+    second = run_airgap(tmp_subtree, settings, _io(FlowRunner())[0], env={}, run_id="r", only_backend="opik")
+    assert second.status == STATUS_OK
+    payload = json.loads((tmp_subtree / "artifacts" / "r" / "airgap" / "verdicts.json").read_text(encoding="utf-8"))
+    assert [entry["backend"] for entry in payload["verdicts"]] == ["langfuse", "opik"]
+    report = (tmp_subtree / "reports" / "airgap_report.md").read_text(encoding="utf-8")
+    assert "langfuse" in report and "opik" in report  # re-render covers the merged set
+
+
+def test_dockerfile_pinned_accepts_multistage_stage_references(tmp_path: Path) -> None:
+    # `FROM <stage>` names an earlier build stage, not a registry image — the digest
+    # gate must not demand a sha256 for it.
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text(
+        f"FROM python:3.11-slim@sha256:{'a' * 64} AS base\nFROM base\nCOPY . .\n",
+        encoding="utf-8",
+    )
+    assert dockerfile_pinned(dockerfile) == []
+    # A genuinely unpinned image ref after a stage line is still refused.
+    dockerfile.write_text(
+        f"FROM python:3.11-slim@sha256:{'a' * 64} AS base\nFROM ubuntu:24.04\n",
+        encoding="utf-8",
+    )
+    violations = dockerfile_pinned(dockerfile)
+    assert violations and "ubuntu:24.04" in violations[0]
