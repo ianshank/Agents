@@ -1,7 +1,7 @@
 {
   "name": "claude-foundation",
   "owner": {
-    "name": "Ian Shank"
+    "name": "Ian Cruickshank"
   },
   "metadata": {
     "description": "Self-hosted marketplace for the foundation plugin. Consumers pin a semver tag via the source ref.",
