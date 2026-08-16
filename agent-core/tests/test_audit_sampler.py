@@ -198,6 +198,46 @@ def test_detailed_selection_reports_the_domain_propensity(tmp_path) -> None:
     assert by_domain["docs"] > by_domain["core"]
 
 
+def test_per_domain_floor_applied_independently_across_domains(tmp_path) -> None:
+    """Per-domain stratification: each domain independently gets its floor.
+
+    When domains have differing volumes, the floor must still apply to each independently.
+    Smaller domains don't get "consumed" by the floor applied to larger domains.
+    This test exercises the headline feature of per-domain stratification."""
+    store = _store(
+        tmp_path,
+        # Small domain: 5 candidates, floor=3 -> must pick exactly 3
+        *[_pending(f"small{i}", domain="tiny") for i in range(5)],
+        # Large domain: 100 candidates, floor=3 -> must pick at least 3
+        *[_pending(f"large{i}", domain="huge") for i in range(100)],
+        # Another small domain: 2 candidates, floor=3 -> picks floor (2, clamped by candidate count)
+        *[_pending(f"other{i}", domain="mini") for i in range(2)],
+    )
+    cfg = AuditConfig(base_rate=0.0, per_domain_floor=3)
+    picks = select_for_audit_detailed(store, cfg, rng=random.Random(42))
+
+    by_domain: dict[str, list[str]] = {}
+    for sel in picks:
+        by_domain.setdefault(sel.domain, []).append(sel.change_id)
+
+    # Each domain independently gets its floor (base_rate=0.0 means floor only)
+    assert len(by_domain["tiny"]) == 3, "floor=3 applied to 5-candidate domain"
+    assert len(by_domain["huge"]) == 3, "floor=3 applied to 100-candidate domain"
+    assert len(by_domain["mini"]) == 2, "floor=3 but only 2 candidates -> all picked"
+
+    # Verify the propensity reflects each domain's independent stratification
+    tiny_propensities = {sel.propensity for sel in picks if sel.domain == "tiny"}
+    huge_propensities = {sel.propensity for sel in picks if sel.domain == "huge"}
+    mini_propensities = {sel.propensity for sel in picks if sel.domain == "mini"}
+
+    # tiny: 3/5 = 0.6
+    assert all(math.isclose(p, 0.6, abs_tol=1e-12) for p in tiny_propensities)
+    # huge: 3/100 = 0.03
+    assert all(math.isclose(p, 0.03, abs_tol=1e-12) for p in huge_propensities)
+    # mini: 2/2 = 1.0 (all candidates picked)
+    assert all(math.isclose(p, 1.0, abs_tol=1e-12) for p in mini_propensities)
+
+
 def test_selection_logs_the_propensity(tmp_path, caplog) -> None:
     store = _store(tmp_path, *[_pending(f"c{i}") for i in range(4)])
     with caplog.at_level("DEBUG", logger="agent_core.audit_sampler"):
