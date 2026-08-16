@@ -142,8 +142,9 @@ def test_config_workspace_and_judge_container_defaults() -> None:
     # Self-hosted Opik's workspace: the client sends it as Comet-Workspace + Opik(workspace=).
     assert settings.backend("opik").workspace == "default"
     assert settings.backend("langfuse").workspace == "default"  # model default; langfuse ignores it
-    # Server-side evaluators dial the judge through the host gateway, not the host loopback.
-    assert settings.judge.container_base_url == "http://host.docker.internal:18323/v1"
+    # Server-side evaluators dial the judge container-to-container over bv-judge-net
+    # (the ollama service's alias); the host's 127.0.0.1 publish is invisible to them.
+    assert settings.judge.container_base_url == "http://bv-judge:11434/v1"
     assert settings.judge.compose_file == "deploy/judge/compose.yaml"
 
 

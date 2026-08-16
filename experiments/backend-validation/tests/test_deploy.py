@@ -299,9 +299,15 @@ def test_airgap_overlays_reset_published_ports_and_join_internal_network() -> No
         base = yaml.safe_load((SUBTREE / "deploy" / stack / "compose.yaml").read_text(encoding="utf-8"))
         text = (SUBTREE / "deploy" / stack / "compose.airgap.yaml").read_text(encoding="utf-8")
         blocks = _overlay_service_blocks(text)
-        for name in base["services"]:
+        for name, service in base["services"].items():
             assert name in blocks, f"{stack} overlay must enumerate {name} to detach the default network"
-            assert "networks: [bv-internal]" in blocks[name], f"{stack}:{name}"
+            # Services with EXPLICIT base networks (the judge-net attachees) must use
+            # `!override`: compose UNIONS explicit network lists on merge, so a plain
+            # [bv-internal] would leave the shared judge network attached inside the seal.
+            expected_networks = (
+                "networks: !override [bv-internal]" if service.get("networks") else "networks: [bv-internal]"
+            )
+            assert expected_networks in blocks[name], f"{stack}:{name} wants {expected_networks!r}"
             assert f"dns: [{ip_prefix}.53]" in blocks[name], f"{stack}:{name}"
             assert "bv-dns-witness: {condition: service_started}" in blocks[name], f"{stack}:{name}"
         publishers = [name for name, service in base["services"].items() if service.get("ports")]
