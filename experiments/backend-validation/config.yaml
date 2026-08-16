@@ -4,39 +4,52 @@
 backends:
   - id: langfuse
     display_name: "Langfuse (self-hosted v3)"
-    base_url: "http://127.0.0.1:${BV_LANGFUSE_PORT:-18321}"
+    # Host is interpolable so the in-network airgap prober can point at the compose
+    # service name + container port (langfuse-web:3000) instead of the host loopback.
+    base_url: "http://${BV_LANGFUSE_HOST:-127.0.0.1}:${BV_LANGFUSE_PORT:-18321}"
     compose_file: "deploy/langfuse/compose.yaml"
     sdk_extra: "langfuse"
     credential_env:
       secret_key: "BV_LANGFUSE_SECRET_KEY"
       public_key: "BV_LANGFUSE_PUBLIC_KEY"
     airgap:
+      # Keys here are the ${VAR} names the COMPOSE FILE interpolates (they feed the
+      # container's TELEMETRY_ENABLED) — not the container variable itself. Using the
+      # container name was a silent no-op: `docker compose` only reads process env.
       as_shipped_env:
-        TELEMETRY_ENABLED: "true"
+        BV_LANGFUSE_TELEMETRY: "true"
       opt_out_env:
         # Documented Langfuse self-host telemetry opt-out (dual scoring, spec R8/P4).
-        TELEMETRY_ENABLED: "false"
+        BV_LANGFUSE_TELEMETRY: "false"
 
   - id: opik
     display_name: "Opik (self-hosted)"
-    base_url: "http://127.0.0.1:${BV_OPIK_PORT:-18322}"
+    # Host is interpolable so the in-network airgap prober can point at the compose
+    # service name + container port (opik-frontend:5173) instead of the host loopback.
+    base_url: "http://${BV_OPIK_HOST:-127.0.0.1}:${BV_OPIK_PORT:-18322}"
     compose_file: "deploy/opik/compose.yaml"
     sdk_extra: "opik"
     credential_env:
       api_key: "BV_OPIK_API_KEY"
+    workspace: "${BV_OPIK_WORKSPACE:-default}"
     airgap:
+      # Keys are the compose-interpolated ${VAR} names (feeding the backend's
+      # OPIK_USAGE_REPORT_ENABLED), not the container variable — see langfuse note.
       as_shipped_env:
-        OPIK_USAGE_REPORT_ENABLED: "true"
+        BV_OPIK_USAGE_REPORT: "true"
       opt_out_env:
         # Documented Opik usage-reporting opt-out (dual scoring, spec R8/P4).
-        OPIK_USAGE_REPORT_ENABLED: "false"
+        BV_OPIK_USAGE_REPORT: "false"
 
 judge:
   # One pinned local judge for every judge-class probe, identical across backends —
   # the probes test score PLUMBING, not judge accuracy (spec risk table).
-  base_url: "http://127.0.0.1:${BV_JUDGE_PORT:-18323}/v1"
+  base_url: "http://${BV_JUDGE_HOST:-127.0.0.1}:${BV_JUDGE_PORT:-18323}/v1"
   model: "${BV_JUDGE_MODEL:-llama3.2:3b}"
   api_key_env: "BV_JUDGE_API_KEY"
+  # What SERVER-SIDE evaluators (Opik online rules, Langfuse evals) must dial: the
+  # judge as seen from inside backend containers, via the host gateway alias.
+  container_base_url: "${BV_JUDGE_CONTAINER_URL:-http://host.docker.internal:18323/v1}"
 
 timeouts:
   op_seconds: ${BV_OP_TIMEOUT_SECONDS:-30}

@@ -51,6 +51,10 @@ class JudgeSpec(BaseModel):
     base_url: str
     model: str
     api_key_env: str  # env var NAME; many OpenAI-compatible servers accept any value
+    # URL the judge is reachable at FROM INSIDE backend containers (server-side
+    # evaluators cannot dial the host's 127.0.0.1). Empty -> fall back to base_url.
+    container_base_url: str = ""
+    compose_file: str = "deploy/judge/compose.yaml"  # relative to the subtree root
 
 
 class AirgapSpec(BaseModel):
@@ -73,6 +77,9 @@ class BackendSpec(BaseModel):
     compose_file: str  # relative to the subtree root
     sdk_extra: str  # pip extra that installs this backend's SDK
     credential_env: dict[str, str] = Field(default_factory=dict)  # role -> env var NAME
+    # SDK/REST workspace scope; only the Opik client consumes it (Comet-Workspace
+    # header + Opik(workspace=...)). Self-hosted default workspace is "default".
+    workspace: str = "default"
     airgap: AirgapSpec = Field(default_factory=AirgapSpec)
 
     @field_validator("id")
