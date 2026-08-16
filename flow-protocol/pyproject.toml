@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "flow-protocol"
 dynamic = ["version"]
 description = "Versioned contract surface between the flow-calibration corpus and the validation harness"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]

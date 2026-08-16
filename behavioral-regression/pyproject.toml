@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "behavioral-regression"
 dynamic = ["version"]
 description = "Calibrated, offline behavioral-regression detector: did model v2 drift (e.g. more sycophantic) vs v1? Composes agent_core calibration + flow_corpus oracle/bootstrap primitives into a ship/hold/escalate gate."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]

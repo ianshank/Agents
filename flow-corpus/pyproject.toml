@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "flow-corpus"
 dynamic = ["version"]
 description = "Calibration corpus of agentic flow variants: specimens, task suites, oracles, and the validation runner"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
