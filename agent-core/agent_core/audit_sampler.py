@@ -20,7 +20,7 @@ import random
 import sys
 from dataclasses import dataclass
 
-from .logging_util import get_logger
+from .logging_util import configure_logging, get_logger
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 from .protocols import Clock, SystemClock
 
@@ -263,6 +263,7 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--correct", dest="correct", action="store_true")
     g.add_argument("--incorrect", dest="correct", action="store_false")
     args = ap.parse_args(argv)
+    configure_logging(level="INFO")
 
     store = OutcomeStore(args.store)
     if args.cmd == "select":

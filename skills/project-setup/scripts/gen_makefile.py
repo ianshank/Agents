@@ -29,6 +29,12 @@ from makegen.render import supports_check
 logger = logging.getLogger("makegen")
 
 
+def _configure_logging(verbose: bool = False) -> None:
+    """Configure root logging for CLI."""
+    level = logging.DEBUG if verbose else logging.WARNING
+    logging.basicConfig(level=level, format="%(levelname)s %(name)s: %(message)s")
+
+
 def _check_one(out: Path, content: str) -> int:
     """Advisory freshness check: compare one committed file against a fresh render."""
     if not out.is_file():
@@ -116,11 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging (prints detected facts).")
     args = parser.parse_args(argv)
+    _configure_logging(verbose=args.verbose)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.WARNING,
-        format="%(levelname)s %(name)s: %(message)s",
-    )
     root = Path(args.root)
     artifacts = _artifacts(root, args.out, args.workspace)
 

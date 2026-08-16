@@ -21,6 +21,13 @@ from pathlib import Path
 
 logger = logging.getLogger("build-fixture")
 
+
+def _configure_logging(verbose: bool = False) -> None:
+    """Configure root logging for CLI."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=level, format="%(levelname)-8s %(name)s: %(message)s")
+
+
 #: Fixed identity + dates so the fixture's commit hash never varies.
 _GIT_ENV = {
     "GIT_AUTHOR_NAME": "fixture",
@@ -155,11 +162,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", required=True, help="directory to build the fixture repo in")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
+    _configure_logging(verbose=args.verbose)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(levelname)-8s %(name)s: %(message)s",
-    )
     path = build(args.kind, Path(args.out).resolve())
     print(f"build-fixture: {args.kind} fixture ready at {path}")
     return 0

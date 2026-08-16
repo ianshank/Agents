@@ -27,6 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from _cli import configure_logging
 from eval_protected_paths import is_protected
 
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ def run_fix_loop(
 
 def main() -> int:
     """Refuse to run — this entry point exists only to make the disabled state explicit."""
-    logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(name)s: %(message)s")
+    configure_logging(level=logging.INFO)
     print(
         "fix_loop is DISABLED by design (FIX_ENABLED=False). See docs/decisions/0004-auto-fix-loop.md before enabling."
     )

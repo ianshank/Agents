@@ -41,6 +41,13 @@ from pathlib import Path
 
 logger = logging.getLogger("repo-invariant-review")
 
+
+def _configure_logging(verbose: bool = False) -> None:
+    """Configure root logging for CLI."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=level, format="%(levelname)-8s %(name)s: %(message)s")
+
+
 #: Hard ceiling enforced by ``scripts/check_size_budget.py``. Single-sourced from that
 #: script when it is importable, so this skill cannot drift from the real gate.
 DEFAULT_MAX_FILE_LINES = 500
@@ -371,11 +378,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--strict", action="store_true", help="advisory findings also fail the run")
     parser.add_argument("--verbose", action="store_true", help="debug logging")
     args = parser.parse_args(argv)
-
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(levelname)-8s %(name)s: %(message)s",
-    )
+    _configure_logging(verbose=args.verbose)
 
     repo = Path(args.repo).resolve()
     if not (repo / ".git").exists():
