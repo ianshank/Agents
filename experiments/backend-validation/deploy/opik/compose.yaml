@@ -1,7 +1,9 @@
 # Opik self-hosted stack (probe target). Hand-maintained config, reviewed at P0 sign-off;
 # tune against the official opik docker-compose for the pinned version if images evolve.
 # Same rules as the Langfuse stack: digest-pinned images only (TODO_PIN -> `make
-# pin-digests`), ${VAR:?} for secrets, loopback ports, named volumes only.
+# pin-digests`), ${VAR:?} for secrets, loopback ports, named volumes — plus exactly one
+# read-only in-subtree config bind mount (the nginx conf on opik-frontend; zero-writes is
+# about container writes to the host, and bind_mounts_inside still checks containment).
 name: bv-opik
 
 services:
@@ -46,6 +48,11 @@ services:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
       clickhouse: {condition: service_healthy}
+    # No minio on purpose: at 1.7.26 the backend's S3 settings are fully env-defaulted
+    # (apps/opik-backend/config.yml s3Config: s3Url ${S3_URL:-http://minio:9000},
+    # isMinIO true, bucket `public`) and /health-check registers only deadlocks/db/
+    # redis/clickhouse/mysql — S3 is touched lazily by the attachments feature, which
+    # no probe exercises, so the backend boots healthy without an object store.
     environment:
       STATE_DB_URL: "jdbc:mysql://mysql:3306/opik?rewriteBatchedStatements=true"
       STATE_DB_DATABASE_NAME: opik
@@ -57,7 +64,20 @@ services:
       ANALYTICS_DB_USERNAME: opik
       ANALYTICS_DB_PASS: ${BV_OPIK_CH_PASSWORD:?}
       REDIS_URL: redis://redis:6379/0
-      OPIK_USAGE_REPORT_ENABLED: ${BV_OPIK_USAGE_REPORT:-true}  # airgap dual-scoring lever (spec R8)
+      # Server-side Python evaluator (online judge rules execute there); the image
+      # default is in-container localhost:8000, which is dead under compose.
+      PYTHON_EVALUATOR_URL: http://opik-python-backend:8000
+      # Server-side feature flag, default false: without it the API rejects guardrails
+      # results even while the guardrails service itself is up.
+      TOGGLE_GUARDRAILS_ENABLED: "true"
+      # airgap dual-scoring lever (spec R8). As shipped (true) this backend phones home
+      # to OPIK_USAGE_REPORT_URL, default https://stats.comet.com/notify/event/ — the
+      # exact egress the P4 witness expects to record in as-shipped mode.
+      OPIK_USAGE_REPORT_ENABLED: ${BV_OPIK_USAGE_REPORT:-true}
+    extra_hosts:
+      # Server-side evaluators must reach the judge stack published on the docker
+      # host's loopback (JudgeSpec.container_base_url); maps the host gateway in-container.
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health-check || exit 1"]
       interval: 10s
@@ -68,16 +88,52 @@ services:
     image: ghcr.io/comet-ml/opik/opik-python-backend:1.7.26@TODO_PIN
     depends_on:
       opik-backend: {condition: service_healthy}
+    # NOTE: no OPIK_USAGE_REPORT_ENABLED here — the 1.7.26 python backend never reads
+    # it (the copy this stack used to carry was dead env); the lever lives on opik-backend.
     environment:
       OPIK_REVERSE_PROXY_URL: http://opik-frontend:5173/api
-      OPIK_USAGE_REPORT_ENABLED: ${BV_OPIK_USAGE_REPORT:-true}
+    # Official 1.7.26 healthcheck verbatim (the file-exists guard keeps images that
+    # predate the healthcheck endpoint from flapping).
+    healthcheck:
+      test: ["CMD", "sh", "-c", "if [ -f /opt/opik-python-backend/src/opik_backend/healthcheck.py ]; then wget --spider --quiet http://127.0.0.1:8000/healthcheck; else exit 0; fi"]
+      interval: 2s
+      timeout: 60s
+      retries: 30
+      start_period: 2s
+
+  # Guardrails backend — the matrix cell where Opik claims native support (Langfuse is
+  # the negative control). The official compose gates this behind `--profile guardrails`;
+  # this probe stack ALWAYS starts it (deliberate deviation: the guardrails probes are
+  # unconditional, so the cell must not depend on a profile flag). CUDA-capable image
+  # with automatic CPU fallback on GPU-less hosts, and it is LARGE (multi-GB) — expect
+  # the P1 ops-burden metrics (pull time, footprint) to shift accordingly.
+  guardrails:
+    # nginx routes /guardrails/ to http://guardrails:5000 — the service name and
+    # hostname must both stay `guardrails` (see nginx_guardrails_local.conf).
+    image: ghcr.io/comet-ml/opik/opik-guardrails-backend:1.7.26@TODO_PIN
+    hostname: guardrails
+    # Official 1.7.26 healthcheck verbatim. No published ports: reachable only through
+    # the frontend nginx proxy on 5173.
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget --spider --quiet http://127.0.0.1:5000/healthcheck"]
+      interval: 2s
+      timeout: 60s
+      retries: 30
+      start_period: 10s
 
   opik-frontend:
     image: ghcr.io/comet-ml/opik/opik-frontend:1.7.26@TODO_PIN
     depends_on:
       opik-backend: {condition: service_healthy}
+      opik-python-backend: {condition: service_healthy}
     ports:
       - "127.0.0.1:${BV_OPIK_PORT:-18322}:5173"
+    volumes:
+      # The official frontend image bakes in NO nginx conf — the official compose mounts
+      # one in, and without it nothing listens on 5173 at all (the healthcheck below can
+      # never pass). Guardrails flavor: /api/ -> opik-backend:8080, /guardrails/ ->
+      # guardrails:5000.
+      - ./nginx_guardrails_local.conf:/etc/nginx/conf.d/default.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5173/ >/dev/null || exit 1"]
       interval: 10s

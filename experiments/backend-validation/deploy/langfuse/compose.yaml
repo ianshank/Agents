@@ -68,6 +68,10 @@ services:
       clickhouse: {condition: service_healthy}
       redis: {condition: service_healthy}
       minio: {condition: service_healthy}
+    extra_hosts:
+      # Langfuse v3 executes evals (LLM-as-judge) in the worker; the judge stack
+      # publishes on the docker host's loopback, so map the host gateway in-container.
+      - "host.docker.internal:host-gateway"
     environment: &langfuse-env
       DATABASE_URL: postgresql://langfuse:${BV_LANGFUSE_PG_PASSWORD:?}@postgres:5432/langfuse
       SALT: ${BV_LANGFUSE_SALT:?set in .env.local}

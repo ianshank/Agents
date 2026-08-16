@@ -231,3 +231,88 @@ def test_pin_compose_file_rewrites_only_image_lines(tmp_path: Path) -> None:
     assert "postgres:16@sha256:" + "c" * 64 in body
     assert _PINNED in body  # already-pinned line untouched
     assert "ports:" in body  # non-image lines untouched
+
+
+# ------------------------------------------------- committed stack shape (Opik + P4)
+def test_opik_compose_declares_guardrails_and_python_health() -> None:
+    """The committed Opik stack carries the guardrails cell and the health wiring the
+    probes rely on — incl. the nginx conf mount without which nothing listens on 5173."""
+    import yaml
+
+    data = yaml.safe_load((SUBTREE / "deploy" / "opik" / "compose.yaml").read_text(encoding="utf-8"))
+    services = data["services"]
+    guardrails = services["guardrails"]
+    assert guardrails["image"].startswith("ghcr.io/comet-ml/opik/opik-guardrails-backend:1.7.26@")
+    assert guardrails["hostname"] == "guardrails"  # nginx proxies /guardrails/ -> guardrails:5000
+    assert "127.0.0.1:5000/healthcheck" in " ".join(guardrails["healthcheck"]["test"])
+    assert "ports" not in guardrails  # reachable only through the frontend proxy
+    assert "healthcheck" in services["opik-python-backend"]
+    # The 1.7.26 python backend never reads the usage-report lever — it must not carry it.
+    assert "OPIK_USAGE_REPORT_ENABLED" not in services["opik-python-backend"].get("environment", {})
+    frontend = services["opik-frontend"]
+    assert "opik-python-backend" in frontend["depends_on"]
+    assert any(
+        volume.startswith("./nginx_guardrails_local.conf:/etc/nginx/conf.d/default.conf")
+        for volume in frontend["volumes"]
+    )
+    backend_env = services["opik-backend"]["environment"]
+    assert backend_env["PYTHON_EVALUATOR_URL"] == "http://opik-python-backend:8000"
+    assert backend_env["TOGGLE_GUARDRAILS_ENABLED"] == "true"
+
+
+def _overlay_service_blocks(text: str) -> dict[str, str]:
+    """Split an overlay's top-level `services:` mapping into raw text per service.
+
+    Deliberately textual: the overlays carry the compose `!reset` tag, which
+    yaml.safe_load rejects — the contract must be pinned against the committed bytes.
+    """
+    blocks: dict[str, str] = {}
+    current: str | None = None
+    in_services = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if line and not line[0].isspace():  # a new top-level key (or column-0 comment)
+            in_services = line.startswith("services:")
+            current = None
+            continue
+        if not in_services or not stripped or stripped.startswith("#"):
+            continue
+        if line.startswith("  ") and not line.startswith("    ") and stripped.endswith(":"):
+            current = stripped[:-1]
+            blocks[current] = ""
+        elif current is not None:
+            blocks[current] += line + "\n"
+    return blocks
+
+
+def test_airgap_overlays_reset_published_ports_and_join_internal_network() -> None:
+    """P4 overlay contract (validated at runtime by check_overlay; pinned here at text
+    level): every base service joins ONLY the internal network (detaching the implicit
+    default one), publishers strip their ports with the load-bearing `!reset` tag (a
+    plain `ports: []` merges to a no-op), and app DNS points at the static witness."""
+    import yaml
+
+    for stack, network_name, ip_prefix in (
+        ("langfuse", "bv-langfuse-internal", "172.31.100"),
+        ("opik", "bv-opik-internal", "172.31.101"),
+    ):
+        base = yaml.safe_load((SUBTREE / "deploy" / stack / "compose.yaml").read_text(encoding="utf-8"))
+        text = (SUBTREE / "deploy" / stack / "compose.airgap.yaml").read_text(encoding="utf-8")
+        blocks = _overlay_service_blocks(text)
+        for name in base["services"]:
+            assert name in blocks, f"{stack} overlay must enumerate {name} to detach the default network"
+            assert "networks: [bv-internal]" in blocks[name], f"{stack}:{name}"
+            assert f"dns: [{ip_prefix}.53]" in blocks[name], f"{stack}:{name}"
+            assert "bv-dns-witness: {condition: service_started}" in blocks[name], f"{stack}:{name}"
+        publishers = [name for name, service in base["services"].items() if service.get("ports")]
+        assert publishers, f"{stack} base compose publishes no ports — overlay test is stale"
+        for name in publishers:
+            assert "ports: !reset []" in blocks[name], f"{stack}:{name} must !reset its published ports"
+        witness = blocks["bv-dns-witness"]
+        assert "image: coredns/coredns:1.12.1@" in witness
+        assert "- ../witness/Corefile:/etc/coredns/Corefile:ro" in witness
+        assert f"ipv4_address: {ip_prefix}.53" in witness
+        # The witness must not point DNS at itself (line-anchored: the coredns image
+        # ref legitimately contains the substring "dns:").
+        assert not any(line.strip().startswith("dns:") for line in witness.splitlines())
+        assert "internal: true" in text and f"name: {network_name}" in text

@@ -31,8 +31,10 @@ newer tags is a deliberate, reviewed PR — never an implicit side effect of dep
 | ghcr.io/comet-ml/opik/opik-backend | 1.7.26 | TODO_PIN | — | — |
 | ghcr.io/comet-ml/opik/opik-python-backend | 1.7.26 | TODO_PIN | — | — |
 | ghcr.io/comet-ml/opik/opik-frontend | 1.7.26 | TODO_PIN | — | — |
+| ghcr.io/comet-ml/opik/opik-guardrails-backend | 1.7.26 | TODO_PIN | — | — |
 | ollama/ollama | 0.9.6 | TODO_PIN | — | — |
 | python (prober base) | 3.11-slim | TODO_PIN | — | — |
+| coredns/coredns (airgap DNS witness) | 1.12.1 | TODO_PIN | — | — |
 
 The judge model (`${BV_JUDGE_MODEL:-llama3.2:3b}`) is pulled by tag into the named
 volume at deploy time; its digest is recorded in `effort_metrics.json` at that moment.
