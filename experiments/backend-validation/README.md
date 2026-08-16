@@ -53,8 +53,35 @@ allowlist. The subtree consumes the repo core as a dependency only.
 2. `cp .env.example .env.local`, fill credentials (Langfuse keys come from the stack's
    headless init on first deploy).
 3. `make deploy` → `make l1` → `make l2` → `make airgap` → `make report`
-   (or `make all-phases`). Every run appends evidence to `artifacts/<run-id>/` (gitignored).
+   (or `make all-phases`; P4 rides the chain only via `cli all --with-airgap`). Every run
+   appends evidence to `artifacts/<run-id>/` (gitignored). `make status` shows all five
+   compose projects.
 4. Commit the curated outputs from `reports/` via a reviewed PR.
+
+## Air-gap mechanics (P4)
+
+`make airgap` re-runs L1 from an in-network prober container per backend, dual-scored
+as-shipped vs opt-out. Details that matter when reading its evidence:
+
+- **Witness + canary.** A CoreDNS sidecar logs every DNS query and resolves nothing
+  (NXDOMAIN). Docker's embedded DNS answers *service names* locally and forwards only
+  external lookups, so a clean opt-out run would log nothing — a deliberate canary lookup
+  (`bv-witness-canary.invalid`, excluded from egress classification) proves the witness
+  was alive. An iptables byte-counter backstop is used ONLY when the run's own bridge
+  DROP rule is positively identified; anything ambiguous degrades to witness-only and is
+  recorded as degraded, never as a trustworthy zero.
+- **Judge and network topology.** `make deploy` ensure-creates the shared `bv-judge-net`
+  network (server-side evaluators dial `http://bv-judge:11434` over it — the judge's host
+  port binds to 127.0.0.1 and is unreachable from containers). The air-gap overlays
+  `!override` that attachment away, so the sealed stacks cannot reach the judge:
+  judge-class probes error inside the seal BY DESIGN — the verdict keys off egress
+  observation, not probe pass/fail.
+- **Prober.** Built once per run (`docker build`, needs registry access — build while
+  online; the sealed runs only `docker run` it). It writes observables through the one
+  sanctioned bind mount (`artifacts/`); files land root-owned on the host.
+- **Failure semantics.** Prober exit 4 propagates HALT (a negative control passed inside
+  the seal — human review before ANY further runs); any other prober failure makes that
+  observation unusable → BLOCKED. A dead witness can never confirm an air gap.
 
 Reproducibility (spec R11): compose images are digest-pinned (`deploy/DIGESTS.md`); the
 judge model tag and every tool version land in the report. `make pin-digests` refreshes

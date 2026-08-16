@@ -298,8 +298,17 @@
   **unsigned** — no probe executes until a human corrects the transcribed matrix claims,
   signs `PROBES.yaml` + `RUBRIC.md`, and writes the `SIGNOFF` hash file (agents never sign).
   Remaining (human-driven, outside this repo's CI): resolve `CLAIM_TBD` marks from the
-  external matrix and sign the TCB; `make pin-digests` where the registries are reachable;
-  run P1–P5 against live stacks; commit the `reports/`. Deliberately NOT wired into the root
+  external matrix and sign the TCB; ~~`make pin-digests` where the registries are reachable~~;
+  run P1–P5 against live stacks; commit the `reports/`. **Update (PR #147, Opik matrix
+  enablement):** P4 air-gap + `status` are now implemented (canary-verified DNS witness,
+  prober rc gates, judge deployment over a shared `bv-judge-net`); every deploy image is
+  digest-pinned via the registry manifest API (provenance in `deploy/DIGESTS.md`); the
+  Opik client's five evidence-integrity defects (workspace, OTel fetch-by-hex, rollback,
+  GET-as-link, guessed judge/RAG/guardrails routes) are fixed on wheel-verified SDK
+  surfaces; the Opik stack gained the required frontend nginx conf + guardrails service.
+  Remaining human steps: TCB sign-off (incl. the stack-vs-SDK version question flagged in
+  the PR — stack pins 1.7.26, the SDK pin resolves 1.11.x) and live P0–P5 on a docker
+  host. Deliberately NOT wired into the root
   `Makefile` fan-out (the experiment is temporary, and the makegen Makefile has no
   hand-extension seam so a delegation target would not survive regeneration) — use
   `make -C experiments/backend-validation check`. Optionally, a path-filtered CI workflow can

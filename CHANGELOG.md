@@ -6,6 +6,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — backend-validation: full Opik matrix coverage + air-gap P4 (PR #147)
+- **Air-gap phase P4 exists now (`experiments/backend-validation/`).** `make airgap` and
+  `make status` invoked CLI subcommands that did not exist (argparse exit 2); no compose
+  had an internal network, no DNS witness ran, and the prober Dockerfile was built by
+  nothing. New `airgap_phase.py` orchestrates the dual-scored egress-blocked L1 re-run
+  through injectable seams (`AirgapIO` + `CommandRunner`): per-backend `internal: true`
+  overlay networks with a CoreDNS witness that logs every query and resolves nothing, a
+  witness-liveness **canary lookup** (Docker's embedded DNS answers service names locally,
+  so a *clean* opt-out run would otherwise leave the witness log empty and unprovable), a
+  strict iptables-counter contract (an integer only on positively identifying THIS run's
+  bridge DROP counter — anything ambiguous degrades to witness-only rather than
+  manufacturing a trustworthy zero), and prober exit-code gates (rc 4 propagates HALT;
+  any failure makes the observation unusable — a broken probe run can never confirm an
+  air gap). `all --with-airgap` opts the chain in; the default chain is byte-identical.
+- **Opik guardrails stack + the nginx conf the frontend always needed.** The official
+  `opik-frontend` image bakes in NO nginx conf (the official compose volume-mounts one);
+  our stack mounted nothing, so nothing ever listened on 5173 and the committed Opik
+  stack could not serve its published port at all. The guardrails-flavor conf is now
+  committed and mounted read-only; the `guardrails` service (the one matrix cell where
+  Opik claims ● with Langfuse as the negative control), the official python-backend
+  healthcheck, `PYTHON_EVALUATOR_URL`, and `TOGGLE_GUARDRAILS_ENABLED` are wired per the
+  fetched 1.7.26 sources. Ops-burden metrics will shift: the guardrails image is multi-GB.
+- **Judge stack deploys, and server-side evaluators can actually reach it.** `run_deploy`
+  now deploys the judge compose (project `bv-judge`) and pulls `${BV_JUDGE_MODEL}`; a
+  shared external `bv-judge-net` network (ensure-created first, `bv-judge` alias on the
+  ollama service) replaces the unreachable host-gateway design — the judge publishes on
+  the host's 127.0.0.1 only, which containers can never reach (Copilot review catch).
+  Air-gap overlays `!override` the network list on the attached services because compose
+  UNIONS explicit network lists on merge (and `!reset [value]` drops the value) — both
+  verified against `docker compose config`.
+- **Every deploy image is digest-pinned.** All 14 refs (bases, overlays, prober FROM)
+  resolved via the registry manifest API and recorded in `deploy/DIGESTS.md`;
+  `pin-digests` now also reaches `compose.airgap.yaml` files and Dockerfile `FROM` lines.
+
+### Fixed — backend-validation: five evidence-integrity defects in the Opik client
+- **The L1 Opik client could corrupt matrix evidence in every direction.** No
+  workspace/`Comet-Workspace` was sent anywhere; `fetch_otel_trace` fetched by the raw
+  32-hex OTLP id — a guaranteed miss reading as a false *absent*; `rollback_prompt` read
+  a payload key the probe never sends and silently "succeeded" on the latest version — a
+  false *positive*; `link_dataset_run` was a GET pretending to be a write (always-200
+  false positive); judge/RAG/guardrails/annotation/alerts ops posted guessed shapes to
+  wrong routes. Every op is rebuilt on surfaces verified against the extracted `opik`
+  wheels (1.11.14 and 1.7.26): OTel verification searches a unique span marker; rollback
+  recreates and verifies the target text; experiment linking creates a real experiment +
+  item references; RAG metrics run the SDK's own `AnswerRelevance` against the local
+  judge (emitting the `score=` token the rubric's range predicate parses); guardrails
+  validation posts through the frontend's `/guardrails/` proxy exactly as the SDK does;
+  judge configuration registers the local judge as a `custom-llm` provider and arms a
+  100%-sampling online rule, so `run_judge_eval` exercises the platform's real trigger
+  (a fresh trace in the armed project). Every SDK touch is a guarded chain with an
+  honest-`error` fallback, version-tolerant across the committed 1.7↔1.11 SDK/stack skew.
+- **The air-gap dual-scoring levers were dead.** `config.yaml` stored container-variable
+  names (`TELEMETRY_ENABLED`, `OPIK_USAGE_REPORT_ENABLED`) but the compose files
+  interpolate `${BV_LANGFUSE_TELEMETRY}` / `${BV_OPIK_USAGE_REPORT}` — the opt-out run's
+  env was a silent no-op, poisoning any future P4 comparison.
+- **`.env.example` omitted most `:?`-required compose secrets**, so the documented first
+  `make deploy` failed before compose could even render; it now lists every required
+  placeholder plus the new workspace/host/judge knobs.
+
 ### Docs
 - **OpenSpec change proposal: `add-panel-judge`
   (`openspec/changes/add-panel-judge/`).** Proposes a `panel` judge — one registered
