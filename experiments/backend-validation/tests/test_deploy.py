@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -322,3 +323,33 @@ def test_airgap_overlays_reset_published_ports_and_join_internal_network() -> No
         # ref legitimately contains the substring "dns:").
         assert not any(line.strip().startswith("dns:") for line in witness.splitlines())
         assert "internal: true" in text and f"name: {network_name}" in text
+
+
+def test_digests_table_covers_every_deployable_image() -> None:
+    """Every image any deploy artifact can start must have a DIGESTS.md provenance row.
+
+    Sweeps `image:` lines across all compose files (base + airgap overlays) and the
+    prober Dockerfile's FROM — a new image without a row would silently escape the
+    pin-digests audit trail (spec R11).
+    """
+    image_line = re.compile(r"^\s*(?:image:|FROM)\s+(?P<name>[^@\s]+)(?:@\S+)?\s*$")
+    deployable: set[tuple[str, str]] = set()
+    sources = [*sorted((SUBTREE / "deploy").glob("*/compose.yaml"))]
+    sources += sorted((SUBTREE / "deploy").glob("*/compose.airgap.yaml"))
+    sources.append(SUBTREE / "deploy" / "prober" / "Dockerfile")
+    for source in sources:
+        for line in source.read_text(encoding="utf-8").splitlines():
+            match = image_line.match(line)
+            if match:
+                name, _, tag = match.group("name").rpartition(":")
+                deployable.add((name, tag))
+    assert deployable, "image sweep found nothing — the regex or layout drifted"
+
+    rows: set[tuple[str, str]] = set()
+    for line in (SUBTREE / "deploy" / "DIGESTS.md").read_text(encoding="utf-8").splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) >= 2 and cells[0] not in ("Image", "---"):
+            rows.add((cells[0].split(" ")[0], cells[1]))
+
+    missing = {(name, tag) for name, tag in deployable if (name, tag) not in rows}
+    assert not missing, f"deployable images without a DIGESTS.md row: {sorted(missing)}"
