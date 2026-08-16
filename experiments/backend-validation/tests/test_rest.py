@@ -25,7 +25,14 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path == "/missing":
             self._reply(404, {"error": "nope"})
         else:
-            self._reply(200, {"ok": True, "auth": self.headers.get("Authorization", "")})
+            self._reply(
+                200,
+                {
+                    "ok": True,
+                    "auth": self.headers.get("Authorization", ""),
+                    "workspace": self.headers.get("Comet-Workspace", ""),
+                },
+            )
 
     def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length", "0"))
@@ -74,3 +81,34 @@ def test_connection_refused_propagates_for_dispatch_capture() -> None:
 
 def test_rest_result_ok_boundary() -> None:
     assert RestResult(status_code=299).ok and not RestResult(status_code=300).ok
+
+
+def test_opik_client_comet_workspace_header_round_trip(http_server: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """from_spec -> real UrllibRest -> loopback echo: the workspace header actually leaves.
+
+    A fake-transport assertion cannot prove the header survives urllib's request build;
+    this drives the real transport end to end (the same pattern as the auth tests above).
+    """
+    import sys
+    import types
+
+    from backend_validation.clients.opik import OpikProbeClient
+    from backend_validation.settings import BackendSpec
+
+    opik_module = types.ModuleType("opik")
+    opik_module.Opik = lambda **_kw: object()  # type: ignore[attr-defined]  # REST-only path below
+    monkeypatch.setitem(sys.modules, "opik", opik_module)
+    spec = BackendSpec(
+        id="opik",
+        display_name="Opik",
+        base_url=http_server,
+        compose_file="deploy/opik/compose.yaml",
+        sdk_extra="opik",
+        credential_env={"api_key": "BV_OPIK_API_KEY"},
+        workspace="default",
+    )
+    client = OpikProbeClient.from_spec(spec, env={})
+    # A bare handle has no fern alerts surface, so this walks the raw-REST fallback.
+    outcome = client.execute("verify_alert_rule", {})
+    assert outcome.status == "ok"
+    assert '"workspace": "default"' in outcome.response_excerpt

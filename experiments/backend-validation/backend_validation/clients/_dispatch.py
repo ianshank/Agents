@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
+from backend_validation.clients._rest import RestResult
 from backend_validation.observables import OpOutcome
 
 
@@ -27,6 +28,23 @@ class OpDraft:
 
 
 OpHandler = Callable[[Mapping[str, object]], OpDraft]
+
+
+def draft_from_rest(result: RestResult) -> OpDraft:
+    """Shared REST-result -> draft mapping for every client (was duplicated per client).
+
+    The excerpt format ``HTTP <code>: <body>`` truncated at 220 is API: probe evidence
+    heuristics (``probes.structured``) parse it, so it must stay byte-identical across
+    clients. The stderr status echo on non-2xx is evidentiary only — no rubric predicate
+    reads it.
+    """
+    status = "ok" if result.ok else "error"
+    stderr = "" if result.ok else f"http_status={result.status_code}"
+    return OpDraft(
+        status=status,
+        response_excerpt=f"HTTP {result.status_code}: {result.body_excerpt}"[:220],
+        stderr=stderr,
+    )
 
 
 class DispatchProbeClient:
