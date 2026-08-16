@@ -4,7 +4,7 @@
 # (the one permitted bind mount — still inside the subtree, zero-writes preserved).
 # Build while ONLINE during P1; run offline during P4. Base image digest-pinned like
 # every other image (TODO_PIN -> `make pin-digests`).
-FROM python:3.11-slim@TODO_PIN
+FROM python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1
 
 WORKDIR /experiment
 COPY pyproject.toml README.md config.yaml PROBES.yaml RUBRIC.md ./

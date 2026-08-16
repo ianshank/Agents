@@ -11,7 +11,7 @@ name: bv-langfuse
 
 services:
   postgres:
-    image: postgres:16-alpine@TODO_PIN
+    image: postgres:16-alpine@sha256:44c4ee9810eff91f7eab4d822642e01115b1a9eccce4bcbdde7604752d68eac6
     environment:
       POSTGRES_USER: langfuse
       POSTGRES_PASSWORD: ${BV_LANGFUSE_PG_PASSWORD:?set in .env.local}
@@ -25,7 +25,7 @@ services:
       - pg-data:/var/lib/postgresql/data
 
   redis:
-    image: redis:7-alpine@TODO_PIN
+    image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     command: ["redis-server", "--requirepass", "${BV_LANGFUSE_REDIS_PASSWORD:?set in .env.local}"]
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG || redis-cli ping | grep PONG"]
@@ -34,7 +34,7 @@ services:
       retries: 20
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8-alpine@TODO_PIN
+    image: clickhouse/clickhouse-server:24.8-alpine@sha256:b002e56ed5c16e224c312527f6fcba7e77216fec5d7a88a7828f59efc614feb5
     environment:
       CLICKHOUSE_USER: clickhouse
       CLICKHOUSE_PASSWORD: ${BV_LANGFUSE_CH_PASSWORD:?set in .env.local}
@@ -48,7 +48,7 @@ services:
       - ch-data:/var/lib/clickhouse
 
   minio:
-    image: minio/minio:RELEASE.2024-09-13T20-26-02Z@TODO_PIN
+    image: minio/minio:RELEASE.2024-09-13T20-26-02Z@sha256:cd04ea408e185cb50076ea1c3988d444119b19aaae15aab45387ccf14b2a2f86
     command: ["server", "/data", "--address", ":9000"]
     environment:
       MINIO_ROOT_USER: langfuse
@@ -62,12 +62,20 @@ services:
       - minio-data:/data
 
   langfuse-worker:
-    image: langfuse/langfuse-worker:3@TODO_PIN
+    image: langfuse/langfuse-worker:3@sha256:138a5b510cd76262a2abb02af1ddc563105013fdc9a62e63ccce526140ad05ba
     depends_on:
       postgres: {condition: service_healthy}
       clickhouse: {condition: service_healthy}
       redis: {condition: service_healthy}
       minio: {condition: service_healthy}
+    networks:
+      # Langfuse v3 executes evals (LLM-as-judge) in the worker; it dials the judge
+      # over the shared bv-judge-net network (http://bv-judge:11434). A host-gateway
+      # alias would not work — the judge publishes on the host's 127.0.0.1 only.
+      # run_deploy ensure-creates the external network; the airgap overlay `!override`s
+      # this list so the sealed stack never touches it.
+      - default
+      - judge-net
     environment: &langfuse-env
       DATABASE_URL: postgresql://langfuse:${BV_LANGFUSE_PG_PASSWORD:?}@postgres:5432/langfuse
       SALT: ${BV_LANGFUSE_SALT:?set in .env.local}
@@ -86,7 +94,7 @@ services:
       TELEMETRY_ENABLED: ${BV_LANGFUSE_TELEMETRY:-true}  # airgap dual-scoring lever (spec R8)
 
   langfuse-web:
-    image: langfuse/langfuse:3@TODO_PIN
+    image: langfuse/langfuse:3@sha256:60a668b1dd06e2d9a034ba8b2ed5e84303e66c6202d76b288020059a755fd037
     depends_on:
       postgres: {condition: service_healthy}
       clickhouse: {condition: service_healthy}
@@ -117,3 +125,11 @@ volumes:
   pg-data:
   ch-data:
   minio-data:
+
+networks:
+  # Shared with the judge stack (deploy/judge/compose.yaml) so the worker's server-side
+  # evals can reach the judge container-to-container. External: created by run_deploy
+  # (idempotent `docker network create bv-judge-net`), owned by no compose project.
+  judge-net:
+    name: bv-judge-net
+    external: true

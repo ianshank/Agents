@@ -11,12 +11,13 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend_validation.deploy import DeployError, pin_compose_file
-from backend_validation.deploy_phase import run_deploy, run_down
+from backend_validation.airgap_phase import AirgapIO, run_airgap
+from backend_validation.deploy import DeployError, pin_compose_file, pin_dockerfile
+from backend_validation.deploy_phase import run_deploy, run_down, run_status
 from backend_validation.isolation import IsolationError, check_isolation
 from backend_validation.l2_phase import run_l2
 from backend_validation.logging_util import configure_logging, get_logger
@@ -94,11 +95,24 @@ def build_parser() -> argparse.ArgumentParser:
     l2 = sub.add_parser("l2", parents=[common], help="P3: integration probes through the harness sink seam")
     l2.add_argument("--run-id", default=None, help="Evidence directory name (default: UTC timestamp)")
 
+    airgap = sub.add_parser(
+        "airgap", parents=[common], help="P4: egress-blocked L1 re-run, dual-scored (as-shipped vs opt-out)"
+    )
+    airgap.add_argument("--backend", help="Air-gap a single configured backend")
+    airgap.add_argument("--run-id", default=None, help="Evidence directory name (default: UTC timestamp)")
+
+    sub.add_parser("status", parents=[common], help="Show container status for every experiment compose project")
+
     report = sub.add_parser("report", parents=[common], help="P5: render claimed-vs-observed from recorded evidence")
     report.add_argument("--run-id", required=True, help="The run whose observables to render")
 
     all_cmd = sub.add_parser("all", parents=[common], help="Chain P0->P2->P3->P5 (stops on BLOCKED/HALT)")
     all_cmd.add_argument("--run-id", default=None, help="Evidence directory name (default: UTC timestamp)")
+    all_cmd.add_argument(
+        "--with-airgap",
+        action="store_true",
+        help="Also run P4 between L2 and the report (requires docker; BLOCKED still renders the report)",
+    )
 
     isolation = sub.add_parser("isolation", parents=[common], help="PR-scoped zero-writes check against a base ref")
     isolation.add_argument("--base-ref", default="origin/main", help="Base ref to diff against")
@@ -169,11 +183,24 @@ def _cmd_pin_digests(args: argparse.Namespace) -> int:
         return EXIT_USAGE_ERROR
     runner = SubprocessRunner()
     compose_paths = [SUBTREE_ROOT / spec.compose_file for spec in settings.backends]
-    compose_paths.append(SUBTREE_ROOT / "deploy" / "judge" / "compose.yaml")
+    compose_paths.append(SUBTREE_ROOT / settings.judge.compose_file)
+    # Air-gap overlays (M2 reach): pin_compose_file is line-based, so overlay files with
+    # `!reset` tags are safe to pin. Glob so an absent overlay is simply skipped.
+    compose_paths.extend(sorted((SUBTREE_ROOT / "deploy").glob("*/compose.airgap.yaml")))
     total = 0
     for compose_path in compose_paths:
         try:
             pinned = pin_compose_file(compose_path, runner)
+        except DeployError as exc:
+            print(f"backend-validation[pin-digests]: FAIL — {exc}")
+            return 1
+        for base, digest in pinned:
+            print(f"  pinned {base} -> {digest}")
+        total += len(pinned)
+    dockerfile = SUBTREE_ROOT / "deploy" / "prober" / "Dockerfile"
+    if dockerfile.exists():
+        try:
+            pinned = pin_dockerfile(dockerfile, runner)
         except DeployError as exc:
             print(f"backend-validation[pin-digests]: FAIL — {exc}")
             return 1
@@ -192,6 +219,29 @@ def _cmd_l2(args: argparse.Namespace) -> int:
     return _verdict(run_l2(SUBTREE_ROOT, settings, run_id=run_id, now_fn=_utc_now))
 
 
+def _airgap_runner(subtree_root: Path, settings: Settings, *, run_id: str, now_fn: Callable[[], str]) -> PhaseResult:
+    """`l2_runner`-shaped adapter over run_airgap for the `all --with-airgap` chain."""
+    io = AirgapIO(runner=SubprocessRunner(), now_fn=now_fn)
+    return run_airgap(subtree_root, settings, io, env=dict(os.environ), run_id=run_id)
+
+
+def _cmd_airgap(args: argparse.Namespace) -> int:
+    settings = _load_settings_or_none(args)
+    if settings is None:
+        return EXIT_USAGE_ERROR
+    run_id = args.run_id or _default_run_id()
+    io = AirgapIO(runner=SubprocessRunner(), now_fn=_utc_now)
+    result = run_airgap(SUBTREE_ROOT, settings, io, env=dict(os.environ), run_id=run_id, only_backend=args.backend)
+    return _verdict(result)
+
+
+def _cmd_status(args: argparse.Namespace) -> int:
+    settings = _load_settings_or_none(args)
+    if settings is None:
+        return EXIT_USAGE_ERROR
+    return _verdict(run_status(SUBTREE_ROOT, settings))
+
+
 def _cmd_report(args: argparse.Namespace) -> int:
     settings = _load_settings_or_none(args)
     if settings is None:
@@ -204,7 +254,14 @@ def _cmd_all(args: argparse.Namespace) -> int:
     if settings is None:
         return EXIT_USAGE_ERROR
     run_id = args.run_id or _default_run_id()
-    results = run_all(SUBTREE_ROOT, settings, run_id=run_id, now_fn=_utc_now, l2_runner=run_l2)
+    results = run_all(
+        SUBTREE_ROOT,
+        settings,
+        run_id=run_id,
+        now_fn=_utc_now,
+        l2_runner=run_l2,
+        airgap_runner=_airgap_runner if args.with_airgap else None,
+    )
     exit_code = 0
     for result in results:
         exit_code = _verdict(result) or exit_code
@@ -243,6 +300,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "pin-digests": _cmd_pin_digests,
         "l1": _cmd_l1,
         "l2": _cmd_l2,
+        "airgap": _cmd_airgap,
+        "status": _cmd_status,
         "report": _cmd_report,
         "all": _cmd_all,
         "isolation": _cmd_isolation,

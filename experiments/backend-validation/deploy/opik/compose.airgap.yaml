@@ -1,0 +1,77 @@
+# Air-gap overlay (P4): docker compose -f compose.yaml -f compose.airgap.yaml -p
+# bv-opik-airgap. Hand-maintained, reviewed at P0 sign-off with the base file, and
+# statically validated by check_overlay before any `up`.
+#
+# Mechanics: EVERY base service is re-declared with `networks: [bv-internal]`, which
+# detaches the implicit default network — the stack still name-resolves itself but has
+# no route out (`internal: true`). Published ports are stripped with `ports: !reset []`
+# (the !reset tag is load-bearing: a plain `ports: []` merges to a no-op). Every app
+# service's DNS points at the CoreDNS witness on the static .53 address, which logs
+# every query and answers NXDOMAIN — in as-shipped mode the opik-backend usage report
+# to stats.comet.com is exactly the egress this records; the pre-run canary lookup
+# proves the witness is alive even when a clean opt-out run logs nothing else.
+services:
+  mysql:
+    networks: [bv-internal]
+    dns: [172.31.101.53]
+    depends_on:
+      bv-dns-witness: {condition: service_started}
+
+  redis:
+    networks: [bv-internal]
+    dns: [172.31.101.53]
+    depends_on:
+      bv-dns-witness: {condition: service_started}
+
+  clickhouse:
+    networks: [bv-internal]
+    dns: [172.31.101.53]
+    depends_on:
+      bv-dns-witness: {condition: service_started}
+
+  opik-backend:
+    # `!override` (not a plain list): the base attaches this service to the shared
+    # bv-judge-net as well, and compose UNIONS explicit network lists on merge — a
+    # plain [bv-internal] here would leave a non-internal egress path into the seal.
+    networks: !override [bv-internal]
+    dns: [172.31.101.53]
+    depends_on:
+      bv-dns-witness: {condition: service_started}
+
+  opik-python-backend:
+    networks: [bv-internal]
+    dns: [172.31.101.53]
+    depends_on:
+      bv-dns-witness: {condition: service_started}
+
+  guardrails:
+    networks: [bv-internal]
+    dns: [172.31.101.53]
+    depends_on:
+      bv-dns-witness: {condition: service_started}
+
+  opik-frontend:
+    networks: [bv-internal]
+    dns: [172.31.101.53]
+    depends_on:
+      bv-dns-witness: {condition: service_started}
+    ports: !reset []
+
+  bv-dns-witness:
+    image: coredns/coredns:1.12.1@sha256:e8c262566636e6bc340ece6473b0eed193cad045384401529721ddbe6463d31c
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ../witness/Corefile:/etc/coredns/Corefile:ro
+    networks:
+      bv-internal:
+        ipv4_address: 172.31.101.53
+
+# Explicit deterministic network name: the prober/canary containers join it via
+# `docker run --network`, which must not depend on compose project-name mangling.
+networks:
+  bv-internal:
+    internal: true
+    name: bv-opik-internal
+    ipam:
+      config:
+        - subnet: 172.31.101.0/24

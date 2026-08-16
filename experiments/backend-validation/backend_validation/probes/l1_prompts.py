@@ -14,4 +14,6 @@ def prompt_version_cycle(run: ProbeRun) -> None:
     run.op("create_prompt_version", {"name": name, "text": v2_text})
     fetched = run.op("fetch_prompt", {"name": name})
     fetched.note(fetched_latest_matches=fetched.ok and v2_text[:10] in fetched.outcome.response_excerpt)
-    run.op("rollback_prompt", {"name": name, "version": 1})
+    # `version` drives Langfuse's label-move rollback; `text` (the v1 body created above)
+    # drives Opik's recreate-as-latest rollback, which must verify the resulting text.
+    run.op("rollback_prompt", {"name": name, "version": 1, "text": "v1"})

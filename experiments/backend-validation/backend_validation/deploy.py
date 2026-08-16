@@ -24,6 +24,13 @@ logger = get_logger(__name__)
 
 _DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
 _IMAGE_LINE = re.compile(r"^(?P<indent>\s+image:\s*)(?P<ref>\S+)\s*$")
+# Dockerfile FROM lines (the prober image base, peer review M2): same digest law as
+# compose `image:` lines — `FROM <ref>@TODO_PIN` / bare tags are refused by the airgap
+# gate and rewritten by `pin_dockerfile`. Multi-stage `AS <name>` suffixes survive.
+_FROM_LINE = re.compile(
+    r"^(?P<prefix>FROM\s+(?:--platform=\S+\s+)?)(?P<ref>\S+)(?P<suffix>\s+AS\s+\S+)?\s*$",
+    re.IGNORECASE,
+)
 # A Docker named volume: a bare token with no path separators and no leading dot/slash.
 # Anything else in a `volumes:` source position is a host bind mount and must stay in-subtree.
 _NAMED_VOLUME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -208,4 +215,39 @@ def pin_compose_file(compose_path: Path, runner: CommandRunner) -> list[tuple[st
         pinned.append((base, digest))
     if pinned:
         compose_path.write_text("".join(lines), encoding="utf-8")
+    return pinned
+
+
+def pin_dockerfile(dockerfile_path: Path, runner: CommandRunner) -> list[tuple[str, str]]:
+    """Rewrite unpinned/TODO ``FROM`` lines in place to ``ref@sha256:...`` (M2 reach).
+
+    Mirrors ``pin_compose_file``: line-based so comments and formatting in the reviewed
+    Dockerfile survive; only ``FROM`` lines change, and already-pinned lines are left alone.
+    """
+    lines = dockerfile_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    pinned: list[tuple[str, str]] = []
+    stages: set[str] = set()  # earlier `FROM ... AS <name>` stages are refs, not images
+    for index, line in enumerate(lines):
+        match = _FROM_LINE.match(line.rstrip("\n"))
+        if not match:
+            continue
+        ref = match.group("ref")
+        suffix_match = match.group("suffix")
+        # Check against PRIOR stages before registering this line's own alias: in
+        # `FROM alpine AS alpine` the alias equals the image ref, and register-first
+        # would skip a real registry image (dockerfile_pinned uses the same order).
+        is_stage_ref = ref.lower() in stages
+        if suffix_match:
+            stages.add(suffix_match.split()[-1].lower())
+        if is_stage_ref:
+            continue  # multi-stage reference to a prior stage — nothing to resolve
+        base = ref.split("@", 1)[0]
+        if _DIGEST_RE.search(ref):
+            continue  # already pinned
+        digest = resolve_digest(base, runner)
+        suffix = match.group("suffix") or ""
+        lines[index] = f"{match.group('prefix')}{base}@{digest}{suffix}\n"
+        pinned.append((base, digest))
+    if pinned:
+        dockerfile_path.write_text("".join(lines), encoding="utf-8")
     return pinned

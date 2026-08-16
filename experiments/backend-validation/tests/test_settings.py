@@ -137,6 +137,34 @@ def test_load_settings_env_and_override_precedence(tmp_path: Path) -> None:
     assert settings.timeouts.op_seconds == 7.0
 
 
+def test_config_workspace_and_judge_container_defaults() -> None:
+    settings = load_settings(SUBTREE / "config.yaml", env={})
+    # Self-hosted Opik's workspace: the client sends it as Comet-Workspace + Opik(workspace=).
+    assert settings.backend("opik").workspace == "default"
+    assert settings.backend("langfuse").workspace == "default"  # model default; langfuse ignores it
+    # Server-side evaluators dial the judge container-to-container over bv-judge-net
+    # (the ollama service's alias); the host's 127.0.0.1 publish is invisible to them.
+    assert settings.judge.container_base_url == "http://bv-judge:11434/v1"
+    assert settings.judge.compose_file == "deploy/judge/compose.yaml"
+
+
+def test_config_workspace_and_host_interpolation() -> None:
+    settings = load_settings(
+        SUBTREE / "config.yaml",
+        env={
+            "BV_OPIK_WORKSPACE": "team-a",
+            "BV_OPIK_HOST": "opik-frontend",
+            "BV_LANGFUSE_HOST": "langfuse-web",
+            "BV_JUDGE_CONTAINER_URL": "http://judge:9/v1",
+        },
+    )
+    assert settings.backend("opik").workspace == "team-a"
+    # Host interpolation lets the in-network airgap prober target compose service names.
+    assert settings.backend("opik").base_url == "http://opik-frontend:18322"
+    assert settings.backend("langfuse").base_url == "http://langfuse-web:18321"
+    assert settings.judge.container_base_url == "http://judge:9/v1"
+
+
 def test_load_settings_error_paths(tmp_path: Path) -> None:
     with pytest.raises(SettingsError, match="cannot read"):
         load_settings(tmp_path / "missing.yaml", env={})

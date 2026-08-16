@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 
 from backend_validation.deploy import (
+    _FROM_LINE,
     DeployError,
     bind_mounts_inside,
     compose_argv,
@@ -91,13 +93,13 @@ def test_refuse_unpinned_accepts_digest(tmp_path: Path) -> None:
     assert refuse_unpinned(path)[0].pinned
 
 
-def test_committed_compose_files_are_currently_todo_pinned() -> None:
-    # Ships with TODO_PIN markers; `make pin-digests` resolves them where the registry is
-    # reachable. This test documents the state AND proves the gate would refuse a deploy.
+def test_committed_compose_files_are_digest_pinned() -> None:
+    # Every committed compose ships digest-pinned (resolved via the registry manifest
+    # API; provenance in deploy/DIGESTS.md), so the deploy gate accepts them as-is.
+    # Re-pinning to newer tags stays a deliberate, reviewed change.
     for name in ("langfuse", "opik", "judge"):
-        path = SUBTREE / "deploy" / name / "compose.yaml"
-        with pytest.raises(DeployError, match="pin-digests"):
-            refuse_unpinned(path)
+        images = refuse_unpinned(SUBTREE / "deploy" / name / "compose.yaml")
+        assert images and all(image.pinned for image in images), name
 
 
 # ---------------------------------------------------------------- bind mounts
@@ -231,3 +233,142 @@ def test_pin_compose_file_rewrites_only_image_lines(tmp_path: Path) -> None:
     assert "postgres:16@sha256:" + "c" * 64 in body
     assert _PINNED in body  # already-pinned line untouched
     assert "ports:" in body  # non-image lines untouched
+
+
+# ------------------------------------------------- committed stack shape (Opik + P4)
+def test_opik_compose_declares_guardrails_and_python_health() -> None:
+    """The committed Opik stack carries the guardrails cell and the health wiring the
+    probes rely on — incl. the nginx conf mount without which nothing listens on 5173."""
+    import yaml
+
+    data = yaml.safe_load((SUBTREE / "deploy" / "opik" / "compose.yaml").read_text(encoding="utf-8"))
+    services = data["services"]
+    guardrails = services["guardrails"]
+    assert guardrails["image"].startswith("ghcr.io/comet-ml/opik/opik-guardrails-backend:1.7.26@")
+    assert guardrails["hostname"] == "guardrails"  # nginx proxies /guardrails/ -> guardrails:5000
+    assert "127.0.0.1:5000/healthcheck" in " ".join(guardrails["healthcheck"]["test"])
+    assert "ports" not in guardrails  # reachable only through the frontend proxy
+    assert "healthcheck" in services["opik-python-backend"]
+    # The 1.7.26 python backend never reads the usage-report lever — it must not carry it.
+    assert "OPIK_USAGE_REPORT_ENABLED" not in services["opik-python-backend"].get("environment", {})
+    frontend = services["opik-frontend"]
+    assert "opik-python-backend" in frontend["depends_on"]
+    # nginx resolves the static guardrails upstream at config load: the container must
+    # at least be created (DNS record) before the frontend starts.
+    assert frontend["depends_on"].get("guardrails") == {"condition": "service_started"}
+    assert any(
+        volume.startswith("./nginx_guardrails_local.conf:/etc/nginx/conf.d/default.conf")
+        for volume in frontend["volumes"]
+    )
+    backend_env = services["opik-backend"]["environment"]
+    assert backend_env["PYTHON_EVALUATOR_URL"] == "http://opik-python-backend:8000"
+    assert backend_env["TOGGLE_GUARDRAILS_ENABLED"] == "true"
+
+
+def _overlay_service_blocks(text: str) -> dict[str, str]:
+    """Split an overlay's top-level `services:` mapping into raw text per service.
+
+    Deliberately textual: the overlays carry the compose `!reset` tag, which
+    yaml.safe_load rejects — the contract must be pinned against the committed bytes.
+    """
+    blocks: dict[str, str] = {}
+    current: str | None = None
+    in_services = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if line and not line[0].isspace():  # a new top-level key (or column-0 comment)
+            in_services = line.startswith("services:")
+            current = None
+            continue
+        if not in_services or not stripped or stripped.startswith("#"):
+            continue
+        if line.startswith("  ") and not line.startswith("    ") and stripped.endswith(":"):
+            current = stripped[:-1]
+            blocks[current] = ""
+        elif current is not None:
+            blocks[current] += line + "\n"
+    return blocks
+
+
+def test_airgap_overlays_reset_published_ports_and_join_internal_network() -> None:
+    """P4 overlay contract (validated at runtime by check_overlay; pinned here at text
+    level): every base service joins ONLY the internal network (detaching the implicit
+    default one), publishers strip their ports with the load-bearing `!reset` tag (a
+    plain `ports: []` merges to a no-op), and app DNS points at the static witness."""
+    import yaml
+
+    for stack, network_name, ip_prefix in (
+        ("langfuse", "bv-langfuse-internal", "172.31.100"),
+        ("opik", "bv-opik-internal", "172.31.101"),
+    ):
+        base = yaml.safe_load((SUBTREE / "deploy" / stack / "compose.yaml").read_text(encoding="utf-8"))
+        text = (SUBTREE / "deploy" / stack / "compose.airgap.yaml").read_text(encoding="utf-8")
+        blocks = _overlay_service_blocks(text)
+        for name, service in base["services"].items():
+            assert name in blocks, f"{stack} overlay must enumerate {name} to detach the default network"
+            # Services with EXPLICIT base networks (the judge-net attachees) must use
+            # `!override`: compose UNIONS explicit network lists on merge, so a plain
+            # [bv-internal] would leave the shared judge network attached inside the seal.
+            expected_networks = (
+                "networks: !override [bv-internal]" if service.get("networks") else "networks: [bv-internal]"
+            )
+            assert expected_networks in blocks[name], f"{stack}:{name} wants {expected_networks!r}"
+            assert f"dns: [{ip_prefix}.53]" in blocks[name], f"{stack}:{name}"
+            assert "bv-dns-witness: {condition: service_started}" in blocks[name], f"{stack}:{name}"
+        publishers = [name for name, service in base["services"].items() if service.get("ports")]
+        assert publishers, f"{stack} base compose publishes no ports — overlay test is stale"
+        for name in publishers:
+            assert "ports: !reset []" in blocks[name], f"{stack}:{name} must !reset its published ports"
+        witness = blocks["bv-dns-witness"]
+        assert "image: coredns/coredns:1.12.1@" in witness
+        assert "- ../witness/Corefile:/etc/coredns/Corefile:ro" in witness
+        assert f"ipv4_address: {ip_prefix}.53" in witness
+        # The witness must not point DNS at itself (line-anchored: the coredns image
+        # ref legitimately contains the substring "dns:").
+        assert not any(line.strip().startswith("dns:") for line in witness.splitlines())
+        assert "internal: true" in text and f"name: {network_name}" in text
+
+
+def test_digests_table_covers_every_deployable_image() -> None:
+    """Every image any deploy artifact can start must have a DIGESTS.md provenance row.
+
+    Sweeps `image:` lines across all compose files (base + airgap overlays) and the
+    prober Dockerfile's FROM — a new image without a row would silently escape the
+    pin-digests audit trail (spec R11).
+    """
+    image_line = re.compile(r"^\s*image:\s+(?P<name>[^@\s]+)(?:@\S+)?\s*$")
+    deployable: set[tuple[str, str]] = set()
+    compose_sources = [*sorted((SUBTREE / "deploy").glob("*/compose.yaml"))]
+    compose_sources += sorted((SUBTREE / "deploy").glob("*/compose.airgap.yaml"))
+    for source in compose_sources:
+        for line in source.read_text(encoding="utf-8").splitlines():
+            match = image_line.match(line)
+            if match:
+                name, _, tag = match.group("name").rpartition(":")
+                deployable.add((name, tag))
+    # Dockerfile FROM lines go through the real parser so `--platform` and `AS <stage>`
+    # shapes are covered, and prior-stage references are not mistaken for images.
+    stages: set[str] = set()
+    for line in (SUBTREE / "deploy" / "prober" / "Dockerfile").read_text(encoding="utf-8").splitlines():
+        from_match = _FROM_LINE.match(line.rstrip())
+        if not from_match:
+            continue
+        ref = from_match.group("ref")
+        is_stage_ref = ref.lower() in stages
+        if from_match.group("suffix"):
+            stages.add(from_match.group("suffix").split()[-1].lower())
+        if is_stage_ref:
+            continue
+        base = ref.split("@", 1)[0]
+        name, _, tag = base.rpartition(":")
+        deployable.add((name, tag))
+    assert deployable, "image sweep found nothing — the regex or layout drifted"
+
+    rows: set[tuple[str, str]] = set()
+    for line in (SUBTREE / "deploy" / "DIGESTS.md").read_text(encoding="utf-8").splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) >= 2 and cells[0] not in ("Image", "---"):
+            rows.add((cells[0].split(" ")[0], cells[1]))
+
+    missing = {(name, tag) for name, tag in deployable if (name, tag) not in rows}
+    assert not missing, f"deployable images without a DIGESTS.md row: {sorted(missing)}"

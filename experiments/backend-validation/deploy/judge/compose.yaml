@@ -6,9 +6,17 @@ name: bv-judge
 
 services:
   ollama:
-    image: ollama/ollama:0.9.6@TODO_PIN
+    image: ollama/ollama:0.9.6@sha256:f478761c18fea69b1624e095bce0f8aab06825d09ccabcd0f88828db0df185ce
     ports:
+      # Host-side SDK access only (RAG metrics run in the harness process). Loopback on
+      # purpose; containers reach the judge via bv-judge-net below, never this port.
       - "127.0.0.1:${BV_JUDGE_PORT:-18323}:11434"
+    networks:
+      default: {}
+      judge-net:
+        # Stable in-network name for server-side evaluators: JudgeSpec.container_base_url
+        # defaults to http://bv-judge:11434/v1 (backend stacks join the same network).
+        aliases: [bv-judge]
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 5s
@@ -19,3 +27,11 @@ services:
 
 volumes:
   ollama-models:
+
+networks:
+  # Shared with the backend stacks so their server-side evaluators can dial the judge
+  # container-to-container. External: created by run_deploy (idempotent `docker network
+  # create bv-judge-net`), owned by no compose project.
+  judge-net:
+    name: bv-judge-net
+    external: true
