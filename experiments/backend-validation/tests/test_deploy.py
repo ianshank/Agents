@@ -92,13 +92,13 @@ def test_refuse_unpinned_accepts_digest(tmp_path: Path) -> None:
     assert refuse_unpinned(path)[0].pinned
 
 
-def test_committed_compose_files_are_currently_todo_pinned() -> None:
-    # Ships with TODO_PIN markers; `make pin-digests` resolves them where the registry is
-    # reachable. This test documents the state AND proves the gate would refuse a deploy.
+def test_committed_compose_files_are_digest_pinned() -> None:
+    # Every committed compose ships digest-pinned (resolved via the registry manifest
+    # API; provenance in deploy/DIGESTS.md), so the deploy gate accepts them as-is.
+    # Re-pinning to newer tags stays a deliberate, reviewed change.
     for name in ("langfuse", "opik", "judge"):
-        path = SUBTREE / "deploy" / name / "compose.yaml"
-        with pytest.raises(DeployError, match="pin-digests"):
-            refuse_unpinned(path)
+        images = refuse_unpinned(SUBTREE / "deploy" / name / "compose.yaml")
+        assert images and all(image.pinned for image in images), name
 
 
 # ---------------------------------------------------------------- bind mounts

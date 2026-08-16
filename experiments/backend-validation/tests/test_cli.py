@@ -90,7 +90,13 @@ def test_isolation_runs_clean_in_the_real_repo(capsys: pytest.CaptureFixture[str
 def test_pin_digests_reports_when_registry_unreachable(
     cli_subtree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # The committed compose files carry TODO_PIN; a failing manifest inspect -> FAIL exit 1.
+    # Recreate an unpinned marker (the committed composes ship pinned); a failing
+    # manifest inspect must then FAIL with exit 1 instead of silently skipping.
+    (cli_subtree / "deploy" / "langfuse" / "compose.yaml").write_text(
+        "name: bv-langfuse\nservices:\n  langfuse-web:\n    image: langfuse/langfuse:3@TODO_PIN\n",
+        encoding="utf-8",
+    )
+
     class NoRegistry(SubprocessRunner):
         def run(self, argv: list[str], **kwargs: object) -> CompletedCommand:
             return CompletedCommand(tuple(argv), returncode=1, stderr="no route to registry")

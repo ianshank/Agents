@@ -35,6 +35,7 @@ from backend_validation.airgap_phase import (
     read_iptables_egress_hits,
     run_airgap,
 )
+from backend_validation.deploy import refuse_unpinned
 from backend_validation.phases import STATUS_BLOCKED, STATUS_FAIL, STATUS_HALT, STATUS_OK
 from backend_validation.procrun import CompletedCommand
 from backend_validation.settings import BackendSpec, Settings, load_settings
@@ -209,10 +210,10 @@ def test_dockerfile_pinned_accepts_digest_and_names_violations(tmp_path: Path) -
     assert "unreadable" in dockerfile_pinned(tmp_path / "absent")[0]
 
 
-def test_committed_prober_dockerfile_is_currently_todo_pinned() -> None:
-    # Documents the shipped state AND proves the P4 gate would refuse to run on it.
-    violations = dockerfile_pinned(SUBTREE / "deploy" / "prober" / "Dockerfile")
-    assert violations and "python:3.11-slim@TODO_PIN" in violations[0]
+def test_committed_prober_dockerfile_is_digest_pinned() -> None:
+    # The shipped Dockerfile pins its FROM by digest (provenance in DIGESTS.md), so
+    # the P4 gate accepts it; a reintroduced TODO_PIN would be refused (covered above).
+    assert dockerfile_pinned(SUBTREE / "deploy" / "prober" / "Dockerfile") == []
 
 
 # ------------------------------------------------------------------ overlay loader
@@ -597,10 +598,13 @@ def _prep(tmp_subtree: Path, *, overlays: bool = True, pin_bases: bool = True, p
                 f'      - "127.0.0.1:1:{port}"\n',
                 encoding="utf-8",
             )
+        overlay_path = tmp_subtree / "deploy" / backend / "compose.airgap.yaml"
         if overlays:
-            (tmp_subtree / "deploy" / backend / "compose.airgap.yaml").write_text(
-                _overlay_text(backend, service), encoding="utf-8"
-            )
+            overlay_path.write_text(_overlay_text(backend, service), encoding="utf-8")
+        else:
+            # The committed tree ships real overlays (tmp_subtree copies them); the
+            # missing-overlay scenario must remove them explicitly.
+            overlay_path.unlink(missing_ok=True)
     if pin_dockerfile:
         (tmp_subtree / "deploy" / "prober" / "Dockerfile").write_text(
             f"FROM python:3.11-slim@sha256:{'a' * 64}\n", encoding="utf-8"
@@ -645,16 +649,17 @@ def test_run_airgap_blocks_on_missing_overlays_naming_every_backend(tmp_subtree:
     assert not any("build" in argv for argv in runner.calls)  # gates block before any build
 
 
-def test_run_airgap_blocks_on_committed_unpinned_tree(tmp_subtree: Path) -> None:
-    # The fixture tree as committed: TODO_PIN bases, no overlays, TODO_PIN Dockerfile —
-    # one BLOCKED report names every class of violation at once.
+def test_committed_tree_passes_every_airgap_static_gate(tmp_subtree: Path) -> None:
+    # The tree as committed: digest-pinned bases, real overlays, pinned prober FROM —
+    # every static P4 gate must be clean, so a live `make airgap` reaches docker itself.
     settings = load_settings(tmp_subtree / "config.yaml", env={})
-    result = run_airgap(tmp_subtree, settings, _io(FlowRunner())[0], env={}, run_id="r")
-    assert result.status == STATUS_BLOCKED
-    report = Path(result.artifacts[0]).read_text(encoding="utf-8")
-    assert "unpinned image(s)" in report
-    assert "overlay missing" in report
-    assert "python:3.11-slim@TODO_PIN" in report
+    for spec in settings.backends:
+        base = tmp_subtree / spec.compose_file
+        assert all(image.pinned for image in refuse_unpinned(base))
+        overlay = overlay_path(tmp_subtree, spec)
+        assert overlay.is_file()
+        assert check_overlay(base, overlay, tmp_subtree) == []
+    assert dockerfile_pinned(tmp_subtree / "deploy" / "prober" / "Dockerfile") == []
 
 
 def test_run_airgap_blocks_on_overlay_violation(tmp_subtree: Path) -> None:

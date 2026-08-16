@@ -209,8 +209,13 @@ def test_deploy_blocks_when_judge_model_pull_fails(tmp_subtree: Path) -> None:
 
 
 def test_deploy_blocks_on_unpinned_judge_compose(tmp_subtree: Path) -> None:
-    # Backends pinned but the judge compose keeps its committed TODO_PIN markers: the
-    # digest gate applies to the judge stack exactly as it does to the backends.
+    # Backends pinned but the judge compose regains a TODO_PIN marker (the committed
+    # file ships pinned): the digest gate applies to the judge stack exactly as it
+    # does to the backends.
+    (tmp_subtree / "deploy" / "judge" / "compose.yaml").write_text(
+        "name: bv-judge\nservices:\n  ollama:\n    image: ollama/ollama:0.9.6@TODO_PIN\n",
+        encoding="utf-8",
+    )
     settings = _pinned_settings(tmp_subtree, include_judge=False)
     result = run_deploy(
         tmp_subtree,
@@ -229,8 +234,12 @@ def test_deploy_blocks_on_unpinned_judge_compose(tmp_subtree: Path) -> None:
 
 
 def test_deploy_blocks_on_unpinned_committed_compose(tmp_subtree: Path) -> None:
-    # The real committed compose files (copied by the fixture) carry TODO_PIN, so the
-    # digest gate BLOCKs without any test-local rewrite.
+    # The committed composes ship pinned; recreate the unpinned state explicitly to
+    # prove the digest gate still BLOCKs a deploy the moment a marker reappears.
+    (tmp_subtree / "deploy" / "langfuse" / "compose.yaml").write_text(
+        "name: bv-langfuse\nservices:\n  langfuse-web:\n    image: langfuse/langfuse:3@TODO_PIN\n",
+        encoding="utf-8",
+    )
     settings = load_settings(tmp_subtree / "config.yaml", env={})
     result = run_deploy(
         tmp_subtree,

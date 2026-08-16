@@ -8,7 +8,7 @@ name: bv-opik
 
 services:
   mysql:
-    image: mysql:8.4@TODO_PIN
+    image: mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
     environment:
       MYSQL_ROOT_PASSWORD: ${BV_OPIK_MYSQL_PASSWORD:?set in .env.local}
       MYSQL_DATABASE: opik
@@ -21,7 +21,7 @@ services:
       - mysql-data:/var/lib/mysql
 
   redis:
-    image: redis:7-alpine@TODO_PIN
+    image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       interval: 5s
@@ -29,7 +29,7 @@ services:
       retries: 20
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8-alpine@TODO_PIN
+    image: clickhouse/clickhouse-server:24.8-alpine@sha256:b002e56ed5c16e224c312527f6fcba7e77216fec5d7a88a7828f59efc614feb5
     environment:
       CLICKHOUSE_USER: opik
       CLICKHOUSE_PASSWORD: ${BV_OPIK_CH_PASSWORD:?set in .env.local}
@@ -43,7 +43,7 @@ services:
       - opik-ch-data:/var/lib/clickhouse
 
   opik-backend:
-    image: ghcr.io/comet-ml/opik/opik-backend:1.7.26@TODO_PIN
+    image: ghcr.io/comet-ml/opik/opik-backend:1.7.26@sha256:3f8ff690871daccf181346347f1fe429b301a6b187bce829d5cc845349c81ea0
     depends_on:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -90,7 +90,7 @@ services:
       retries: 30
 
   opik-python-backend:
-    image: ghcr.io/comet-ml/opik/opik-python-backend:1.7.26@TODO_PIN
+    image: ghcr.io/comet-ml/opik/opik-python-backend:1.7.26@sha256:35374fc93b46a1f7c0633b6bde3c045cef91ce39985226e1832c1a51977c7dd9
     depends_on:
       opik-backend: {condition: service_healthy}
     # NOTE: no OPIK_USAGE_REPORT_ENABLED here — the 1.7.26 python backend never reads
@@ -115,7 +115,7 @@ services:
   guardrails:
     # nginx routes /guardrails/ to http://guardrails:5000 — the service name and
     # hostname must both stay `guardrails` (see nginx_guardrails_local.conf).
-    image: ghcr.io/comet-ml/opik/opik-guardrails-backend:1.7.26@TODO_PIN
+    image: ghcr.io/comet-ml/opik/opik-guardrails-backend:1.7.26@sha256:8a47859fed49470071ba1f2133212a403d4a0272f1b196626cad7c5d3d4523d4
     hostname: guardrails
     # Official 1.7.26 healthcheck verbatim. No published ports: reachable only through
     # the frontend nginx proxy on 5173.
@@ -127,7 +127,7 @@ services:
       start_period: 10s
 
   opik-frontend:
-    image: ghcr.io/comet-ml/opik/opik-frontend:1.7.26@TODO_PIN
+    image: ghcr.io/comet-ml/opik/opik-frontend:1.7.26@sha256:1ba821742dd21d50d22f9cfe80bb9ad3fee2f6dbfa84c849c6055a3a939d7f33
     depends_on:
       opik-backend: {condition: service_healthy}
       opik-python-backend: {condition: service_healthy}

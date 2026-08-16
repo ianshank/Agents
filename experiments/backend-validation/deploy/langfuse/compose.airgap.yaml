@@ -52,7 +52,7 @@ services:
     ports: !reset []
 
   bv-dns-witness:
-    image: coredns/coredns:1.12.1@TODO_PIN
+    image: coredns/coredns:1.12.1@sha256:e8c262566636e6bc340ece6473b0eed193cad045384401529721ddbe6463d31c
     command: ["-conf", "/etc/coredns/Corefile"]
     volumes:
       - ../witness/Corefile:/etc/coredns/Corefile:ro

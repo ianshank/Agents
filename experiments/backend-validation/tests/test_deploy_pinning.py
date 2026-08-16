@@ -130,6 +130,9 @@ def test_pin_digests_cli_covers_overlays_and_prober_dockerfile(
     monkeypatch.setattr(cli, "SubprocessRunner", ManifestSubprocess)
     overlay = tmp_subtree / "deploy" / "langfuse" / "compose.airgap.yaml"
     overlay.write_text(_OVERLAY_WITH_RESET, encoding="utf-8")
+    # The committed prober Dockerfile ships pinned; recreate the marker so the
+    # Dockerfile branch has work to do.
+    (tmp_subtree / "deploy" / "prober" / "Dockerfile").write_text("FROM python:3.11-slim@TODO_PIN\n", encoding="utf-8")
     code = cli.main(["pin-digests", "--config", str(tmp_subtree / "config.yaml")])
     out = capsys.readouterr().out
     assert code == 0 and "backend-validation[pin-digests]: OK" in out
@@ -153,6 +156,8 @@ def test_pin_digests_cli_fails_when_only_the_dockerfile_needs_the_registry(
         (tmp_subtree / "deploy" / name / "compose.yaml").write_text(
             f"services:\n  s:\n    image: img@sha256:{'a' * 64}\n", encoding="utf-8"
         )
+        (tmp_subtree / "deploy" / name / "compose.airgap.yaml").unlink(missing_ok=True)
+    (tmp_subtree / "deploy" / "prober" / "Dockerfile").write_text("FROM python:3.11-slim@TODO_PIN\n", encoding="utf-8")
 
     class NoRegistry(SubprocessRunner):
         def run(self, argv: list[str], **kwargs: object) -> CompletedCommand:

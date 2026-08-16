@@ -6,7 +6,7 @@ name: bv-judge
 
 services:
   ollama:
-    image: ollama/ollama:0.9.6@TODO_PIN
+    image: ollama/ollama:0.9.6@sha256:f478761c18fea69b1624e095bce0f8aab06825d09ccabcd0f88828db0df185ce
     ports:
       # Host-side SDK access only (RAG metrics run in the harness process). Loopback on
       # purpose; containers reach the judge via bv-judge-net below, never this port.
