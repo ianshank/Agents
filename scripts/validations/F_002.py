@@ -12,10 +12,16 @@ Exit codes:
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from _common import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +49,7 @@ def _project_root() -> Path:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run pytest for the OpenAI judge tests and return the exit code."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)-8s %(name)s: %(message)s",
-    )
+    configure_logging()
 
     root = _project_root()
     test_path = root / TEST_MODULE
@@ -58,7 +61,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     cmd = [sys.executable, "-m", "pytest", str(test_path), "-q"]
     logger.info("Running: %s", " ".join(cmd))
 
-    result = subprocess.run(cmd, cwd=str(root))
+    result = subprocess.run(cmd, cwd=str(root), timeout=120)
 
     if result.returncode == 0:
         logger.info("F-002 passed ✓")

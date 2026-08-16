@@ -225,6 +225,7 @@ def main() -> int:
             text=True,
             env={**os.environ, "PYTHONHASHSEED": seed},
             check=False,
+            timeout=30,
         )
         forms.add(proc.stdout.strip())
     _check(len(forms) == 1, f"canonical form is identical under every PYTHONHASHSEED (got {len(forms)})", errors)
