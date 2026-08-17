@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validation script for F-054 - Tool-version lockstep (ruff/mypy pins).
+"""Validation script for F-055 - Tool-version lockstep (ruff/mypy pins).
 
 ``ruff==0.15.20``/``mypy==2.1.0`` (current values — see ``scripts/tool_versions.py``)
 are hand-duplicated across 7 ``pyproject.toml`` ``dev`` extras and 9 ``pip install``
@@ -115,7 +115,7 @@ def main() -> int:
 
     _check_pins(_read(_SKILLS_CI_WORKFLOW), _SKILLS_CI_WORKFLOW, errors)
 
-    return report(logger, "F-054", errors)
+    return report(logger, "F-055", errors)
 
 
 if __name__ == "__main__":

@@ -16,13 +16,13 @@ to every ``pyproject.toml`` dev extra and every ``skills-ci.yml`` pip-install li
 hand — deliberately, in lockstep, per ADR 0034. This module does not install, invoke,
 or otherwise act on the pins; it only names them.
 
-Enforced by: ``scripts/validations/F_054.py`` (read-only; asserts every copy matches).
+Enforced by: ``scripts/validations/F_055.py`` (read-only; asserts every copy matches).
 """
 
 from __future__ import annotations
 
 # Bump deliberately, in lockstep with every consumer named above — CI/local skew broke
-# ``ruff format --check`` once already. scripts/validations/F_054.py fails the moment
+# ``ruff format --check`` once already. scripts/validations/F_055.py fails the moment
 # any consumer disagrees with either value.
 RUFF_VERSION = "0.15.20"
 MYPY_VERSION = "2.1.0"

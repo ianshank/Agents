@@ -1,9 +1,9 @@
 # 0034 - Ruff/mypy pins stay hand-duplicated, and are drift-tested rather than templated
 
-**Status**: Accepted — lands with `openspec/changes/pin-lockstep-tool-versions/` as F-054
+**Status**: Accepted — lands with `openspec/changes/pin-lockstep-tool-versions/` as F-055
 (`implemented_in` recorded in `features.yaml`). Enforcement is live from the same change:
-`scripts/validations/F_054.py` runs in the tier-fast validation set from the commit that
-flips F-054 to `done`.
+`scripts/validations/F_055.py` runs in the tier-fast validation set from the commit that
+flips F-055 to `done`.
 **Date**: 2026-08-17
 
 Related: [ADR 0009](0009-tech-debt-audit-and-compat-surface.md) (the tech-debt baseline this
@@ -35,6 +35,17 @@ casually" framing (the line this ADR is now cited from) already settled that. Th
 how sixteen call sites stay honest without turning a two-line reproducibility fix into a
 sixteen-file refactor.
 
+**Known, separately-tracked surface, not covered by the eight-file census above:**
+`agent-core/.pre-commit-config.yaml`'s `ruff-pre-commit rev:` was found, during this change's
+review, still pinned at `v0.8.0` — live, contributor-facing, and the exact version this
+Context section's own "drifted once already" sentence describes. Bumped to `v0.15.20` in the
+same change that lands this ADR, but `F_055.py` (formerly drafted as F-054; renumbered — see
+Compliance) does not check it: pre-commit `rev:` pins use different YAML shape than the
+`tool==version` string the regex matches, and this repo's `dev`-extra/`skills-ci.yml` set is
+already sixteen call sites without adding a seventeenth to the same script. A dedicated,
+small companion check (or folding pre-commit `rev:` pins into a future version of this one)
+is the honest way to close that gap — tracked as a fast-follow, not silently left unmentioned.
+
 ## Decision
 
 Keep the duplication; test the lockstep instead of removing it.
@@ -43,7 +54,7 @@ Keep the duplication; test the lockstep instead of removing it.
    `RUFF_VERSION`/`MYPY_VERSION` as the two literal strings every other copy must match. It
    installs nothing and runs nothing — it only names the values, the same role
    `scripts/eval_protected_paths.py` plays for the protected-path set.
-2. **A read-only gate, not a rewrite.** `scripts/validations/F_054.py` reads the text of the
+2. **A read-only gate, not a rewrite.** `scripts/validations/F_055.py` reads the text of the
    7 `pyproject.toml` files and `.github/workflows/skills-ci.yml`, and asserts every
    `ruff==`/`mypy==` occurrence in them equals `tool_versions.py`'s constants exactly — and
    that no copy has silently lost its pin. It performs no installs, no subprocess calls, and
@@ -54,7 +65,7 @@ Keep the duplication; test the lockstep instead of removing it.
 3. **Casual bumping stays exactly as hard as it was.** This gate tests *drift* — sixteen
    copies disagreeing with each other — not the act of bumping itself. A deliberate version
    bump still requires editing `tool_versions.py` and propagating the same two values by hand
-   to every `pyproject.toml` dev extra and every `skills-ci.yml` install line; F-054 simply
+   to every `pyproject.toml` dev extra and every `skills-ci.yml` install line; F-055 simply
    makes "propagating by hand, correctly, everywhere" a CI-checked fact instead of a comment's
    unverified promise. `AGENTS.md`'s "do not bump them casually" constraint is respected, not
    relaxed — a bump is still sixteen hand-edits and still a reviewed diff; the only change is
@@ -65,7 +76,7 @@ Keep the duplication; test the lockstep instead of removing it.
    hand-synced literals — was considered. It is explicitly deferred as a separate, larger
    follow-on: it touches 9 CI job definitions (each currently a plain `pip install` shell
    line) for marginal gain over what this change already delivers. "Drift cannot merge
-   silently" is the actual guarantee sought, and F-054 delivers it today at a fraction of the
+   silently" is the actual guarantee sought, and F-055 delivers it today at a fraction of the
    surface area; templating would trade a tested duplication for an untested indirection layer
    across every skill job, which is not a strict improvement and is exactly the kind of
    larger, separately-reviewable change ADR 0021's own CI-delegation precedent suggests should
@@ -92,7 +103,7 @@ correct bump must touch. This is the trade this ADR makes deliberately (§4 abov
 would reduce edit count at the cost of touching 9 CI job definitions and introducing a
 runtime interpolation seam that does not exist today.
 
-**Neutral.** `scripts/validations/F_054.py` follows `scripts/validations/F_031.py`'s existing
+**Neutral.** `scripts/validations/F_055.py` follows `scripts/validations/F_031.py`'s existing
 shape (same `_common.check`/`report`/`configure_logging` helpers, same read-only,
 deterministic, offline design, same exit-code contract) rather than introducing a new
 validator pattern. `scripts/tool_versions.py` carries no logger — it is a plain constants
@@ -101,8 +112,8 @@ makes for the protected-path set it single-sources.
 
 ## Compliance
 
-Enforced by `scripts/validations/F_054.py`, which runs in the tier-fast validation set via
-`features.yaml`'s F-054 `validation_command`; `python scripts/validate.py --tier fast`
+Enforced by `scripts/validations/F_055.py`, which runs in the tier-fast validation set via
+`features.yaml`'s F-055 `validation_command`; `python scripts/validate.py --tier fast`
 discovers and executes it, and `.github/workflows/quality-gates.yml` runs
 `python scripts/validate.py --tier fast --strict` on every PR. A deliberate mismatch
 introduced in any of the 8 covered files reproduces a targeted, file-and-version-naming

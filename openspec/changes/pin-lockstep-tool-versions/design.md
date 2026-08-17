@@ -5,18 +5,18 @@
 | Concern | Home | Why |
 |---|---|---|
 | `RUFF_VERSION`/`MYPY_VERSION` source of truth | `scripts/tool_versions.py` | Mirrors `scripts/eval_protected_paths.py`'s role for `PROTECTED_PATTERNS`: a plain constants module every consumer is checked against, with no installs or logic of its own |
-| Lockstep proof | `scripts/validations/F_054.py` | Same family as `scripts/validations/F_031.py` — CI-governance checks that read committed config/workflow text and run nothing |
+| Lockstep proof | `scripts/validations/F_055.py` | Same family as `scripts/validations/F_031.py` — CI-governance checks that read committed config/workflow text and run nothing |
 | Decision record | `docs/decisions/0034-tool-version-lockstep.md` | New numbered ADR per `docs/decisions/README.md`'s "next free number" convention |
 
 No engine, registry, or `src/eval_harness` code is touched. `architecture.yaml` is
 unchanged — this change adds no import edge; `scripts/tool_versions.py` has zero
-dependents besides `scripts/validations/F_054.py`, which already sits outside the
+dependents besides `scripts/validations/F_055.py`, which already sits outside the
 architecture-drift-guard's tracked component graph (validators are gates, not
 components).
 
 ## Parsing approach: regex over raw text, not a TOML/YAML parser
 
-`F_054.py` matches `\b(ruff|mypy)==([^"'\s]+)` against each file's full text. Two
+`F_055.py` matches `\b(ruff|mypy)==([^"'\s]+)` against each file's full text. Two
 properties of this choice are deliberate, not accidental simplicity:
 
 1. **It is not anchored to a line.** `experiments/backend-validation/pyproject.toml`
@@ -71,7 +71,7 @@ family's established shape.
 
 ## Logging
 
-Following `AGENTS.md` "Logging": `scripts/validations/F_054.py` obtains
+Following `AGENTS.md` "Logging": `scripts/validations/F_055.py` obtains
 `logger = logging.getLogger(__name__)` and calls `scripts/validations/_common.py`'s
 `configure_logging`/`report`/`check`, exactly like every other `F_0NN.py` validator — no
 `logging.basicConfig` of its own.
@@ -94,7 +94,7 @@ validator family.
 
 **Not reused:** `_common.ci_enforces`/`delegates_to_gate`. Those exist to assert that a CI
 *step* runs somewhere in the ADR-0021 delegation chain (inline in a workflow, or via the
-generated `quality-gate.sh`) — a wiring question. F-054 is not asserting a step runs
+generated `quality-gate.sh`) — a wiring question. F-055 is not asserting a step runs
 somewhere; it is asserting a *value* — that `ruff==0.15.20` typed in file A equals
 `ruff==0.15.20` typed in file B. Reusing the delegation-aware helpers here would imply a
 guarantee this check does not make and does not need.
@@ -105,7 +105,7 @@ guarantee this check does not make and does not need.
 |---|---|
 | A `pyproject.toml` dev extra reformatted onto multiple lines | Handled — the regex is not anchored to a line; `experiments/backend-validation/pyproject.toml` already ships this way today |
 | A pin loosened from `==` to `>=` | Caught as a presence failure (zero `tool==` occurrences), not silently passed |
-| `skills-ci.yml` gains a 10th skill job with the correct pin | Passes with no `F_054.py` change — occurrences are counted dynamically |
+| `skills-ci.yml` gains a 10th skill job with the correct pin | Passes with no `F_055.py` change — occurrences are counted dynamically |
 | `skills-ci.yml` gains a 10th skill job with a wrong pin | Caught — every occurrence found is checked individually, regardless of count |
 | `tool_versions.py` is bumped without propagating the value everywhere | All still-unpropagated copies fail individually, each naming its own file and the mismatched value found |
 | A comment elsewhere in a covered file contains literal `tool==version` text | Would false-fail, naming that file/value (see "Known scope boundary" above) — not exercised today, since no covered file has one |

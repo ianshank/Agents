@@ -10,7 +10,7 @@ deleted. House precedent: `openspec/changes/add-panel-judge/review.md`.
 ## Verdict
 
 **APPROVE WITH FOLLOW-UPS.** The core deliverable is real and correct: `scripts/tool_versions.py`
-and `scripts/validations/F_054.py` exist, match every claim made about them, run clean, and
+and `scripts/validations/F_055.py` exist, match every claim made about them, run clean, and
 are genuinely read-only under adversarial inspection (no `eval`/`exec`/`subprocess`/write path
 anywhere in the import chain — verified, not assumed). All 7 `pyproject.toml` files and
 `.github/workflows/skills-ci.yml` already carry `ruff==0.15.20`/`mypy==2.1.0` in lockstep with
@@ -29,7 +29,7 @@ of which is a defect in the reviewed code:
    See Pass 1, finding P1-F1.
 2. **Scope gap, pre-existing, not introduced by this change:** `agent-core/.pre-commit-config.yaml`
    pins `ruff-pre-commit` at `rev: v0.8.0` — a live, contributor-facing, currently-drifted
-   ruff pin (the fleet is `0.15.20`) that F-054 does not check and ADR 0034's "eight files,
+   ruff pin (the fleet is `0.15.20`) that F-055 does not check and ADR 0034's "eight files,
    sixteen copies" census does not mention. See Pass 2, finding P2-F1.
 
 Both are recorded as follow-ups below, not blockers — see "Overall verdict" at the end for the
@@ -45,18 +45,18 @@ precise reasoning and required actions.
 | P1-2 | Those constants match root `pyproject.toml` | **CONFIRMED** | `pyproject.toml:84` — `"mypy==2.1.0", "ruff==0.15.20"` |
 | P1-3 | All 7 named `pyproject.toml` files carry the identical pins | **CONFIRMED** | `agent-core/pyproject.toml:34`, `behavioral-regression/pyproject.toml:36`, `claude-foundation/pyproject.toml:36`, `experiments/backend-validation/pyproject.toml:38-39`, `flow-corpus/pyproject.toml:35`, `flow-protocol/pyproject.toml:35` — all `ruff==0.15.20`/`mypy==2.1.0`, checked by direct `grep`, not trusted from the module docstring |
 | P1-4 | The other 5 `pyproject.toml` files in the repo (fixtures under `skills/*/evals/fixtures/`) are correctly out of scope | **CONFIRMED** | None of the 5 pin a version (`ruff`/`mypy` unpinned or absent) — they are eval-harness test fixtures, not real dependency manifests |
-| P1-5 | `F_054.py` reads all 7 `pyproject.toml` files plus `.github/workflows/skills-ci.yml` | **CONFIRMED** | `scripts/validations/F_054.py:52-60` (`_PYPROJECT_PATHS` tuple, 7 entries) and `:64` (`_SKILLS_CI_WORKFLOW`); `main()` at `:113-116` iterates both |
-| P1-6 | `F_054.py` actually runs and passes | **CONFIRMED** | Ran `python3 scripts/validations/F_054.py` directly — exit 0, full output pasted below |
+| P1-5 | `F_055.py` reads all 7 `pyproject.toml` files plus `.github/workflows/skills-ci.yml` | **CONFIRMED** | `scripts/validations/F_055.py:52-60` (`_PYPROJECT_PATHS` tuple, 7 entries) and `:64` (`_SKILLS_CI_WORKFLOW`); `main()` at `:113-116` iterates both |
+| P1-6 | `F_055.py` actually runs and passes | **CONFIRMED** | Ran `python3 scripts/validations/F_055.py` directly — exit 0, full output pasted below |
 | P1-7 | **"Zero diff on all 7 `pyproject.toml` files and `skills-ci.yml`"** (the task's single most important claim) | **CONFIRMED for the specific files**, but see P1-F1 below | `git diff 7cdba73 HEAD --stat` lists 13 changed files; none of the 7 `pyproject.toml` files or `skills-ci.yml` appear in it at all — zero touches, not "diff exists but is empty." The read-only validator did not become a write. |
 | P1-8 | ADR took a genuinely free number, 0034 | **CONFIRMED, with a stated limitation** | `docs/decisions/` has 0001-0033 pre-existing, 0034 newly added by this change (`git log --all --oneline -- docs/decisions/0034*` → one commit, `86eeb5c`, from this branch only). Checked all 4 sibling worktrees on disk (`agent-a0d0b0246d3e791ad`, `agent-a677e84000123bf93`, `agent-a83ed32a5c4dec0db`, and `/home/user/Agents` itself) — none claim 0034. **Limitation:** this is a shallow-ish clone with only `origin/main` and `origin/claude/orbital-drift-agents-reuse-aely36` fetched (confirmed via `git branch -a`), so a same-numbered ADR proposed on some other, unfetched remote branch cannot be fully ruled out — noted, not swept under the rug. |
 | P1-9 | `AGENTS.md`'s pin bullet now points at `scripts/tool_versions.py` | **CONFIRMED** | `git diff 7cdba73 HEAD -- AGENTS.md` — one line changed, `AGENTS.md:97`, matches `docs/plans/orbital-drift-alignment/PLAN.md` Phase 2's exact instruction |
 | P1-10 | ADR 0034's citations are accurate to the line | **CONFIRMED** | Spot-checked all three: `pyproject.toml:81-83` (the "0.8.0 local vs 0.15.20 CI" comment), `agent-core/pyproject.toml:31-33`, `claude-foundation/pyproject.toml:34-35` — every one matches the live file byte-for-byte at the cited lines |
 | P1-11 | `proposal.md`'s "six of the seven `pyproject.toml` copies carry the exact 'bump deliberately, in lockstep' phrase" | **CONFIRMED** | Checked all 7 directly; `experiments/backend-validation/pyproject.toml` is the one exception (it says "Same exact pins as the repo root" instead) — exactly as claimed, including which file is the exception |
-| P1-12 | `F_054.py` follows `F_031.py`'s shape (same `_common` helpers, same read-only/deterministic/offline design) | **CONFIRMED** | Both import `_common.check`/`report`/`configure_logging`; both carry the same `sys.path` bootstrap idiom; `F_031.py`'s own docstring makes the identical "reads config/workflow files only, runs nothing" claim |
+| P1-12 | `F_055.py` follows `F_031.py`'s shape (same `_common` helpers, same read-only/deterministic/offline design) | **CONFIRMED** | Both import `_common.check`/`report`/`configure_logging`; both carry the same `sys.path` bootstrap idiom; `F_031.py`'s own docstring makes the identical "reads config/workflow files only, runs nothing" claim |
 | P1-13 | The two-commit ledger pattern matches the F-053 precedent it cites | **CONFIRMED** | `git show bc0ae2c4940f0ecdfa50da47f1c249cb16b77e02` and `git show f1f73a3` both exist and show the identical `in_progress` → `done` + `implemented_in`-set-in-the-child-commit shape |
 | P1-14 | `features.yaml` is schema-valid | **CONFIRMED** | Independently validated with `python3 -c "import jsonschema; ..."` against `features.schema.json` (not just trusting the repo's own validator) — passes |
-| P1-15 | F-054 is genuinely the next free F-ID, no collision | **CONFIRMED** | F-053 is the highest ID at the true merge-base (`159460a`); F-054 appears exactly once in `features.yaml` at HEAD |
-| P1-16 | `ruff`/`mypy` at the exact pinned versions run clean against the two new files | **CONFIRMED** | This environment has `ruff 0.15.20` / `mypy 2.1.0` installed (matching the pin exactly, by chance of environment, not engineered for this review); `ruff check`, `ruff format --check`, and `mypy` all pass clean on `scripts/tool_versions.py` and `scripts/validations/F_054.py` |
+| P1-15 | F-055 is genuinely the next free F-ID, no collision | **CONFIRMED** | F-053 is the highest ID at the true merge-base (`159460a`); F-055 appears exactly once in `features.yaml` at HEAD |
+| P1-16 | `ruff`/`mypy` at the exact pinned versions run clean against the two new files | **CONFIRMED** | This environment has `ruff 0.15.20` / `mypy 2.1.0` installed (matching the pin exactly, by chance of environment, not engineered for this review); `ruff check`, `ruff format --check`, and `mypy` all pass clean on `scripts/tool_versions.py` and `scripts/validations/F_055.py` |
 | P1-17 | `proposal.md`'s "this implementation carries the `eval-change-approved` label" | **UNVERIFIABLE from the tree** | This branch has no upstream tracking ref (`git branch -vv` shows none) and has never been pushed — there is no PR yet to carry a label. Not a defect; the sentence reads as present tense but is necessarily a forward statement today. |
 | P1-18 | Phase 0 §5's worktree-naming convention (`worktree-<change-id>`) was followed | **CORRECTED (informational)** | The branch is `worktree-agent-a1935d45e12a8002a`, not `worktree-pin-lockstep-tool-versions`. This is almost certainly the CCR session/worktree provisioning system's own naming, not a choice available to the implementer — noted, not weighted against the change. |
 | P1-19 | Phase 0's cross-cutting "Objective peer-review step" requires a `tasks.md` "Verification" checklist item for the `review.md` dispatch, in every phase | **CORRECTED — gap found** | `docs/plans/orbital-drift-alignment/PLAN.md`'s "Objective peer-review step" section (its "Enforcement" bullet) requires this for every phase. `openspec/changes/pin-lockstep-tool-versions/tasks.md`'s "## 6. Verification" section has 3 items; none reference `review.md` or the peer-review dispatch. Real, confirmable gap against the plan's own requirement — paperwork, not function (this document is the review the plan asked for; it just wasn't tracked as a checklist line). |
@@ -107,7 +107,7 @@ already has `7cdba73`, and specifically confirm `docs/plans/orbital-drift-alignm
 is present post-merge. This is not a defect in the reviewed code and does not block approval of
 the code itself — see "Overall verdict."
 
-### Pasted output — `python3 scripts/validations/F_054.py`
+### Pasted output — `python3 scripts/validations/F_055.py`
 
 ```
 INFO     validations: OK: pyproject.toml: at least one ruff== pin is present
@@ -145,7 +145,7 @@ INFO     validations: OK: .github/workflows/skills-ci.yml: ruff==0.15.20 matches
 INFO     validations: OK: .github/workflows/skills-ci.yml: at least one mypy== pin is present
 INFO     validations: OK: .github/workflows/skills-ci.yml: mypy==2.1.0 matches tool_versions.MYPY_VERSION (2.1.0)
   [... 7 more identical mypy==2.1.0 OK lines, one per skills-ci.yml job, 8 total ...]
-INFO     __main__: F-054 passed
+INFO     __main__: F-055 passed
 ```
 
 Exit code: `0`. `git status --short` and `git diff HEAD --stat` both empty before and after
@@ -159,20 +159,20 @@ WARNING  __main__: shallow clone detected - downgrading --strict provenance chec
 WARNING  __main__: Git: F-001 implemented_in ref '57f7cc2cbcaa3cf618c0b9ec6c5048da11da6796' does not resolve
   [... ~30 more pre-existing "ref does not resolve" warnings for F-002 through F-040, all
        downgraded from hard failures by the shallow-clone warning above — none reference
-       F-054, and none were introduced by this change; this is the ambient state of the
+       F-055, and none were introduced by this change; this is the ambient state of the
        clone this review is running in, not a regression ...]
 INFO     __main__: Running validation for F-001: python scripts/validations/F_001.py
 INFO     __main__: Validation: F-001 passed ✓
   [... F-002 through F-053, all "passed ✓" ...]
-INFO     __main__: Running validation for F-054: python scripts/validations/F_054.py
-INFO     __main__: Validation: F-054 passed ✓
+INFO     __main__: Running validation for F-055: python scripts/validations/F_055.py
+INFO     __main__: Validation: F-055 passed ✓
 OK: 52 done; ran 52 for tier(s) ['fast'], skipped 0 (other tiers).
 ```
 
-Exit code: `0`. All 52 `done`-status fast-tier features pass, including F-054. The
+Exit code: `0`. All 52 `done`-status fast-tier features pass, including F-055. The
 `implemented_in` ref-resolution warnings for F-001–F-040 are a pre-existing, ambient
 consequence of this clone being shallow (`git fetch --unshallow` would check them for real
-per the tool's own warning) — none of them concern F-054, and F-054 itself produced **no**
+per the tool's own warning) — none of them concern F-055, and F-055 itself produced **no**
 such warning, meaning its own `implemented_in` SHA (`86eeb5cf1db0f17f06e5ed50b90e8c02fc4e939f`)
 resolved cleanly.
 
@@ -189,7 +189,7 @@ reverted and confirmed clean (`git status --short` empty) before moving to the n
 **Tested two shapes of this attack:**
 
 1. **Lazy/partial "fix":** drifted `agent-core/pyproject.toml`'s `ruff==0.15.20` to
-   `ruff==0.14.0` (simulating an accidental bad edit), confirmed `F_054.py` fails naming
+   `ruff==0.14.0` (simulating an accidental bad edit), confirmed `F_055.py` fails naming
    exactly that file and value. Then edited `scripts/tool_versions.py`'s `RUFF_VERSION` to
    also say `"0.14.0"` — i.e., "fixed" the source of truth to match the one wrong copy instead
    of reverting it. **Result: still fails** — now with 8 new errors, because the other 6
@@ -201,7 +201,7 @@ reverted and confirmed clean (`git status --short` empty) before moving to the n
    together. **Result: passes cleanly**, exit 0.
 
 **Verdict: CONFIRMED as a real but *accepted, explicitly documented* limitation, not an
-undisclosed bug.** `F_054.py` is a coherence/consistency check ("do all N copies agree with
+undisclosed bug.** `F_055.py` is a coherence/consistency check ("do all N copies agree with
 each other"), not a correctness check ("is this a value that should exist"); it has no
 external oracle (no PyPI lookup, no network access — the module docstring is explicit:
 "Deterministic and offline: reads files only, runs nothing"). This is exactly what
@@ -216,14 +216,14 @@ above to still fail loudly.
 
 ### (b) Does the read-only claim hold under adversarial reading — any `eval`/`exec`/subprocess/write path?
 
-Grepped the entire import chain — `scripts/validations/F_054.py`, `scripts/validations/_common.py`,
+Grepped the entire import chain — `scripts/validations/F_055.py`, `scripts/validations/_common.py`,
 `scripts/tool_versions.py`, and `scripts/_cli.py` (transitively imported via `_common`) — for
 `eval(`, `exec(`, `subprocess`, `os.system`, `os.popen`, `open(...` in write mode, `__import__`,
 `compile(`. **Zero hits** beyond the docstring's own textual claim and one `re.compile(...)`
 false-positive (a regex compile, not code compile). `_common.py`'s `check`/`report` functions
 only append to an in-memory list and log; `configure_logging` only calls `logging.basicConfig`.
 The only file I/O anywhere in the chain is `open(path, encoding="utf-8")` in `_read()`
-(`scripts/validations/F_054.py:77-79`), opened in default (read) mode.
+(`scripts/validations/F_055.py:77-79`), opened in default (read) mode.
 
 Empirically confirmed three separate times during the (a) testing above — including while the
 tree was deliberately left in a **failing** state, not just the happy path — that `.github/workflows/skills-ci.yml`'s
@@ -235,7 +235,7 @@ in either the passing or the failing branch. Recorded per house style despite di
 
 ### (c) Is the two-commit ledger pattern actually correct, or is there a window where `features.yaml` claims `done` with an unresolvable SHA?
 
-Read both commits directly. `86eeb5c` (`git show 86eeb5c -- features.yaml`) lands the F-054
+Read both commits directly. `86eeb5c` (`git show 86eeb5c -- features.yaml`) lands the F-055
 row with `status: "in_progress"` and **no** `implemented_in` key at all. `06dc980` (`git show
 06dc980 -- features.yaml`), whose sole parent is `86eeb5c`, changes only two things: `status`
 `in_progress` → `done`, and adds `implemented_in: "86eeb5cf1db0f17f06e5ed50b90e8c02fc4e939f"`.
@@ -267,7 +267,7 @@ tree.
   uses [package]'s own pinned `[dev]` extra... instead of a separate unpinned `pip install ruff
   mypy`"). Verified these are genuinely comments, not a second live pin: the actual `install:`
   lines delegate to `pip install -e ".[dev]"` via the `run-quality-gate` composite action,
-  reading whatever `pyproject.toml`'s `dev` extra says — already covered by F_054.py. These two
+  reading whatever `pyproject.toml`'s `dev` extra says — already covered by F_055.py. These two
   comments carry no independent drift risk (nothing installs from them), but would go
   *textually* stale after a future version bump with nothing to catch it. Severity: low/cosmetic.
 - `.github/workflows/claude-foundation-ci.yml` and `.github/workflows/eval-harness-ci.yml`
@@ -284,7 +284,7 @@ tree.
 ```
 
 This is a real, separate ruff-version pin — via the `ruff-pre-commit` hook's `rev:` field, a
-different syntax than the `tool==version` string `F_054.py`'s regex matches, so it would not be
+different syntax than the `tool==version` string `F_055.py`'s regex matches, so it would not be
 caught even if this file were added to the scan unmodified. It is **not** dormant: `agent-core/CONTRIBUTING.md:33-34`
 explicitly documents and instructs contributors to run
 `pre-commit run --all-files --config agent-core/.pre-commit-config.yaml`. `agent-core`'s CI
@@ -338,7 +338,7 @@ guarantee, not merely by absence of a failed test.
 | # | Severity | Finding | Recommended action |
 |---|---|---|---|
 | P1-F1 | **High (procedural, not code)** | This branch's true parent is `159460a`, not the claimed `7cdba73` — `docs/plans/orbital-drift-alignment/PLAN.md` is absent from this branch's history and shows as a spurious full deletion under a raw `git diff 7cdba73 HEAD` | Rebase onto `7cdba73`/current `claude/orbital-drift-agents-reuse-aely36` tip before merge, **or** confirm the actual integration is a real 3-way merge into a target that already has `7cdba73`, and verify `PLAN.md` is present post-merge. Required at merge time, not deferrable. |
-| P2-F1 | **Medium** | `agent-core/.pre-commit-config.yaml:7` pins `ruff-pre-commit rev: v0.8.0`, live and contributor-facing, drifted against the fleet's `0.15.20`, uncovered by F-054, unmentioned in ADR 0034's "eight files" census | Bump the `rev:` to match `v0.15.20` as a fast-follow; consider whether `F_054.py` (or a new, small companion check) should cover pre-commit `rev:` pins in a future change, and correct ADR 0034's Context section to acknowledge this as a known, separately-tracked surface rather than implying the 16-copy census is exhaustive |
+| P2-F1 | **Medium** | `agent-core/.pre-commit-config.yaml:7` pins `ruff-pre-commit rev: v0.8.0`, live and contributor-facing, drifted against the fleet's `0.15.20`, uncovered by F-055, unmentioned in ADR 0034's "eight files" census | Bump the `rev:` to match `v0.15.20` as a fast-follow; consider whether `F_055.py` (or a new, small companion check) should cover pre-commit `rev:` pins in a future change, and correct ADR 0034's Context section to acknowledge this as a known, separately-tracked surface rather than implying the 16-copy census is exhaustive |
 | P1-19 | **Low** | `tasks.md`'s "Verification" section omits the `review.md`/peer-review-dispatch checklist item that `docs/plans/orbital-drift-alignment/PLAN.md`'s Phase 0 "Objective peer-review step" requires for every phase | Add the checklist item to `tasks.md` (retroactively checked, since this document now exists) |
 | P2 (comments) | **Low / cosmetic** | `flow-corpus-ci.yml:64` and `behavioral-regression-ci.yml:47` cite the version numbers in comments; nothing re-checks them against `tool_versions.py`, so they can go textually stale after a future bump | No action required now; optional: mention in a future bump's checklist to grep for these two comments |
 | P1-17 | **Informational** | `proposal.md` states this change "carries the `eval-change-approved` label" in present tense; unverifiable since the branch has no PR yet | No action; will resolve itself once a PR exists |
@@ -350,7 +350,7 @@ guarantee, not merely by absence of a failed test.
   missed one real pin. A repo-wide `grep -rn "rev: v[0-9]"` sweep across all `.pre-commit-config.yaml`
   files (there may be more than the one found under `agent-core/`) would be the honest way to
   close this out completely, and is outside this change's already-landed scope.
-- **The lockstep check is coherence-only, permanently.** As long as `F_054.py` stays offline and
+- **The lockstep check is coherence-only, permanently.** As long as `F_055.py` stays offline and
   deterministic (a design choice this review agrees with — see attack (a)'s verdict), a fully
   and consistently propagated wrong version will always pass. This is accepted, not a residual
   bug, but worth stating plainly for whoever next touches this file.
@@ -363,12 +363,12 @@ guarantee, not merely by absence of a failed test.
 **APPROVE WITH FOLLOW-UPS.**
 
 Every claim about the actual deliverable — `scripts/tool_versions.py`'s constants,
-`scripts/validations/F_054.py`'s coverage/behavior/read-only guarantee, the ADR's numbering and
+`scripts/validations/F_055.py`'s coverage/behavior/read-only guarantee, the ADR's numbering and
 citations, the two-commit ledger's correctness, the OpenSpec package's internal consistency,
 and the doc/index updates — was independently re-derived from the tree and **holds**. Both
 scripts run clean; `ruff`/`mypy` at the pinned versions pass on the new files; `features.yaml`
 is schema-valid; `python scripts/validate.py --tier fast --strict` is green at 52/52 including
-F-054. All three adversarial attacks that could have found a defect in the *design* (partial-edit
+F-055. All three adversarial attacks that could have found a defect in the *design* (partial-edit
 evasion, hidden write/exec path, ledger race window) were tried and refuted. The one adversarial
 attack that landed (P2-F1, the pre-commit config) found a real, pre-existing gap outside this
 change's diff, not a defect introduced by it.

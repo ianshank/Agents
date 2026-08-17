@@ -4,8 +4,8 @@
 **Motivated by:** `docs/plans/orbital-drift-alignment/PLAN.md` Phase 2, itself motivated by a
 file-by-file comparison against a sibling project's CI discipline, independently
 fact-checked against this repo's actual files (not trusted from the comparison).
-**Compiles down to:** `scripts/tool_versions.py` (source of truth) + F-054
-(`features.yaml`, `scripts/validations/F_054.py`) + [ADR 0034](../../../docs/decisions/0034-tool-version-lockstep.md).
+**Compiles down to:** `scripts/tool_versions.py` (source of truth) + F-055
+(`features.yaml`, `scripts/validations/F_055.py`) + [ADR 0034](../../../docs/decisions/0034-tool-version-lockstep.md).
 
 ## Why
 
@@ -44,14 +44,14 @@ copy. This proposal closes the same defect class for the ruff/mypy pins.
 
 - Add `scripts/tool_versions.py`: `RUFF_VERSION`/`MYPY_VERSION`, the one place a version is
   typed. No installs, no subprocess calls — it only names the values.
-- Add `scripts/validations/F_054.py`: a **read-only** text check (opens each file for
+- Add `scripts/validations/F_055.py`: a **read-only** text check (opens each file for
   reading only; runs no subprocess and no code execution) over the 7 `pyproject.toml` files
   and `.github/workflows/skills-ci.yml`, asserting every `ruff==`/`mypy==` occurrence matches
   `tool_versions.py`'s constants exactly, and that no file has silently lost its pin
   entirely. Structured after `scripts/validations/F_031.py` — same `_common.check`/`report`/
   `configure_logging` helpers, same read-only/deterministic/offline shape, same exit-code
   contract — deliberately the same pattern, not a new one.
-- Claim F-054 in `features.yaml`.
+- Claim F-055 in `features.yaml`.
 - Point `AGENTS.md`'s existing pin bullet (`AGENTS.md:97`) at `scripts/tool_versions.py` as
   the canonical source, one line, no restructuring of the surrounding doc.
 - Add [ADR 0034](../../../docs/decisions/0034-tool-version-lockstep.md), documenting
@@ -70,17 +70,17 @@ copy. This proposal closes the same defect class for the ruff/mypy pins.
   a separate, larger follow-on: it touches 9 CI job definitions for marginal gain over what
   this change already delivers (drift cannot merge silently).
 - **Non-goal: relaxing the "bump deliberately" constraint.** `AGENTS.md`'s "do not bump them
-  casually" framing is the constraint this change respects, not loosens. F-054 tests *drift*
+  casually" framing is the constraint this change respects, not loosens. F-055 tests *drift*
   between the 16 copies; a deliberate, correct bump made everywhere still requires the same
   16 hand-edits it always did, and remains a reviewed diff.
-- **Non-goal: a new validator pattern.** F_054.py's shape (helpers, exit codes, reporting) is
+- **Non-goal: a new validator pattern.** F_055.py's shape (helpers, exit codes, reporting) is
   copied from F_031.py on purpose; no new validation idiom is introduced.
 
 ## Impact
 
-- New, additive files only: `scripts/tool_versions.py`, `scripts/validations/F_054.py`. No
+- New, additive files only: `scripts/tool_versions.py`, `scripts/validations/F_055.py`. No
   existing lint/format/type-check/install behaviour changes for any package or skill job.
 - **Protected paths:** `features.yaml`, `scripts/validations/**` — this implementation
   carries the `eval-change-approved` label per `scripts/eval_protected_paths.py`.
   `.github/**` is also protected; this change touches it only by reading
-  `.github/workflows/skills-ci.yml` from `F_054.py` at validation time, never by editing it.
+  `.github/workflows/skills-ci.yml` from `F_055.py` at validation time, never by editing it.
