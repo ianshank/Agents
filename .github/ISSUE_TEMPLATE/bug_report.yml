@@ -34,7 +34,7 @@ body:
     id: python
     attributes:
       label: Python version
-      description: One of the supported versions (3.10–3.12).
+      description: One of the supported versions (3.11–3.13).
       placeholder: "3.12"
     validations:
       required: true

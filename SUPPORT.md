@@ -20,7 +20,7 @@ Thanks for using this project. Here is where to go for help.
 
 - File a **GitHub Issue** — the issue templates (bug report, feature request)
   will prompt you for the details we need. For bugs, include a minimal reproduction, the
-  package and version, your Python version (3.10–3.12 are supported), and whether
+  package and version, your Python version (3.11–3.13 are supported), and whether
   you were running the offline suite or a live integration.
 
 ## Security
