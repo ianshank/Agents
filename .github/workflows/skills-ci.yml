@@ -327,7 +327,14 @@ jobs:
       - run: ruff format --check skill_validator.py __init__.py tests
       # Type-check against the root mypy config (skills ship no config of their own).
       - run: mypy --config-file ../../pyproject.toml skill_validator.py __init__.py
-      - run: python -m pytest tests --cov=skill_validator --cov-branch --cov-report=term-missing --cov-fail-under=95
+      # --cov=skill_validator (a bare module name) silently measures 0% here: pytest-cov
+      # resolves it against sys.modules, and skill_validator is already cached under that
+      # name (or under the common.skill_validator qualified name, via __init__.py's
+      # re-export) before coverage's tracer attaches -- "module was previously imported,
+      # but not measured", pytest-cov's own name for this. --cov=. (path-based, sidesteps
+      # module-name resolution) plus .coveragerc's omit=tests/* keeps the 95% floor scoped
+      # to exactly skill_validator.py + __init__.py, matching the original intent.
+      - run: python -m pytest tests --cov=. --cov-branch --cov-report=term-missing --cov-fail-under=95
       # Structural tier ONLY -- not "structural,behavioral" like the jobs above. ADR 0030
       # names two tiers: skills with real library code (full lint+type+test, just run above,
       # plus structural,behavioral here) and skills with no library code and no gradable

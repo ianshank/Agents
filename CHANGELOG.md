@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — skills-ci.yml `common` job: coverage gate silently measured 0%
+- `python -m pytest tests --cov=skill_validator ...` (a bare module name) resolved against
+  `sys.modules`, not a file path — and `skill_validator` was already cached there (directly via
+  the test file's own `import skill_validator`, and via `common/__init__.py`'s re-export under
+  the qualified name `common.skill_validator`) before pytest-cov's tracer attached. Every run
+  reported `Total coverage: 0.00%` and failed the `--cov-fail-under=95` gate regardless of test
+  quality — found while merging an independent, unrelated PR's own new test suite for the same
+  module and empirically confirmed against *both* suites, ruling out a test-content cause.
+  `--cov=.` (path-based, sidesteps module-name resolution entirely) plus a new
+  `skills/common/.coveragerc` (`omit = tests/*`) restores the original intent — the 95% floor
+  scoped to exactly `skill_validator.py` + `__init__.py` — verified clean at 100%/72 passed.
+
 ### Fixed — quality-gate: coverage-threshold and PYTEST_ADDOPTS env-override evasion closed (F-054)
 - **`COV_FAIL_UNDER` and single-source `COVERAGE_SOURCE` were live, unguarded environment
   overrides.** `COV_FAIL_UNDER=0 ./scripts/quality-gate.sh coverage` made every generated
