@@ -12,12 +12,12 @@
 `claude-foundation` is a versioned Claude Code plugin (plugin name: **`foundation`**)
 plus a self-hosted marketplace, packaging the reusable generic layer of an agentic
 workflow: constraint-programming planning, code review, test-first enforcement, and C4
-documentation skills; least-privilege explorer and test-runner subagents; and
-deterministic lifecycle hook guards. Components are namespaced `foundation:*`, carry no
-hardcoded values (all configuration is via environment variables), and ship with a full
-validation and eval suite. Consumer repositories install it via the marketplace and pin
-a semver tag — the single-source-of-truth alternative to copy-pasting agent config
-across repos.
+documentation skills; least-privilege explorer, test-runner, spec-guardian and
+peer-reviewer subagents; and deterministic lifecycle hook guards. Components are
+namespaced `foundation:*`, carry no hardcoded values (all configuration is via
+environment variables), and ship with a full validation and eval suite. Consumer
+repositories install it via the marketplace and pin a semver tag — the
+single-source-of-truth alternative to copy-pasting agent config across repos.
 
 ## Install
 

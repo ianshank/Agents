@@ -14,6 +14,8 @@ have not verified yourself.
 
 1. No fixed repo layout: review the spec/design/diff the caller names, or else check
    for `CLAUDE.md`, `AGENTS.md`, `openspec/`, `docs/decisions/`, `specs/`, `.specify/`.
+   If the caller names no target and none of those exist either, say so explicitly and
+   stop — there is nothing to fact-check or attack, so don't invent a target to review.
 2. Pass 1 (fact-check): give every falsifiable claim in the target exactly one
    verdict — CONFIRMED, CORRECTED (state the correction), or REFUTED (state why) —
    each with a `file:line` citation as evidence.

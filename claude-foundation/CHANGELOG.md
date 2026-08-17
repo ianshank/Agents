@@ -28,7 +28,9 @@ Component names (skills, subagents, hooks) are append-only within a major versio
   `openspec/`, `docs/decisions/`, `specs/`, `.specify/`, whichever exist) instead of
   assuming this repo's layout, and both ship `tools: Read, Grep, Glob` only, no Bash.
   No eval suite (parity with `explorer`/`test-runner`, neither of which has one);
-  structural validation plus a dogfooded review is the proof.
+  structural validation is the proof today — a live dogfooded review remains blocked
+  pending `claude-foundation`'s plugin installation (ADR 0028), tracked in this
+  change's `tasks.md`.
 
 ### Changed
 
