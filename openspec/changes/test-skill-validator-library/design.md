@@ -25,7 +25,7 @@ named gaps (`grade_file_exists`, `_run_eval` mechanics): reaching 95% branch cov
 `skill_validator.py`, measured in total isolation, requires covering the module's entire
 surface — `parse_frontmatter`, `load_evals`, `first_path_token`, `check_structural`, every
 grader, `_validate_eval_shape`, `_run_one_eval`, `check_behavioral` — from scratch. The new
-file's ~70 tests therefore cover the same *ground* the root suite's 19 tests cover, but
+file's 68 tests therefore cover the same *ground* the root suite's 19 tests cover, but
 through a different contract (`skill_validator`'s own public/internal surface, called
 directly) and organised independently — not copy-pasted bodies, and not a second copy of the
 root file's test names or structure.
