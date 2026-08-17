@@ -93,6 +93,15 @@ before that guard existed.
   a dedicated `common` CI job (structural-tier-only, since it has no behavioral surface of
   its own to grade — a third case ADR 0030 didn't explicitly name), and removes `common`'s
   now-stale `EXEMPT` entry. No new F-ID or ADR.
+- [`changes/add-openspec-implementation-review/`](changes/add-openspec-implementation-review/) —
+  *proposed.* New skill `openspec-implementation-review`: reviews a *shipped* OpenSpec
+  change's implementation against its own proposal/design/tasks/spec, producing a dated,
+  two-pass `review.md` — dispatching `spec-guardian` then `peer-reviewer` when
+  `claude-foundation` is plugin-loaded, degrading to a `general-purpose` subagent with the
+  same method inlined when it is not (the case this repo's own sessions actually hit today,
+  per ADR 0028). Advisory/opt-in tooling, not a CI gate (Decision Point 2). Complements, and
+  is named to not collide with, `openspec-peer-review` (which reviews a *plan* before
+  implementation starts).
 
 ## Archived changes
 
