@@ -20,8 +20,8 @@ byte — an unpinned ruff drifted once already (0.8.0 local vs 0.15.20 CI) and b
 `ruff format --check` (`pyproject.toml:81-83`). That reproducibility requirement means the
 same two version strings are hand-typed in eight separate places: the `dev` extra of 7
 `pyproject.toml` files (root, `agent-core`, `behavioral-regression`, `flow-protocol`,
-`flow-corpus`, `claude-foundation`, `experiments/backend-validation`) and 9 `pip install`
-lines across `.github/workflows/skills-ci.yml`'s per-skill CI jobs — 16 hand-typed copies in
+`flow-corpus`, `claude-foundation`, `experiments/backend-validation`) and every `pip install`
+line across `.github/workflows/skills-ci.yml`'s per-skill CI jobs — 16 hand-typed copies in
 total. Each copy carries a "bump deliberately, in lockstep" comment (e.g.
 `agent-core/pyproject.toml:31-33`, `claude-foundation/pyproject.toml:34-35`), but before this
 change nothing checked that the comment's promise held. A partial bump — one file edited,
@@ -71,10 +71,10 @@ Keep the duplication; test the lockstep instead of removing it.
    relaxed — a bump is still sixteen hand-edits and still a reviewed diff; the only change is
    that a *partial* one now fails the build instead of merging silently.
 4. **Full CI templating is deferred, not rejected.** Interpolating `pyproject.toml`'s `dev`
-   extra directly into all 9 `skills-ci.yml` install lines at workflow-run time — so the
+   extra directly into all `skills-ci.yml` install lines at workflow-run time — so the
    version strings are typed exactly once and every consumer reads them, rather than sixteen
    hand-synced literals — was considered. It is explicitly deferred as a separate, larger
-   follow-on: it touches 9 CI job definitions (each currently a plain `pip install` shell
+   follow-on: it touches every per-skill CI job definition (each currently a plain `pip install` shell
    line) for marginal gain over what this change already delivers. "Drift cannot merge
    silently" is the actual guarantee sought, and F-055 delivers it today at a fraction of the
    surface area; templating would trade a tested duplication for an untested indirection layer
@@ -100,7 +100,7 @@ here to an empty pin.
 edits (`tool_versions.py` plus every `pyproject.toml` dev extra plus every `skills-ci.yml`
 line) rather than one. The gate proves the copies agree; it does not reduce how many places a
 correct bump must touch. This is the trade this ADR makes deliberately (§4 above) — templating
-would reduce edit count at the cost of touching 9 CI job definitions and introducing a
+would reduce edit count at the cost of touching every per-skill CI job definition and introducing a
 runtime interpolation seam that does not exist today.
 
 **Neutral.** `scripts/validations/F_055.py` follows `scripts/validations/F_031.py`'s existing

@@ -100,18 +100,18 @@ asserting it silently.
 
 ## Phase 2 — `pin-lockstep-tool-versions`
 
-`ruff==0.15.20`/`mypy==2.1.0` are hand-duplicated across 7 `pyproject.toml` files and 9 `pip
-install` lines in `skills-ci.yml`, with a "bump in lockstep" comment but no test enforcing it.
+`ruff==0.15.20`/`mypy==2.1.0` are hand-duplicated across 7 `pyproject.toml` files and every `pip
+install` line in `skills-ci.yml`, with a "bump in lockstep" comment but no test enforcing it.
 
 | Area | Files | Protected |
 |---|---|---|
 | Source of truth | new `scripts/tool_versions.py` (`RUFF_VERSION`, `MYPY_VERSION`) | no |
-| Lockstep proof | new `scripts/validations/F_0NN.py` — **read-only** text check of all 7 `pyproject.toml` dev-extras and all 9 `skills-ci.yml` pip-install lines against `tool_versions.py` (deliberately read-only on `skills-ci.yml` — see Phase 0 §1) | **yes** |
+| Lockstep proof | new `scripts/validations/F_0NN.py` — **read-only** text check of all 7 `pyproject.toml` dev-extras and every `skills-ci.yml` pip-install line against `tool_versions.py` (deliberately read-only on `skills-ci.yml` — see Phase 0 §1) | **yes** |
 | Docs | `AGENTS.md` — point its existing pin bullet at `scripts/tool_versions.py`; new ADR (0034 if it lands first — Phase 0 §2) documenting "drift-tested duplication, not full templating" | no |
 
 **Declined this round:** rewiring the 16 call sites to interpolate from the shared file at install
 time — real gain is "drift can't merge silently," which the lockstep proof already delivers;
-templating 9 CI job definitions for marginal further benefit is an explicit optional follow-on.
+templating every per-skill CI job definition for marginal further benefit is an explicit optional follow-on.
 
 ## Phase 3 — `test-skill-validator-library`
 

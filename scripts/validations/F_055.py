@@ -2,8 +2,8 @@
 """Validation script for F-055 - Tool-version lockstep (ruff/mypy pins).
 
 ``ruff==0.15.20``/``mypy==2.1.0`` (current values — see ``scripts/tool_versions.py``)
-are hand-duplicated across 7 ``pyproject.toml`` ``dev`` extras and 9 ``pip install``
-lines in ``.github/workflows/skills-ci.yml``, each carrying a "bump deliberately, in
+are hand-duplicated across 7 ``pyproject.toml`` ``dev`` extras and every ``pip install``
+line in ``.github/workflows/skills-ci.yml``, each carrying a "bump deliberately, in
 lockstep" comment but — before this gate — no automated check that the copies agree.
 A missed bump in any one location silently drifts: green locally, red (or worse,
 silently different) in CI. This asserts every occurrence of a ``ruff==``/``mypy==``
