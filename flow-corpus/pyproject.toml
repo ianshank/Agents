@@ -63,7 +63,7 @@ fail_under = 95
 exclude_also = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
-    "\\.\\.\\.",
+    "^\\s*\\.\\.\\.$",
     "if __name__ == .__main__.:",
 ]
 

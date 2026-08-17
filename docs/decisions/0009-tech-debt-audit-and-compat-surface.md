@@ -2,6 +2,17 @@
 
 - Status: **Accepted**
 - Date: 2026-06-29
+- **Errata** (2026-08-17, post-acceptance — factual correction only, no change of course):
+  §4's claim that "the root `exclude_lines` was aligned with the sub-packages'" was true in
+  intent but false in the regex text for 4 of 5 packages checked. Root's `exclude_lines` and
+  `scripts/.coveragerc` used the anchored pattern `"^\s*\.\.\.$"` (a line that is *entirely*
+  whitespace + ellipsis); `agent-core`, `behavioral-regression`, `flow-protocol`, and
+  `flow-corpus`'s `exclude_also` instead carried the unanchored `"\.\.\."`, which
+  `coverage.py` matches with `re.search` — so it silently excluded any line merely
+  *containing* three consecutive dots (e.g. `arr[..., 0]`), not just a standalone stub body.
+  Corrected to the anchored pattern in all four packages by
+  `openspec/changes/harden-quality-gate-integrity/`; each package's full coverage suite was
+  re-run against the corrected pattern and stayed comfortably above its `fail_under` floor.
 - Related: `scripts/_cli.py`, `scripts/check_skill_script_drift.py`,
   `.github/workflows/quality-gates.yml`, `.github/workflows/skills-ci.yml`
 

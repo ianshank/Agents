@@ -61,6 +61,16 @@ before that guard existed.
   **blocked.** Ingesting production traces back into the golden dataset. Blocked on a
   CHARTER §3 ratified amendment plus its own ADR — §3 lists "a general observability
   platform" as a non-goal — and on the three changes above.
+- [`changes/harden-quality-gate-integrity/`](changes/harden-quality-gate-integrity/) —
+  *proposed.* The generated `quality-gate.sh` coverage gate could be made to report green
+  without meeting its real threshold: `COV_FAIL_UNDER` and single-source `COVERAGE_SOURCE`
+  were live, unguarded environment overrides, `PYTEST_ADDOPTS` passed through to pytest
+  unguarded, and four packages' coverage-exclude regex was unanchored (excluding any line
+  containing `...`, not just a standalone stub body) despite ADR 0009 claiming it was aligned
+  with root's already-anchored pattern. All four are closed with generation-time literals, an
+  active `PYTEST_ADDOPTS` guard, an anchored regex verified safe against each package's real
+  coverage suite, and positive-control tests that run the real gate against a real
+  under-covered fixture.
 
 ## Archived changes
 

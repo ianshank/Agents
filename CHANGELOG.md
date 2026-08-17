@@ -6,6 +6,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — quality-gate: coverage-threshold and PYTEST_ADDOPTS env-override evasion closed (F-054)
+- **`COV_FAIL_UNDER` and single-source `COVERAGE_SOURCE` were live, unguarded environment
+  overrides.** `COV_FAIL_UNDER=0 ./scripts/quality-gate.sh coverage` made every generated
+  package's coverage gate trivially pass — the generated script never `unset` anything and
+  never warned. `skills/quality-gate/scripts/gategen/render.py`'s `_coverage_command()` now
+  interpolates both as generation-time literals (`--cov-fail-under=95`, `--cov="demo"`) in
+  both the single- and multi-source branches, and unconditionally warns to stderr
+  (`quality-gate: COV_FAIL_UNDER is ignored; ...`) when either is set anyway — exit code
+  unaffected either way. `_variables()` no longer declares either as an overridable shell
+  variable.
+- **`PYTEST_ADDOPTS` passed through to pytest completely unguarded.** A coverage-weakening
+  flag (`--no-cov`, `-k`, `--override-ini`) set in the environment silently applied to every
+  pytest invocation the gate made. A new `_pytest_addopts_guard()` warns then `unset`s it
+  ahead of every pytest call the generated script makes (`do_test`, `do_coverage`); root
+  `scripts/quality-gate.sh`'s hand-maintained `do_extra()` (below the marker, out of the
+  generator's reach) carries the identical guard by hand.
+- **Coverage-exclude regex was unanchored in 4 packages, contradicting ADR 0009's own
+  "aligned" claim.** `agent-core`, `behavioral-regression`, `flow-protocol`, and
+  `flow-corpus`'s `pyproject.toml` `exclude_also` used `"\.\.\."` (matches ANY line
+  containing three dots — `coverage.py` uses `re.search`, not a full-line match) instead of
+  the anchored `"^\s*\.\.\.$"` root `pyproject.toml`/`scripts/.coveragerc` already used.
+  Corrected in all four; each package's full test suite was re-run for real afterward and
+  stayed clear of its floor (`agent-core` 98.49%/95%, `behavioral-regression` 100%/95%,
+  `flow-corpus` 100%/95%, `flow-protocol` 100%/95% — the anchored pattern's removal of the
+  one-line `Protocol`-stub exclusion does not regress coverage; verified, not assumed).
+  `docs/decisions/0009-tech-debt-audit-and-compat-surface.md` carries an Errata recording the
+  correction (factual, no superseding ADR).
+- **`tests/_e2e_matrix.py`'s `_floor_from_gate_script`** updated to match the new
+  `--cov-fail-under=N` literal form; the real cross-package floor-agreement check
+  (`test_floor_anchors_agree_with_each_other`) was re-verified to still compare two
+  independent anchors per package, not one silently left unmatched.
+- All 7 generated `scripts/quality-gate.sh` copies regenerated (root, `agent-core/`,
+  `behavioral-regression/`, `claude-foundation/`, `experiments/backend-validation/`,
+  `flow-corpus/`, `flow-protocol/`); the frozen `skills/project-setup` eval fixture is
+  untouched. New subprocess-level positive-control tests
+  (`skills/quality-gate/tests/test_coverage_gate_integrity.py`) run the real rendered gate
+  against a real under/over-covered fixture and confirm all evasions above stay closed —
+  nothing here is mocked. `quality-gate` skill bumped `1.1.0` → `1.2.0`. New
+  `scripts/validations/F_054.py`, `features.yaml` F-054. Full design and the branch-coverage
+  regex-safety experiment: `openspec/changes/harden-quality-gate-integrity/design.md`.
+
 ### Added — backend-validation: full Opik matrix coverage + air-gap P4 (PR #147)
 - **Air-gap phase P4 exists now (`experiments/backend-validation/`).** `make airgap` and
   `make status` invoked CLI subcommands that did not exist (argparse exit 2); no compose

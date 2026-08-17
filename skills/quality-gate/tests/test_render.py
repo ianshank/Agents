@@ -35,11 +35,18 @@ def test_variables_are_overridable_and_quoted() -> None:
     out = render_gate(FULL)
     assert 'PYTHON="${PYTHON:-python3}"' in out
     assert 'TYPECHECK_PATHS="${TYPECHECK_PATHS:-src}"' in out
-    assert 'COVERAGE_SOURCE="${COVERAGE_SOURCE:-demo}"' in out
-    assert 'COV_FAIL_UNDER="${COV_FAIL_UNDER:-90}"' in out
+    # COVERAGE_SOURCE/COV_FAIL_UNDER are gate-integrity values, not a debug affordance: no
+    # ${VAR:-default} declaration is emitted for either, single-source or not (closes the
+    # coverage-evasion gap where COV_FAIL_UNDER=0 made the gate trivially pass).
+    assert 'COVERAGE_SOURCE="${COVERAGE_SOURCE:-demo}"' not in out
+    assert 'COV_FAIL_UNDER="${COV_FAIL_UNDER:-90}"' not in out
     # ShellCheck-cleanliness: every variable expansion in commands is double-quoted.
     assert '"$PYTHON" -m ruff check "."' in out
-    assert '--cov="$COVERAGE_SOURCE"' in out
+    # --cov=/--cov-fail-under= are generation-time literals, never a live env reference.
+    assert '--cov="demo"' in out
+    assert "--cov-fail-under=90" in out
+    assert "$COVERAGE_SOURCE" not in out
+    assert "$COV_FAIL_UNDER" not in out
 
 
 def test_all_runs_coverage_not_test_when_both_present() -> None:
@@ -95,9 +102,10 @@ def test_header_usage_references_scripts_path() -> None:
 
 
 def test_special_chars_in_source_are_shell_escaped() -> None:
-    # A detected value containing $ must be neutralised inside the ${VAR:-...} default.
+    # A detected value containing $ must be neutralised in the generation-time --cov literal
+    # (single-source coverage no longer has a ${VAR:-...} default to hide behind).
     out = render_gate(GateFacts(has_pytest_cov=True, coverage_source="pkg$x"))
-    assert 'COVERAGE_SOURCE="${COVERAGE_SOURCE:-pkg\\$x}"' in out
+    assert '--cov="pkg\\$x"' in out
 
 
 # ------------------------------------------------------------ 1.1.0: tuples & BC
@@ -124,12 +132,27 @@ def test_multi_coverage_sources_render_repeated_cov_flags() -> None:
     assert '--cov="pkg_a" --cov="pkg_b"' in out
     assert 'COVERAGE_SOURCE="${COVERAGE_SOURCE:-' not in out  # no single-source env var in multi mode
     assert "COVERAGE_SOURCE is ignored" in out  # ...and the swallowed override warns
-    assert 'COV_FAIL_UNDER="${COV_FAIL_UNDER:-85}"' in out  # threshold override survives
+    # COV_FAIL_UNDER is now a generation-time literal everywhere -- no live override survives
+    # anywhere, and a set env var warns just like COVERAGE_SOURCE.
+    assert 'COV_FAIL_UNDER="${COV_FAIL_UNDER:-85}"' not in out
+    assert "COV_FAIL_UNDER is ignored" in out
+    assert "--cov-fail-under=85" in out
 
 
-def test_single_path_forms_have_no_ignored_notice() -> None:
+def test_typecheck_single_path_form_has_no_ignored_notice() -> None:
+    # TYPECHECK_PATHS keeps its 1.0.x single-path env-override behaviour (a documented debug
+    # affordance for a non-thresholded check) -- unlike COVERAGE_SOURCE/COV_FAIL_UNDER below,
+    # it stays silent when the render uses the single-path form.
     out = render_gate(FULL)  # single typecheck path + single coverage source
-    assert "is ignored" not in out
+    assert "TYPECHECK_PATHS is ignored" not in out
+
+
+def test_coverage_notices_present_even_in_single_source_form() -> None:
+    # Unlike TYPECHECK_PATHS, COVERAGE_SOURCE/COV_FAIL_UNDER are gate-integrity values: the
+    # ignored-override notice fires on every render, single-source or multi-source alike.
+    out = render_gate(FULL)
+    assert "COVERAGE_SOURCE is ignored" in out
+    assert "COV_FAIL_UNDER is ignored" in out
 
 
 def test_lint_paths_render_quoted_targets() -> None:
@@ -234,3 +257,29 @@ def test_empty_tuples_normalize_to_whole_tree_defaults() -> None:
     assert facts.typecheck_paths == (".",) and facts.coverage_source == (".",)
     out = render_gate(facts)
     assert '"$PYTHON" -m mypy "$TYPECHECK_PATHS"' in out  # real command, not an empty body
+
+
+# ------------------------------------------ harden-quality-gate-integrity: PYTEST_ADDOPTS
+def test_do_test_guards_against_pytest_addopts() -> None:
+    out = render_gate(GateFacts(has_pytest=True))
+    do_test = out.split("do_test() {")[1].split("\n}")[0]
+    assert "PYTEST_ADDOPTS is ignored" in do_test
+    assert "unset PYTEST_ADDOPTS" in do_test
+    # The guard runs BEFORE pytest, so a set PYTEST_ADDOPTS can never reach it.
+    assert do_test.index("unset PYTEST_ADDOPTS") < do_test.index('"$PYTHON" -m pytest')
+
+
+def test_do_coverage_guards_against_pytest_addopts() -> None:
+    out = render_gate(FULL)
+    do_coverage = out.split("do_coverage() {")[1].split("\n}")[0]
+    assert "PYTEST_ADDOPTS is ignored" in do_coverage
+    assert "unset PYTEST_ADDOPTS" in do_coverage
+    assert do_coverage.index("unset PYTEST_ADDOPTS") < do_coverage.index("--cov-fail-under=90")
+
+
+def test_pytest_addopts_guard_message_names_the_gate() -> None:
+    # Distinct wording from _ignored_override_notice's "targets are fixed at generation
+    # time": PYTEST_ADDOPTS is not a target, it is arbitrary pytest flags, so the message
+    # says plainly that the stage has no opt-out at all.
+    out = render_gate(GateFacts(has_pytest=True))
+    assert "PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" in out
