@@ -35,7 +35,11 @@ from pathlib import Path
 from typing import Literal
 
 DispatchPath = Literal["plugin", "degraded"]
-Confidence = Literal["low", "medium"]
+#: Every real path currently returns "medium" -- no code returns "low" today. Kept as a
+#: single-value Literal rather than str so a future genuinely-low-confidence path (e.g. a
+#: partial/ambiguous plugin-root match) has a typed slot to return into without widening the
+#: type at every call site; add "low" back here only when a real path returns it.
+Confidence = Literal["medium"]
 
 #: Env var Claude Code populates for a plugin's own hook/script invocations
 #: (see claude-foundation/hooks/hooks.json, which reads it directly).

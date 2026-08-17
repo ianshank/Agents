@@ -378,7 +378,6 @@ jobs:
       # The skill's own end-to-end self-check (structural + behavioral evals).
       - run: python scripts/validate_skill.py --skill . --tier structural,behavioral
 
-
   # Repo-level guard over the skill *set*, not a per-skill quality gate (ADR 0030) -- it sits
   # outside the ADR 0021 delegation chain by design, so its steps run inline rather than
   # through a generated quality-gate.sh. Gives every skills/*/ directory a structural floor,

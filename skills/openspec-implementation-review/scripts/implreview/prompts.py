@@ -35,8 +35,11 @@ PRECEDENT_REVIEW = "openspec/changes/add-panel-judge/review.md"
 SECOND_PRECEDENT_REVIEW = "openspec/changes/harden-quality-gate-integrity/review.md"
 
 _OUTPUT_SHAPE = """\
-Write the result to {review_path} in exactly this shape (matching {precedent} and
-{precedent2}):
+Return your review as your final message text, in exactly this shape (matching {precedent}
+and {precedent2}). Do NOT write, create, or edit {review_path} or any other file yourself --
+the orchestrating agent captures your returned text and writes the file via this skill's own
+`compose` step. A dispatched agent that writes the file directly, in addition to the
+orchestrator's own compose step, produces duplicated content -- this is your one job to avoid:
 
   # Review: {change_id}
 
@@ -186,10 +189,16 @@ in the abstract. An attack that dies under verification is RECORDED AS REFUTED, 
 reasoning that refuted it, never deleted -- a reviewed-and-rejected risk is information the
 next reviewer needs, exactly as both precedent reviews do.
 
-Read only; do not edit any file this review is not itself the output of.
+Read only: do not write, create, or edit ANY file, including {review_path} itself. Return
+your complete review as the text of your final message -- the orchestrating agent captures
+it and writes the file via this skill's own `compose` step, exactly once.
 """
     prompt = method.format(
-        change_id=change.change_id, tree_sha=tree_sha, precedent=PRECEDENT_REVIEW, precedent2=SECOND_PRECEDENT_REVIEW
+        change_id=change.change_id,
+        tree_sha=tree_sha,
+        precedent=PRECEDENT_REVIEW,
+        precedent2=SECOND_PRECEDENT_REVIEW,
+        review_path=_review_path_str(change),
     )
     prompt += "\n" + _TASK_PRELUDE.format(change_dir=change.change_dir, change_id=change.change_id, tree_sha=tree_sha)
     prompt += "\n" + _OUTPUT_SHAPE.format(

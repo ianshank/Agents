@@ -52,6 +52,28 @@ def test_peer_reviewer_prompt_specifies_the_output_shape(tmp_path: Path) -> None
     assert "## Overall verdict" in dispatch.prompt
 
 
+def test_peer_reviewer_and_degraded_prompts_never_instruct_the_dispatched_agent_to_write_the_file(
+    tmp_path: Path,
+) -> None:
+    # Regression test for a real, reproduced bug (Phase 5 independent review, pass 2a): the
+    # output-shape template used to say "Write the result to {review_path}", which conflicts
+    # with SKILL.md's documented flow -- the ORCHESTRATOR captures the dispatched agent's text
+    # output and writes the file via `compose`, exactly once. A dispatched general-purpose
+    # subagent plausibly has its own Write tool and nothing told it not to use it, so a real
+    # dispatch could double-write duplicated content. Both prompt shapes that reach the output
+    # contract (peer-reviewer and degraded) must instruct the dispatched agent to return text
+    # only, and must say so explicitly rather than leaving it implicit.
+    change = _change(tmp_path)
+    for dispatch in (
+        build_peer_reviewer_prompt(change, "deadbeef"),
+        build_degraded_prompt(change, "deadbeef"),
+    ):
+        assert "write the result to" not in dispatch.prompt.lower(), dispatch.subagent_type
+        assert "do not write, create, or edit" in dispatch.prompt.lower(), dispatch.subagent_type
+        assert "orchestrating agent captures" in dispatch.prompt.lower(), dispatch.subagent_type
+        assert str(change.review_path) in dispatch.prompt, dispatch.subagent_type
+
+
 def test_peer_reviewer_prompt_includes_spec_guardian_handoff_when_given(tmp_path: Path) -> None:
     change = _change(tmp_path)
     dispatch = build_peer_reviewer_prompt(change, "deadbeef", spec_guardian_findings="Verdict: conforms\n1. ...")
