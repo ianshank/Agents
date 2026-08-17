@@ -109,7 +109,7 @@ install` line in `skills-ci.yml`, with a "bump in lockstep" comment but no test 
 | Lockstep proof | new `scripts/validations/F_0NN.py` — **read-only** text check of all 7 `pyproject.toml` dev-extras and every `skills-ci.yml` pip-install line against `tool_versions.py` (deliberately read-only on `skills-ci.yml` — see Phase 0 §1) | **yes** |
 | Docs | `AGENTS.md` — point its existing pin bullet at `scripts/tool_versions.py`; new ADR (0034 if it lands first — Phase 0 §2) documenting "drift-tested duplication, not full templating" | no |
 
-**Declined this round:** rewiring the 16 call sites to interpolate from the shared file at install
+**Declined this round:** rewiring the call sites to interpolate from the shared file at install
 time — real gain is "drift can't merge silently," which the lockstep proof already delivers;
 templating every per-skill CI job definition for marginal further benefit is an explicit optional follow-on.
 

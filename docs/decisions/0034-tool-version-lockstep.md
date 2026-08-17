@@ -5,6 +5,19 @@
 `scripts/validations/F_055.py` runs in the tier-fast validation set from the commit that
 flips F-055 to `done`.
 **Date**: 2026-08-17
+**Errata** (2026-08-17, post-acceptance — factual correction only, no change of course):
+this document's prose cites "sixteen hand-typed copies" (7 `pyproject.toml` dev extras +
+9 `skills-ci.yml` pip-install lines) throughout — accurate when written. Two later,
+independent changes each added a new per-skill CI job with its own correctly-valued pin
+(the `common` and `openspec-implementation-review` jobs), so the real count has grown past
+sixteen and will keep growing as skills are added — deliberately not restated as a new fixed
+number here, since a specific replacement figure would only go stale the same way "sixteen"
+did. `scripts/validations/F_055.py`'s enforcement is unaffected — it counts occurrences
+dynamically via regex scan and never hardcodes 16 (or any count) in its actual logic,
+confirmed by re-running it clean against every real occurrence today. The "sixteen" figure
+below is left as originally written rather than edited in place, per this repo's ADR
+convention (a factual correction is an Errata, not a rewrite of accepted prose) — read it as
+"however many hand-typed copies exist today."
 
 Related: [ADR 0009](0009-tech-debt-audit-and-compat-surface.md) (the tech-debt baseline this
 change does not regress), [ADR 0021](0021-ci-gate-delegation.md) (CI gate delegation — the
