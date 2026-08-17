@@ -3,7 +3,7 @@
 #
 # WHY THIS EXISTS. `pip install -e '.[dev]'` (CONTRIBUTING.md) installs neither the four
 # sibling packages, nor `hypothesis`, nor the optional extras. Without them the gates report
-# failures that are artifacts of the environment, not of the code. Three real examples, each
+# failures that are artifacts of the environment, not of the code. Four real examples, each
 # of which cost investigation time before being traced to a missing package:
 #
 #   symptom                                          actual cause
@@ -16,6 +16,10 @@
 #   `make check-all` dies in claude-foundation with   claude-foundation was the one package
 #     "No module named 'foundation_tools'", and         this hook did not install, and its
 #     'Library stubs not installed for "yaml"'          declared types-PyYAML came with it
+#   tests/test_braintrust_scorer.py and               `autoevals` was missing from this
+#     tests/test_matrix_eval_tools.py silently          hook's extras list even though
+#     SKIP instead of running (no failure at all,       eval-harness-ci.yml installs it —
+#     so nothing even looked wrong locally)              found by a 2026-08-17 peer review
 #
 # Idempotent and safe to re-run. Never fails the session: a sandbox without network still
 # gets a usable shell, just with the warning below.
@@ -45,7 +49,7 @@ if [ -z "${SKIP_SESSION_BOOTSTRAP:-}" ]; then
     # Every package `make check-all` recurses into must be here — claude-foundation is a
     # target like any other, and omitting it made the sweep die before reaching it.
     # `[dev]` on claude-foundation pulls its declared types-PyYAML stubs.
-    python3 -m pip install -q -e '.[dev,langfuse,openai,anthropic,archguard,parquet]' \
+    python3 -m pip install -q -e '.[dev,langfuse,openai,anthropic,archguard,parquet,autoevals]' \
       && python3 -m pip install -q -e ./agent-core -e ./flow-protocol \
                                    -e ./flow-corpus -e ./behavioral-regression \
                                    -e './claude-foundation[dev]' \
