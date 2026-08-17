@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — tool-version lockstep gate (F-054, ADR 0034)
+- **`ruff==0.15.20`/`mypy==2.1.0` are now checked, not just commented, across every copy.**
+  The pins are hand-duplicated — each carrying a "bump deliberately, in lockstep" comment
+  but no automated check — across the `dev` extra of 7 `pyproject.toml` files (root,
+  `agent-core`, `behavioral-regression`, `flow-protocol`, `flow-corpus`,
+  `claude-foundation`, `experiments/backend-validation`) and 9 `pip install` lines in
+  `.github/workflows/skills-ci.yml`'s per-skill jobs. New `scripts/tool_versions.py` is the
+  single source of truth; new `scripts/validations/F_054.py` (read-only — no installs, no
+  subprocess, no edits to `skills-ci.yml`) asserts every occurrence matches it exactly, and
+  fails if a pin is dropped entirely, not just mistyped. Full CI templating of the 9
+  install lines was considered and explicitly deferred (ADR 0034) as a separate, larger
+  follow-on. `AGENTS.md`'s existing pin bullet now points at `scripts/tool_versions.py`.
+
 ### Added — backend-validation: full Opik matrix coverage + air-gap P4 (PR #147)
 - **Air-gap phase P4 exists now (`experiments/backend-validation/`).** `make airgap` and
   `make status` invoked CLI subcommands that did not exist (argparse exit 2); no compose

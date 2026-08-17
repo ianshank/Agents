@@ -61,6 +61,12 @@ before that guard existed.
   **blocked.** Ingesting production traces back into the golden dataset. Blocked on a
   CHARTER §3 ratified amendment plus its own ADR — §3 lists "a general observability
   platform" as a non-goal — and on the three changes above.
+- [`changes/pin-lockstep-tool-versions/`](changes/pin-lockstep-tool-versions/) —
+  *implemented.* `ruff==0.15.20`/`mypy==2.1.0` were hand-duplicated across 7
+  `pyproject.toml` dev extras and 9 `skills-ci.yml` pip-install lines with a "bump in
+  lockstep" comment but no automated check. `scripts/tool_versions.py` is now the single
+  source of truth and `scripts/validations/F_054.py` (F-054) asserts every copy matches
+  it, read-only on `skills-ci.yml`. See ADR 0034.
 
 ## Archived changes
 
