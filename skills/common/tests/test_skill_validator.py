@@ -55,6 +55,12 @@ from skill_validator import (
 _SHORT_TIMEOUT = 1
 _SLEEP_CMD = 'python3 -c "import time; time.sleep(3)"'
 
+# The ordinary (non-timeout-testing) timeout budget passed to _run_eval/_exec/
+# _run_one_eval/check_behavioral everywhere else below. Every call site here is
+# expected to complete in well under a second; 10s is just a generous margin over
+# interpreter-startup overhead on a slow CI runner.
+_TIMEOUT = 10
+
 
 def _write_skill_md(skill_dir, name: str = "my-skill") -> None:
     (skill_dir / "SKILL.md").write_text(
@@ -288,16 +294,30 @@ def test_check_structural_with_non_iterable_evals_value_does_not_crash(tmp_path)
 # ---------------------------------------------------------------------------
 
 
-def test_run_eval_rewrites_bare_python3_token_to_sys_executable():
-    r = _run_eval('python3 -c "import sys; print(sys.executable)"', ".", 10)
+@pytest.mark.parametrize("token", ["python3", "python"])
+def test_run_eval_rewrites_bare_python_token_to_sys_executable(token, tmp_path, monkeypatch):
+    """Proves the *rewrite itself* fires, not just that PATH's own interpreter happens
+    to be byte-identical to ``sys.executable`` in this sandbox (both ``python3`` and
+    ``python`` on PATH here are symlinks to the very same interpreter running this
+    suite, so a mutation that broke the rewrite could otherwise still pass by
+    coincidence -- confirmed by hand: mutating the regex to drop the bare ``python``
+    alternative left the un-monkeypatched version of this test passing under
+    ``python -m pytest``, because ``sys.executable`` for a ``python``-invoked pytest
+    run already equals what unrewritten ``python`` resolves to on PATH).
+    ``sys.executable`` is monkeypatched to a fake interpreter that, unlike a real
+    python, ignores its arguments and always emits a fixed marker -- the assertion
+    below can only pass if ``_run_eval`` substituted this mocked value for the bare
+    token, causing the shell to invoke the fake interpreter directly. If the rewrite
+    doesn't fire, the shell instead resolves the literal token via PATH to the real
+    system interpreter, which executes the ``-c`` code for real and prints the genuine
+    ``sys.executable`` -- failing the assertion."""
+    fake = tmp_path / "fake-interpreter"
+    fake.write_text("#!/bin/sh\necho rewritten-to-fake-interpreter\n", encoding="utf-8")
+    fake.chmod(0o755)
+    monkeypatch.setattr(sys, "executable", str(fake))
+    r = _run_eval(f'{token} -c "import sys; print(sys.executable)"', ".", _TIMEOUT)
     assert r.returncode == 0
-    assert r.stdout.strip() == sys.executable
-
-
-def test_run_eval_rewrites_bare_python_token_to_sys_executable():
-    r = _run_eval('python -c "import sys; print(sys.executable)"', ".", 10)
-    assert r.returncode == 0
-    assert r.stdout.strip() == sys.executable
+    assert r.stdout.strip() == "rewritten-to-fake-interpreter"
 
 
 @pytest.mark.parametrize(
@@ -315,38 +335,32 @@ def test_run_eval_does_not_rewrite_non_bare_python_tokens(cmd, expected_stdout):
     real shell untouched. Proven by ``echo`` returning the literal text back: if the
     token had been (wrongly) rewritten, stdout would be a python executable path
     instead of the literal string."""
-    r = _run_eval(cmd, ".", 10)
+    r = _run_eval(cmd, ".", _TIMEOUT)
     assert r.returncode == 0
     assert r.stdout.strip() == expected_stdout
 
 
-def test_run_eval_quotes_sys_executable_path_containing_spaces(tmp_path, monkeypatch):
-    """A ``sys.executable`` with a space in its path must still work as a single
-    shell token after the rewrite -- proves the ``shlex.quote`` wrapping, not just
-    the regex substitution. A fake wrapper interpreter is placed at a
-    space-containing path and re-execs the real interpreter."""
-    wrapper_dir = tmp_path / "my python bin"
+@pytest.mark.parametrize(
+    "dirname",
+    [
+        "my python bin",
+        "py's $HOME (weird)",
+    ],
+)
+def test_run_eval_quotes_sys_executable_path_containing_spaces_and_metacharacters(dirname, tmp_path, monkeypatch):
+    """A ``sys.executable`` whose path contains spaces, or classically hard-to-quote
+    shell metacharacters (a single quote, ``$``, parentheses -- an unescaped single
+    quote inside single-quoting is a common bug), must still work as a single shell
+    token after the rewrite -- proves the ``shlex.quote`` wrapping, not just the
+    regex substitution. A fake wrapper interpreter is placed at the given path and
+    re-execs the real interpreter."""
+    wrapper_dir = tmp_path / dirname
     wrapper_dir.mkdir()
     wrapper = wrapper_dir / "python3"
     wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
     wrapper.chmod(0o755)
     monkeypatch.setattr(sys, "executable", str(wrapper))
-    r = _run_eval("python3 -c \"print('ok-from-wrapper')\"", ".", 10)
-    assert r.returncode == 0
-    assert r.stdout.strip() == "ok-from-wrapper"
-
-
-def test_run_eval_quotes_sys_executable_path_containing_shell_metacharacters(tmp_path, monkeypatch):
-    """Same proof as above, with a path containing a single quote, ``$``, and
-    parentheses -- classically the hardest characters for shell quoting to get
-    wrong (an unescaped single quote inside single-quoting is a common bug)."""
-    wrapper_dir = tmp_path / "py's $HOME (weird)"
-    wrapper_dir.mkdir()
-    wrapper = wrapper_dir / "python3"
-    wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
-    wrapper.chmod(0o755)
-    monkeypatch.setattr(sys, "executable", str(wrapper))
-    r = _run_eval("python3 -c \"print('ok-from-wrapper')\"", ".", 10)
+    r = _run_eval("python3 -c \"print('ok-from-wrapper')\"", ".", _TIMEOUT)
     assert r.returncode == 0
     assert r.stdout.strip() == "ok-from-wrapper"
 
@@ -360,7 +374,7 @@ def test_run_eval_shell_quoted_arguments_with_spaces_and_metacharacters_survive(
         'python3 -c "import sys; [print(a) for a in sys.argv[1:]]" '
         "'arg with spaces' 'arg;with;semicolons' 'arg&&with&&ampersands' 'arg$with$dollar'"
     )
-    r = _run_eval(cmd, ".", 10)
+    r = _run_eval(cmd, ".", _TIMEOUT)
     assert r.returncode == 0
     assert r.stdout.splitlines() == [
         "arg with spaces",
@@ -372,21 +386,48 @@ def test_run_eval_shell_quoted_arguments_with_spaces_and_metacharacters_survive(
 
 def test_run_eval_stdin_is_devnull_not_the_terminal():
     """Eval commands never read from the terminal: a command reading stdin must see
-    immediate EOF rather than block waiting for input."""
-    r = _run_eval('python3 -c "import sys; print(repr(sys.stdin.read()))"', ".", 10)
+    immediate EOF rather than block waiting for input, or see data meant for someone
+    else.
+
+    A naive version of this test can't tell "code explicitly redirects stdin to
+    DEVNULL" apart from "code passes no stdin= at all and just inherits the parent's,
+    which happens to already be empty in this sandbox" -- this pytest worker's own
+    fd 0 is already ``/dev/null`` here, so both scenarios look identical if the test
+    only checks for an empty read. To close that gap, this test gives *this very
+    process* a real, non-empty, pending stdin by piping bytes directly onto fd 0
+    (POSIX) before calling ``_run_eval``, then restores the original fd 0 afterward.
+    If ``_run_eval`` ever stopped passing ``stdin=subprocess.DEVNULL`` and fell back
+    to inheriting the parent's stdin, the child would see -- and echo back -- the
+    piped bytes instead of empty string, and the assertion below would fail.
+    (Verified by mutation: temporarily deleting the ``stdin=subprocess.DEVNULL`` kwarg
+    from ``_run_eval`` makes this test fail, while the old, non-fd-swapping version of
+    this test kept passing against that same mutation.)
+    """
+    marker = b"do-not-read-me-from-the-child\n"
+    read_fd, write_fd = os.pipe()
+    os.write(write_fd, marker)
+    os.close(write_fd)  # EOF follows the marker bytes on the read end
+    saved_stdin_fd = os.dup(0)
+    try:
+        os.dup2(read_fd, 0)
+        os.close(read_fd)
+        r = _run_eval('python3 -c "import sys; print(repr(sys.stdin.read()))"', ".", _TIMEOUT)
+    finally:
+        os.dup2(saved_stdin_fd, 0)
+        os.close(saved_stdin_fd)
     assert r.returncode == 0
     assert r.stdout.strip() == "''"
 
 
 def test_run_eval_runs_in_the_given_cwd(tmp_path):
     (tmp_path / "marker.txt").write_text("here", encoding="utf-8")
-    r = _run_eval("python3 -c \"import os; print(os.path.exists('marker.txt'))\"", str(tmp_path), 10)
+    r = _run_eval("python3 -c \"import os; print(os.path.exists('marker.txt'))\"", str(tmp_path), _TIMEOUT)
     assert r.returncode == 0
     assert r.stdout.strip() == "True"
 
 
 def test_run_eval_nonzero_exit_is_reported():
-    r = _run_eval('python3 -c "import sys; sys.exit(7)"', ".", 10)
+    r = _run_eval('python3 -c "import sys; sys.exit(7)"', ".", _TIMEOUT)
     assert r.returncode == 7
 
 
@@ -403,7 +444,7 @@ def test_run_eval_real_timeout_raises_timeout_expired():
 
 
 def test_exec_returns_completed_process_on_success():
-    r = _exec('python3 -c "print(1)"', ".", 10)
+    r = _exec('python3 -c "print(1)"', ".", _TIMEOUT)
     assert r is not None
     assert r.returncode == 0
 
@@ -418,57 +459,64 @@ def test_exec_returns_none_on_real_timeout():
 
 
 def test_grade_exit_zero_pass_fail_and_no_run():
-    assert grade_exit_zero({}, 0, "", True, ".", 10)[0] is True
-    assert grade_exit_zero({}, 1, "", True, ".", 10)[0] is False
-    assert grade_exit_zero({}, 0, "", False, ".", 10)[0] is False
+    assert grade_exit_zero({}, 0, "", True, ".", _TIMEOUT)[0] is True
+    assert grade_exit_zero({}, 1, "", True, ".", _TIMEOUT)[0] is False
+    assert grade_exit_zero({}, 0, "", False, ".", _TIMEOUT)[0] is False
 
 
 def test_grade_exit_nonzero_pass_fail_and_no_run():
-    assert grade_exit_nonzero({}, 1, "", True, ".", 10)[0] is True
-    assert grade_exit_nonzero({}, 0, "", True, ".", 10)[0] is False
-    assert grade_exit_nonzero({}, 1, "", False, ".", 10)[0] is False
+    assert grade_exit_nonzero({}, 1, "", True, ".", _TIMEOUT)[0] is True
+    assert grade_exit_nonzero({}, 0, "", True, ".", _TIMEOUT)[0] is False
+    assert grade_exit_nonzero({}, 1, "", False, ".", _TIMEOUT)[0] is False
 
 
 def test_grade_output_contains_pass_fail_and_no_run():
-    assert grade_output_contains({"contains": "hi"}, 0, "hi there", True, ".", 10)[0] is True
-    assert grade_output_contains({"contains": "nope"}, 0, "hi there", True, ".", 10)[0] is False
-    passed, evidence = grade_output_contains({"contains": "hi"}, 0, "", False, ".", 10)
+    assert grade_output_contains({"contains": "hi"}, 0, "hi there", True, ".", _TIMEOUT)[0] is True
+    assert grade_output_contains({"contains": "nope"}, 0, "hi there", True, ".", _TIMEOUT)[0] is False
+    passed, evidence = grade_output_contains({"contains": "hi"}, 0, "", False, ".", _TIMEOUT)
     assert passed is False
     assert "no 'run'" in evidence
 
 
 def test_grade_file_contains_pass_fail_and_missing_file(tmp_path):
     (tmp_path / "test.txt").write_text("custom content", encoding="utf-8")
-    assert grade_file_contains({"path": "test.txt", "contains": "custom"}, 0, "", True, str(tmp_path), 10)[0] is True
-    assert grade_file_contains({"path": "test.txt", "contains": "absent"}, 0, "", True, str(tmp_path), 10)[0] is False
-    passed, evidence = grade_file_contains({"path": "missing.txt", "contains": "x"}, 0, "", True, str(tmp_path), 10)
+    assert (
+        grade_file_contains({"path": "test.txt", "contains": "custom"}, 0, "", True, str(tmp_path), _TIMEOUT)[0] is True
+    )
+    assert (
+        grade_file_contains({"path": "test.txt", "contains": "absent"}, 0, "", True, str(tmp_path), _TIMEOUT)[0]
+        is False
+    )
+    passed, evidence = grade_file_contains(
+        {"path": "missing.txt", "contains": "x"}, 0, "", True, str(tmp_path), _TIMEOUT
+    )
     assert passed is False
     assert "cannot read" in evidence
 
 
 def test_grade_idempotent_matching_second_run_passes():
-    r = grade_idempotent({}, 0, "hello\n", True, ".", 10, run_cmd="python3 -c \"print('hello')\"")
+    r = grade_idempotent({}, 0, "hello\n", True, ".", _TIMEOUT, run_cmd="python3 -c \"print('hello')\"")
     assert r[0] is True
 
 
 def test_grade_idempotent_mismatched_second_run_fails():
-    r = grade_idempotent({}, 0, "hello\n", True, ".", 10, run_cmd="python3 -c \"print('different')\"")
+    r = grade_idempotent({}, 0, "hello\n", True, ".", _TIMEOUT, run_cmd="python3 -c \"print('different')\"")
     assert r[0] is False
     assert "mismatch" in r[1]
 
 
 def test_grade_idempotent_second_run_nonzero_exit_fails():
-    r = grade_idempotent({}, 0, "", True, ".", 10, run_cmd='python3 -c "import sys; sys.exit(1)"')
+    r = grade_idempotent({}, 0, "", True, ".", _TIMEOUT, run_cmd='python3 -c "import sys; sys.exit(1)"')
     assert r[0] is False
     assert "second run failed" in r[1]
 
 
 def test_grade_idempotent_no_run_fails():
-    assert grade_idempotent({}, 0, "", False, ".", 10)[0] is False
+    assert grade_idempotent({}, 0, "", False, ".", _TIMEOUT)[0] is False
 
 
 def test_grade_idempotent_missing_run_cmd_fails():
-    passed, evidence = grade_idempotent({}, 0, "", True, ".", 10, run_cmd=None)
+    passed, evidence = grade_idempotent({}, 0, "", True, ".", _TIMEOUT, run_cmd=None)
     assert passed is False
     assert "run command is missing" in evidence
 
@@ -480,8 +528,8 @@ def test_grade_idempotent_real_timeout_on_second_run_fails():
 
 
 def test_grade_command_exit_zero_pass_and_fail():
-    assert grade_command_exit_zero({"cmd": 'python3 -c "exit(0)"'}, 0, "", True, ".", 10)[0] is True
-    assert grade_command_exit_zero({"cmd": 'python3 -c "exit(1)"'}, 0, "", True, ".", 10)[0] is False
+    assert grade_command_exit_zero({"cmd": 'python3 -c "exit(0)"'}, 0, "", True, ".", _TIMEOUT)[0] is True
+    assert grade_command_exit_zero({"cmd": 'python3 -c "exit(1)"'}, 0, "", True, ".", _TIMEOUT)[0] is False
 
 
 def test_grade_command_exit_zero_real_timeout_fails():
@@ -494,14 +542,14 @@ def test_grade_file_exists_when_present(tmp_path):
     """Confirmed gap: grade_file_exists had no dedicated test anywhere before this
     file (only incidental line execution as a side effect of an unrelated test)."""
     (tmp_path / "present.txt").write_text("x", encoding="utf-8")
-    passed, evidence = grade_file_exists({"path": "present.txt"}, 0, "", True, str(tmp_path), 10)
+    passed, evidence = grade_file_exists({"path": "present.txt"}, 0, "", True, str(tmp_path), _TIMEOUT)
     assert passed is True
     assert "exists" in evidence
     assert "present.txt" in evidence
 
 
 def test_grade_file_exists_when_absent(tmp_path):
-    passed, evidence = grade_file_exists({"path": "absent.txt"}, 0, "", True, str(tmp_path), 10)
+    passed, evidence = grade_file_exists({"path": "absent.txt"}, 0, "", True, str(tmp_path), _TIMEOUT)
     assert passed is False
     assert "absent" in evidence
     assert "absent.txt" in evidence
@@ -511,7 +559,7 @@ def test_grade_file_exists_resolves_relative_to_skill_dir_not_cwd(tmp_path):
     sub = tmp_path / "sub" / "dir"
     sub.mkdir(parents=True)
     (sub / "nested.txt").write_text("x", encoding="utf-8")
-    passed, _evidence = grade_file_exists({"path": "sub/dir/nested.txt"}, 0, "", True, str(tmp_path), 10)
+    passed, _evidence = grade_file_exists({"path": "sub/dir/nested.txt"}, 0, "", True, str(tmp_path), _TIMEOUT)
     assert passed is True
 
 
@@ -524,26 +572,26 @@ def test_grade_file_exists_path_traversal_is_not_sandboxed(tmp_path):
     skill_dir = tmp_path / "skill"
     skill_dir.mkdir()
     (tmp_path / "outside.txt").write_text("secret", encoding="utf-8")
-    passed, evidence = grade_file_exists({"path": "../outside.txt"}, 0, "", True, str(skill_dir), 10)
+    passed, evidence = grade_file_exists({"path": "../outside.txt"}, 0, "", True, str(skill_dir), _TIMEOUT)
     assert passed is True
     assert "exists" in evidence
 
 
 def test_grade_unknown_assertion_type_fails_with_readable_evidence():
-    result = grade({"type": "not_a_real_type"}, 0, "", True, ".", 10)
+    result = grade({"type": "not_a_real_type"}, 0, "", True, ".", _TIMEOUT)
     assert result["passed"] is False
     assert "unknown assertion type" in result["evidence"]
     assert "not_a_real_type" in result["evidence"]
 
 
 def test_grade_uses_text_field_as_label_when_present():
-    result = grade({"type": "exit_zero", "text": "custom label"}, 0, "", True, ".", 10)
+    result = grade({"type": "exit_zero", "text": "custom label"}, 0, "", True, ".", _TIMEOUT)
     assert result["text"] == "custom label"
     assert result["passed"] is True
 
 
 def test_grade_falls_back_to_type_as_label_when_text_absent():
-    result = grade({"type": "exit_zero"}, 0, "", True, ".", 10)
+    result = grade({"type": "exit_zero"}, 0, "", True, ".", _TIMEOUT)
     assert result["text"] == "exit_zero"
 
 
@@ -599,7 +647,7 @@ def test_run_one_eval_setup_succeeds_then_run_executes(tmp_path):
         "run": "python3 -c \"print('done')\"",
         "assertions": [{"type": "exit_zero"}],
     }
-    record = _run_one_eval(ev, str(tmp_path), 10, errs)
+    record = _run_one_eval(ev, str(tmp_path), _TIMEOUT, errs)
     assert record is not None
     assert errs == []
     assert record["expectations"][0]["passed"] is True
@@ -613,7 +661,7 @@ def test_run_one_eval_setup_failure_is_recorded_and_skips_run(tmp_path):
         "run": "python3 -c \"print('should not run')\"",
         "assertions": [{"type": "exit_zero"}],
     }
-    record = _run_one_eval(ev, str(tmp_path), 10, errs)
+    record = _run_one_eval(ev, str(tmp_path), _TIMEOUT, errs)
     assert record is None
     assert any("setup failed (exit 3)" in e for e in errs)
 
@@ -632,7 +680,7 @@ def test_run_one_eval_command_exit_zero_only_skips_the_run_step(tmp_path):
     ever entering the ``has_run`` branch that drives ``run_rc``/``run_out``."""
     errs: list[str] = []
     ev = {"id": "e1", "assertions": [{"type": "command_exit_zero", "cmd": 'python3 -c "exit(0)"'}]}
-    record = _run_one_eval(ev, str(tmp_path), 10, errs)
+    record = _run_one_eval(ev, str(tmp_path), _TIMEOUT, errs)
     assert record is not None
     assert errs == []
     assert record["expectations"][0]["passed"] is True
@@ -663,7 +711,7 @@ def test_check_behavioral_end_to_end_writes_grading_json(tmp_path):
         ),
         encoding="utf-8",
     )
-    errs = check_behavioral(str(tmp_path), "evals.json", 10)
+    errs = check_behavioral(str(tmp_path), "evals.json", _TIMEOUT)
     assert errs == []
     grading = tmp_path / ".skill-validation" / "grading.json"
     assert grading.is_file()
@@ -672,7 +720,7 @@ def test_check_behavioral_end_to_end_writes_grading_json(tmp_path):
 
 
 def test_check_behavioral_missing_evals_file_is_a_readable_error(tmp_path):
-    errs = check_behavioral(str(tmp_path), "evals.json", 10)
+    errs = check_behavioral(str(tmp_path), "evals.json", _TIMEOUT)
     assert any("needs a parseable" in e for e in errs)
 
 
@@ -689,7 +737,7 @@ def test_check_behavioral_non_dict_eval_entries_are_ignored(tmp_path):
         ),
         encoding="utf-8",
     )
-    errs = check_behavioral(str(tmp_path), "evals.json", 10)  # must not raise on the string entry
+    errs = check_behavioral(str(tmp_path), "evals.json", _TIMEOUT)  # must not raise on the string entry
     assert errs == []
 
 
@@ -706,7 +754,7 @@ def test_check_behavioral_skips_evals_with_no_assertions_but_continues(tmp_path)
         ),
         encoding="utf-8",
     )
-    errs = check_behavioral(str(tmp_path), "evals.json", 10)
+    errs = check_behavioral(str(tmp_path), "evals.json", _TIMEOUT)
     assert any("no-asserts" in e and "no assertions" in e for e in errs)
     grading = json.loads((tmp_path / ".skill-validation" / "grading.json").read_text(encoding="utf-8"))
     assert [r["eval_id"] for r in grading["results"]] == ["real"]
