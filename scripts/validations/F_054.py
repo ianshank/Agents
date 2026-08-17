@@ -9,7 +9,7 @@ A missed bump in any one location silently drifts: green locally, red (or worse,
 silently different) in CI. This asserts every occurrence of a ``ruff==``/``mypy==``
 pin in those 8 files matches ``scripts/tool_versions.py`` exactly, and that every file
 still carries at least one pin of each (a pin quietly dropped entirely — e.g. loosened
-to ``ruff>=``  — is the same drift failure by another shape, so absence is a failure
+to ``ruff>=`` — is the same drift failure by another shape, so absence is a failure
 too, not a vacuous pass; see ADR 0034 "Consequences").
 
 Deliberately read-only: reads the text of the 7 ``pyproject.toml`` files plus
