@@ -43,9 +43,19 @@ logger = logging.getLogger("repo-invariant-review")
 
 
 def _configure_logging(verbose: bool = False) -> None:
-    """Configure root logging for CLI."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(level=level, format="%(levelname)-8s %(name)s: %(message)s")
+    """Configure root logging for CLI.
+
+    Deliberately a local copy, not an import from scripts/_cli.py or skills/common —
+    this skill is self-contained/vendorable by design (ADR 0009). Kept identical to its
+    4 sibling copies (skills/quality-gate/scripts/gen_gate.py,
+    skills/deploy/scripts/gen_deploy.py, skills/project-setup/scripts/gen_makefile.py,
+    and this skill's own build_fixture.py; ADR 0034) so the duplication doesn't
+    silently drift into 5 different behaviors. Previously defaulted to INFO with a
+    differently-padded format string; this module has no logger.info(...) calls (only
+    debug/warning), so standardizing to WARNING is a no-op for actual output here.
+    """
+    level = logging.DEBUG if verbose else logging.WARNING
+    logging.basicConfig(level=level, format="%(levelname)s %(name)s: %(message)s")
 
 
 #: Hard ceiling enforced by ``scripts/check_size_budget.py``. Single-sourced from that
