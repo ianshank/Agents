@@ -14,9 +14,9 @@ claude plugin validate .              # official plugin structure checker
 bash tests/smoke/install_smoke.sh     # install smoke test (--plugin-dir fast path)
 ```
 
-Release gate (before tagging, also nightly): `python -m foundation_tools.eval_gate`
-plus `python -m foundation_tools.backwards_compat` (ADR 0004). Behavioral evals never
-gate merges.
+Release gate (run on-demand before tagging, not on a schedule): `python -m
+foundation_tools.eval_gate` plus `python -m foundation_tools.backwards_compat`
+(ADR 0004). Behavioral evals never gate merges.
 
 After applying a skill/agent/hook removal or rename and bumping the major version,
 run `python -m foundation_tools.backwards_compat --root . --update` and commit the
@@ -54,7 +54,9 @@ but does not block on it.
 ## Known Limitations
 
 - Behavioral skill evals are non-deterministic and require Anthropic API access and
-  credits; they run in the release gate (and nightly), never per-PR.
+  credits; they run only in the on-demand release gate above, never per-PR and never
+  on a schedule (no nightly run exists — see the 2026-08-17 peer review note in
+  ADR 0034 in the parent Agents repo if a real nightly run is ever added).
 - Hooks assume a POSIX environment, or Windows with Python 3.11+ on `PATH`; hook
   scripts are stdlib-only by design (ADR 0003).
 
