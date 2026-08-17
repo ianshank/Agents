@@ -1,41 +1,37 @@
 #!/usr/bin/env python3
 """Validation script for Feature F-005: Langfuse Tracing Integration."""
 
+from __future__ import annotations
+
+import logging
 import os
-import subprocess
 import sys
+from pathlib import Path
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from _common import configure_logging, run_subprocess_check
+
+logger = logging.getLogger(__name__)
 
 
 def validate_f005() -> bool:
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    test_file = os.path.join(project_root, "tests", "test_langfuse_integration.py")
+    project_root = Path(__file__).resolve().parent.parent.parent
+    test_file = project_root / "tests" / "test_langfuse_integration.py"
 
-    if not os.path.isfile(test_file):
-        print(f"FAIL: test_langfuse_integration.py not found at {test_file}")
+    if not test_file.is_file():
+        logger.error("FAIL: test_langfuse_integration.py not found at %s", test_file)
         return False
 
-    cmd = [sys.executable, "-m", "pytest", test_file, "-v"]
+    cmd = [sys.executable, "-m", "pytest", str(test_file), "-v"]
+    return run_subprocess_check(cmd, cwd=project_root, timeout=60, label="F-005 validation")
 
-    print(f"Running command: {' '.join(cmd)}")
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
-        print("STDOUT:")
-        print(res.stdout)
-        print("STDERR:")
-        print(res.stderr)
 
-        if res.returncode == 0:
-            print("OK: F-005 validation passed.")
-            return True
-        else:
-            print(f"FAIL: pytest exited with code {res.returncode}")
-            return False
-    except Exception as e:
-        print(f"FAIL: Validation script crashed: {e}")
-        return False
+def main() -> int:
+    configure_logging()
+    return 0 if validate_f005() else 1
 
 
 if __name__ == "__main__":
-    if not validate_f005():
-        sys.exit(1)
-    sys.exit(0)
+    sys.exit(main())

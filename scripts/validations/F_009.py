@@ -7,9 +7,19 @@ Checks three things, all deterministic:
   3. The dogfood freshness gate passes (committed architecture.mmd is current).
 """
 
+from __future__ import annotations
+
+import logging
 import os
 import subprocess
 import sys
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from _common import configure_logging
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SKILL_DIR = os.path.join(PROJECT_ROOT, "skills", "architecture-drift-guard")
@@ -19,17 +29,8 @@ MANIFEST = os.path.join(PROJECT_ROOT, "architecture.yaml")
 DIAGRAM = os.path.join(PROJECT_ROOT, "architecture.mmd")
 
 
-def _safe_print(text: str) -> None:
-    if not text:
-        return
-    try:
-        print(text)
-    except UnicodeEncodeError:
-        sys.stdout.buffer.write((text + "\n").encode("utf-8", errors="replace"))
-
-
 def _run(cmd: list[str], *, cwd: str) -> bool:
-    _safe_print(f"Running: {' '.join(cmd)} (cwd={cwd})")
+    logger.info("Running: %s (cwd=%s)", " ".join(cmd), cwd)
     try:
         res = subprocess.run(
             cmd,
@@ -41,12 +42,14 @@ def _run(cmd: list[str], *, cwd: str) -> bool:
             timeout=180,
         )
     except Exception as exc:  # pragma: no cover - defensive
-        _safe_print(f"FAIL: command crashed: {exc}")
+        logger.error("FAIL: command crashed: %s", exc)
         return False
-    _safe_print(res.stdout)
+    if res.stdout:
+        logger.info(res.stdout)
     if res.returncode != 0:
-        _safe_print(res.stderr)
-        _safe_print(f"FAIL: exited {res.returncode}")
+        if res.stderr:
+            logger.error(res.stderr)
+        logger.error("FAIL: exited %d", res.returncode)
         return False
     return True
 
@@ -55,7 +58,7 @@ def validate_f009() -> bool:
     val_script = os.path.join(SKILL_DIR, "scripts", "validate_skill.py")
     for path in (val_script, DRIFT_CHECK, MERMAID_GEN, MANIFEST, DIAGRAM):
         if not os.path.exists(path):
-            print(f"FAIL: required path missing: {path}")
+            logger.error("FAIL: required path missing: %s", path)
             return False
 
     # 1. Skill self-check (run from the skill dir, like F_004).
@@ -76,9 +79,14 @@ def validate_f009() -> bool:
     ):
         return False
 
-    print("OK: F-009 validation passed.")
+    logger.info("OK: F-009 validation passed.")
     return True
 
 
+def main() -> int:
+    configure_logging()
+    return 0 if validate_f009() else 1
+
+
 if __name__ == "__main__":
-    sys.exit(0 if validate_f009() else 1)
+    sys.exit(main())

@@ -13,9 +13,19 @@ Deterministic and offline. Asserts the Phase-1 exit gates:
      (co-determinate pairs only, power-aware).
 """
 
+from __future__ import annotations
+
+import logging
 import os
 import random
 import sys
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from _common import configure_logging
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 for rel in ("flow-protocol", "flow-corpus", "agent-core"):
@@ -93,11 +103,16 @@ def validate_f013() -> bool:
 
     ok = True
     for name, passed in checks.items():
-        print(f"  [{'PASS' if passed else 'FAIL'}] {name}")
+        (logger.info if passed else logger.error)("  [%s] %s", "PASS" if passed else "FAIL", name)
         ok = ok and passed
-    print("OK: F-013 validation passed." if ok else "FAIL: F-013 validation failed.")
+    (logger.info if ok else logger.error)("OK: F-013 validation passed." if ok else "FAIL: F-013 validation failed.")
     return ok
 
 
+def main() -> int:
+    configure_logging()
+    return 0 if validate_f013() else 1
+
+
 if __name__ == "__main__":
-    sys.exit(0 if validate_f013() else 1)
+    sys.exit(main())

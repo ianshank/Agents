@@ -8,8 +8,18 @@ ESCALATE, the happy path AUTO_MERGEs, the exit-code contract is complete, and
 protected auto-merge is off by default.
 """
 
+from __future__ import annotations
+
+import logging
 import os
 import sys
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from _common import configure_logging
+
+logger = logging.getLogger(__name__)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "agent-core"))
@@ -84,14 +94,19 @@ def validate_f010() -> bool:
     }
     ok = True
     for name, passed in checks.items():
-        print(f"  [{'PASS' if passed else 'FAIL'}] {name}")
+        (logger.info if passed else logger.error)("  [%s] %s", "PASS" if passed else "FAIL", name)
         ok = ok and passed
     if ok:
-        print("OK: F-010 validation passed.")
+        logger.info("OK: F-010 validation passed.")
     else:
-        print("FAIL: F-010 validation failed.")
+        logger.error("FAIL: F-010 validation failed.")
     return ok
 
 
+def main() -> int:
+    configure_logging()
+    return 0 if validate_f010() else 1
+
+
 if __name__ == "__main__":
-    sys.exit(0 if validate_f010() else 1)
+    sys.exit(main())

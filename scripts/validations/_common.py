@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
+from pathlib import Path
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _SCRIPTS = os.path.dirname(_HERE)
@@ -20,7 +22,7 @@ if _SCRIPTS not in sys.path:
 
 from _cli import configure_logging
 
-__all__ = ["check", "ci_enforces", "configure_logging", "delegates_to_gate", "report"]
+__all__ = ["check", "ci_enforces", "configure_logging", "delegates_to_gate", "report", "run_subprocess_check"]
 
 _logger = logging.getLogger("validations")
 
@@ -75,3 +77,37 @@ def report(logger: logging.Logger, label: str, errors: list[str]) -> int:
         return 1
     logger.info("%s passed", label)
     return 0
+
+
+def run_subprocess_check(cmd: list[str], *, cwd: Path, timeout: int, label: str) -> bool:
+    """Run *cmd*, log its output, and report pass/fail by exit code.
+
+    Shared by the F_0NN validators that shell out to run a test file or another script
+    and check its exit code -- F_004..F_008 each hand-duplicated this shape (subprocess
+    invocation, stdout/stderr logging, exit-code check, and a crash/timeout guard) before
+    this existed, with two independently-drifted variants (one dropped the crash guard,
+    the other dropped the explicit UTF-8 decoding).
+    """
+    _logger.info("Running: %s", " ".join(cmd))
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        _logger.error("FAIL: %s crashed: %s", label, exc)
+        return False
+    if result.stdout:
+        _logger.info(result.stdout)
+    if result.stderr:
+        _logger.info(result.stderr)
+    if result.returncode != 0:
+        _logger.error("FAIL: %s exited with code %d", label, result.returncode)
+        return False
+    _logger.info("OK: %s passed", label)
+    return True
