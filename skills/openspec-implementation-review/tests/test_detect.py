@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from implreview.detect import PLUGIN_ROOT_ENV_VAR, detect_dispatch_path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -76,11 +77,23 @@ def test_env_var_pointing_at_a_nonexistent_path_does_not_crash(tmp_path: Path) -
 
 
 def test_env_var_pointing_at_a_symlink_loop_does_not_crash(tmp_path: Path) -> None:
-    # A real OSError (ELOOP) from Path.resolve(), not a monkeypatch -- exercises the actual
-    # defensive `except OSError` branch in _env_signals_plugin_loaded with a genuine failure.
+    # A real Path.resolve() failure on a self-referencing symlink, not a monkeypatch --
+    # exercises _env_signals_plugin_loaded's defensive handling with a genuine failure.
+    # Which of its two except clauses fires is platform/Python-version dependent (this
+    # sandbox raises RuntimeError: "Symlink loop"; POSIX ELOOP as OSError is also real on
+    # other platforms) -- both are caught, and this test asserts the resulting behavior,
+    # not which branch ran.
     _make_fake_foundation(tmp_path)
     loop = tmp_path / "self-loop"
-    loop.symlink_to(loop)
+    try:
+        loop.symlink_to(loop)
+    except OSError as exc:
+        # Probe, don't assume: non-elevated Windows needs Administrator or Developer Mode
+        # to create symlinks at all (WinError 1314). This test's actual target is
+        # resolve()'s ELOOP/RuntimeError handling, not symlink creation -- a host that
+        # can't build the fixture skips this one test rather than failing the whole suite
+        # (AGENTS.md "Windows / cross-platform gotchas": known trap, not a real failure).
+        pytest.skip(f"platform cannot create symlinks (fixture setup, not the code under test): {exc!r}")
     detection = detect_dispatch_path(tmp_path, environ={PLUGIN_ROOT_ENV_VAR: str(loop)})
     assert detection.env_signals_plugin_loaded is False
     assert detection.recommended_path == "degraded"

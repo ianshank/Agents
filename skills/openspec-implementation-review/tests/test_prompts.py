@@ -29,6 +29,55 @@ def _change(tmp_path: Path, change_id: str = "add-openspec-implementation-review
     )
 
 
+class _BackslashPath:
+    """Stands in for a Path whose str() and as_posix() genuinely diverge.
+
+    On this (POSIX) test host, a real Path's str() and as_posix() are already identical --
+    the bug Copilot's review caught (AGENTS.md "Windows / cross-platform gotchas": emit
+    paths via .as_posix(), never str()) is invisible to a same-output-either-way assertion
+    here. This stand-in makes the two diverge on purpose (distinct per instance, via
+    ``tag``) so the test actually distinguishes "calls .as_posix()" from "calls str() and
+    got lucky", the way a real WindowsPath would, and can tell change_dir's rendering
+    apart from review_path's in the same prompt.
+    """
+
+    def __init__(self, tag: str) -> None:
+        self._tag = tag
+
+    def __str__(self) -> str:
+        return f"C:\\fake\\{self._tag}\\backslash-form"
+
+    def as_posix(self) -> str:
+        return f"C:/fake/{self._tag}/posix-form"
+
+
+def test_prompts_use_as_posix_not_str_for_paths(tmp_path: Path) -> None:
+    change = _change(tmp_path)
+    fake_change_dir = _BackslashPath("change-dir")
+    fake_review_path = _BackslashPath("review-path")
+    change = ChangeLocation(
+        change_id=change.change_id,
+        change_dir=fake_change_dir,  # type: ignore[arg-type]
+        inferred=change.inferred,
+        inferred_from=change.inferred_from,
+        tasks_status=change.tasks_status,
+        review_path=fake_review_path,  # type: ignore[arg-type]
+        review_exists=change.review_exists,
+    )
+
+    spec_guardian = build_spec_guardian_prompt(change, "deadbeef")
+    assert "C:/fake/change-dir/posix-form" in spec_guardian.prompt
+    assert "backslash-form" not in spec_guardian.prompt
+
+    for dispatch in (
+        build_peer_reviewer_prompt(change, "deadbeef"),
+        build_degraded_prompt(change, "deadbeef"),
+    ):
+        assert "C:/fake/change-dir/posix-form" in dispatch.prompt, dispatch.subagent_type
+        assert "C:/fake/review-path/posix-form" in dispatch.prompt, dispatch.subagent_type
+        assert "backslash-form" not in dispatch.prompt, dispatch.subagent_type
+
+
 def test_spec_guardian_prompt_names_the_target(tmp_path: Path) -> None:
     change = _change(tmp_path)
     dispatch = build_spec_guardian_prompt(change, "deadbeef")

@@ -105,13 +105,20 @@ class DispatchPlan:
 
 
 def _review_path_str(change: ChangeLocation) -> str:
-    return str(change.review_path)
+    # .as_posix(), not str(): prompt text must be deterministic across platforms
+    # (AGENTS.md "Windows / cross-platform gotchas" -- str(Path) emits backslashes on
+    # Windows, which would make the same change produce a different prompt per host).
+    return change.review_path.as_posix()
+
+
+def _change_dir_str(change: ChangeLocation) -> str:
+    return change.change_dir.as_posix()
 
 
 def build_spec_guardian_prompt(change: ChangeLocation, tree_sha: str) -> DispatchPrompt:
     """Prompt for the ``spec-guardian`` charter (plugin path, pass 1 of the review loop)."""
     prompt = (
-        _TASK_PRELUDE.format(change_dir=change.change_dir, change_id=change.change_id, tree_sha=tree_sha)
+        _TASK_PRELUDE.format(change_dir=_change_dir_str(change), change_id=change.change_id, tree_sha=tree_sha)
         + "\nApply your standard conformance-review procedure (see your own frontmatter/body) "
         "to this change: does the implementation still match what proposal.md/design.md/"
         "tasks.md/specs/ say it does? Report `Verdict: conforms` or `Verdict: drift` first, "
@@ -132,7 +139,7 @@ def build_peer_reviewer_prompt(
         else ""
     )
     prompt = (
-        _TASK_PRELUDE.format(change_dir=change.change_dir, change_id=change.change_id, tree_sha=tree_sha)
+        _TASK_PRELUDE.format(change_dir=_change_dir_str(change), change_id=change.change_id, tree_sha=tree_sha)
         + handoff
         + "\nApply your standard two-pass procedure (see your own frontmatter/body): pass 1 "
         "mechanically fact-checks every falsifiable claim (CONFIRMED/CORRECTED/REFUTED with "
@@ -200,7 +207,9 @@ it and writes the file via this skill's own `compose` step, exactly once.
         precedent2=SECOND_PRECEDENT_REVIEW,
         review_path=_review_path_str(change),
     )
-    prompt += "\n" + _TASK_PRELUDE.format(change_dir=change.change_dir, change_id=change.change_id, tree_sha=tree_sha)
+    prompt += "\n" + _TASK_PRELUDE.format(
+        change_dir=_change_dir_str(change), change_id=change.change_id, tree_sha=tree_sha
+    )
     prompt += "\n" + _OUTPUT_SHAPE.format(
         review_path=_review_path_str(change),
         precedent=PRECEDENT_REVIEW,
