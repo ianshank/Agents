@@ -110,32 +110,49 @@ class BRConfig:
         Each guard delegates to a reusable validator (``_require_positive`` /
         ``_require_at_least`` / ``_require_in_range``) so the check stays a flat,
         low-complexity sequence and the interval error messages are generated
-        rather than hand-duplicated.
+        rather than hand-duplicated. The shared ``flow_corpus`` validators raise
+        plain ``ValueError``; translated to ``ConfigError`` here so this module's
+        public contract (every invalid ``BRConfig`` raises ``ConfigError``) holds
+        regardless of which package the check itself lives in. ``ConfigError`` is
+        a ``ValueError`` subclass, so callers catching the broader type still work.
         """
-        _require_positive("n_pairs", self.n_pairs)
-        _require_in_range("v1_sycophancy_mean", self.v1_sycophancy_mean, 0, 1)
-        _require_in_range("v2_sycophancy_mean", self.v2_sycophancy_mean, 0, 1)
-        _require_positive("dist_sigma", self.dist_sigma)
-        _require_positive("injected_shift", self.injected_shift)
-        _require_in_range("judge_noise", self.judge_noise, 0, 1, hi_inclusive=False)
-        _require_in_range("judge_bias", self.judge_bias, -1, 1)
-        _require_in_range(
-            "judge_indeterminate_band", self.judge_indeterminate_band, 0, 1, hi_inclusive=False
-        )
-        _require_in_range("min_judge_kappa", self.min_judge_kappa, 0, 1)
-        _require_positive("power_min_sample", self.power_min_sample)
-        _require_at_least("n_bins", self.n_bins, 1)
-        _require_positive("wilson_z", self.wilson_z)
-        _require_at_least("bootstrap_resamples", self.bootstrap_resamples, 1)
-        _require_in_range(
-            "bootstrap_alpha", self.bootstrap_alpha, 0, 1, lo_inclusive=False, hi_inclusive=False
-        )
-        _require_in_range("max_brier_reliability", self.max_brier_reliability, 0, 1)
-        _require_in_range(
-            "ship_risk_target", self.ship_risk_target, 0, 1, lo_inclusive=False, hi_inclusive=False
-        )
-        _require_positive("min_canary_margin", self.min_canary_margin)
-        _require_in_range("sycophancy_label_threshold", self.sycophancy_label_threshold, 0, 1)
+        try:
+            _require_positive("n_pairs", self.n_pairs)
+            _require_in_range("v1_sycophancy_mean", self.v1_sycophancy_mean, 0, 1)
+            _require_in_range("v2_sycophancy_mean", self.v2_sycophancy_mean, 0, 1)
+            _require_positive("dist_sigma", self.dist_sigma)
+            _require_positive("injected_shift", self.injected_shift)
+            _require_in_range("judge_noise", self.judge_noise, 0, 1, hi_inclusive=False)
+            _require_in_range("judge_bias", self.judge_bias, -1, 1)
+            _require_in_range(
+                "judge_indeterminate_band", self.judge_indeterminate_band, 0, 1, hi_inclusive=False
+            )
+            _require_in_range("min_judge_kappa", self.min_judge_kappa, 0, 1)
+            _require_positive("power_min_sample", self.power_min_sample)
+            _require_at_least("n_bins", self.n_bins, 1)
+            _require_positive("wilson_z", self.wilson_z)
+            _require_at_least("bootstrap_resamples", self.bootstrap_resamples, 1)
+            _require_in_range(
+                "bootstrap_alpha",
+                self.bootstrap_alpha,
+                0,
+                1,
+                lo_inclusive=False,
+                hi_inclusive=False,
+            )
+            _require_in_range("max_brier_reliability", self.max_brier_reliability, 0, 1)
+            _require_in_range(
+                "ship_risk_target",
+                self.ship_risk_target,
+                0,
+                1,
+                lo_inclusive=False,
+                hi_inclusive=False,
+            )
+            _require_positive("min_canary_margin", self.min_canary_margin)
+            _require_in_range("sycophancy_label_threshold", self.sycophancy_label_threshold, 0, 1)
+        except ValueError as exc:
+            raise ConfigError(str(exc)) from exc
 
     def as_corpus_config(self) -> CorpusConfig:
         """Build a ``CorpusConfig`` carrying the fields the reused flow_corpus
