@@ -2,6 +2,8 @@
   "components": {
     "agents": [
       "explorer",
+      "peer-reviewer",
+      "spec-guardian",
       "test-runner"
     ],
     "hooks": [
