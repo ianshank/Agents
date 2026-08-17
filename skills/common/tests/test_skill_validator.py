@@ -264,6 +264,23 @@ def test_check_structural_with_non_list_evals_value_does_not_crash(tmp_path):
     assert errs == []
 
 
+def test_check_structural_with_non_iterable_evals_value_does_not_crash(tmp_path):
+    # A string ``evals`` value (see the test above) happens to be iterable, so a list
+    # comprehension over it would also silently yield [] even without the isinstance
+    # guard -- that case alone can't tell "guarded" apart from "unguarded but lucky".
+    # None (JSON null) is not iterable at all: without _eval_entries's isinstance
+    # check, `for ev in evals` raises TypeError. This is the case that actually
+    # proves the guard, not just the fallback behavior it produces.
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    _write_skill_md(skill_dir)
+    evals_dir = skill_dir / "evals"
+    evals_dir.mkdir()
+    (evals_dir / "evals.json").write_text(json.dumps({"evals": None}), encoding="utf-8")
+    errs, _warns = check_structural(str(skill_dir), "evals/evals.json")  # must not raise
+    assert errs == []
+
+
 # ---------------------------------------------------------------------------
 # _run_eval: real subprocess mechanics (no monkeypatching -- these invoke the
 # actual interpreter through a real ``shell=True`` subprocess, as the brief for

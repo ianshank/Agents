@@ -317,8 +317,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
-      # TODO(tool_versions): scripts/tool_versions.py (RUFF_VERSION/MYPY_VERSION) lands via a
-      # parallel phase; switch this pin to its constants once that phase merges into this branch.
+      # Pin text asserted against scripts/tool_versions.py by scripts/validations/F_055.py
+      # (same convention as every other skill job's install line below).
       - run: pip install pytest pytest-cov "pyyaml>=6" "ruff==0.15.20" "mypy==2.1.0"
       # skill_validator.py is the grading engine every other skill's vendored
       # validate_skill.py imports from (frontmatter parsing, eval-assertion grading,

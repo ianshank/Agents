@@ -122,7 +122,7 @@ python scripts/validations/F_050.py
 python -m pytest tests/test_validate_skill.py tests/test_skill_script_drift.py -q
 ```
 
-All eight commands run clean against the landed tree (see `design.md` and this session's
+All nine commands run clean against the landed tree (see `design.md` and this session's
 final report for the exact captured output).
 
 ## Archive
