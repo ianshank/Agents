@@ -51,6 +51,18 @@
       ]
     },
     {
+      "id": "plan-degraded-path-real-subprocess",
+      "prompt": "Plan the dispatch prompt for a real change via a real `python scripts/run.py plan` subprocess (not an in-process call) and confirm the degraded path's general-purpose dispatch is what actually comes out of the real CLI entry point.",
+      "run": "python scripts/run.py plan --repo evals/fixtures/locate-happy-path/repo --change demo-change --force-path degraded --tree-sha eval00001abc",
+      "assertions": [
+        { "type": "exit_zero", "text": "planning a real, existing change via the real CLI process succeeds" },
+        { "type": "output_contains", "contains": "dispatch path: degraded", "text": "reports the forced degraded path" },
+        { "type": "output_contains", "contains": "general-purpose", "text": "the degraded path dispatches a general-purpose subagent" },
+        { "type": "output_contains", "contains": "changes/demo-change", "text": "names the change directory" },
+        { "type": "output_contains", "contains": "eval00001abc", "text": "pins the given tree SHA into the dispatch prompt" }
+      ]
+    },
+    {
       "id": "validate-hand-written-review-fixture",
       "prompt": "Validate a hand-authored review.md fixture against the required structural shape.",
       "run": "python scripts/run.py validate --path evals/fixtures/validate-hand-written-review/review.md --change demo-fixture-change",

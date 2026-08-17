@@ -20,6 +20,7 @@ import argparse
 import dataclasses
 import json
 import sys
+import typing
 from pathlib import Path
 from typing import Any
 
@@ -161,14 +162,17 @@ def _cmd_compose(args: argparse.Namespace) -> int:
         date=args.date,
         overwrite=args.overwrite,
     )
-    print(f"{result.mode}: {result.path}")
-    if not result.validation.ok:
-        print("structural validation FAILED:", file=sys.stderr)
-        for err in result.validation.errors:
-            print(f"  - {err}", file=sys.stderr)
-        return 1
-    print(f"structural validation OK (verdict: {result.validation.verdict})")
-    return 0
+    if args.json:
+        _print_json(result)
+    else:
+        print(f"{result.mode}: {result.path}")
+        if result.validation.ok:
+            print(f"structural validation OK (verdict: {result.validation.verdict})")
+        else:
+            print("structural validation FAILED:", file=sys.stderr)
+            for err in result.validation.errors:
+                print(f"  - {err}", file=sys.stderr)
+    return 0 if result.validation.ok else 1
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
@@ -224,7 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_args(p_plan)
     p_plan.add_argument("--change", default=None, help="Change id; inferred from branch/commits if omitted.")
     p_plan.add_argument("--tree-sha", default=None, help="Tree SHA to pin (default: git rev-parse HEAD).")
-    p_plan.add_argument("--force-path", choices=("plugin", "degraded"), default=None, help="Override detection.")
+    p_plan.add_argument("--force-path", choices=typing.get_args(DispatchPath), default=None, help="Override detection.")
     p_plan.add_argument("--out-dir", default=None, help="Write each prompt to <out-dir>/<subagent-type>.md.")
     p_plan.set_defaults(func=_cmd_plan)
 
@@ -235,7 +239,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--body-file", required=True, help="File with the reviewer's markdown output ('-' for stdin)."
     )
     p_compose.add_argument("--tree-sha", default=None, help="Tree SHA to record (default: git rev-parse HEAD).")
-    p_compose.add_argument("--dispatch-path", choices=("plugin", "degraded"), default=None, help="Which path was used.")
+    p_compose.add_argument(
+        "--dispatch-path", choices=typing.get_args(DispatchPath), default=None, help="Which path was used."
+    )
     p_compose.add_argument("--date", default=None, help="Override the follow-up date (default: today, YYYY-MM-DD).")
     p_compose.add_argument(
         "--overwrite", action="store_true", help="Replace an existing review.md instead of appending."

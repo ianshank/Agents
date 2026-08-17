@@ -16,7 +16,12 @@ Two shapes, chosen by :mod:`implreview.detect`'s recommendation:
 Both shapes target the same output contract (:mod:`implreview.validate`'s required shape),
 which is itself the shape of the two real precedents this prompt cites:
 ``openspec/changes/harden-quality-gate-integrity/review.md`` and
-``openspec/changes/add-panel-judge/review.md``.
+``openspec/changes/test-skill-validator-library/review.md`` -- see ``implreview.validate``'s
+own module docstring and ``add-openspec-implementation-review/design.md``'s "recalibrated
+against real precedent" section for how those two, specifically, were chosen. (A third file,
+``openspec/changes/add-panel-judge/review.md``, is a *different* genre -- a pre-implementation
+plan review, not this shape -- and is cited elsewhere in this package only for its append,
+not-overwrite pattern; see ``implreview.compose``'s module docstring.)
 """
 
 from __future__ import annotations
@@ -30,8 +35,13 @@ if TYPE_CHECKING:
     from .locate import ChangeLocation
 
 #: Referenced from every prompt shape so a reader can go look at the real artifact this
-#: skill's output is meant to resemble.
-PRECEDENT_REVIEW = "openspec/changes/add-panel-judge/review.md"
+#: skill's output is meant to resemble. Both this and ``SECOND_PRECEDENT_REVIEW`` name the
+#: two real, already-merged review.md files ``implreview.validate``'s required shape was
+#: actually calibrated against (see that module's docstring) -- NOT
+#: ``add-panel-judge/review.md``, which is a different genre (a pre-implementation plan
+#: review) and correctly fails ``validate_review_file`` (see
+#: ``tests/test_validate.py::test_real_add_panel_judge_review_is_a_different_genre_and_correctly_does_not_validate``).
+PRECEDENT_REVIEW = "openspec/changes/test-skill-validator-library/review.md"
 SECOND_PRECEDENT_REVIEW = "openspec/changes/harden-quality-gate-integrity/review.md"
 
 _OUTPUT_SHAPE = """\

@@ -10,10 +10,11 @@ version: 1.0.0
 
 Reviews the *shipped implementation* of an OpenSpec change against its own proposal/design/
 tasks/spec, in the two-pass shape this repo's own reviews already use by hand
-(`openspec/changes/add-panel-judge/review.md`,
-`openspec/changes/harden-quality-gate-integrity/review.md`). This is **advisory, opt-in
-tooling** — a contributor or agent invokes it on demand. It is not wired into
-`CONTRIBUTING.md`, `GOVERNANCE.md`, protected paths, or any CI gate as mandatory.
+(`openspec/changes/test-skill-validator-library/review.md`,
+`openspec/changes/harden-quality-gate-integrity/review.md` — the two real, already-merged
+reviews `implreview.validate`'s required shape is actually calibrated against). This is
+**advisory, opt-in tooling** — a contributor or agent invokes it on demand. It is not wired
+into `CONTRIBUTING.md`, `GOVERNANCE.md`, protected paths, or any CI gate as mandatory.
 
 **Not a duplicate of `openspec-peer-review`.** That skill reviews a *plan* package before
 implementation starts and rewrites it to meet quality standards. This skill runs *after* a

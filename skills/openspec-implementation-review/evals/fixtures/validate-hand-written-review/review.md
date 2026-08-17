@@ -1,7 +1,7 @@
 # Review: demo-fixture-change
 
 **Reviewed:** tree `f1a3ade0`, via a general-purpose subagent with the two-pass method
-inlined, following `openspec/changes/add-panel-judge/review.md`.
+inlined, following `openspec/changes/test-skill-validator-library/review.md`.
 
 ## Verdict
 

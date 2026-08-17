@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 from implreview.locate import (
+    DEFAULT_COMMIT_SCAN_DEPTH,
     ChangeNotFoundError,
     current_branch_name,
     current_tree_sha,
@@ -242,6 +244,35 @@ def test_recent_commit_subjects_splits_lines(tmp_path: Path) -> None:
 
 def test_recent_commit_subjects_unavailable_is_empty(tmp_path: Path) -> None:
     assert recent_commit_subjects(tmp_path, run=lambda root, args: None) == ()
+
+
+def test_recent_commit_subjects_default_count_uses_the_scan_depth_constant(tmp_path: Path) -> None:
+    # The existing fake `run` callables above (and below) all ignore `args`, so nothing
+    # previously proved DEFAULT_COMMIT_SCAN_DEPTH actually reaches the constructed git
+    # command rather than some other hardcoded number. This one captures `args` for real.
+    captured: list[Sequence[str]] = []
+
+    def fake_run(root: Path, args: Sequence[str]) -> str | None:
+        captured.append(args)
+        return None
+
+    recent_commit_subjects(tmp_path, run=fake_run)
+
+    assert len(captured) == 1
+    assert list(captured[0]) == ["log", f"-{DEFAULT_COMMIT_SCAN_DEPTH}", "--format=%s"]
+
+
+def test_recent_commit_subjects_explicit_count_overrides_the_default(tmp_path: Path) -> None:
+    captured: list[Sequence[str]] = []
+
+    def fake_run(root: Path, args: Sequence[str]) -> str | None:
+        captured.append(args)
+        return None
+
+    recent_commit_subjects(tmp_path, count=3, run=fake_run)
+
+    assert list(captured[0]) == ["log", "-3", "--format=%s"]
+    assert f"-{DEFAULT_COMMIT_SCAN_DEPTH}" not in captured[0]
 
 
 def test_current_tree_sha_uses_injected_run(tmp_path: Path) -> None:

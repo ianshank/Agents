@@ -171,6 +171,22 @@ def test_plan_degraded_path_prints_general_purpose_dispatch(
     assert "abc123" in out
 
 
+def test_plan_without_tree_sha_falls_back_to_the_unknown_sentinel_outside_a_git_repo(
+    repo_root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # repo_root (tmp_path) is genuinely not a git repository -- the real, uninjected
+    # `_run_git` path (exercised the same way in test_locate.py's
+    # test_run_git_against_a_real_non_repo_directory_returns_none) returns None here, so
+    # _resolve_tree_sha's fallback sentinel is what actually reaches the printed prompt. No
+    # existing test asserted this string ever appears in real output, only that *some* run
+    # exercising the fallback branch doesn't crash.
+    _make_change(repo_root, "demo-change")
+    rc = main(["plan", "--repo", str(repo_root), "--change", "demo-change", "--force-path", "degraded"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "<unknown -- not a git repository or git unavailable>" in out
+
+
 def test_plan_without_force_path_uses_real_detection(
     repo_root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -303,6 +319,68 @@ def test_compose_reports_structural_failure_with_nonzero_exit(
     )
     assert rc == 1
     assert "structural validation FAILED" in capsys.readouterr().err
+
+
+def test_compose_json_output_is_parseable(repo_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Regression test: --json used to be silently ignored by `compose` (every other
+    # subcommand honors it) -- a caller passing --json got the same plain text either way.
+    _make_change(repo_root, "demo-change")
+    body_file = tmp_path / "body.md"
+    body_file.write_text(_GOOD_BODY, encoding="utf-8")
+
+    rc = main(
+        [
+            "compose",
+            "--repo",
+            str(repo_root),
+            "--change",
+            "demo-change",
+            "--body-file",
+            str(body_file),
+            "--tree-sha",
+            "abc123",
+            "--dispatch-path",
+            "degraded",
+            "--json",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "structural validation OK" not in out  # JSON mode replaces the text report entirely
+    payload = json.loads(out)
+    review_path = repo_root / "openspec" / "changes" / "demo-change" / "review.md"
+    assert payload["mode"] == "created"
+    assert payload["path"] == str(review_path)
+    assert payload["validation"]["ok"] is True
+    assert payload["validation"]["verdict"] == "APPROVE"
+
+
+def test_compose_json_output_on_structural_failure_still_parses_and_reports_nonzero(
+    repo_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _make_change(repo_root, "demo-change")
+    body_file = tmp_path / "bad-body.md"
+    body_file.write_text("no headings here at all\n", encoding="utf-8")
+
+    rc = main(
+        [
+            "compose",
+            "--repo",
+            str(repo_root),
+            "--change",
+            "demo-change",
+            "--body-file",
+            str(body_file),
+            "--dispatch-path",
+            "degraded",
+            "--json",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert rc == 1
+    payload = json.loads(out)  # still valid JSON on the failure path, exactly like `validate`
+    assert payload["validation"]["ok"] is False
+    assert payload["validation"]["errors"]
 
 
 # --- validate ----------------------------------------------------------------------------------
