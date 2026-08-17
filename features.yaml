@@ -986,7 +986,7 @@ features:
     description: "ruff==0.15.20/mypy==2.1.0 (AGENTS.md's own pin bullet) were hand-duplicated, each carrying a 'bump deliberately, in lockstep' comment but no automated check, across the dev extra of 7 pyproject.toml files (root, agent-core, behavioral-regression, flow-protocol, flow-corpus, claude-foundation, experiments/backend-validation) and 9 pip-install lines across skills-ci.yml's per-skill CI jobs -- 16 hand-typed copies of the same two version strings, any one of which could silently drift on a partial bump (green locally, red -- or worse, silently different -- in CI). scripts/tool_versions.py is now the single source of truth (RUFF_VERSION, MYPY_VERSION); scripts/validations/F_054.py reads the text of all 8 files (read-only -- no install, no subprocess, no edits) and asserts every ruff==/mypy== occurrence matches those two constants exactly, and that no copy has silently lost its pin entirely. skills-ci.yml is deliberately read-only in this change (a sibling phase in docs/plans/orbital-drift-alignment/PLAN.md owns edits to that file); full CI templating of the 9 install lines from the shared constant was considered and explicitly deferred (ADR 0034) as a separate, larger follow-on."
     category: "infrastructure"
     priority: "high"
-    status: "in_progress"
+    status: "done"
     tier: "fast"
     verification:
       - "scripts/tool_versions.py defines RUFF_VERSION/MYPY_VERSION matching the values already live in every pyproject.toml dev extra at introduction (0.15.20 / 2.1.0)"
@@ -996,5 +996,6 @@ features:
       - "F_054.py is read-only: it opens each of the 8 files for reading only, runs no subprocess and no code execution, and never writes to .github/workflows/skills-ci.yml"
       - "python scripts/validate.py --tier fast discovers and runs F_054.py via this ledger entry's validation_command"
     validation_command: "python scripts/validations/F_054.py"
+    implemented_in: "86eeb5cf1db0f17f06e5ed50b90e8c02fc4e939f"
     depends_on: []
     notes: "Decision recorded in ADR 0034: drift-tested duplication, not full templating -- the fix prevents silent drift between copies, not deliberate bumping (AGENTS.md's 'do not bump them casually' framing is respected, not relaxed). Interpolating pyproject.toml's dev extra into all 9 skills-ci.yml install lines at run time was considered and deferred as a separate, larger follow-on (touches 9 CI job definitions for marginal gain over 'drift can't merge silently'). See docs/plans/orbital-drift-alignment/PLAN.md Phase 2."
