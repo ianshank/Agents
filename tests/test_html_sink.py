@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
 
@@ -17,7 +17,7 @@ from eval_harness.plugins import SINKS
 
 _EXTERNAL_RESOURCE = re.compile(r"""(<script[^>]*\ssrc=|<link[^>]*\shref=|@import|url\(\s*['"]?https?:)""", re.I)
 
-_TS = datetime(2026, 1, 1, tzinfo=timezone.utc)
+_TS = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class _RenderableSink(Protocol):
@@ -151,11 +151,11 @@ def test_custom_title_and_bar_clamp(tmp_path: Path):
 
 
 def _traj_run(*outputs):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from eval_harness.core.types import EvalItem, ItemResult, RunResult
 
-    moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    moment = datetime(2026, 1, 1, tzinfo=UTC)
     return RunResult(
         run_id="r",
         config_name="c",

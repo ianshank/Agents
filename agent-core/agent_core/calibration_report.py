@@ -48,7 +48,7 @@ from .calibration_report_render import render_json as render_json
 from .calibration_report_render import render_markdown as render_markdown
 from .config import ConfigError
 from .domains import DOMAIN_FILTERS, in_domain_scope, is_agent_domain
-from .logging_util import get_logger
+from .logging_util import configure_logging, get_logger
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 from .ppi import PPIConfig, ppi_plus_interval
 from .report_types import (
@@ -335,6 +335,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--output", help="write here instead of stdout")
     args = ap.parse_args(argv)
+    configure_logging(level="INFO")
 
     # A bad --n-bins/--risk-target/--z is an operator error, not a bug: surface it as a
     # clean message + exit 2, not an unhandled ReportConfig.__post_init__ traceback.

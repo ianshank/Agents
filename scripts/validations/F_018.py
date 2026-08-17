@@ -15,9 +15,17 @@ Exit codes:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from datetime import UTC
+
+from _common import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +42,7 @@ for _p in (str(PROJECT_ROOT), str(SRC)):
 
 def main() -> int:
     """Run all F-018 validation checks."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)-8s %(name)s: %(message)s",
-    )
+    configure_logging()
 
     from eval_harness.config import load_config_dict
     from eval_harness.config.models import RunSettings
@@ -80,10 +85,10 @@ def main() -> int:
         "sinks": [],
     }
 
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     def _clock():
-        return datetime(2026, 6, 22, tzinfo=timezone.utc)
+        return datetime(2026, 6, 22, tzinfo=UTC)
 
     try:
         # Sequential

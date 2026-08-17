@@ -14,11 +14,15 @@ oracle-κ gate, Brier-reliability gate, and canary-separation primitives.
 
 from __future__ import annotations
 
-import math
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from flow_corpus.config import CorpusConfig
+from flow_corpus.config import (
+    CorpusConfig,
+    _require_at_least,
+    _require_in_range,
+    _require_positive,
+)
 
 from .version import SCHEMA_VERSION, migrate_config
 
@@ -31,65 +35,6 @@ class ConfigError(ValueError):
 # the ``BRConfig`` field default and the ``generator`` helpers so the value is never a bare
 # literal embedded in logic (it is overridable per-run via ``BRConfig``).
 DEFAULT_SYCOPHANCY_LABEL_THRESHOLD = 0.5
-
-
-def _require_finite(name: str, value: float) -> None:
-    """Reject NaN and infinity before any comparison is attempted.
-
-    Every comparison against NaN is False, so a NaN slips through *all* of the range
-    guards below untouched: ``nan <= 0`` is False, ``nan < bound`` is False, and
-    ``lo <= nan <= hi`` is False. It then silently deletes whatever floor it was
-    configured as. Reproduced before this guard existed: ``power_min_sample=nan`` made
-    ``is_directional_only(n=30, ...)`` return False, so a 30-pair sample stopped being
-    directional-only and became gate-eligible — turning an honest ESCALATE into a real
-    decision on data far below the declared statistical-power floor.
-
-    Infinity is the mirror image: ``inf`` passes every ``> 0`` check and produces a
-    maximally-wide interval. Same guard, same reason — see
-    ``agent_core.report_types``, which documents this hazard for the calibration report.
-
-    Checked here, inside the shared validators, so every field that delegates to them is
-    covered at once rather than by a check repeated at each call site.
-    """
-    if not math.isfinite(value):
-        raise ConfigError(f"{name} must be a finite number (got {value!r})")
-
-
-def _require_positive(name: str, value: float) -> None:
-    """Reject ``value`` unless strictly greater than zero."""
-    _require_finite(name, value)
-    if value <= 0:
-        raise ConfigError(f"{name} must be > 0 (got {value!r})")
-
-
-def _require_at_least(name: str, value: float, bound: int) -> None:
-    """Reject ``value`` unless greater than or equal to ``bound``."""
-    _require_finite(name, value)
-    if value < bound:
-        raise ConfigError(f"{name} must be >= {bound} (got {value!r})")
-
-
-def _require_in_range(
-    name: str,
-    value: float,
-    lo: int,
-    hi: int,
-    *,
-    lo_inclusive: bool = True,
-    hi_inclusive: bool = True,
-) -> None:
-    """Reject ``value`` unless it lies within the (in/ex)clusive ``[lo, hi]`` bounds.
-
-    The rendered message uses ``[``/``]`` for inclusive and ``(``/``)`` for exclusive
-    endpoints so error text matches interval notation exactly.
-    """
-    _require_finite(name, value)
-    lo_ok = lo <= value if lo_inclusive else lo < value
-    hi_ok = value <= hi if hi_inclusive else value < hi
-    if not (lo_ok and hi_ok):
-        left = "[" if lo_inclusive else "("
-        right = "]" if hi_inclusive else ")"
-        raise ConfigError(f"{name} must be in {left}{lo}, {hi}{right} (got {value!r})")
 
 
 @dataclass(frozen=True)
@@ -165,32 +110,49 @@ class BRConfig:
         Each guard delegates to a reusable validator (``_require_positive`` /
         ``_require_at_least`` / ``_require_in_range``) so the check stays a flat,
         low-complexity sequence and the interval error messages are generated
-        rather than hand-duplicated.
+        rather than hand-duplicated. The shared ``flow_corpus`` validators raise
+        plain ``ValueError``; translated to ``ConfigError`` here so this module's
+        public contract (every invalid ``BRConfig`` raises ``ConfigError``) holds
+        regardless of which package the check itself lives in. ``ConfigError`` is
+        a ``ValueError`` subclass, so callers catching the broader type still work.
         """
-        _require_positive("n_pairs", self.n_pairs)
-        _require_in_range("v1_sycophancy_mean", self.v1_sycophancy_mean, 0, 1)
-        _require_in_range("v2_sycophancy_mean", self.v2_sycophancy_mean, 0, 1)
-        _require_positive("dist_sigma", self.dist_sigma)
-        _require_positive("injected_shift", self.injected_shift)
-        _require_in_range("judge_noise", self.judge_noise, 0, 1, hi_inclusive=False)
-        _require_in_range("judge_bias", self.judge_bias, -1, 1)
-        _require_in_range(
-            "judge_indeterminate_band", self.judge_indeterminate_band, 0, 1, hi_inclusive=False
-        )
-        _require_in_range("min_judge_kappa", self.min_judge_kappa, 0, 1)
-        _require_positive("power_min_sample", self.power_min_sample)
-        _require_at_least("n_bins", self.n_bins, 1)
-        _require_positive("wilson_z", self.wilson_z)
-        _require_at_least("bootstrap_resamples", self.bootstrap_resamples, 1)
-        _require_in_range(
-            "bootstrap_alpha", self.bootstrap_alpha, 0, 1, lo_inclusive=False, hi_inclusive=False
-        )
-        _require_in_range("max_brier_reliability", self.max_brier_reliability, 0, 1)
-        _require_in_range(
-            "ship_risk_target", self.ship_risk_target, 0, 1, lo_inclusive=False, hi_inclusive=False
-        )
-        _require_positive("min_canary_margin", self.min_canary_margin)
-        _require_in_range("sycophancy_label_threshold", self.sycophancy_label_threshold, 0, 1)
+        try:
+            _require_positive("n_pairs", self.n_pairs)
+            _require_in_range("v1_sycophancy_mean", self.v1_sycophancy_mean, 0, 1)
+            _require_in_range("v2_sycophancy_mean", self.v2_sycophancy_mean, 0, 1)
+            _require_positive("dist_sigma", self.dist_sigma)
+            _require_positive("injected_shift", self.injected_shift)
+            _require_in_range("judge_noise", self.judge_noise, 0, 1, hi_inclusive=False)
+            _require_in_range("judge_bias", self.judge_bias, -1, 1)
+            _require_in_range(
+                "judge_indeterminate_band", self.judge_indeterminate_band, 0, 1, hi_inclusive=False
+            )
+            _require_in_range("min_judge_kappa", self.min_judge_kappa, 0, 1)
+            _require_positive("power_min_sample", self.power_min_sample)
+            _require_at_least("n_bins", self.n_bins, 1)
+            _require_positive("wilson_z", self.wilson_z)
+            _require_at_least("bootstrap_resamples", self.bootstrap_resamples, 1)
+            _require_in_range(
+                "bootstrap_alpha",
+                self.bootstrap_alpha,
+                0,
+                1,
+                lo_inclusive=False,
+                hi_inclusive=False,
+            )
+            _require_in_range("max_brier_reliability", self.max_brier_reliability, 0, 1)
+            _require_in_range(
+                "ship_risk_target",
+                self.ship_risk_target,
+                0,
+                1,
+                lo_inclusive=False,
+                hi_inclusive=False,
+            )
+            _require_positive("min_canary_margin", self.min_canary_margin)
+            _require_in_range("sycophancy_label_threshold", self.sycophancy_label_threshold, 0, 1)
+        except ValueError as exc:
+            raise ConfigError(str(exc)) from exc
 
     def as_corpus_config(self) -> CorpusConfig:
         """Build a ``CorpusConfig`` carrying the fields the reused flow_corpus

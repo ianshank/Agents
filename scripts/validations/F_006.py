@@ -12,28 +12,30 @@ Exit codes:
 
 from __future__ import annotations
 
-import subprocess
+import logging
+import os
 import sys
 from pathlib import Path
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from _common import configure_logging, run_subprocess_check
+
+logger = logging.getLogger(__name__)
+
 
 def main() -> int:
+    configure_logging()
     project_root = Path(__file__).resolve().parent.parent.parent
     test_file = project_root / "tests" / "test_regression_gate.py"
     if not test_file.is_file():
-        print(f"FAIL: {test_file} not found")
+        logger.error("FAIL: %s not found", test_file)
         return 1
 
     cmd = [sys.executable, "-m", "pytest", str(test_file), "-q"]
-    print(f"Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True, timeout=600)
-    print(result.stdout)
-    print(result.stderr)
-    if result.returncode != 0:
-        print(f"FAIL: pytest exited with {result.returncode}")
-        return 1
-    print("OK: F-006 validation passed.")
-    return 0
+    ok = run_subprocess_check(cmd, cwd=project_root, timeout=600, label="F-006 validation")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

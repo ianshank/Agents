@@ -27,6 +27,20 @@ from deploygen import DeployConfig, render_deploy
 logger = logging.getLogger("deploygen")
 
 
+def _configure_logging(verbose: bool = False) -> None:
+    """Configure root logging for CLI.
+
+    Deliberately a local copy, not an import from scripts/_cli.py or skills/common —
+    this skill is self-contained/vendorable by design (ADR 0009). Kept identical to its
+    4 sibling copies (skills/quality-gate/scripts/gen_gate.py,
+    skills/project-setup/scripts/gen_makefile.py,
+    skills/repo-invariant-review/scripts/{build_fixture,check_invariants}.py; ADR 0034)
+    so the duplication doesn't silently drift into 5 different behaviors.
+    """
+    level = logging.DEBUG if verbose else logging.WARNING
+    logging.basicConfig(level=level, format="%(levelname)s %(name)s: %(message)s")
+
+
 def _check(out: Path, content: str) -> int:
     """Advisory freshness check: compare the committed script against a fresh render."""
     if not out.is_file():
@@ -57,11 +71,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="Advisory: exit 1 if the committed script is stale.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging (prints the deploy config).")
     args = parser.parse_args(argv)
+    _configure_logging(verbose=args.verbose)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.WARNING,
-        format="%(levelname)s %(name)s: %(message)s",
-    )
     config = DeployConfig(
         app=args.app,
         environment=args.environment,

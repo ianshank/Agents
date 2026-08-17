@@ -22,7 +22,7 @@ import logging
 import os
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +35,7 @@ from eval_harness.campaign import CampaignStore, Decision, analyze, record_run
 from eval_harness.config.models import ABCampaignConfig, EvalConfig
 from eval_harness.version import SCHEMA_VERSION
 
-FIXED = datetime(2026, 6, 30, tzinfo=timezone.utc)
+FIXED = datetime(2026, 6, 30, tzinfo=UTC)
 
 
 def _items(n: int) -> list[dict]:

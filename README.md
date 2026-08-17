@@ -1,8 +1,8 @@
 # langfuse-eval-harness
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](pyproject.toml)
-[![Coverage](https://img.shields.io/badge/branch%20coverage-%E2%89%A595%25-brightgreen.svg)](#test)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](pyproject.toml)
+[![Coverage](https://img.shields.io/badge/branch%20coverage-%E2%89%A596%25-brightgreen.svg)](#test)
 [![CI](https://github.com/ianshank/Agents/actions/workflows/eval-harness-ci.yml/badge.svg)](https://github.com/ianshank/Agents/actions/workflows/eval-harness-ci.yml)
 
 A dynamic, modular, backwards-compatible enterprise LLM evaluation harness with
@@ -255,7 +255,7 @@ under `scripts/` carry their own **≥85% gate** (`scripts/.coveragerc`, F-031);
 `validations/F_*` gate scripts are excluded — they are one-shot CI checks executed via
 `features.yaml`, not unit-test targets. Coverage is measured with `branch = true` across the
 board. Each sub-package runs its own `ruff` + `mypy` + `pytest --cov` in CI across
-Python 3.10–3.12. The measured 2026-07 baseline behind these numbers is recorded in
+Python 3.11–3.13. The measured 2026-07 baseline behind these numbers is recorded in
 [docs/gap-analysis-2026-07.md](docs/gap-analysis-2026-07.md).
 
 ## Quality Gates
@@ -458,7 +458,7 @@ docs/
 ```yaml
 # GitHub Actions example
 - name: Test
-  run: pytest --cov=eval_harness --cov-report=term-missing --cov-fail-under=85
+  run: pytest --cov=eval_harness --cov-report=term-missing --cov-fail-under=96
 
 - name: Lint
   run: ruff check src/ tests/

@@ -37,5 +37,5 @@ pre-commit run --all-files --config agent-core/.pre-commit-config.yaml
 ## CI
 
 `.github/workflows/agent-core-ci.yml` runs on changes under `agent-core/**` across
-Python 3.10 / 3.11 / 3.12: ruff lint + format check, strict mypy, and pytest with the
+Python 3.11 / 3.12 / 3.13: ruff lint + format check, strict mypy, and pytest with the
 95% coverage gate under the `ci` Hypothesis profile.

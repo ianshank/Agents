@@ -27,7 +27,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from .calibration import DEFAULT_N_BINS, wilson_interval
@@ -39,7 +39,7 @@ from .config import ConfigError
 MAX_N_BINS = 1000
 
 
-class GateDecision(str, Enum):
+class GateDecision(StrEnum):
     AUTO_MERGE = "auto_merge"
     ESCALATE = "escalate"  # human (or higher-authority agent) review
     REJECT = "reject"  # mechanical ground-truth failure

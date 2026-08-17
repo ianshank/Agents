@@ -9,7 +9,7 @@ appears in the decision logic.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from agent_core.logging_util import get_logger
 from flow_corpus.oracles.kappa_gate import KappaReport
@@ -21,7 +21,7 @@ from .detector import RegressionEstimate
 _log = get_logger("behavioral_regression.gate")
 
 
-class ShipDecision(str, Enum):
+class ShipDecision(StrEnum):
     SHIP = "ship"
     HOLD = "hold"  # a real regression — do not ship v2
     ESCALATE = "escalate"  # route to a human; fail-safe default

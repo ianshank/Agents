@@ -22,6 +22,7 @@ source or committed config).
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -34,6 +35,8 @@ from ..plugins import TARGETS
 # Default system prompt is intentionally empty for a *target* — unlike a judge we
 # do not coerce a JSON shape; the model answers the user prompt as-is.
 _PROVIDERS = ("openai", "bedrock", "anthropic")
+
+logger = logging.getLogger(__name__)
 
 
 class ModelTargetConfig(BaseModel):
@@ -218,6 +221,9 @@ class ModelTarget(TargetRunner):
             )
         except Exception as exc:  # surface model/transport failures as scored errors
             latency = (time.perf_counter() - start) * 1000
+            logger.error(
+                "ModelTarget run failed (provider=%s, model=%s): %s", self.provider, self.model, exc, exc_info=True
+            )
             return TargetOutput(output=None, error=str(exc), latency_ms=latency)
 
     def _complete(self, prompt: str) -> str:
@@ -248,6 +254,7 @@ class ModelTarget(TargetRunner):
             reraise=True,
         )
         def _call_api() -> Any:
+            logger.debug("Calling OpenAI-compatible API: model=%s, base_url=%s", self.model, self.base_url)
             return self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,  # type: ignore[arg-type]
@@ -284,6 +291,7 @@ class ModelTarget(TargetRunner):
             body["system"] = self.system
         if self.temperature is not None:
             body["temperature"] = self.temperature
+        logger.debug("Calling Bedrock API: model=%s, region=%s", self.model, self.region)
         resp = self.client.invoke_model(modelId=self.model, body=json.dumps(body))
         payload = json.loads(resp["body"].read())
         return str(payload["content"][0]["text"])
@@ -303,5 +311,6 @@ class ModelTarget(TargetRunner):
             kwargs["system"] = self.system
         if self.temperature is not None:
             kwargs["temperature"] = self.temperature
+        logger.debug("Calling Anthropic API: model=%s", self.model)
         resp = self.client.messages.create(**kwargs)
         return "".join(block.text for block in resp.content if block.type == "text")

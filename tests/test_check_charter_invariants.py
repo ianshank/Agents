@@ -429,6 +429,78 @@ def test_scan_roots_are_derived_from_mission_dirs(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# check_magic_number_defaults: retry-decorator call literals (the blind spot a
+# 2026-08-17 peer review found -- OpenAIJudge.evaluate's
+# @retry(wait=wait_exponential(min=2, max=30), stop=stop_after_attempt(5)) carried
+# bare numeric literals the original node.args.defaults-only scan never saw).
+# ---------------------------------------------------------------------------
+
+
+def test_bare_literal_in_wait_exponential_keyword_is_flagged(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/eval_harness/thing.py",
+        "from tenacity import retry, wait_exponential\n"
+        "\n"
+        "@retry(wait=wait_exponential(multiplier=1, min=2, max=30))\n"
+        "def call():\n"
+        "    pass\n",
+    )
+    findings = guard.check_magic_number_defaults(tmp_path)
+    details = [f.detail for f in findings]
+    assert any("wait_exponential() literal=30" in d for d in details)
+    assert all(not f.hard for f in findings)
+
+
+def test_bare_literal_in_stop_after_attempt_positional_is_flagged(tmp_path: Path) -> None:
+    """stop_after_attempt(5) passes its literal positionally, not as a keyword --
+    the scan must check Call.args, not just Call.keywords."""
+    _write(
+        tmp_path,
+        "src/eval_harness/thing.py",
+        "from tenacity import retry, stop_after_attempt\n\n@retry(stop=stop_after_attempt(5))\ndef call():\n    pass\n",
+    )
+    findings = guard.check_magic_number_defaults(tmp_path)
+    assert any("stop_after_attempt() literal=5" in f.detail for f in findings)
+
+
+def test_allowlisted_literal_in_retry_call_is_not_flagged(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/eval_harness/thing.py",
+        "from tenacity import wait_exponential\n\nwait_exponential(multiplier=1, min=0, max=2)\n",
+    )
+    assert guard.check_magic_number_defaults(tmp_path) == []
+
+
+def test_named_constant_in_retry_call_is_not_flagged(tmp_path: Path) -> None:
+    """The fix this check exists to require: name the value, don't inline the literal."""
+    _write(
+        tmp_path,
+        "src/eval_harness/thing.py",
+        "from tenacity import wait_exponential\n\nMAX_WAIT = 30\nwait_exponential(multiplier=1, min=2, max=MAX_WAIT)\n",
+    )
+    findings = guard.check_magic_number_defaults(tmp_path)
+    assert not any("wait_exponential" in f.detail for f in findings)
+
+
+def test_unrelated_call_with_numeric_args_is_not_flagged(tmp_path: Path) -> None:
+    """Only the named tenacity callables are in scope -- an arbitrary call with a
+    bare numeric literal (e.g. range(10)) is not this heuristic's concern."""
+    _write(tmp_path, "src/eval_harness/thing.py", "range(10)\n")
+    assert guard.check_magic_number_defaults(tmp_path) == []
+
+
+def test_retry_call_in_test_file_is_excluded(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/eval_harness/tests/test_thing.py",
+        "from tenacity import stop_after_attempt\n\nstop_after_attempt(5)\n",
+    )
+    assert guard.check_magic_number_defaults(tmp_path) == []
+
+
+# ---------------------------------------------------------------------------
 # CLI: exit codes, --json
 # ---------------------------------------------------------------------------
 

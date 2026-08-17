@@ -38,7 +38,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .logging_util import get_logger
+from .logging_util import configure_logging, get_logger
 from .outcome_store import OutcomeRecord, OutcomeStore
 from .protocols import Clock, SystemClock
 
@@ -102,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         help="optional impl+config keying hash for the flow-calibration corpus",
     )
     args = ap.parse_args(argv)
+    configure_logging(level="INFO")
 
     store = OutcomeStore(args.store)
     rec = seed_pending(

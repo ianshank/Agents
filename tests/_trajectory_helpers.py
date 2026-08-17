@@ -6,7 +6,7 @@ construct trajectories the same way, and a change to the step shape updates one 
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from eval_harness.core.types import (
@@ -58,7 +58,7 @@ def item(expected: Any = None, **metadata: Any) -> EvalItem:
 
 
 def run_result(target_output: TargetOutput) -> RunResult:
-    moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    moment = datetime(2026, 1, 1, tzinfo=UTC)
     return RunResult(
         run_id="r",
         config_name="c",

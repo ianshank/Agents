@@ -26,8 +26,8 @@ import html as _html
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 
 from ._formatting import _fmt
@@ -38,7 +38,7 @@ from .langfuse_client import LangfuseClient
 logger = logging.getLogger(__name__)
 
 
-class Decision(str, Enum):
+class Decision(StrEnum):
     B_BETTER = "b_better"  # arm B significantly beats arm A
     A_BETTER = "a_better"  # arm A significantly beats arm B
     NO_DIFFERENCE = "no_difference"  # powered, but CIs overlap -> not demonstrably different
@@ -131,7 +131,7 @@ def record_run(
     spec = ab if ab is not None else config.ab_campaign
     if spec is None:
         raise ValueError("record_run requires an ab_campaign config (config.ab_campaign or arg)")
-    ts = (now or datetime.now(timezone.utc)).isoformat()
+    ts = (now or datetime.now(UTC)).isoformat()
     records: list[CampaignRecord] = []
     for arm in (spec.arm_a, spec.arm_b):
         result = _run_arm(config, arm, langfuse_client=langfuse_client)

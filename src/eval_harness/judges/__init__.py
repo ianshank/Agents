@@ -15,6 +15,16 @@ from ..plugins import JUDGES
 # drift apart; always overridable via config — never hard-coded at a call site.
 DEFAULT_ANTHROPIC_JUDGE_MODEL = "claude-opus-4-8"
 
+# OpenAIJudge.evaluate's rate-limit backoff, named for the same reason (charter §4
+# invariant 5). Not exposed as constructor params, unlike ModelTargetConfig's identical
+# values (targets/model.py) — OpenAIJudge's other constructor defaults are also bare
+# literals today, so promoting only the retry knob to a config field would be an
+# inconsistent partial migration; a full *Config class for this judge is a separate,
+# larger change than the naming fix these constants are for.
+DEFAULT_RETRY_WAIT_MIN_SECONDS = 2
+DEFAULT_RETRY_WAIT_MAX_SECONDS = 30
+DEFAULT_RETRY_MAX_ATTEMPTS = 5
+
 logger = logging.getLogger(__name__)
 
 
@@ -142,8 +152,8 @@ class OpenAIJudge(Judge):
 
         @retry(
             retry=retry_if_exception_type(openai.RateLimitError),
-            wait=wait_exponential(multiplier=1, min=2, max=30),
-            stop=stop_after_attempt(5),
+            wait=wait_exponential(multiplier=1, min=DEFAULT_RETRY_WAIT_MIN_SECONDS, max=DEFAULT_RETRY_WAIT_MAX_SECONDS),
+            stop=stop_after_attempt(DEFAULT_RETRY_MAX_ATTEMPTS),
             reraise=True,
         )
         def _call_api() -> Any:

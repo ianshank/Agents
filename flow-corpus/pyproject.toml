@@ -6,14 +6,13 @@ build-backend = "setuptools.build_meta"
 name = "flow-corpus"
 dynamic = ["version"]
 description = "Calibration corpus of agentic flow variants: specimens, task suites, oracles, and the validation runner"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
@@ -69,7 +68,7 @@ exclude_also = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 # C901 enforces the project's cyclomatic-complexity budget (< 15) via mccabe below.
@@ -83,7 +82,7 @@ max-complexity = 14
 "tests/*" = ["B905"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 strict = true
 # tests/ ships no __init__.py, so without explicit bases mypy names its files as
 # top-level modules (test_*, conftest) and the tests.* override below silently

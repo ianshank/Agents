@@ -1,45 +1,41 @@
 #!/usr/bin/env python3
 """Validation script for Feature F-004: First Real Skill (openai-judge)."""
 
+from __future__ import annotations
+
+import logging
 import os
-import subprocess
 import sys
+from pathlib import Path
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from _common import configure_logging, run_subprocess_check
+
+logger = logging.getLogger(__name__)
 
 
 def validate_f004() -> bool:
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    val_script = os.path.join(project_root, "scripts", "validate_skill.py")
-    skill_dir = os.path.join(project_root, "skills", "openai-judge")
+    project_root = Path(__file__).resolve().parent.parent.parent
+    val_script = project_root / "scripts" / "validate_skill.py"
+    skill_dir = project_root / "skills" / "openai-judge"
 
-    if not os.path.isfile(val_script):
-        print(f"FAIL: validate_skill.py not found at {val_script}")
+    if not val_script.is_file():
+        logger.error("FAIL: validate_skill.py not found at %s", val_script)
         return False
-    if not os.path.isdir(skill_dir):
-        print(f"FAIL: openai-judge skill dir not found at {skill_dir}")
+    if not skill_dir.is_dir():
+        logger.error("FAIL: openai-judge skill dir not found at %s", skill_dir)
         return False
 
-    cmd = [sys.executable, val_script, "--skill", skill_dir, "--tier", "structural,behavioral"]
+    cmd = [sys.executable, str(val_script), "--skill", str(skill_dir), "--tier", "structural,behavioral"]
+    return run_subprocess_check(cmd, cwd=project_root, timeout=120, label="F-004 validation")
 
-    print(f"Running command: {' '.join(cmd)}")
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
-        print("STDOUT:")
-        print(res.stdout)
-        print("STDERR:")
-        print(res.stderr)
 
-        if res.returncode == 0:
-            print("OK: F-004 validation passed.")
-            return True
-        else:
-            print(f"FAIL: validate_skill.py exited with non-zero code {res.returncode}")
-            return False
-    except Exception as e:
-        print(f"FAIL: Validation script crashed: {e}")
-        return False
+def main() -> int:
+    configure_logging()
+    return 0 if validate_f004() else 1
 
 
 if __name__ == "__main__":
-    if not validate_f004():
-        sys.exit(1)
-    sys.exit(0)
+    sys.exit(main())

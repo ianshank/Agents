@@ -240,6 +240,35 @@ def test_check_structural_placeholders(tmp_path):
     assert any("description' missing or placeholder" in e for e in errs)
 
 
+def test_check_structural_missing_name_field_is_an_error(tmp_path):
+    """A SKILL.md with no ``name:`` key at all, as opposed to a placeholder like
+    ``{{skill-name}}`` above, is the only way to independently exercise the ``not
+    name`` half of ``_check_name``'s ``if not name or "{{" in name:`` check -- the
+    placeholder test above only ever hits the ``"{{" in name`` half, since a
+    placeholder string is truthy. A mutation dropping ``not name or`` from that
+    condition would survive the placeholder test alone but not this one."""
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\ndescription: Use when the user asks to validate a skill.\n---\nBody", encoding="utf-8"
+    )
+    errs, warns = check_structural(str(skill_dir), "evals/evals.json")
+    assert any("name' missing or placeholder" in e for e in errs)
+    assert warns == []
+
+
+def test_check_structural_missing_description_field_is_an_error(tmp_path):
+    """Mirrors the missing-name case above for ``_check_description``'s ``if not
+    desc or "{{" in desc:`` check: a SKILL.md with no ``description:`` key
+    independently exercises the ``not desc`` half of that condition."""
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("---\nname: my-skill\n---\nBody", encoding="utf-8")
+    errs, warns = check_structural(str(skill_dir), "evals/evals.json")
+    assert any("description' missing or placeholder" in e for e in errs)
+    assert warns == []
+
+
 def test_check_structural_clean_skill_has_no_errors_or_warnings(tmp_path):
     skill_dir = tmp_path / "my-skill"
     skill_dir.mkdir()
@@ -758,3 +787,18 @@ def test_check_behavioral_skips_evals_with_no_assertions_but_continues(tmp_path)
     assert any("no-asserts" in e and "no assertions" in e for e in errs)
     grading = json.loads((tmp_path / ".skill-validation" / "grading.json").read_text(encoding="utf-8"))
     assert [r["eval_id"] for r in grading["results"]] == ["real"]
+
+
+def test_check_behavioral_rerun_clears_stale_workdir_contents(tmp_path):
+    """``check_behavioral`` calls ``shutil.rmtree(work, ignore_errors=True)`` before
+    rebuilding WORKDIR, but every other check_behavioral test above starts from a
+    workdir that doesn't exist yet, so that call always executes as a no-op --
+    100% line coverage of it does not by itself prove stale contents actually get
+    removed on a rerun. This seeds a leftover file first so the cleanup has
+    something real to prove."""
+    work = tmp_path / ".skill-validation"
+    work.mkdir()
+    (work / "stale.txt").write_text("leftover from a previous run", encoding="utf-8")
+    (tmp_path / "evals.json").write_text(json.dumps({"evals": []}), encoding="utf-8")
+    check_behavioral(str(tmp_path), "evals.json", _TIMEOUT)
+    assert not (work / "stale.txt").exists()

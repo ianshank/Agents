@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC
+
 import pytest
 
 from eval_harness.core.types import EvalItem, RunContext, TargetOutput
@@ -194,7 +196,7 @@ def test_custom_component_name_label():
 
 
 def test_breakdown_survives_to_dict_roundtrip():
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from eval_harness.core.types import ItemResult, RunResult, ScoreAggregate
 
@@ -207,8 +209,8 @@ def test_breakdown_survives_to_dict_roundtrip():
         config_name="c",
         items=[ItemResult(item=item, output=out, scores=[res])],
         aggregate={"weighted": ScoreAggregate(count=1, mean=res.value, pass_rate=1.0)},
-        started_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-        finished_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        finished_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     dumped = run.to_dict()["items"][0]["scores"][0]
     assert dumped["metadata"]["components"][0]["name"]

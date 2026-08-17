@@ -298,11 +298,11 @@ class IsotonicCalibrator:
             if prob <= self._x[i]:
                 x0, x1 = self._x[i - 1], self._x[i]
                 y0, y1 = self._y[i - 1], self._y[i]
-                if x1 == x0:
+                if x1 == x0:  # pragma: no cover  (fit guarantees strictly-increasing _x)
                     return y1
                 t = (prob - x0) / (x1 - x0)
                 return y0 + t * (y1 - y0)
-        return self._y[-1]
+        return self._y[-1]  # pragma: no cover  (if prob >= self._x[-1], we returned at line 295)
 
 
 # --- aggregate report --------------------------------------------------------

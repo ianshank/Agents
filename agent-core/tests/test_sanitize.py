@@ -89,7 +89,7 @@ def test_benign_adversarial_not_flagged(text: str) -> None:
 
 
 @pytest.mark.parametrize("text", KNOWN_BYPASSES)
-@pytest.mark.xfail(reason="known bypass; see docs/sanitizer-threat-model.md", strict=False)
+@pytest.mark.xfail(reason="known bypass; see docs/sanitizer-threat-model.md", strict=True)
 def test_known_bypasses_are_caught(text: str) -> None:
     result = RuleSanitizer(SanitizerConfig()).sanitize(text)
     assert result.findings

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from eval_harness.config import load_config_dict
 from eval_harness.engine import EvalEngine
@@ -10,7 +10,7 @@ from eval_harness.version import SCHEMA_VERSION
 
 
 def _fixed_clock():
-    return datetime(2026, 1, 1, tzinfo=timezone.utc)
+    return datetime(2026, 1, 1, tzinfo=UTC)
 
 
 CONFIG = {
@@ -114,7 +114,6 @@ def test_gate_none_passes():
 
 def test_gate_pass_rate_none_fails():
     """Metric='pass_rate' on an aggregate with pass_rate=None → failure with informative message."""
-    from datetime import timezone
 
     from eval_harness.config.models import GateConfig, GateRule
     from eval_harness.core.types import RunResult, ScoreAggregate
@@ -124,8 +123,8 @@ def test_gate_pass_rate_none_fails():
         config_name="c",
         items=[],
         aggregate={"acc": ScoreAggregate(count=1, mean=0.9, pass_rate=None)},
-        started_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-        finished_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        finished_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     gate = GateConfig(rules=[GateRule(score="acc", metric="pass_rate", min=0.5)])
     result = evaluate_gate(gate, run)

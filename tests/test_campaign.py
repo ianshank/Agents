@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -20,7 +20,7 @@ from eval_harness.cli import main as cli_main
 from eval_harness.config.models import ABCampaignConfig, EvalConfig
 from eval_harness.version import SCHEMA_VERSION
 
-FIXED = datetime(2026, 6, 30, tzinfo=timezone.utc)
+FIXED = datetime(2026, 6, 30, tzinfo=UTC)
 
 
 def _eval_config(**data: Any) -> EvalConfig:
@@ -93,7 +93,7 @@ def test_record_run_requires_config(tmp_path):
 
 def test_pass_counts_matches_pass_rate_semantics():
     # success = passed is True; denominator = passed is not None (None ignored).
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from eval_harness.core.types import (
         EvalItem,
@@ -110,7 +110,7 @@ def test_pass_counts_matches_pass_rate_semantics():
             scores=[ScoreResult("exact_match", value=1.0 if passed else 0.0, passed=passed)],
         )
 
-    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
     run = RunResult(
         run_id="r",
         config_name="c",

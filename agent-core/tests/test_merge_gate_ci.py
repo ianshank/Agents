@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -139,7 +139,7 @@ def test_append_audit_uses_injected_clock(tmp_path):
     """Direct unit test of the private _append_audit DI seam: a broken
     `clock or SystemClock()` fallback would go undetected via main() alone, since
     no existing test asserts anything about the written `ts` field."""
-    fixed = datetime(2026, 3, 4, 5, 6, 7, tzinfo=timezone.utc)
+    fixed = datetime(2026, 3, 4, 5, 6, 7, tzinfo=UTC)
     audit = tmp_path / "audit.jsonl"
     ctx = _ctx()
     merge_gate_ci._append_audit(

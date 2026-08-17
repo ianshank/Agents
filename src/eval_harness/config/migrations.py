@@ -41,6 +41,17 @@ def _v0_9_to_1_0(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def migrate_to_current(raw: dict) -> dict:
+    """Bring a (possibly old) config dict up to the current schema version.
+
+    This migration-chain-walker pattern is intentionally duplicated across:
+    - agent-core/agent_core/version.py
+    - behavioral-regression/behavioral_regression/version.py
+    - flow-protocol/flow_protocol/version.py
+    - src/eval_harness/config/migrations.py (this file)
+    See ADR 0034 for rationale: agent-core cannot import from elsewhere, and
+    eval_harness uses an incompatible (to_version, fn) tuple shape. The identical
+    while-loop/cycle-guard logic is maintained across all four, not shared, by design.
+    """
     raw = dict(raw)
     if "schema_version" not in raw:
         raise ConfigError("config is missing required 'schema_version'")

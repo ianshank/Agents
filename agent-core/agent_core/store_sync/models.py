@@ -10,7 +10,7 @@ from __future__ import annotations
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from ..config import ConfigError
@@ -80,7 +80,7 @@ class StoreSyncConfig:
             raise ConfigError("store_sync.backoff_base_s must be >= 0")
 
 
-class SyncStatus(str, Enum):
+class SyncStatus(StrEnum):
     OK = "ok"
     NOOP = "noop"  # push: remote already contains every local record
     REMOTE_ABSENT = "remote_absent"  # pull: data branch not born yet (cold start)
