@@ -298,6 +298,47 @@ jobs:
       - run: python -m pytest tests --cov=check_invariants --cov=build_fixture --cov-branch --cov-report=term-missing --cov-fail-under=95
       - run: python scripts/validate_skill.py --skill . --tier structural,behavioral
 
+  common:
+    name: common py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: skills/common
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      # TODO(tool_versions): scripts/tool_versions.py (RUFF_VERSION/MYPY_VERSION) lands via a
+      # parallel phase; switch this pin to its constants once that phase merges into this branch.
+      - run: pip install pytest pytest-cov "pyyaml>=6" "ruff==0.15.20" "mypy==2.1.0"
+      # skill_validator.py is the grading engine every other skill's vendored
+      # validate_skill.py imports from (frontmatter parsing, eval-assertion grading,
+      # subprocess execution) -- real, load-bearing library code, lint/type/test it like one.
+      - run: ruff check skill_validator.py __init__.py tests
+      - run: ruff format --check skill_validator.py __init__.py tests
+      # Type-check against the root mypy config (skills ship no config of their own).
+      - run: mypy --config-file ../../pyproject.toml skill_validator.py __init__.py
+      - run: python -m pytest tests --cov=skill_validator --cov-branch --cov-report=term-missing --cov-fail-under=95
+      # Structural tier ONLY -- not "structural,behavioral" like the jobs above. ADR 0030
+      # names two tiers: skills with real library code (full lint+type+test, just run above,
+      # plus structural,behavioral here) and skills with no library code and no gradable
+      # output ("subjective" skills, structural-only via the EXEMPT mapping in the all-skills
+      # job below). common is a third case the ADR didn't name explicitly: real, tested
+      # library code -- but no evals/evals.json and no end-to-end task of its own to run
+      # behaviorally, because it *is* the grading engine, not a task that produces gradable
+      # output for it to grade. Structural tier (frontmatter/metadata only) is this skill's
+      # complete behavioral surface; the pytest step above is where its real code is proven.
+      - run: python scripts/validate_skill.py --skill . --tier structural
+
 
   # Repo-level guard over the skill *set*, not a per-skill quality gate (ADR 0030) -- it sits
   # outside the ADR 0021 delegation chain by design, so its steps run inline rather than
@@ -357,7 +398,6 @@ jobs:
           # Each reason is re-checked below against evals/evals.json so a skill that later
           # grows real evals and library code can't stay silently exempted forever.
           EXEMPT = {
-              "common": "shared library (skill validator, utilities); not a standalone skill; no evals/",
               "hierarchical-recursive-brainstorm": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",
               "openspec-quality-plan": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",
               "openspec-peer-review": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",

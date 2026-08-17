@@ -43,7 +43,11 @@ There is no honest scripted gate for the quality of an OpenSpec package.
 - Run **structural only** (`python scripts/validate_skill.py --skill . --tier structural`) to keep the metadata/triggering honest.
 - Self-check against explicit, concrete criteria:
   1. **Mandatory Sections Present**: The "Code Hygiene & Quality Gates" section is present in `design.md`.
-  2. **Phase Gates Present**: Every phase in `tasks.md` ends with a hygiene/test gate.
+  2. **Tooling Named Concretely**: The section names the actual required tools for this change (e.g., `ruff`, `mypy`), not a generic placeholder like "appropriate linters."
+  3. **Coverage Target Is Derived, Not Boilerplate**: The stated coverage target reflects this change's own criticality — it is not the same number copy-pasted unchanged from the last package generated.
+  4. **Configuration Is Hardcode-Free, Not Just Claimed**: The section states config values are single-sourced (a flag, a config field, a named constant) with zero literals duplicated at call sites — not a generic "config is externalized" sentence.
+  5. **Backwards-Compatibility Approach Is Concrete**: The section names an actual approach for this change (e.g., additive-only, a deprecation window, a version gate), not a placeholder claim.
+  6. **Phase Gates Are Concrete**: Every phase in `tasks.md` ends with a hygiene/test gate that names the actual command to run (e.g., "Run `quality-gate.sh all` and fix issues"), not a vague mention of "testing."
 
 ## 6. Examples
 
