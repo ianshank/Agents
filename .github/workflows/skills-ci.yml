@@ -342,7 +342,7 @@ jobs:
         run: >-
           pip install pytest pytest-cov &&
           python -m pytest skills/common/tests/test_skill_validator.py
-          --cov=skills.common.skill_validator --cov-branch
+          --cov=common.skill_validator --cov-branch
           --cov-report=term-missing --cov-fail-under=95
       # Every skills/*/ directory must be registered in marketplace.yaml, and must have
       # either a dedicated job in this file or a documented EXEMPT entry. Structured on the
