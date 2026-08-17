@@ -214,6 +214,19 @@ def test_split_at_marker_handles_crlf_line_endings() -> None:
     assert tail == "hand content\r\n"
 
 
+def test_split_at_marker_with_no_trailing_content_after_marker() -> None:
+    # The marker is the literal end of the text: no trailing newline, nothing after it at
+    # all. `end == len(text)` here, so `end < len(text)` is False and short-circuits before
+    # `text[end]` is ever indexed (which would otherwise be an IndexError) -- the False arc
+    # of `elif end < len(text) and text[end] == "\n":`, unexercised by every other test (the
+    # CRLF case above takes the earlier `if` branch instead, and every `render_gate` output
+    # has real content after the marker).
+    text = "before\n" + MARKER
+    prefix, tail = split_at_marker(text)
+    assert prefix == text
+    assert tail == ""
+
+
 def test_multi_path_pyright_renders_single_invocation() -> None:
     # Unlike mypy (deliberate per-path runs), pyright takes all paths at once so its
     # startup cost is paid once, not once per path.

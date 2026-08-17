@@ -84,11 +84,6 @@ def _typecheck_env_form(facts: GateFacts) -> bool:
     return len(facts.typecheck_paths) == 1
 
 
-def _coverage_env_form(facts: GateFacts) -> bool:
-    """Single source of truth for 'coverage uses the $COVERAGE_SOURCE env form'."""
-    return len(facts.coverage_source) == 1
-
-
 def _ignored_override_notice(var: str) -> str:
     """A shell line that warns when a generation-time-literal step ignores an env override.
 
@@ -146,11 +141,14 @@ def _coverage_command(facts: GateFacts) -> list[str]:
     threshold at runtime, single-source or multi-source alike. That closes the gap where
     ``COV_FAIL_UNDER=0`` (or a narrow ``COVERAGE_SOURCE``) made the gate trivially pass; see
     the ``harden-quality-gate-integrity`` change.
+
+    One ``--cov=`` flag per source, unconditionally. There used to be a dedicated
+    single-source form that built the flag from ``_quoted(facts.coverage_source)`` directly;
+    for exactly one source that is byte-identical to this general, repeat-the-flag form
+    (joining one element is a no-op), so the dedicated form was dead weight, not a behavior
+    difference. Collapsing to one path removes that now-pointless branch.
     """
-    if _coverage_env_form(facts):
-        cov = f"--cov={_quoted(facts.coverage_source)}"
-    else:
-        cov = " ".join(f"--cov={_quoted((src,))}" for src in facts.coverage_source)
+    cov = " ".join(f"--cov={_quoted((src,))}" for src in facts.coverage_source)
     return [
         _ignored_override_notice("COVERAGE_SOURCE"),
         _ignored_override_notice("COV_FAIL_UNDER"),

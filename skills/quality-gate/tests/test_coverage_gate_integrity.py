@@ -140,13 +140,23 @@ def _coverage_fixture(root: Path, *, test_body: str) -> None:
     )
 
 
+_GUARDED_VARS = ("COVERAGE_SOURCE", "COV_FAIL_UNDER", "PYTEST_ADDOPTS")
+
+
 def _run_coverage(root: Path, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     """Actually execute the real, rendered ``quality-gate.sh coverage`` stage.
 
     A real ``bash`` subprocess running the real generated script against the real, installed
     ``pytest``/``coverage`` -- no mocking, since the outcome is the entire point.
+
+    The three guarded vars are stripped from the inherited ambient environment before
+    ``extra_env`` is applied: a "baseline" call (``extra_env=None``) must mean those vars are
+    genuinely unset in the subprocess, not merely unset in ``extra_env`` -- a stray ambient
+    ``PYTEST_ADDOPTS`` picked up from the calling shell would otherwise silently invalidate the
+    "no override" tests' assertions that the ignored-override notices stay absent.
     """
-    env = {**os.environ, "PYTHON": "python3"}
+    env = {k: v for k, v in os.environ.items() if k not in _GUARDED_VARS}
+    env["PYTHON"] = "python3"
     if extra_env:
         env.update(extra_env)
     assert BASH is not None
@@ -168,6 +178,13 @@ def test_low_coverage_fixture_fails_the_real_gate(tmp_path: Path) -> None:
     assert result.returncode != 0, combined
     assert "Required test coverage" in combined
     assert "not reached" in combined
+    # Baseline: no env override at all. The three ignored-override notices are guarded by
+    # `if [ -n "${VAR:-}" ]; ...` in the rendered script, so with the var genuinely unset they
+    # must never print. Nothing previously asserted this ABSENCE, so a guard rewritten to fire
+    # unconditionally (regardless of the var's state) would have gone undetected here.
+    assert "COVERAGE_SOURCE is ignored" not in combined
+    assert "COV_FAIL_UNDER is ignored" not in combined
+    assert "PYTEST_ADDOPTS is ignored" not in combined
 
 
 def test_high_coverage_fixture_passes_the_real_gate(tmp_path: Path) -> None:
@@ -180,6 +197,11 @@ def test_high_coverage_fixture_passes_the_real_gate(tmp_path: Path) -> None:
     assert result.returncode == 0, combined
     assert "Required test coverage" in combined
     assert "not reached" not in combined
+    # Same baseline-absence guard as the low-coverage case above, on the passing path too --
+    # a gate that happens to pass must still be silent about overrides nobody set.
+    assert "COVERAGE_SOURCE is ignored" not in combined
+    assert "COV_FAIL_UNDER is ignored" not in combined
+    assert "PYTEST_ADDOPTS is ignored" not in combined
 
 
 def test_cov_fail_under_zero_does_not_evade_the_low_coverage_gate(tmp_path: Path) -> None:
