@@ -56,6 +56,7 @@ TRACKED_DUPLICATES: dict[str, tuple[str, ...]] = {
         "skills/hierarchical-recursive-brainstorm/scripts/validate_skill.py",
         "skills/openspec-quality-plan/scripts/validate_skill.py",
         "skills/openspec-peer-review/scripts/validate_skill.py",
+        "skills/common/scripts/validate_skill.py",
     ),
     # The public-surface guard runs in every package's isolated pytest suite, so its logic
     # is copied into each package's tests/ (only the co-located baseline JSON differs). The

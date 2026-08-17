@@ -86,6 +86,13 @@ before that guard existed.
   lockstep" comment but no automated check. `scripts/tool_versions.py` is now the single
   source of truth and `scripts/validations/F_055.py` (F-055) asserts every copy matches
   it, read-only on `skills-ci.yml`. See ADR 0034.
+- [`changes/test-skill-validator-library/`](changes/test-skill-validator-library/) —
+  *proposed.* `skills/common/skill_validator.py` is the grading engine every other skill's
+  vendored `validate_skill.py` imports from — real library code with zero measured coverage
+  and no lint/mypy pass today. Adds a standalone test suite (100% branch coverage measured),
+  a dedicated `common` CI job (structural-tier-only, since it has no behavioral surface of
+  its own to grade — a third case ADR 0030 didn't explicitly name), and removes `common`'s
+  now-stale `EXEMPT` entry. No new F-ID or ADR.
 
 ## Archived changes
 
