@@ -74,6 +74,20 @@ touches no Python source, only agent markdown, docs, and one regenerated JSON fi
       `harden-quality-gate-integrity` worktree reachable from here. See `design.md`,
       "Dogfood and worktree isolation," for the full account. Left for the orchestrating
       session once this change merges and Phase 1's diff is reachable in the same tree.
+      **Update from the orchestrating session (post-merge):** the diff-reachability half
+      of this blocker is now resolved — Phase 1 is merged, its diff and
+      `harden-quality-gate-integrity/review.md` (produced by a general-purpose reviewer
+      per this plan's cross-cutting objective-review step) are both in this tree. A
+      second, distinct blocker remains, also checked not assumed: `claude-foundation/`
+      is staged (ADR 0028), not an installed plugin in *any* session working this repo
+      directly — confirmed by inspecting this orchestrating session's own available
+      subagent types, which do not include `spec-guardian`/`peer-reviewer` (only the
+      generic types every session gets). Dispatching these two charters by name requires
+      a session actually started with `claude --plugin-dir claude-foundation`, which
+      this integration was not. Genuinely left open — not something either this task or
+      the orchestrating session can complete today; revisit once `claude-foundation` is
+      extracted to its own repo (ADR 0028's M7) or a session is deliberately started
+      with the plugin loaded.
 
 ## 5. Verification
 
