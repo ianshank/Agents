@@ -80,6 +80,12 @@ before that guard existed.
   pass whose refuted attacks are kept, not deleted). Both discover a consumer repo's own
   planning conventions at invocation time instead of hardcoding this repo's paths, per
   `claude-foundation`'s own portability contract.
+- [`changes/pin-lockstep-tool-versions/`](changes/pin-lockstep-tool-versions/) —
+  *implemented.* `ruff==0.15.20`/`mypy==2.1.0` were hand-duplicated across 7
+  `pyproject.toml` dev extras and 9 `skills-ci.yml` pip-install lines with a "bump in
+  lockstep" comment but no automated check. `scripts/tool_versions.py` is now the single
+  source of truth and `scripts/validations/F_055.py` (F-055) asserts every copy matches
+  it, read-only on `skills-ci.yml`. See ADR 0034.
 
 ## Archived changes
 

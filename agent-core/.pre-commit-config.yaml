@@ -4,7 +4,7 @@
 # All hooks are scoped to agent-core/** so the harness at the repo root is untouched.
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0
+    rev: v0.15.20
     hooks:
       - id: ruff
         args: [--fix]
