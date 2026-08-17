@@ -8,8 +8,6 @@
 set -euo pipefail
 
 PYTHON="${PYTHON:-python3}"
-COVERAGE_SOURCE="${COVERAGE_SOURCE:-flow_protocol}"
-COV_FAIL_UNDER="${COV_FAIL_UNDER:-95}"
 
 log() { printf '\n\033[1m[quality-gate] %s\033[0m\n' "$1"; }
 
@@ -28,12 +26,18 @@ do_typecheck() {
 
 do_test() {
   log "test"
+  if [ -n "${PYTEST_ADDOPTS:-}" ]; then echo "quality-gate: PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" >&2; fi
+  unset PYTEST_ADDOPTS
   "$PYTHON" -m pytest
 }
 
 do_coverage() {
   log "coverage"
-  "$PYTHON" -m pytest --cov="$COVERAGE_SOURCE" --cov-branch --cov-report=term-missing --cov-fail-under="$COV_FAIL_UNDER"
+  if [ -n "${COVERAGE_SOURCE:-}" ]; then echo "quality-gate: COVERAGE_SOURCE is ignored; targets are fixed at generation time" >&2; fi
+  if [ -n "${COV_FAIL_UNDER:-}" ]; then echo "quality-gate: COV_FAIL_UNDER is ignored; targets are fixed at generation time" >&2; fi
+  if [ -n "${PYTEST_ADDOPTS:-}" ]; then echo "quality-gate: PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" >&2; fi
+  unset PYTEST_ADDOPTS
+  "$PYTHON" -m pytest --cov="flow_protocol" --cov-branch --cov-report=term-missing --cov-fail-under=95
 }
 
 do_all() {
