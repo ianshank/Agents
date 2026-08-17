@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import UTC
 from typing import Any
 
 import pytest
@@ -86,7 +87,7 @@ class TestLangfuseSink:
     def test_sink_emits_to_langfuse(self, sdk_langfuse_client: SDKLangfuseClient, tmp_path: Any) -> None:
         """LangfuseSink.emit() sends scores that appear in Langfuse API."""
         import uuid
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from eval_harness.core.types import EvalItem, ItemResult, RunResult, ScoreAggregate, ScoreResult, TargetOutput
 
@@ -98,7 +99,7 @@ class TestLangfuseSink:
         output = TargetOutput(output="answer", latency_ms=100.0)
         score = ScoreResult(name="accuracy", value=0.9, passed=True)
         item_result = ItemResult(item=item, output=output, scores=[score])
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         run_result = RunResult(
             run_id="e2e-sink-test-run",
             config_name="e2e-sink-test",
@@ -117,12 +118,12 @@ class TestLangfuseSink:
 
     def test_sink_without_client_raises(self) -> None:
         """LangfuseSink.emit() without attach_client raises RuntimeError."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from eval_harness.core.types import RunResult
 
         sink = LangfuseSink()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         dummy_result = RunResult(
             run_id="test",
             config_name="test",

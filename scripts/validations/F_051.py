@@ -34,7 +34,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -113,7 +113,7 @@ def main() -> int:
     _check(legacy.output == "mutated", "TargetOutput is still mutable (not frozen)", errors)
 
     # 3. ADR 0031 obligation 4: no trajectory key when no trajectory
-    moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    moment = datetime(2026, 1, 1, tzinfo=UTC)
 
     def run_of(target_output: TargetOutput) -> RunResult:
         return RunResult(

@@ -9,7 +9,7 @@ which cannot be exercised deterministically offline without a mock.
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from agent_core.detectors import (
     DetectorConfig,
@@ -23,7 +23,7 @@ from agent_core.detectors import (
 from agent_core.outcome_labeller import main
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 
-SINCE = datetime(2000, 1, 1, tzinfo=timezone.utc)
+SINCE = datetime(2000, 1, 1, tzinfo=UTC)
 
 
 # Real-git helpers shared with test_store_sync (tests/gitrepo.py).
@@ -60,7 +60,7 @@ def test_revert_outside_window_is_ignored(tmp_path):
     repo = _init_repo(tmp_path / "r")
     sha = _commit(repo, "a.txt", "v1", "add a")
     _git(repo, "revert", "--no-edit", sha)
-    future = datetime(2999, 1, 1, tzinfo=timezone.utc)
+    future = datetime(2999, 1, 1, tzinfo=UTC)
     assert GitRevertDetector(repo).was_reverted(sha, future) is False
 
 
@@ -114,7 +114,7 @@ def test_ci_failure_counts_timed_out_and_startup_failure():
 
 
 def test_ci_failure_ignores_failures_before_since():
-    since = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    since = datetime(2026, 6, 1, tzinfo=UTC)
     runs = [{"conclusion": "failure", "completed_at": "2026-01-01T00:00:00Z"}]  # pre-merge
     assert commit_has_ci_failure(runs, since) is False
 

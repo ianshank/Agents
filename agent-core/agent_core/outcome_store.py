@@ -19,7 +19,7 @@ import hashlib
 import json
 import math
 from dataclasses import asdict, dataclass, fields
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from .calibration import DEFAULT_N_BINS, auroc, expected_calibration_error, wilson_interval
@@ -30,7 +30,7 @@ from .merge_gate import CalibratorHealth, GatePolicyConfig, threshold_for_risk
 logger = get_logger(__name__)
 
 
-class LabelSource(str, Enum):
+class LabelSource(StrEnum):
     REVERT = "revert"  # passive: a revert commit referenced this change
     CI_FAILURE = "ci_failure"  # passive: net-new failure attributed to this change
     TIMEOUT_CLEAN = "timeout_clean"  # passive: window elapsed, nothing observed

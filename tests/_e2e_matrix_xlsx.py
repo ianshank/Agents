@@ -115,7 +115,7 @@ def parse_stamp(iso_timestamp: str) -> tuple[int, int, int, int, int, int]:
         logger.warning("unparseable provenance timestamp %r; pinning the archive to the ZIP epoch", iso_timestamp)
         return ZIP_EPOCH
     if parsed.tzinfo is not None:
-        parsed = parsed.astimezone(dt.timezone.utc).replace(tzinfo=None)
+        parsed = parsed.astimezone(dt.UTC).replace(tzinfo=None)
     if parsed.year < ZIP_EPOCH[0] or parsed.year > ZIP_MAX_YEAR:
         logger.warning("provenance timestamp %r is outside the ZIP range; pinning to the epoch", iso_timestamp)
         return ZIP_EPOCH

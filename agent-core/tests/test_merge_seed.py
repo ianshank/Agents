@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -11,7 +11,7 @@ from agent_core.merge_seed import already_seeded, main, seed_pending
 from agent_core.outcome_store import LabelSource, OutcomeStore
 from agent_core.protocols import FixedClock
 
-FIXED = datetime(2026, 6, 30, 12, 0, 0, tzinfo=timezone.utc)
+FIXED = datetime(2026, 6, 30, 12, 0, 0, tzinfo=UTC)
 CLOCK = FixedClock(FIXED)
 
 

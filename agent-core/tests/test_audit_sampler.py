@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import hypothesis.strategies as st
 import pytest
@@ -80,7 +80,7 @@ def test_record_verdict_uses_injected_clock(tmp_path):
     """A broken `clock or SystemClock()` fallback (e.g. ignoring `clock` entirely)
     would go undetected without this: every other record_verdict test exercises
     only the SystemClock default path."""
-    fixed = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+    fixed = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
     store = _store(tmp_path, _pending("c1"))
     rec = record_verdict(store, "c1", correct=True, clock=FixedClock(fixed))
     assert rec.labeled_at == fixed.isoformat()

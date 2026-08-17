@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -85,8 +85,8 @@ def main() -> int:
             config_name="c",
             items=[ItemResult(item=item, output=out, scores=[res])],
             aggregate={"weighted": ScoreAggregate(count=1, mean=res.value, pass_rate=1.0)},
-            started_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-            finished_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            started_at=datetime(2026, 1, 1, tzinfo=UTC),
+            finished_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
         dumped = run.to_dict()
         score_dict = dumped["items"][0]["scores"][0]

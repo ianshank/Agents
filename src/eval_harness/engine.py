@@ -13,7 +13,7 @@ import statistics
 import uuid
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any, cast
 
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 def _utcnow() -> datetime:
     """Return the current time in UTC."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _make_item_rng(base_seed: int, item_index: int) -> random.Random:

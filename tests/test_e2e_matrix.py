@@ -1124,7 +1124,7 @@ def _to_utc_iso(stamp: str) -> str:
         return stamp
     if stamp.endswith("Z"):
         stamp = stamp[:-1] + "+00:00"
-    return dt.datetime.fromisoformat(stamp).astimezone(dt.timezone.utc).isoformat()
+    return dt.datetime.fromisoformat(stamp).astimezone(dt.UTC).isoformat()
 
 
 def _provenance(sha: str | None = None, stamp: str | None = None) -> em.Provenance:

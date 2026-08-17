@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from agent_core.timeutil import parse_iso8601
 
-UTC_MIDNIGHT = datetime(2026, 1, 1, tzinfo=timezone.utc)
+UTC_MIDNIGHT = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def test_parses_z_suffix():

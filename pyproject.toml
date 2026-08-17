@@ -13,7 +13,6 @@ license-files = ["LICENSE", "NOTICE"]
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
@@ -108,7 +107,7 @@ markers = [
 ]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 120
 src = ["src", "tests"]
 
@@ -136,7 +135,7 @@ max-complexity = 14
 "scripts/**" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 # Package bases for explicit_package_bases (below). mypy picks the longest matching base
 # per file.
 #   * "src" makes `mypy src/eval_harness` name the package `eval_harness.*` (stripping the
@@ -161,12 +160,13 @@ ignore_missing_imports = true
 
 # Known limitation: when phoenix-evals is installed alongside dev, its transitive
 # numpy 2.5+ dependency uses Python 3.12 `type` statement syntax in its stubs, and
-# mypy under python_version = "3.10" cannot parse them. mypy `follow_imports` in
+# mypy under python_version = "3.11" cannot parse them. mypy `follow_imports` in
 # `[[tool.mypy.overrides]]` does NOT skip stub parsing, so a per-module override
 # can't fix this. eval-harness-ci.yml's test job intentionally does not install
 # phoenix-evals (`pip install -e ".[dev,langfuse,openai,parquet]"`), so mypy stays
 # green in CI. For local mypy runs with the full extras, either pin the mypy venv
-# to CI's install set or bump python_version to 3.12 (revisit after 3.10 EOL).
+# to CI's install set or bump python_version to 3.12 -- raising the floor to 3.11
+# (ADR 0034) did not itself resolve this, since the stubs specifically need 3.12.
 #
 # Second known limitation: `trace.get_tracer` in `src/eval_harness/phoenix_client/__init__.py`
 # fails type-check locally when opentelemetry is present transitively via unpinned

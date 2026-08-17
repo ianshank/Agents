@@ -35,7 +35,7 @@ def build_manifest(
     }
     return {
         "dataset_name": dataset_name,
-        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
         "source_input": source_input,
         "schema_version": SCHEMA_VERSION,
         "mode": mode,
