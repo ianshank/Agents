@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from eval_harness.core.types import (
     EvalItem,
@@ -73,7 +73,7 @@ def test_langfuse_dataset_with_client():
 def _run():
     item = EvalItem(id="i", inputs={}, expected=None)
     ir = ItemResult(item=item, output=TargetOutput(output="o"), scores=[ScoreResult("acc", 1.0, True)])
-    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
     return RunResult(
         run_id="r1",
         config_name="c",
@@ -133,7 +133,7 @@ def test_langfuse_sink_min_value_filter():
     assert len(client.scores) == 1
 
     # Now emit a run whose score is below the threshold
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from eval_harness.core.types import (
         EvalItem,
@@ -149,7 +149,7 @@ def test_langfuse_sink_min_value_filter():
         output=TargetOutput(output="o"),
         scores=[ScoreResult("acc", 0.1, False)],
     )
-    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
     low_run = RunResult(
         run_id="r2",
         config_name="c",

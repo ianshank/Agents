@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from agent_core.outcome_labeller import LabellerConfig, label_matured, main
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 from agent_core.protocols import FixedClock
 
-NOW = datetime(2026, 6, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 6, 1, tzinfo=UTC)
 CLOCK = FixedClock(NOW)
 CFG = LabellerConfig(maturity_days=7)
 

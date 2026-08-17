@@ -23,7 +23,16 @@ MIGRATIONS: dict[str, Migration] = {}
 
 
 def migrate_config(data: ConfigDict) -> ConfigDict:
-    """Bring a (possibly older) config dict up to the current schema version."""
+    """Bring a (possibly older) config dict up to the current schema version.
+
+    This migration-chain-walker pattern is intentionally duplicated across:
+    - agent-core/agent_core/version.py
+    - behavioral-regression/behavioral_regression/version.py (this file)
+    - flow-protocol/flow_protocol/version.py
+    - src/eval_harness/config/migrations.py
+    See ADR 0034 for rationale: agent-core cannot import from elsewhere, and
+    eval_harness uses an incompatible (to_version, fn) tuple shape.
+    """
     data = dict(data)
     version = str(data.get("version", SCHEMA_VERSION))
     seen: set[str] = set()

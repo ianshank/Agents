@@ -43,8 +43,11 @@ jobs:
           bash tests/smoke/install_smoke.sh
 
   release-gate:
-    # Behavioral evals gate RELEASES, not merges (ADR 0003): run on tags and
-    # nightly; requires grading.json from a skill-creator eval run.
+    # Behavioral evals gate RELEASES, not merges (ADR 0003): runs on tags only,
+    # on demand -- no schedule: trigger exists in this file's `on:` block above,
+    # so this never runs nightly despite an earlier version of this comment
+    # claiming otherwise (found by a 2026-08-17 peer review). Requires
+    # grading.json from a skill-creator eval run.
     name: release gate (behavioral evals)
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest

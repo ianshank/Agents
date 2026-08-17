@@ -60,7 +60,7 @@ def resolve_explicit_files(files: Sequence[str] | None, files_from: str | None) 
     return None
 
 
-def load_yaml_mapping(path: str) -> dict:
+def load_yaml_mapping(path: str) -> dict[str, object]:
     """Load a YAML file that must be a mapping; any I/O or parse error -> ``ConfigError``."""
     try:
         with open(path, encoding="utf-8") as fh:

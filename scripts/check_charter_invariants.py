@@ -91,6 +91,16 @@ _ABC_INTERFACES = ("Scorer",)
 # check. int/float equality (0 == 0.0) means each entry also excludes its float counterpart.
 _MAGIC_NUMBER_ALLOWLIST = {0, 1, -1, 2}
 
+# Tenacity retry-decorator callables whose numeric arguments are exactly the class of
+# magic-number violation invariant 5 targets, but that were invisible to
+# check_magic_number_defaults' original scan: it only ever inspected
+# node.args.defaults/kw_defaults (function *signature* defaults), never the
+# args/keywords of a Call expression inside a decorator like
+# ``@retry(wait=wait_exponential(min=2, max=30), stop=stop_after_attempt(5))``.
+# Found via a 2026-08-17 peer review of OpenAIJudge.evaluate, which carried exactly
+# that violation undetected. The only tenacity callables this codebase actually uses.
+_RETRY_DECORATOR_CALLABLES = {"retry", "wait_exponential", "wait_fixed", "stop_after_attempt"}
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -110,11 +120,11 @@ def _extract_toml_section(text: str, section: str) -> str:
     """Return the raw body of a top-level TOML ``[section]`` (up to the next
     top-level header or EOF), or ``""`` if the section is absent.
 
-    Deliberately not a full TOML parser: this repo's CI matrix runs Python 3.10,
-    where the stdlib ``tomllib`` (3.11+) is unavailable, and adding a backport
-    dependency (``tomli``) for two existence checks would itself be new drift
-    surface. The pyproject.toml files this reads are simple and well-formed, so a
-    section-scoped regex is sufficient.
+    Deliberately not a full TOML parser: even though the floor is now 3.11+ (ADR
+    0034), where stdlib ``tomllib`` is available, switching this existing regex
+    scanner to real TOML parsing is a separate, untested-here change — the
+    pyproject.toml files this reads are simple and well-formed, so a
+    section-scoped regex remains sufficient without it.
     """
     pattern = re.compile(rf"^\[{re.escape(section)}\]\s*$(.*?)(?=^\[|\Z)", re.MULTILINE | re.DOTALL)
     match = pattern.search(text)
@@ -310,10 +320,44 @@ def _is_config_class(node: ast.ClassDef) -> bool:
     return node.name.endswith("Config")
 
 
+def _is_magic_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value not in _MAGIC_NUMBER_ALLOWLIST
+
+
+def _retry_call_magic_numbers(node: ast.AST, path: Path, root: Path) -> list[Finding]:
+    """Bare numeric literals passed to a tenacity retry-decorator call.
+
+    ``check_magic_number_defaults``'s original scan only ever inspected
+    ``node.args.defaults``/``kw_defaults`` (function *signature* defaults), never the
+    ``args``/``keywords`` of a ``Call`` expression inside a decorator like
+    ``@retry(wait=wait_exponential(min=2, max=30), stop=stop_after_attempt(5))`` — a real
+    gap found via a 2026-08-17 peer review of ``OpenAIJudge.evaluate``, which carried
+    exactly that violation undetected.
+    """
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+        return []
+    if node.func.id not in _RETRY_DECORATOR_CALLABLES:
+        return []
+    literals = list(node.args) + [kw.value for kw in node.keywords]
+    rel = path.relative_to(root).as_posix()
+    return [
+        Finding(
+            "possible_magic_number_default",
+            f"{rel}:{node.lineno}::{node.func.id}() literal={arg.value!r}",
+            hard=False,
+        )
+        for arg in literals
+        if isinstance(arg, ast.Constant) and _is_magic_number(arg.value)
+    ]
+
+
 def check_magic_number_defaults(root: Path) -> list[Finding]:
     """Charter §4 invariant 5 (heuristic, non-blocking): flag bare numeric literal
-    defaults on non-``__init__``-of-``*Config`` functions, outside tests. A proxy for
-    "no hard-coded numeric defaults at call sites" — not a full proof, since a
+    defaults on non-``__init__``-of-``*Config`` functions, outside tests, AND bare
+    numeric literals passed to a tenacity retry-decorator call (``retry``,
+    ``wait_exponential``, ``wait_fixed``, ``stop_after_attempt`` —
+    :data:`_RETRY_DECORATOR_CALLABLES`, see :func:`_retry_call_magic_numbers`). A proxy
+    for "no hard-coded numeric defaults at call sites" — not a full proof, since a
     reasonable proxy is the best that's mechanically checkable here.
     """
     findings: list[Finding] = []
@@ -334,6 +378,7 @@ def check_magic_number_defaults(root: Path) -> list[Finding]:
             for node in ast.walk(tree):
                 if isinstance(node, ast.ClassDef):
                     class_stack.append(node)
+                findings.extend(_retry_call_magic_numbers(node, path, root))
                 if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
                 enclosing = next((c for c in reversed(class_stack) if node in ast.walk(c)), None)
@@ -341,12 +386,7 @@ def check_magic_number_defaults(root: Path) -> list[Finding]:
                     continue  # *Config classes ARE the documented-default source
                 defaults = list(node.args.defaults) + list(node.args.kw_defaults)
                 for default in defaults:
-                    if (
-                        isinstance(default, ast.Constant)
-                        and isinstance(default.value, (int, float))
-                        and not isinstance(default.value, bool)
-                        and default.value not in _MAGIC_NUMBER_ALLOWLIST
-                    ):
+                    if isinstance(default, ast.Constant) and _is_magic_number(default.value):
                         # ``.as_posix()`` so the detail is portable: on Windows a bare
                         # ``relative_to`` renders ``flow-corpus\thing.py``, which breaks any
                         # consumer matching on ``/`` (and differs from Linux CI's output).

@@ -29,7 +29,16 @@ MIGRATIONS: dict[str, Migration] = {}
 
 
 def migrate_protocol(data: PayloadDict) -> PayloadDict:
-    """Bring a (possibly old) serialized payload up to the current PROTOCOL_VERSION."""
+    """Bring a (possibly old) serialized payload up to the current PROTOCOL_VERSION.
+
+    This migration-chain-walker pattern is intentionally duplicated across:
+    - agent-core/agent_core/version.py
+    - behavioral-regression/behavioral_regression/version.py
+    - flow-protocol/flow_protocol/version.py (this file)
+    - src/eval_harness/config/migrations.py
+    See ADR 0034 for rationale: agent-core cannot import from elsewhere, and
+    eval_harness uses an incompatible (to_version, fn) tuple shape.
+    """
     data = dict(data)
     version = data.get("protocol_version", PROTOCOL_VERSION)
     seen: set[str] = set()

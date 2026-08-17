@@ -9,8 +9,18 @@ it was built against. This validator asserts:
 The negative cases are the point: if a wrong pin passed, the skew tripwire would be dead.
 """
 
+from __future__ import annotations
+
+import logging
 import os
 import sys
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from _common import configure_logging
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 for rel in ("flow-protocol", "flow-corpus", "agent-core"):
@@ -60,11 +70,16 @@ def validate_f012() -> bool:
 
     ok = True
     for name, passed in checks.items():
-        print(f"  [{'PASS' if passed else 'FAIL'}] {name}")
+        (logger.info if passed else logger.error)("  [%s] %s", "PASS" if passed else "FAIL", name)
         ok = ok and passed
-    print("OK: F-012 validation passed." if ok else "FAIL: F-012 validation failed.")
+    (logger.info if ok else logger.error)("OK: F-012 validation passed." if ok else "FAIL: F-012 validation failed.")
     return ok
 
 
+def main() -> int:
+    configure_logging()
+    return 0 if validate_f012() else 1
+
+
 if __name__ == "__main__":
-    sys.exit(0 if validate_f012() else 1)
+    sys.exit(main())

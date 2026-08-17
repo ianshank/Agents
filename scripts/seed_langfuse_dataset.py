@@ -16,7 +16,9 @@ import os
 import sys
 from typing import Any
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+from _cli import configure_logging
+
+configure_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Default dataset name — overridable via CLI arg or env var

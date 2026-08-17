@@ -11,10 +11,20 @@ Deterministic and offline. Asserts the F-016 exit gates:
      regression; SHIPs only validated, separable, below-risk changes.
 """
 
+from __future__ import annotations
+
 import json
+import logging
 import os
 import socket
 import sys
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from _common import configure_logging
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 for rel in ("flow-protocol", "flow-corpus", "agent-core", "behavioral-regression"):
@@ -95,11 +105,16 @@ def validate_f016() -> bool:
 
     ok = True
     for name, passed in checks.items():
-        print(f"  [{'PASS' if passed else 'FAIL'}] {name}")
+        (logger.info if passed else logger.error)("  [%s] %s", "PASS" if passed else "FAIL", name)
         ok = ok and passed
-    print("OK: F-016 validation passed." if ok else "FAIL: F-016 validation failed.")
+    (logger.info if ok else logger.error)("OK: F-016 validation passed." if ok else "FAIL: F-016 validation failed.")
     return ok
 
 
+def main() -> int:
+    configure_logging()
+    return 0 if validate_f016() else 1
+
+
 if __name__ == "__main__":
-    sys.exit(0 if validate_f016() else 1)
+    sys.exit(main())

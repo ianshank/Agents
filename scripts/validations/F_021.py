@@ -20,7 +20,7 @@ import os
 import re
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -46,7 +46,7 @@ def _sample_run():
         TargetOutput,
     )
 
-    ts = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2026, 1, 1, tzinfo=UTC)
     item = ItemResult(
         item=EvalItem(id="i1", inputs={"q": "<b>hi</b>"}, expected="x"),
         output=TargetOutput(output="<b>hi</b>"),

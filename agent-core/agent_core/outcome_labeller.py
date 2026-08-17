@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from typing import Protocol, runtime_checkable
 
 from .detectors import GitHubChecksFailureAttributor, GitRevertDetector, resolve_repo
-from .logging_util import get_logger
+from .logging_util import configure_logging, get_logger
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 from .protocols import Clock, SystemClock
 from .timeutil import parse_iso8601
@@ -116,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         help="owner/name for GitHub check-run lookup (default: derived from the origin remote)",
     )
     args = ap.parse_args(argv)
+    configure_logging(level="INFO")
 
     # Real detectors: reverts from git history, CI failures from GitHub Actions
     # check-runs. Both fail safe when the repo / remote / network is unavailable,

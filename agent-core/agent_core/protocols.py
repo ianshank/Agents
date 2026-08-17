@@ -10,8 +10,8 @@ add or swap an implementation, never edit the loop.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:  # avoid runtime import cycle; restores static typing
@@ -34,7 +34,7 @@ class SystemClock:
     """Default ``Clock``, backed by the real wall clock (UTC)."""
 
     def now(self) -> datetime:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -105,7 +105,7 @@ class CostEstimator(Protocol):
     def project(self, state: CycleState) -> float: ...
 
 
-class StopReason(str, Enum):
+class StopReason(StrEnum):
     CONTINUE = "continue"
     SUCCESS = "success"  # converged
     STALL = "stall"  # no progress

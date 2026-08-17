@@ -21,6 +21,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from _common import configure_logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,10 +56,7 @@ def _check(condition: bool, msg: str, errors: list[str]) -> bool:
 
 def main() -> int:
     """Run all F-019 validation checks."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)-8s %(name)s: %(message)s",
-    )
+    configure_logging()
 
     errors: list[str] = []
 

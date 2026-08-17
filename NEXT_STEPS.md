@@ -472,13 +472,14 @@
 - [ ] **Make gates required** — add `quality-gates` jobs to branch-protection required
   checks once they have soaked.
 - [ ] **Enable auto-fix loop** — only after the ADR 0004 human checklist is complete.
-- [ ] **Consider migrating `Scorer` to `Protocol`** — the other four core interfaces
+- [ ] **Migrate `Scorer` to `Protocol`** — the other four core interfaces
   (`Judge`/`DatasetSource`/`TargetRunner`/`ResultSink`) are `typing.Protocol`; `Scorer`
-  stays `abc.ABC` because `typing.Protocol.__init__` doesn't reliably propagate a Protocol
-  base's own `__init__` to subclasses that don't redefine their own on Python 3.10 (fixed in
-  3.11+), and `pyproject.toml`/`agent-core/pyproject.toml` both pin `requires-python >= 3.10`.
-  Revisit once the floor moves past 3.10 (see `src/eval_harness/core/interfaces.py`'s module
-  docstring for the confirmed regression).
+  still stays `abc.ABC` because `typing.Protocol.__init__` doesn't reliably propagate a
+  Protocol base's own `__init__` to subclasses that don't redefine their own on Python
+  3.10. **The floor has now moved past 3.10** — `pyproject.toml`/`agent-core/pyproject.toml`
+  (and the other 3 sibling packages) pin `requires-python >= 3.11` as of ADR 0034 — so the
+  blocker is cleared; this is now unblocked follow-up work, not a wait-and-revisit item (see
+  `src/eval_harness/core/interfaces.py`'s module docstring for the confirmed regression).
 - [x] **Seed merge-gate records (F-010 seam)** — `agent_core/merge_seed.py` writes the initial
   pending `OutcomeRecord` (`change_id` / `domain` / `raw_confidence` / `merged_at`) at merge
   time (idempotent, default-off integration in `merge_gate_ci`); closes the only seam ADR 0005

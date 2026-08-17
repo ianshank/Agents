@@ -6,7 +6,7 @@ error handling, config validation, and aggregation correctness.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -28,7 +28,7 @@ from eval_harness.version import SCHEMA_VERSION
 
 
 def _fixed_clock():
-    return datetime(2026, 1, 1, tzinfo=timezone.utc)
+    return datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def _make_config(extra_run=None):
