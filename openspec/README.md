@@ -71,6 +71,15 @@ before that guard existed.
   active `PYTEST_ADDOPTS` guard, an anchored regex verified safe against each package's real
   coverage suite, and positive-control tests that run the real gate against a real
   under-covered fixture.
+- [`changes/add-foundation-reviewer-charters/`](changes/add-foundation-reviewer-charters/) —
+  *proposed.* `claude-foundation/agents/` holds only `explorer`/`test-runner` — no
+  spec-guardian/peer-reviewer-equivalent charter exists, and no sequential review-loop
+  convention exists to slot one into. Adds `spec-guardian` (read-only conformance check of a
+  change against its own declared spec/plan/decision surface) and `peer-reviewer` (read-only
+  two-pass adversarial review — mechanical fact-check, then a separately labeled adversarial
+  pass whose refuted attacks are kept, not deleted). Both discover a consumer repo's own
+  planning conventions at invocation time instead of hardcoding this repo's paths, per
+  `claude-foundation`'s own portability contract.
 
 ## Archived changes
 
