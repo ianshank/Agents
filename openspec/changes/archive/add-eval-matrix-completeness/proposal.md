@@ -1,9 +1,9 @@
 # Change: add-eval-matrix-completeness
 
-**Status:** proposed · **Date:** 2026-08-08 · **Author track:** `claude/` agent lane
+**Status:** implemented · **Date:** 2026-08-08 · **Author track:** `claude/` agent lane
 **Motivated by:** `./review.md` (peer review of the matrix-completion plan: every citation
 re-derived against the tree, plus an adversarial design pass)
-**Compiles down to:** an F-ID claimed at land + [ADR 0032](../../../docs/decisions/0032-matrix-completeness-policy.md)
+**Compiles down to:** an F-ID claimed at land + [ADR 0032](../../../../docs/decisions/0032-matrix-completeness-policy.md)
 
 ## Why
 

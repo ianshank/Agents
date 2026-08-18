@@ -13,7 +13,7 @@ commits** (each commit green standalone).
 - [x] `proposal.md` / `design.md` / `tasks.md` / `review.md` / `specs/eval-matrix/spec.md`.
 - [x] Linked bullet in `openspec/README.md` "Current changes" (target exactly
   `changes/add-eval-matrix-completeness/` — the docs.yml index guard matches link targets).
-- [x] [ADR 0032](../../../docs/decisions/0032-matrix-completeness-policy.md) authored as
+- [x] [ADR 0032](../../../../docs/decisions/0032-matrix-completeness-policy.md) authored as
   *Proposed*.
 
 ## 1. Trajectory rows + M8 pipelines + shipped-config fix — commit 1

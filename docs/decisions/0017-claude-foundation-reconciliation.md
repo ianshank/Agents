@@ -19,8 +19,9 @@ This repo, however, already has a mature, CI-enforced **custom** skill system th
 the plugin: four domain skills (`openai-judge`, `architecture-drift-guard`,
 `eval-corpus-forge`, `model-bench`) in the custom frontmatter convention
 (`compatibility` and semver `version` on all four; three also declare
-`validator_version: '2.0'` — `architecture-drift-guard` predates that field, an existing
-inconsistency this ADR records rather than fixes), a schema-validated registry
+`validator_version: '2.0'` — `architecture-drift-guard` predated that field, an inconsistency
+this ADR originally recorded rather than fixed; `validator_version: '2.0'` has since been
+added to its frontmatter, closing the gap), a schema-validated registry
 (`skills/marketplace.yaml` + `scripts/skill_marketplace.py`, F-023), per-skill CI with ≥95%
 branch-coverage gates (`skills-ci.yml`), and the vendored `validate_skill.py` drift guard
 (ADR 0009). The plugin's `.claude-plugin/marketplace.json` format and Anthropic's SKILL.md

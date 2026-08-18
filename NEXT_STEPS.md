@@ -182,11 +182,11 @@
 
 - [ ] **Skills/agents extraction from the F-053 work** (ranked by value per hour; the
   Phase-2 fan-out is the forcing function):
-  1. **Extend `skills/openspec-peer-review`** with the two-pass protocol this branch used —
+  1. ~~**Extend `skills/openspec-peer-review`** with the two-pass protocol~~ — **shipped**
+     (v1.1.0, `skills/openspec-peer-review/SKILL.md` + `references/two-pass-protocol.md`):
      an independent mechanical fact-check (every falsifiable claim re-derived against a
      pinned SHA, verdicts CONFIRMED/CORRECTED/REFUTED) *plus* an adversarial design pass,
-     attacks verified before kept and refuted attacks recorded. It caught five real defects
-     across two rounds here. SKILL.md edit only, stays subjective tier, ~2h.
+     attacks verified before kept and refuted attacks recorded.
   2. **Validator-registration guard (F-054)** — the 5-point sweep (ledger entry, `F_0NN.py`,
      the import/parametrize hook, the `--cov=` token) has now been half-done twice. This
      pass added the drift test for two of those lists; a ~25-line guard over all of them
@@ -210,6 +210,39 @@
      advisory — the opposite of what these blocking gates need. A ~15-line
      `freshness_main(render, path, hint)` helper is the right size; candidate 3 subsumes the
      rest.
+  6. **`openspec-archive` mechanical helper — reconsidered, not rejected.** A 2026-08-18
+     ledger-refresh pass archiving 6 proposals by hand made two real mistakes a script
+     wouldn't: an ad-hoc `grep ... | grep -v "changes/archive"` link check silently excluded
+     its own results (grepping *inside* `changes/archive/` means the matched filename itself
+     contains the exclude string), missing 6 relative links broken by the directory move
+     until CI caught them post-push; and cross-references *between* the archived proposals
+     themselves (their `design.md`/`review.md` citing each other's pre-move paths) were
+     missed on the first pass, caught only by a second, independent review. Given more
+     proposals will reach archive-eligibility as the roadmap lands (the four core reliability
+     changes, at minimum), this is a recurring operation, not the one-time pass the original
+     "declined" verdict assumed — worth a small deterministic script (git mv + Status flip +
+     `openspec/README.md` index update + repo-wide path-reference rewrite + the relative-link
+     check, run automatically as its last step) next time three or more proposals queue up
+     for archiving at once.
+  7. **`openspec-implementation-review`'s "plugin path" has never actually run.** Its
+     `detect.py` branches on whether `claude-foundation` is plugin-loaded, but every real
+     precedent (`test-skill-validator-library`, `harden-quality-gate-integrity`,
+     `add-foundation-reviewer-charters`'s own dogfood task) has only exercised the "degraded"
+     branch. A 2026-08-18 session proved `foundation:spec-guardian`/`foundation:peer-reviewer`
+     dispatch works when hand-invoked via `claude --plugin-dir claude-foundation`, but did
+     *not* run this skill's own `scripts/run.py plan`/`compose` from inside that session — so
+     the plugin-path code itself remains unverified end-to-end. Tracked in
+     `add-openspec-implementation-review/tasks.md` §7 as an explicit, still-open follow-on;
+     worth doing the next time a `--plugin-dir` session is available.
+  8. **Two smaller hygiene notes from the same pass, not worth their own items.** (a)
+     `docs.yml`'s relative-link check is CI-only and advisory (`continue-on-error: true`,
+     deliberately "soaking") — nothing lets a contributor run the identical check locally
+     before pushing; a documented one-liner (not a new hook or a hand-edit to the *generated*
+     root `Makefile`) would have caught item 6's link breakage pre-push. (b) Any script/skill
+     that diffs "this branch vs. main" should diff against `origin/main`, not a possibly-stale
+     local ref — this session's own `code-review` skill invocation self-corrected for exactly
+     this after a raw `git diff main...HEAD` picked up 267 commits of drift; not every
+     diff-consuming script in the tree is known to do the same.
 - [x] **Reasoning & Planning Skills** — added three composable reasoning skills to the marketplace (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`).
 - [x] **Dynamic drift guard script tech-debt resolution** — resolved tech debt in the dynamic drift guard scripts.
 - [x] **Proxy-correlation measurement, PPI++ report estimator & audit propensity (F-047,
@@ -396,6 +429,21 @@
   the activation PR (protected paths); exclude `merge-gate-data` from branch
   protection; enable required reviewers on the `merge-gate-verdict` environment;
   record the first verdict via the dispatch UI.
+- [ ] **Quality-gate tech debt (F-054 dogfood follow-up, `openspec/changes/archive/
+  harden-quality-gate-integrity/review.md`)** — a real `spec-guardian`→`peer-reviewer`
+  dispatch (via `claude --plugin-dir claude-foundation`, the functional proof
+  `add-foundation-reviewer-charters`'s task 4 needed) found one live gate-integrity hole
+  F-054 didn't close: 6 of 7 generated `do_coverage()` bodies pass no `--cov-config`, so
+  `COVERAGE_RCFILE` reaches coverage.py unguarded — a pointed-at rc file with a broad
+  `exclude_lines`/`omit` can drive measured coverage to ~100% with no notice and no `unset`,
+  the same evasion class this change exists to close. Root's hand-maintained `do_extra()` is
+  incidentally immune (`--cov-config=scripts/.coveragerc` is explicit there); the 6 generated
+  scripts are not. Fix is one line in `_coverage_command` (add `--cov-config=`) or fold into
+  a generalized env-scrub alongside the existing `PYTEST_ADDOPTS` guard. The same pass found
+  four now-stale documentation claims in the archived proposal's own `proposal.md`/`design.md`/
+  `spec.md`/`SKILL.md` and one prior review attack-refutation that over-claimed — full detail
+  in the review.md's dated follow-up section; none change the coverage gate's actual
+  correctness today.
 - [ ] **Merge-gate tech debt (`docs/gap-analysis-merge-gate-2026-07-24.md`)** — the three
   HIGH findings (G1 `GatePolicyConfig` unreachable/unvalidated, G2 the duplicated binning
   implementations, G3 `_upper_half_ci_width` returning `0.0` for "no data") are **closed by
@@ -403,16 +451,25 @@
   also **refuted G5**'s headline claim — `outcome_labeller` and `audit_sampler` both gained
   real logging since the doc was written — leaving its `record_verdict` non-idempotency
   sub-claim, which the library docstring says is deliberate.
-  Remaining, none of which can change a gate decision: **G4**, widened by that
-  re-verification from 2 CLIs to 4 (`calibration_report`, `merge_seed`, `outcome_labeller`
-  and `audit_sampler` all log at INFO but never call `configure_logging`, so every structured
-  run record is discarded at the root default WARNING); **G6** `load_yaml_mapping -> dict`
-  erasing types at three call sites; **G7** two `configure_logging` implementations with
-  different signatures and formats, of which `scripts/_cli` is the one `AGENTS.md` names as
-  canonical; **G8** two provably dead lines in `IsotonicCalibrator.predict` counted against
-  the coverage budget; **G9** `agent_confidence.py` missing from `quality-gates.yml`'s
-  explicit `--cov=` allowlist, so the module computing every `raw_confidence` is gated in one
-  job and not the other.
+  **Fixed (`9d68d44`, `38761f7a`):** G4 (all 4 CLIs — `calibration_report`, `merge_seed`,
+  `outcome_labeller`, `audit_sampler` — now call `configure_logging`); G6
+  (`load_yaml_mapping` now returns `dict[str, object]`, `mypy --strict` clean at all three
+  call sites); G8 (the two dead `IsotonicCalibrator.predict` lines now carry
+  `# pragma: no cover`); G9 (`agent_confidence.py` added to `quality-gates.yml`'s `--cov=`
+  allowlist).
+  Remaining, none of which can change a gate decision: **G7**, four `configure_logging`
+  implementations across two incompatible signature families still coexist (`scripts/_cli.py`
+  is the one `AGENTS.md` names as canonical) — `9d68d44` migrated 7 stray
+  `logging.basicConfig()` callers onto the canonical helpers but did not unify the
+  implementations themselves. `agent_core/logging_util.py` and
+  `skills/architecture-drift-guard/scripts/adguard/logging_util.py` are genuinely
+  byte-identical to each other (`level: str = "INFO"`, explicit `force` kwarg) but share
+  neither shape nor behavior with the canonical `scripts/_cli.py`
+  (`verbose: bool, level: int | None`, no `force`). `experiments/backend-validation`'s copy
+  matches `scripts/_cli.py`'s *signature* but silently hardcodes `force=True` in the body —
+  every call there tears down and replaces existing handlers, where the canonical version is a
+  no-op once one exists; a future dedup that trusts these as interchangeable would silently
+  change that reconfiguration behavior.
 - [ ] **Merge-gate soak** — accumulate shadow decisions and weekly audits before
   revisiting the ADR 0005 enablement checklist. **The "N≥20" this entry used to quote is a
   soak *counter*, not the activation bar**: the peer review in
@@ -445,8 +502,10 @@
 - [x] **Execute `claude-foundation` M0–M6 (staged)** — full plugin implemented per
   `docs/plans/claude-foundation/PLAN.md` in the staging directory
   [`claude-foundation/`](claude-foundation/): manifests (official `claude plugin validate`
-  green), 4 skills with evals, 2 subagents, 3 hooks (fail-closed guard, fail-open
-  verify/logger), `foundation_tools` validation/scan/eval-gate package (94% branch
+  green), 4 skills with evals, 4 subagents (`explorer`, `test-runner`, `spec-guardian`,
+  `peer-reviewer` — the latter two added by `add-foundation-reviewer-charters`), 3 hooks
+  (fail-closed guard, fail-open verify/logger), `foundation_tools` validation/scan/eval-gate
+  package (94% branch
   coverage, mypy strict), inert CI workflow, docs+ADRs. Verified end-to-end via
   `claude --plugin-dir` headless load. Staging is CI-neutral here (per ADR 0017 the
   plugin's final home is its own repo).
@@ -479,14 +538,14 @@
 - [ ] **Make gates required** — add `quality-gates` jobs to branch-protection required
   checks once they have soaked.
 - [ ] **Enable auto-fix loop** — only after the ADR 0004 human checklist is complete.
-- [ ] **Migrate `Scorer` to `Protocol`** — the other four core interfaces
-  (`Judge`/`DatasetSource`/`TargetRunner`/`ResultSink`) are `typing.Protocol`; `Scorer`
-  still stays `abc.ABC` because `typing.Protocol.__init__` doesn't reliably propagate a
-  Protocol base's own `__init__` to subclasses that don't redefine their own on Python
-  3.10. **The floor has now moved past 3.10** — `pyproject.toml`/`agent-core/pyproject.toml`
-  (and the other 3 sibling packages) pin `requires-python >= 3.11` as of ADR 0034 — so the
-  blocker is cleared; this is now unblocked follow-up work, not a wait-and-revisit item (see
-  `src/eval_harness/core/interfaces.py`'s module docstring for the confirmed regression).
+- [x] **Migrate `Scorer` to `Protocol` (`d4dc07f`)** — the blocker (`typing.Protocol.__init__`
+  not reliably propagating to subclasses on Python 3.10) cleared once the floor moved past
+  3.10 (`pyproject.toml`/`agent-core/pyproject.toml` and the other 3 sibling packages pin
+  `requires-python >= 3.11`, ADR 0034). All five core interfaces —
+  `Scorer`/`Judge`/`DatasetSource`/`TargetRunner`/`ResultSink` — are now `typing.Protocol`;
+  `src/eval_harness/core/interfaces.py:30` and `scripts/check_charter_invariants.py`'s
+  `_PROTOCOL_INTERFACES` (which now includes `"Scorer"`, `_ABC_INTERFACES = ()`) are the
+  enforcement mechanism going forward.
 - [x] **Seed merge-gate records (F-010 seam)** — `agent_core/merge_seed.py` writes the initial
   pending `OutcomeRecord` (`change_id` / `domain` / `raw_confidence` / `merged_at`) at merge
   time (idempotent, default-off integration in `merge_gate_ci`); closes the only seam ADR 0005

@@ -5,7 +5,7 @@
 file-by-file comparison against a sibling project's CI discipline, independently
 fact-checked against this repo's actual files (not trusted from the comparison).
 **Compiles down to:** `scripts/tool_versions.py` (source of truth) + F-055
-(`features.yaml`, `scripts/validations/F_055.py`) + [ADR 0034](../../../docs/decisions/0034-tool-version-lockstep.md).
+(`features.yaml`, `scripts/validations/F_055.py`) + [ADR 0034](../../../../docs/decisions/0034-tool-version-lockstep.md).
 
 ## Why
 
@@ -54,7 +54,7 @@ copy. This proposal closes the same defect class for the ruff/mypy pins.
 - Claim F-055 in `features.yaml`.
 - Point `AGENTS.md`'s existing pin bullet (`AGENTS.md:97`) at `scripts/tool_versions.py` as
   the canonical source, one line, no restructuring of the surrounding doc.
-- Add [ADR 0034](../../../docs/decisions/0034-tool-version-lockstep.md), documenting
+- Add [ADR 0034](../../../../docs/decisions/0034-tool-version-lockstep.md), documenting
   "drift-tested duplication, not full templating."
 
 ## Scope / non-goals

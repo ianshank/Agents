@@ -56,7 +56,7 @@ Then, and only then, the rewritten package.
 
 ## Worked examples (this repository)
 
-- **`openspec/changes/add-eval-matrix-completeness/review.md`** — the review that shaped
+- **`openspec/changes/archive/add-eval-matrix-completeness/review.md`** — the review that shaped
   the F-053 matrix-completeness change. Pass 1 pinned `4ceed30` and, among other things,
   *executed* the shipped `config/trajectory_eval.yaml` and found it failing its own gate
   (pass_rate 0.0 vs min 0.9) behind a covering test that asserted only non-emptiness, and

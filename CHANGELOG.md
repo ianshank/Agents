@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Docs — ledger refresh: archive 6 landed OpenSpec proposals, correct 5 stale claims
+- **Archived `harden-quality-gate-integrity` (F-054), `add-eval-matrix-completeness` (F-053),
+  `pin-lockstep-tool-versions` (F-055), `test-skill-validator-library`,
+  `add-openspec-implementation-review`, and `add-foundation-reviewer-charters`** — all six
+  shipped weeks ago but sat under `openspec/changes/` marked `proposed`, one
+  (`add-foundation-reviewer-charters/proposal.md`) self-contradicting its own shipped work
+  ("no spec-guardian/peer-reviewer charter exists"). Moved to `changes/archive/`, `Status:`
+  flipped to `implemented`, `openspec/README.md`'s index updated (verified against
+  `docs.yml`'s own guard script: 6 in flight, 10 archived). Broke two things downstream, both
+  fixed in the same pass: `skills/openspec-implementation-review`'s `prompts.py` hardcoded
+  `PRECEDENT_REVIEW`/`SECOND_PRECEDENT_REVIEW` at the old paths (used to build its own dispatch
+  prompts) and `tests/test_validate.py` had two tests asserting against the old paths directly
+  — both repointed at `changes/archive/...`, full suite re-verified green (113 passed).
+- **Corrected 5 stale "still open" claims in `NEXT_STEPS.md`** — the `Scorer`→`typing.Protocol`
+  migration (`d4dc07f`) and merge-gate tech-debt items G4/G6/G8/G9 (`9d68d44`, `38761f7a`) were
+  all already fixed but still listed as pending; the "extend `openspec-peer-review` with the
+  two-pass protocol" TODO was already shipped (v1.1.0); `claude-foundation`'s subagent count
+  was still recorded as 2, not the current 4 (`explorer`, `test-runner`, `spec-guardian`,
+  `peer-reviewer`).
+- **`docs/CHARTER.md` had the same `Scorer`/`abc.ABC` claim stale** — its "Dependency injection
+  via Protocol" section still said the conversion was "not yet done"; corrected to state all
+  five core interfaces are `typing.Protocol` as of `d4dc07f`.
+- **Minor drift closed alongside:** `skills/common/SKILL.md` said "11 skills" (actually 13);
+  `skills/architecture-drift-guard/SKILL.md` was missing `validator_version: '2.0'`, a gap
+  ADR 0017 had recorded but not fixed — now added, with an errata note in the ADR.
+
 ### Fixed — skills-ci.yml `common` job: coverage gate silently measured 0%
 - `python -m pytest tests --cov=skill_validator ...` (a bare module name) resolved against
   `sys.modules`, not a file path — and `skill_validator` was already cached there (directly via

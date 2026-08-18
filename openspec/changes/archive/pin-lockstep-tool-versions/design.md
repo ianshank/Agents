@@ -40,7 +40,7 @@ Two independent checks run per tool (`ruff`, `mypy`) per file:
 - **Presence** — at least one `tool==` occurrence exists. Catches a pin silently
   dropped entirely (loosened to `ruff>=`, or deleted) — a different-shaped drift than a
   wrong version, but drift all the same. This is the same "vacuity is refused"
-  discipline [ADR 0032](../../../docs/decisions/0032-matrix-completeness-policy.md)
+  discipline [ADR 0032](../../../../docs/decisions/0032-matrix-completeness-policy.md)
   applies to an empty component census, applied here to an empty pin.
 - **Exact match** — every occurrence found equals `tool_versions.py`'s constant,
   checked individually (not via a single aggregated set comparison), so a failure names

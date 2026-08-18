@@ -10,8 +10,8 @@ version: 1.0.0
 
 Reviews the *shipped implementation* of an OpenSpec change against its own proposal/design/
 tasks/spec, in the two-pass shape this repo's own reviews already use by hand
-(`openspec/changes/test-skill-validator-library/review.md`,
-`openspec/changes/harden-quality-gate-integrity/review.md` — the two real, already-merged
+(`openspec/changes/archive/test-skill-validator-library/review.md`,
+`openspec/changes/archive/harden-quality-gate-integrity/review.md` — the two real, already-merged
 reviews `implreview.validate`'s required shape is actually calibrated against). This is
 **advisory, opt-in tooling** — a contributor or agent invokes it on demand. It is not wired
 into `CONTRIBUTING.md`, `GOVERNANCE.md`, protected paths, or any CI gate as mandatory.
@@ -129,16 +129,20 @@ python scripts/validate_skill.py --skill . --tier structural,behavioral
 
 ## 6. Examples
 
-**Example 1 — dogfooding a real, merged change**
-Input: `python scripts/run.py locate --change harden-quality-gate-integrity` (tasks.md already
-fully checked). `detect` reports `degraded` (no `CLAUDE_PLUGIN_ROOT`) — see
-`references/dispatch-detection.md` for why that's the expected, common case. `plan` prints
-one `general-purpose` prompt with the two-pass method inlined, naming
-`openspec/changes/harden-quality-gate-integrity/`. After dispatching it and capturing its
+**Example 1 — dogfooding a real, merged change (historical; the target has since been archived)**
+Input, run while `harden-quality-gate-integrity` was still under `openspec/changes/` (tasks.md
+already fully checked): `python scripts/run.py locate --change harden-quality-gate-integrity`.
+`detect` reports `degraded` (no `CLAUDE_PLUGIN_ROOT`) — see `references/dispatch-detection.md`
+for why that's the expected, common case. `plan` prints one `general-purpose` prompt with the
+two-pass method inlined, naming the change directory. After dispatching it and capturing its
 output, `compose --change harden-quality-gate-integrity --body-file <output> --dispatch-path
 degraded` writes (or, since that change already has a real `review.md` from Phase 1's own
 independent review, appends a dated follow-up to) `review.md`.
-Output: a structurally valid `review.md`, confirmed by `validate`'s exit 0.
+Output: a structurally valid `review.md`, confirmed by `validate`'s exit 0. The artifact now
+lives at `openspec/changes/archive/harden-quality-gate-integrity/review.md`. **`locate` only
+resolves currently-open changes** — `list_change_ids` deliberately excludes `changes/archive/`
+— so re-running this exact command today raises `ChangeNotFoundError`; that is Example 2's
+failure mode, not a regression, once a change has been archived.
 
 **Example 2 (edge case) — a bogus change id**
 Input: `python scripts/run.py locate --change this-change-does-not-exist`.

@@ -143,7 +143,7 @@ section for the precedent being matched.
 Decision Point 1 substitutes "structural validation + dogfooding on a real change" for a
 scripted eval suite. The intended dogfood target is Phase 1's
 (`harden-quality-gate-integrity`) merged diff, producing
-`openspec/changes/harden-quality-gate-integrity/review.md`.
+`openspec/changes/archive/harden-quality-gate-integrity/review.md`.
 
 This package was authored in an isolated git worktree branched from
 `docs/plans/orbital-drift-alignment/PLAN.md`'s base commit, parallel to (not sequenced after)
@@ -157,7 +157,7 @@ other's uncommitted working trees or unmerged branches; Phase 1's actual diff is
 from here by construction, not by an oversight this package could route around.
 
 The dogfood step is therefore reported as **blocked**, not skipped silently and not
-fabricated. `openspec/changes/harden-quality-gate-integrity/review.md` is not created by this
+fabricated. `openspec/changes/archive/harden-quality-gate-integrity/review.md` is not created by this
 package. `tasks.md` §4 records the blocker and the exact commands run to confirm it. The
 orchestrating session — which will have both this change's charters and Phase 1's landed diff
 in the same tree — is the correct place to run the real dogfood pass

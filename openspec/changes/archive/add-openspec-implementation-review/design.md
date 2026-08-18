@@ -52,10 +52,10 @@ dispatching a subagent type that does not exist in the caller's own harness.
 ## The two-pass output shape, recalibrated against real precedent
 
 The first draft of `implreview.validate` required a document to *end* on a distinct
-`## Overall verdict` heading, modeled on `openspec/changes/harden-quality-gate-integrity/
+`## Overall verdict` heading, modeled on `openspec/changes/archive/harden-quality-gate-integrity/
 review.md`. Checking that assumption against the **other** real, already-merged implementation
 review in this repo —
-`openspec/changes/test-skill-validator-library/review.md` — falsified it: that file's last
+`openspec/changes/archive/test-skill-validator-library/review.md` — falsified it: that file's last
 section is `## Residual risk / follow-ups (non-blocking)`; it never repeats its verdict in a
 final section. Both are real, both are accepted, APPROVE-WITH-FOLLOW-UPS reviews. A validator
 that rejected the second because it lacks something the first happens to have would have been

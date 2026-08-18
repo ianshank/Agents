@@ -451,3 +451,144 @@ was refuted with direct evidence.
 4. Resolve or explicitly waive the pre-existing `check_size_budget.py` failure in
    `experiments/backend-validation/` before the consolidated PR is opened, so it doesn't read
    as a Phase 1 regression (Pass 2 attack g).
+
+---
+
+## Follow-up review -- 2026-08-18
+
+**`spec-guardian` + `peer-reviewer`, dispatched for real.**
+
+**Method note.** Everything above was produced by a `general-purpose` subagent inlining the
+two-pass method — the case `add-foundation-reviewer-charters/tasks.md` §4 records as the one
+this repo's own sessions actually hit (`claude-foundation` staged, not plugin-loaded, ADR
+0028). This section is different: it was produced by the actual named
+`foundation:spec-guardian` and `foundation:peer-reviewer` subagent types, dispatched from a
+real `claude -p --plugin-dir claude-foundation` session — the functional proof
+`add-foundation-reviewer-charters`'s task 4 asked for and had left genuinely blocked. Both
+charters, in character, correctly flagged their own tool limitation (`Read`/`Grep`/`Glob`
+only, no `git`/Bash) rather than fabricating confidence, and reviewed against the *current*
+working tree — this package has since been archived (`changes/archive/`), so some of what
+follows is drift between the original merge and today, not a defect this phase introduced.
+Findings are lightly reformatted for this artifact; nothing substantive was cut.
+
+### spec-guardian verdict
+
+**Verdict: conforms** (with material caveats on verification method and one stale follow-up).
+
+- **Follow-up #3, above, is resolved and should be struck.** `tests/test_validation_scripts.py:43`
+  now imports `F_054`, and `.github/workflows/quality-gates.yml:178` includes `--cov=F_054` —
+  confirmed by direct read. (Whether this landed inside the original diff range or arrived via
+  the later `pin-lockstep-tool-versions` change is not determinable without `git`; either way,
+  the follow-up is closed.)
+- **The `eval-change-approved` label / CODEOWNERS review is a GitHub PR-metadata claim** that
+  no repository file can confirm or deny — flagged as unverifiable-from-repo evidence per
+  charter Rule 3, not assumed. The protected-path hits it should cover: `features.yaml`,
+  `tests/_e2e_matrix.py` (root `tests/**`), `scripts/validations/F_054.py`.
+- **`skills/quality-gate/tests/**` is not actually in `scripts/eval_protected_paths.py`'s
+  `PROTECTED_PATTERNS`**, despite `tasks.md` tagging its positive-control tests `[P]`.
+  `proposal.md` is self-aware about this (voluntary discipline, not CI-guarded) — not drift,
+  but worth stating explicitly.
+- **Every core technical claim spot-checked against the current tree holds**: the generator's
+  literal `--cov-fail-under=`/`--cov=`, the unconditional ignored-override notices, the
+  `PYTEST_ADDOPTS` guard wired into both the generated and hand-maintained paths, the anchored
+  regex (2 of 4 packages independently re-checked), `F-054`'s `features.yaml` row, the ADR 0009
+  errata, the skill version bump, and all 5 named positive-control tests.
+- **Declared non-goals verified still true**: `makegen/render.py`'s analogous bug remains
+  untouched (correctly out of scope here), and — independently reconfirmed —
+  `experiments/backend-validation/{airgap_phase.py,clients/opik.py}` (884/605 lines) still
+  exceed the size budget, matching this review's own Pass 2 attack (g) as still open.
+
+### peer-reviewer verdict
+
+**Verdict: approve the code; reject four documentation claims and one prior refutation as
+written.** Nothing found is a correctness defect in the shipped shell scripts. One live,
+unclosed env lever of exactly the class this change exists to close was found by the
+adversarial pass.
+
+**Pass 1 — mechanical fact-check.** 23 claims CONFIRMED outright (generation-time literals in
+both call sites, the notice/guard wiring, all 7 scripts, the anchored regex in all 4 named
+packages, `_floor_from_gate_script`'s updated regex, the ADR errata, version bumps, eval
+assertions, both declared non-goals, the "no prior positive control existed" claim). Eight
+corrected or refuted:
+
+- **`proposal.md`'s "every one of the 7 packages uses single-source coverage" — REFUTED.**
+  `claude-foundation` is multi-source (`source = ["foundation_tools", "hooks"]`,
+  `claude-foundation/pyproject.toml:71`); the real figure is 6 of 7. The prior review did not
+  catch this.
+- **`design.md`'s "two-branch parity" section and its `_coverage_env_form()` citation —
+  CORRECTED/REFUTED.** No such branch or function exists at HEAD; `render.py:151` is a single
+  unconditional comprehension (behaviour-preserving collapse, verified). `design.md` describes
+  code that no longer exists — landed after the original review was written, or after this
+  phase, undeterminable without `git`.
+- **`spec.md`'s "cannot be weakened by anything set in the calling environment" — REFUTED as an
+  unqualified capability statement.** `PYTHON="${PYTHON:-python3}"` is a live, total override
+  in all 7 scripts, and see the `COVERAGE_RCFILE` finding below. The individual scoped
+  Requirements below that sentence are fine; only the umbrella claim over-reaches.
+- **`SKILL.md`'s "a stderr notice either way" — CORRECTED.** False for the `test` step, which
+  emits only the `PYTEST_ADDOPTS` notice. The substantive "no effect" claim holds.
+- **`spec.md`'s "every gate step that invokes pytest SHALL clear PYTEST_ADDOPTS" — CORRECTED
+  (scope).** True for the 7 generated scripts + root's `do_extra()`; not true for ~15 CI steps
+  across `skills-ci.yml`/`quality-gates.yml`/`claude-foundation-ci.yml` that invoke pytest
+  directly. Low practical risk (GitHub-controlled env), but unacknowledged in any of
+  `proposal.md`/`design.md`/`review.md`.
+- **`CHANGELOG.md:60`'s link to this package's `design.md` — stale**, broken by the later
+  archiving commit (correct at merge time).
+- **This review's own line citations have drifted** against current `render.py` line numbers —
+  cosmetic, but means the evidence above can no longer be re-checked mechanically without
+  re-deriving the line numbers first.
+
+**Pass 2 — adversarial.** Nine attacks refuted (fail-closed by design: disabling pytest-cov,
+`readonly` env tricks, function-local `unset` shadowing, empty-string override, vacuous
+fixtures, `PYTHONPATH` shadowing, unrelated-content regeneration — all checked against the
+real scripts, not assumed). Nine held:
+
+1. **`COVERAGE_RCFILE` is an unclosed env lever of exactly the class this change closes — the
+   one live gate-integrity hole found.** 6 of 7 generated `do_coverage()` bodies pass no
+   `--cov-config`, so pytest-cov falls through to coverage.py's `COVERAGE_RCFILE`
+   environment-variable fallback; a pointed-at rc file with a broad `exclude_lines`/`omit` can
+   drive measured coverage to ~100% with no notice and no `unset`. Zero repo-wide mentions of
+   `COVERAGE_RCFILE` anywhere in this change's docs or residual-risk list. Root's `do_extra()`
+   is incidentally immune (`--cov-config=scripts/.coveragerc` is explicit there). Fix is one
+   line: add `--cov-config=` to `_coverage_command`, or fold into a general env-scrub.
+2. Root's `do_extra()` guard is dead on its only reachable call path — `do_coverage` (which
+   `do_all` always runs first) already clears `PYTEST_ADDOPTS` globally, so `do_extra`'s own
+   notice/unset can never fire. The prior review's refutation of this same attack sourced
+   `do_extra` standalone, a path the shipped script cannot take. Real defense-in-depth against
+   *future* reordering, not what closes the evasion today.
+3. `F_054.py` asserts `unset PYTEST_ADDOPTS` presence/count, never ordering — moving it after
+   the `pytest` call in the one hand-maintained region it can't police passes F-054 unchanged.
+4. `F_054.py`'s regex check is presence-only (never asserts the old unanchored pattern is
+   *absent* — re-adding it silently restores the vulnerability) and its checked-package list
+   omits `claude-foundation`, which does declare an (already-anchored) exclusion.
+5. The two-anchor floor cross-check degrades silently to one anchor if a regex stops matching
+   — the exact failure class this change discovered, fixed as a one-time value update rather
+   than a structural `len(anchors) == 2` assertion.
+6. `PYTHON=` remains a strictly stronger, still-live total bypass — correctly out of scope for
+   this layer, but not carved out of `spec.md`'s absolute capability sentence (ties to the
+   REFUTED claim above).
+7. `F_054.py`'s `expected_unsets` count is a brittle proxy in both directions (a legitimately
+   coverage-less package misreports its own failure cause; an extra unguarded pytest call in
+   `do_extra` doesn't trip the count).
+8. The committed floor literal's only other guard (`test_floor_anchors_agree_with_each_other`)
+   is the same check weakened by finding 5 above — a hand-edited `--cov-fail-under=0` in a
+   committed script passes every other test.
+9. The `COV_FAIL_UNDER=0` positive control discriminates via a pytest-cov int-vs-float
+   formatting accident (`"90%"` vs `"90.0%"`), not a structural assertion that the CLI flag is
+   actually present — would silently stop discriminating if that formatting ever normalized.
+
+### New follow-ups from this pass (none blocking; ranked)
+
+1. **Confirm and close `COVERAGE_RCFILE`** (attack 1, above) — the one live gate-integrity
+   hole, not a docs or enforcement gap.
+2. **Fix the four documentation defects**: the false "single-source" claim, the two
+   non-existent-code citations in `design.md`, `spec.md`'s over-broad capability sentence, and
+   `SKILL.md`'s "notice either way" claim.
+3. **Correct the record on the original review's attack (b)** — the `do_extra` guard is
+   defense-in-depth, not what closed the evasion.
+4. **Strengthen the guards that guard the guards**: an ordering assertion in `F_054.py`, an
+   absence-of-unanchored-pattern check plus `claude-foundation` added to
+   `_ANCHORED_REGEX_PYPROJECTS`, and a structural two-anchor assertion in `test_e2e_matrix.py`.
+
+Follow-up 1 is tracked in `NEXT_STEPS.md` (merge-gate/quality-gate tech-debt section) rather
+than fixed here — this pass is dogfood proof for `add-foundation-reviewer-charters`'s task 4,
+not a license to re-open an already-archived, already-shipped change's scope.

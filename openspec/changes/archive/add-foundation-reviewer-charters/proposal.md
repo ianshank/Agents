@@ -1,6 +1,6 @@
 # Change: add-foundation-reviewer-charters
 
-**Status:** proposed · **Date:** 2026-08-17 · **Author track:** `claude/` agent lane
+**Status:** implemented · **Date:** 2026-08-17 · **Author track:** `claude/` agent lane
 **Motivated by:** `docs/plans/orbital-drift-alignment/PLAN.md` Phase 4, itself grounded in a
 verified gap, not an assumed one: `claude-foundation/agents/` holds exactly two files today
 (`explorer.md`, `test-runner.md`), no spec-guardian/peer-reviewer-equivalent charter exists,
