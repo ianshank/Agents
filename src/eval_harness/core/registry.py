@@ -7,8 +7,11 @@ written against an earlier version keep working.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Generic, TypeVar
+import logging
+from collections.abc import Callable, Iterable
+from typing import Any, Generic, TypeVar
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -23,7 +26,7 @@ class Registry(Generic[T]):
         self._reg: dict[str, type[T]] = {}
         self._aliases: dict[str, str] = {}
 
-    def register(self, name: str, *, aliases: Iterable[str] = ()):  # decorator
+    def register(self, name: str, *, aliases: Iterable[str] = ()) -> Callable[[type[T]], type[T]]:
         def deco(cls: type[T]) -> type[T]:
             self.register_class(name, cls, aliases=aliases)
             return cls
@@ -34,8 +37,10 @@ class Registry(Generic[T]):
         if name in self._reg and self._reg[name] is not cls:
             raise RegistryError(f"{self.kind} '{name}' already registered")
         self._reg[name] = cls
+        logger.debug("Registered %s: %s -> %s", self.kind, name, cls.__qualname__)
         for alias in aliases:
             self._aliases[alias] = name
+            logger.debug("Registered %s alias: %s -> %s", self.kind, alias, name)
 
     def resolve(self, name: str) -> str:
         return self._aliases.get(name, name)
@@ -46,7 +51,8 @@ class Registry(Generic[T]):
             raise RegistryError(f"Unknown {self.kind} '{name}'. Available: {self.names()}")
         return self._reg[key]
 
-    def create(self, name: str, params: dict | None = None) -> T:
+    def create(self, name: str, params: dict[str, Any] | None = None) -> T:
+        logger.debug("Creating %s: %s (params=%s)", self.kind, name, sorted(params) if params else "{}")
         return self.get(name)(**(params or {}))
 
     def names(self) -> list[str]:

@@ -9,6 +9,7 @@ agents share one source of navigation. Prose docs also render as a site — see
 
 | If you want to… | Read |
 |---|---|
+| Get running in 5 minutes | [quickstart.md](quickstart.md) |
 | Install / run / test the harness | [../README.md](../README.md) |
 | Know which doc answers what (and the guardrails) | [../AGENTS.md](../AGENTS.md) |
 | Understand the north-star scope & invariants | [CHARTER.md](CHARTER.md) |

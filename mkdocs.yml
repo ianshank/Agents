@@ -51,6 +51,7 @@ markdown_extensions:
 
 nav:
   - Home: README.md
+  - Quickstart: quickstart.md
   - Architecture:
       - Charter: CHARTER.md
       - C4 architecture: c4_architecture.md
