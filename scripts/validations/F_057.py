@@ -108,8 +108,14 @@ def _check_corpus_and_report(errors: list[str]) -> None:
 
     try:
         PairwiseItem(
-            item_id="x", prompt="p", answer_a="a", answer_b="b", family_a="gpt", family_b="claude",
-            expected="a", canary_kind="known_equal",
+            item_id="x",
+            prompt="p",
+            answer_a="a",
+            answer_b="b",
+            family_a="gpt",
+            family_b="claude",
+            expected="a",
+            canary_kind="known_equal",
         )
         _check(False, "PairwiseItem rejects a known_equal canary with expected != 'tie'", errors)
     except Exception:
@@ -125,15 +131,32 @@ def _check_corpus_and_report(errors: list[str]) -> None:
     passing_order = OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True)
     failing_order = OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False)
     passing_verbosity = VerbosityProbeResult(
-        n=10, ties=0, concise_wins=5, expanded_wins=5, expanded_win_rate=0.5,
-        preference_delta=0.0, ci_low=0.2, ci_high=0.8, passes=True,
+        n=10,
+        ties=0,
+        concise_wins=5,
+        expanded_wins=5,
+        expanded_win_rate=0.5,
+        preference_delta=0.0,
+        ci_low=0.2,
+        ci_high=0.8,
+        passes=True,
     )
 
     def _mkreport(order_flip: OrderProbeResult, agreement_may_gate: bool) -> JudgeCalibrationReport:
         return JudgeCalibrationReport(
-            schema_version="1.0.0", judge_id="j", artifact_id="a", n_total=100, n_codeterminate=90,
-            percent_agreement=0.9, kappa=0.85, directional_only=False, agreement_may_gate=agreement_may_gate,
-            order_flip=order_flip, verbosity=passing_verbosity, self_preference=None, canary_pass_rate=1.0,
+            schema_version="1.0.0",
+            judge_id="j",
+            artifact_id="a",
+            n_total=100,
+            n_codeterminate=90,
+            percent_agreement=0.9,
+            kappa=0.85,
+            directional_only=False,
+            agreement_may_gate=agreement_may_gate,
+            order_flip=order_flip,
+            verbosity=passing_verbosity,
+            self_preference=None,
+            canary_pass_rate=1.0,
         )
 
     _check(
@@ -154,25 +177,57 @@ def _check_corpus_and_report(errors: list[str]) -> None:
 
     canaries = [
         PairwiseItem(
-            item_id="c1", prompt="p", answer_a="a", answer_b="b", family_a="gpt", family_b="claude",
-            expected="tie", canary_kind="known_equal",
+            item_id="c1",
+            prompt="p",
+            answer_a="a",
+            answer_b="b",
+            family_a="gpt",
+            family_b="claude",
+            expected="tie",
+            canary_kind="known_equal",
         ),
         PairwiseItem(
-            item_id="c2", prompt="p", answer_a="a", answer_b="b", family_a="gpt", family_b="claude",
-            expected="a", canary_kind="clearly_better",
+            item_id="c2",
+            prompt="p",
+            answer_a="a",
+            answer_b="b",
+            family_a="gpt",
+            family_b="claude",
+            expected="a",
+            canary_kind="clearly_better",
         ),
     ]
     built = agent_core_build_report(
-        "j1", "art-1", n_total=10, n_codeterminate=10, percent_agreement=1.0, kappa=1.0,
-        directional_only=False, agreement_may_gate=True, order_flip=passing_order, verbosity=passing_verbosity,
-        self_preference=None, canaries=canaries, canary_verdicts=["tie", "b"],
+        "j1",
+        "art-1",
+        n_total=10,
+        n_codeterminate=10,
+        percent_agreement=1.0,
+        kappa=1.0,
+        directional_only=False,
+        agreement_may_gate=True,
+        order_flip=passing_order,
+        verbosity=passing_verbosity,
+        self_preference=None,
+        canaries=canaries,
+        canary_verdicts=["tie", "b"],
     )
     _check(built.canary_pass_rate == 0.5, "build_judge_calibration_report: canary pass rate (1 of 2 correct)", errors)
     try:
         agent_core_build_report(
-            "j1", "art-1", n_total=1, n_codeterminate=1, percent_agreement=1.0, kappa=1.0,
-            directional_only=False, agreement_may_gate=True, order_flip=passing_order, verbosity=passing_verbosity,
-            self_preference=None, canaries=[], canary_verdicts=[],
+            "j1",
+            "art-1",
+            n_total=1,
+            n_codeterminate=1,
+            percent_agreement=1.0,
+            kappa=1.0,
+            directional_only=False,
+            agreement_may_gate=True,
+            order_flip=passing_order,
+            verbosity=passing_verbosity,
+            self_preference=None,
+            canaries=[],
+            canary_verdicts=[],
         )
         _check(False, "build_judge_calibration_report rejects an empty canary list", errors)
     except ValueError:
@@ -237,7 +292,11 @@ def _check_engine_ordering(errors: list[str]) -> None:
 
     try:
         EvalEngine(
-            config, dataset=_Dataset(), target=target, scorers=[_DuckScorer()], sinks=[]  # type: ignore[list-item]
+            config,
+            dataset=_Dataset(),
+            target=target,
+            scorers=[_DuckScorer()],  # type: ignore[list-item]
+            sinks=[],
         ).run()
         _check(True, "a duck-typed scorer without uses_judge() does not crash the engine", errors)
     except AttributeError:
@@ -306,14 +365,30 @@ def _check_gating_config(errors: list[str]) -> None:
     from agent_core.judge_calibration_report import JudgeCalibrationReport
 
     passing_verbosity = VerbosityProbeResult(
-        n=10, ties=0, concise_wins=5, expanded_wins=5, expanded_win_rate=0.5,
-        preference_delta=0.0, ci_low=0.2, ci_high=0.8, passes=True,
+        n=10,
+        ties=0,
+        concise_wins=5,
+        expanded_wins=5,
+        expanded_win_rate=0.5,
+        preference_delta=0.0,
+        ci_low=0.2,
+        ci_high=0.8,
+        passes=True,
     )
     ok_report = JudgeCalibrationReport(
-        schema_version="1.0.0", judge_id="j", artifact_id="a", n_total=100, n_codeterminate=90,
-        percent_agreement=0.9, kappa=0.85, directional_only=False, agreement_may_gate=True,
+        schema_version="1.0.0",
+        judge_id="j",
+        artifact_id="a",
+        n_total=100,
+        n_codeterminate=90,
+        percent_agreement=0.9,
+        kappa=0.85,
+        directional_only=False,
+        agreement_may_gate=True,
         order_flip=OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
-        verbosity=passing_verbosity, self_preference=None, canary_pass_rate=1.0,
+        verbosity=passing_verbosity,
+        self_preference=None,
+        canary_pass_rate=1.0,
     )
     try:
         require_report_to_gate(ok_report, "wrong-id")
@@ -322,10 +397,19 @@ def _check_gating_config(errors: list[str]) -> None:
         _check(True, "require_report_to_gate rejects an artifact_id mismatch", errors)
 
     biased_report = JudgeCalibrationReport(
-        schema_version="1.0.0", judge_id="j", artifact_id="a", n_total=100, n_codeterminate=90,
-        percent_agreement=0.9, kappa=0.85, directional_only=False, agreement_may_gate=True,
+        schema_version="1.0.0",
+        judge_id="j",
+        artifact_id="a",
+        n_total=100,
+        n_codeterminate=90,
+        percent_agreement=0.9,
+        kappa=0.85,
+        directional_only=False,
+        agreement_may_gate=True,
         order_flip=OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False),
-        verbosity=passing_verbosity, self_preference=None, canary_pass_rate=1.0,
+        verbosity=passing_verbosity,
+        self_preference=None,
+        canary_pass_rate=1.0,
     )
     try:
         require_report_to_gate(biased_report, "a")
@@ -348,17 +432,36 @@ def _check_behavioral_regression(errors: list[str]) -> None:
     labels = [True, False] * 20
     br_verdicts = [JVerdict(label=lbl, confidence=0.9) for lbl in labels]
     br_canary = PairwiseItem(
-        item_id="c1", prompt="p", answer_a="a", answer_b="b", family_a="gpt", family_b="claude",
-        expected="tie", canary_kind="known_equal",
+        item_id="c1",
+        prompt="p",
+        answer_a="a",
+        answer_b="b",
+        family_a="gpt",
+        family_b="claude",
+        expected="tie",
+        canary_kind="known_equal",
     )
     br_report = br_build_report(
-        "j1", "art-1", br_verdicts, labels, br_cfg,
+        "j1",
+        "art-1",
+        br_verdicts,
+        labels,
+        br_cfg,
         order_flip=OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
         verbosity=VerbosityProbeResult(
-            n=10, ties=0, concise_wins=5, expanded_wins=5, expanded_win_rate=0.5,
-            preference_delta=0.0, ci_low=0.2, ci_high=0.8, passes=True,
+            n=10,
+            ties=0,
+            concise_wins=5,
+            expanded_wins=5,
+            expanded_win_rate=0.5,
+            preference_delta=0.0,
+            ci_low=0.2,
+            ci_high=0.8,
+            passes=True,
         ),
-        self_preference=None, canaries=[br_canary], canary_verdicts=["tie"],
+        self_preference=None,
+        canaries=[br_canary],
+        canary_verdicts=["tie"],
     )
     _check(
         br_report.kappa == 1.0 and br_report.percent_agreement == 1.0,
