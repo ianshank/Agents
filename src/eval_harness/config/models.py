@@ -162,6 +162,28 @@ class PromptSourceConfig(BaseModel):
         return self
 
 
+class JudgeCalibrationGateConfig(BaseModel):
+    """Names the calibration run that authorises a judge to participate in gating.
+
+    ``spec.md`` "Gating requires a named calibration artifact": a gate rule that
+    targets a judge-backed scorer's score without this block is rejected — see
+    ``eval_harness.gating.require_calibration_for_judge_gating``, called from
+    ``cli.py`` once the engine's real scorers (and their resolved ``uses_judge()``)
+    are known, rather than guessed from raw config here (this model has no
+    dependency on the scorer registry, and shouldn't gain one). So a gate decision
+    is traceable to the calibration run that authorised it, not to "a judge that
+    was validated at some point" (design.md "Gating"). The ID is an opaque
+    provenance string, like ``ab_campaign.campaign_id`` — this harness does not
+    itself resolve it to a live ``agent_core.JudgeCalibrationReport``; no
+    artifact-registry/lookup precedent exists in this codebase (see design.md).
+    """
+
+    calibration_artifact_id: str = Field(
+        min_length=1,
+        description="Identifies the JudgeCalibrationReport run that authorised this judge to gate.",
+    )
+
+
 class GateRule(BaseModel):
     score: str
     metric: str = "mean"  # "mean" | "pass_rate" | "pass_at_k" | "pass_power_k"
@@ -282,6 +304,7 @@ class EvalConfig(BaseModel):
     judge: ComponentSpec | None = None
     judge_budget: JudgeBudgetConfig | None = None
     judge_prompt: PromptSourceConfig | None = None
+    judge_calibration: JudgeCalibrationGateConfig | None = None
     sinks: list[ComponentSpec] = Field(default_factory=list)
     gate: GateConfig | None = None
     comparison: ComparisonConfig | None = None

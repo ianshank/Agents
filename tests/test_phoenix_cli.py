@@ -18,7 +18,7 @@ from eval_harness.version import SCHEMA_VERSION
 class _FakeEngine:
     @classmethod
     def from_config(cls, config, **kwargs):
-        return SimpleNamespace(run=lambda: SimpleNamespace(aggregate={}))
+        return SimpleNamespace(scorers=[], run=lambda: SimpleNamespace(aggregate={}))
 
 
 def _eval_config(**data: Any) -> EvalConfig:

@@ -5,13 +5,45 @@ All thresholds come from GateConfig; there are no baked-in cutoffs.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-from ..config.models import GateConfig
+from ..config.models import EvalConfig, GateConfig
+from ..core.interfaces import Scorer
 from ..core.types import RunResult
 from ..reliability import ReliabilityAggregator, ReliabilityReport
 
 _RELIABILITY_METRICS = ("pass_at_k", "pass_power_k")
+
+
+def _uses_judge(scorer: Scorer) -> bool:
+    """Whether *scorer* is judge-backed; tolerates one predating ``Scorer.uses_judge``."""
+    method = getattr(scorer, "uses_judge", None)
+    return bool(method()) if callable(method) else False
+
+
+def require_calibration_for_judge_gating(config: EvalConfig, scorers: Iterable[Scorer]) -> None:
+    """Raise if a gate rule targets a judge-backed scorer with no named calibration.
+
+    ``spec.md`` "Gating requires a named calibration artifact": a config that marks
+    a judge as gating — one of ``config.gate.rules`` names a scorer whose real,
+    resolved ``uses_judge()`` is true — without a ``judge_calibration`` block is
+    rejected. Checked against the *actual constructed* ``scorers`` (each one's real
+    ``.name``/``.uses_judge()``), not guessed from raw config, so a scorer's own
+    name-resolution/default-name logic never needs duplicating here. Call once the
+    engine's scorers are built (``EvalEngine.from_config``), before ``evaluate_gate``.
+    """
+    if config.gate is None or not config.gate.rules:
+        return
+    judge_backed_names = {s.name for s in scorers if _uses_judge(s)}
+    gated_names = {rule.score for rule in config.gate.rules}
+    targeted = judge_backed_names & gated_names
+    if targeted and config.judge_calibration is None:
+        raise ValueError(
+            f"judge_calibration.calibration_artifact_id is required to gate on "
+            f"{sorted(targeted)!r}: a judge's participation in gating must be traceable "
+            "to the calibration run that authorised it"
+        )
 
 
 @dataclass

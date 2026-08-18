@@ -359,3 +359,81 @@ class TestLoopControllerIntegration:
         # Directly usable as initial CycleState.unresolved
         state = agent_core.CycleState(unresolved=store.claim_ids)
         assert len(state.unresolved) == 5
+
+
+# ---------------------------------------------------------------------------
+# require_report_to_gate (extend-judge-calibration Group 4)
+# ---------------------------------------------------------------------------
+
+
+def _calibration_report(**overrides: Any):
+    from agent_core import (
+        JudgeCalibrationReport,
+        OrderProbeResult,
+        VerbosityProbeResult,
+    )
+
+    order_flip = overrides.pop(
+        "order_flip",
+        OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
+    )
+    verbosity = overrides.pop(
+        "verbosity",
+        VerbosityProbeResult(
+            n=10,
+            ties=0,
+            concise_wins=5,
+            expanded_wins=5,
+            expanded_win_rate=0.5,
+            preference_delta=0.0,
+            ci_low=0.2,
+            ci_high=0.8,
+            passes=True,
+        ),
+    )
+    defaults: dict[str, Any] = dict(
+        schema_version="1.0.0",
+        judge_id="j1",
+        artifact_id="run-123",
+        n_total=100,
+        n_codeterminate=90,
+        percent_agreement=0.9,
+        kappa=0.85,
+        directional_only=False,
+        agreement_may_gate=True,
+        order_flip=order_flip,
+        verbosity=verbosity,
+        self_preference=None,
+        canary_pass_rate=1.0,
+    )
+    defaults.update(overrides)
+    return JudgeCalibrationReport(**defaults)
+
+
+class TestRequireReportToGate:
+    """spec.md 'Uncalibrated judges cannot gate releases' — enforced against a real
+    ``agent_core.JudgeCalibrationReport``, not just the config-level artifact-ID
+    presence check in ``eval_harness.gating.require_calibration_for_judge_gating``."""
+
+    def test_raises_when_the_artifact_id_does_not_match(self) -> None:
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        report = _calibration_report(artifact_id="run-123")
+        with pytest.raises(ValueError, match="does not match"):
+            require_report_to_gate(report, "run-999")
+
+    def test_raises_when_the_report_does_not_authorise_gating(self) -> None:
+        from agent_core import OrderProbeResult
+
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        failing_order = OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False)
+        report = _calibration_report(artifact_id="run-123", order_flip=failing_order)
+        with pytest.raises(ValueError, match="order_flip"):
+            require_report_to_gate(report, "run-123")
+
+    def test_passes_when_the_report_authorises_gating_under_the_matching_id(self) -> None:
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        report = _calibration_report(artifact_id="run-123")
+        require_report_to_gate(report, "run-123")  # must not raise

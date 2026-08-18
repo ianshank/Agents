@@ -1227,6 +1227,75 @@ class TestGating:
         assert any("not present" in reason for reason in result.failures)
 
 
+class TestJudgeCalibrationGating:
+    """extend-judge-calibration Group 4: 'gating requires a named calibration
+    artifact' (spec.md) — checked against real, constructed ``Scorer`` instances'
+    resolved ``.name``/``.uses_judge()``, not guessed from raw config."""
+
+    MATRIX_KIND = "gating"
+
+    @staticmethod
+    def _config(**overrides):
+        from eval_harness.version import SCHEMA_VERSION
+
+        data = {
+            "schema_version": SCHEMA_VERSION,
+            "dataset": {"type": "inline", "params": {"items": []}},
+            "target": {"type": "echo", "params": {}},
+        }
+        data.update(overrides)
+        return EvalConfig.model_validate(data)
+
+    def test_raises_when_a_gate_rule_targets_a_judge_backed_scorer_without_an_artifact(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(
+            judge={"type": "mock", "params": {}},
+            gate={"rules": [{"score": "quality", "metric": "mean", "min": 0.5}]},
+        )
+        scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+        with pytest.raises(ValueError, match="judge_calibration"):
+            require_calibration_for_judge_gating(config, scorers)
+
+    def test_passes_when_a_calibration_artifact_is_named(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(
+            judge={"type": "mock", "params": {}},
+            judge_calibration={"calibration_artifact_id": "run-123"},
+            gate={"rules": [{"score": "quality", "metric": "mean", "min": 0.5}]},
+        )
+        scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+        require_calibration_for_judge_gating(config, scorers)  # must not raise
+
+    def test_no_artifact_needed_when_the_gate_does_not_target_the_judge_scorer(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(
+            judge={"type": "mock", "params": {}},
+            gate={"rules": [{"score": "acc", "metric": "mean", "min": 0.5}]},
+        )
+        scorers = [
+            SCORERS.create("exact_match", {"name": "acc"}),
+            SCORERS.create("llm_judge", {"name": "quality"}),
+        ]
+        require_calibration_for_judge_gating(config, scorers)  # judge isn't gated on -> fine
+
+    def test_no_artifact_needed_when_the_gate_has_no_rules(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(judge={"type": "mock", "params": {}}, gate={"rules": []})
+        scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+        require_calibration_for_judge_gating(config, scorers)  # nothing to gate -> fine
+
+    def test_no_artifact_needed_when_there_is_no_gate_at_all(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(judge={"type": "mock", "params": {}})
+        scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+        require_calibration_for_judge_gating(config, scorers)  # gate is None -> fine
+
+
 def _repeated_attempts_run(per_item_passed: dict[str, list[bool]]) -> RunResult:
     """A multi-attempt RunResult shaped the way EvalEngine produces one at
     repetitions>1: one ItemResult per (item, attempt), attempt_index set."""

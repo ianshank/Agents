@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from eval_harness.config.models import JudgeBudgetConfig
 
 try:
+    from agent_core import JudgeCalibrationReport
     from agent_core.protocols import CycleResult, CycleState
 except ImportError as _exc:  # pragma: no cover
     raise ImportError(
@@ -55,6 +56,7 @@ __all__ = [
     "HarnessJudgeRunner",
     "ItemStore",
     "build_budgeted_judge",
+    "require_report_to_gate",
 ]
 
 log = logging.getLogger(__name__)
@@ -381,3 +383,26 @@ def build_budgeted_judge(
         limiter=limiter,
         on_rate_limited=budget.on_rate_limited,
     )
+
+
+def require_report_to_gate(report: JudgeCalibrationReport, expected_artifact_id: str) -> None:
+    """Raise unless *report* authorises gating under *expected_artifact_id*.
+
+    ``spec.md`` "Uncalibrated judges cannot gate releases": a judge stays advisory
+    unless agreement, power and every configured bias tolerance pass
+    (``report.may_gate``); the error names every failing check
+    (``report.failing_checks``), not just a bare verdict. Also checks
+    ``report.artifact_id == expected_artifact_id`` first, so a stale or mismatched
+    report can't be substituted for the run named by a config's
+    ``judge_calibration.calibration_artifact_id``
+    (``eval_harness.config.models.JudgeCalibrationGateConfig``) without actually
+    being that calibration run.
+    """
+    if report.artifact_id != expected_artifact_id:
+        raise ValueError(
+            f"calibration report artifact_id {report.artifact_id!r} does not match the "
+            f"configured judge_calibration.calibration_artifact_id {expected_artifact_id!r}"
+        )
+    if not report.may_gate:
+        reason = ", ".join(report.failing_checks) or "agreement/power"
+        raise ValueError(f"judge calibration artifact {expected_artifact_id!r} does not authorise gating: {reason}")

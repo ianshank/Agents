@@ -97,10 +97,67 @@
       `mypy --strict` and `ruff` clean, `public_surface_baseline.json` regenerated.
 
 ## 4. Consumption — PR 2
-- [ ] Wire the report into `src/eval_harness/agent_core_adapter/`.
-- [ ] Wire into `behavioral_regression` alongside `validate_judge`.
-- [ ] `[P]` Require an explicit calibration artifact ID in gating configuration.
-- [ ] `[P]` Assert an uncalibrated or biased judge cannot gate.
+- [x] Wire the report into `src/eval_harness/agent_core_adapter/`.
+      New `require_report_to_gate(report, expected_artifact_id)` in
+      `agent_core_adapter/__init__.py`, imported eagerly alongside `agent_core.protocols`
+      (the module already hard-requires `agent-core`, so no new lazy-import seam is needed).
+      Checks `report.artifact_id == expected_artifact_id` first — a stale or swapped-in
+      report can't be substituted for the run a config actually named — then
+      `report.may_gate`, raising with `report.failing_checks` named in the message when it
+      does not authorise gating. Deliberately does **not** decide *how* a caller obtains the
+      `JudgeCalibrationReport` (load from a file, a store, construct it in-process): no
+      artifact-registry precedent exists in this codebase (Group 3's finding, unchanged).
+      Tests: `tests/test_agent_core_adapter.py::TestRequireReportToGate` (3 cases: mismatched
+      ID, failing bias check named in the error, and the passing path).
+- [x] Wire into `behavioral_regression` alongside `validate_judge`.
+      New `build_judge_calibration_report(...)` in `oracle.py`, exported from
+      `behavioral_regression/__init__.py` next to `validate_judge` (both in `__all__`).
+      Reuses `validate_judge`'s own `KappaReport` for `n_total`/`n_codeterminate`/`kappa`/
+      `directional_only`/`agreement_may_gate`, and `agent_core.golden.percent_agreement`
+      over the *same* codeterminate pairs (never re-derived) for the raw agreement rate —
+      `0.0` when there are none, since `percent_agreement` itself rejects an empty sequence
+      and an underpowered/`directional_only` report already can't gate regardless of that
+      value. The three bias probes (order-flip, verbosity, self-preference) are accepted
+      pre-computed, exactly like `agent_core.judge_calibration_report.
+      build_judge_calibration_report`'s own contract — this function composes an existing
+      agreement measurement with an existing probe pipeline, it does not run either itself.
+      Tests: `behavioral-regression/tests/test_oracle.py` (4 new cases: length-mismatch,
+      full composition incl. `may_gate`, percent-agreement scoped to codeterminate pairs
+      only, and the zero-codeterminate-pairs edge case not crashing).
+      Verified: `make check` (behavioral-regression) 100% coverage, `mypy --strict`/`ruff`
+      clean, `tests/public_surface_baseline.json` regenerated (purely additive: one name).
+- [x] `[P]` Require an explicit calibration artifact ID in gating configuration.
+      New `JudgeCalibrationGateConfig` (`config/models.py`, sibling to `JudgeBudgetConfig`/
+      `PhoenixConfig`) with a single required `calibration_artifact_id: str` field
+      (`min_length=1`) — an opaque provenance string, like `ab_campaign.campaign_id`;
+      `EvalConfig.judge_calibration: JudgeCalibrationGateConfig | None = None`.
+      **Design correction, found by running the full suite, not by reasoning alone**: the
+      first cut added an `EvalConfig`-level `model_validator` requiring the block whenever
+      `judge is not None and gate.rules` — too coarse. Many existing configs legitimately
+      configure a judge for measurement while gating only on programmatic scores, and the
+      blanket check broke roughly a dozen unrelated passing tests. Config models have no
+      dependency on the scorer registry (by design — they're pure data), so they cannot see
+      a scorer's real, resolved name or `uses_judge()`; guessing from raw `ComponentSpec`
+      dicts would mean duplicating every scorer type's `default_name`/child-composition
+      logic in a module that shouldn't own it. Moved the actual check to
+      `eval_harness.gating.require_calibration_for_judge_gating(config, scorers)` — called
+      from `cli.py` right after `EvalEngine.from_config` (before `engine.run()`), where the
+      *real*, constructed `Scorer` instances (and their real `.name`/`.uses_judge()`, via the
+      same `_uses_judge()` helper pattern as `engine.py`) are already available. It only
+      raises when a `gate.rules[].score` actually names a judge-backed scorer with no
+      `judge_calibration` block — precise, not guessed.
+      `config/eval.example.yaml` needed a `judge_calibration` block added (its own
+      `gate.rules` names `helpfulness`, the `llm_judge` scorer) — another real, disclosed
+      consequence of the new check, not a test-only fixture fix.
+      Tests: `tests/test_config.py` (3 cases: absent by default, empty/missing ID rejected,
+      named ID accepted); `tests/test_matrix_eval_tools.py::TestJudgeCalibrationGating` (5
+      cases: raises when targeted without an ID, passes when named, and three "does not
+      apply" cases — untargeted judge, empty gate, no gate at all).
+- [x] `[P]` Assert an uncalibrated or biased judge cannot gate.
+      Covered jointly by the two items above: `require_calibration_for_judge_gating` blocks
+      an *unnamed* calibration at config/engine-construction time; `require_report_to_gate`
+      blocks a named-but-failing (`may_gate is False`) or mismatched-ID calibration once a
+      real `JudgeCalibrationReport` is in hand, naming every failing check in the error.
 - [x] `[P]` Assert programmatic scorers are ordered ahead of judges.
       `Scorer.uses_judge()` (`core/interfaces.py`) — a plain method, not a `@property`, for the
       same `runtime_checkable`-Protocol reason as `TargetRunner.is_deterministic`. Defaults

@@ -20,7 +20,7 @@ from .detector import RegressionDetector, RegressionEstimate
 from .gate import ShipDecision, decide_ship
 from .generator import PairedResponse, PairedResponseGenerator
 from .judge import JudgeProtocol, JVerdict, SyntheticJudge
-from .oracle import validate_judge
+from .oracle import build_judge_calibration_report, validate_judge
 from .pipeline import run_pipeline
 from .report import RegressionReport
 from .version import SCHEMA_VERSION, __version__
@@ -40,6 +40,7 @@ __all__ = [
     "ShipDecision",
     "SyntheticJudge",
     "__version__",
+    "build_judge_calibration_report",
     "decide_ship",
     "run_canary",
     "run_pipeline",
