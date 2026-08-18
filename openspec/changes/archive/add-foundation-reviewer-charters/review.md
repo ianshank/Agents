@@ -223,7 +223,7 @@ working as intended.
 
 **Real, kept — P2-4 (severity: major, the most substantial finding in this review).** `PLAN.md`'s
 Phase 4 table (`PLAN.md:143`) requires: "dogfood: dispatch both charters against Phase 1's
-merged diff, producing a real `openspec/changes/harden-quality-gate-integrity/review.md`." The
+merged diff, producing a real `openspec/changes/archive/harden-quality-gate-integrity/review.md`." The
 plan's own "Verification" section (`PLAN.md:242-243`) repeats this as a behavioral acceptance
 criterion: "both new charters pass `foundation_tools.validate`, and a dogfood run against
 Phase 1's diff produces a non-trivial `review.md`." Neither happened. `openspec/changes/

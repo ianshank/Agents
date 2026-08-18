@@ -454,7 +454,9 @@ was refuted with direct evidence.
 
 ---
 
-## Follow-up pass (2026-08-18) — `spec-guardian` + `peer-reviewer`, dispatched for real
+## Follow-up review -- 2026-08-18
+
+**`spec-guardian` + `peer-reviewer`, dispatched for real.**
 
 **Method note.** Everything above was produced by a `general-purpose` subagent inlining the
 two-pass method — the case `add-foundation-reviewer-charters/tasks.md` §4 records as the one

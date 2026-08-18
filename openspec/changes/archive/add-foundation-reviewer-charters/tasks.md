@@ -67,7 +67,7 @@ touches no Python source, only agent markdown, docs, and one regenerated JSON fi
 
 - [x] Dogfood: apply `spec-guardian`'s then `peer-reviewer`'s stated procedure, in character,
       against Phase 1 (`harden-quality-gate-integrity`)'s actual diff, producing
-      `openspec/changes/harden-quality-gate-integrity/review.md`.
+      `openspec/changes/archive/harden-quality-gate-integrity/review.md`.
       **Blocked from this worktree — not fabricated.** Checked, not assumed:
       `git log --all --oneline | grep -i quality-gate` surfaces only pre-existing,
       unrelated `quality-gate` skill history; `git worktree list` shows no

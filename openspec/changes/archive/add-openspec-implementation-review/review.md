@@ -59,7 +59,7 @@ assumed.
 | 6 | `python scripts/validate_skill.py --skill . --tier structural,behavioral` passes | **CONFIRMED** | `OK: skill passed tier(s) ['behavioral', 'structural'].`, exit 0 — all 7 evals ran for real. |
 | 7 | The `CLAUDE_PLUGIN_ROOT` signal genuinely corresponds to real Claude Code plugin-loading behavior, not an invented heuristic | **CONFIRMED** | `claude-foundation/hooks/hooks.json` uses `"${CLAUDE_PLUGIN_ROOT}/hooks/pre_tool_guard.py"` (and two more hook commands) directly, matching `docs/plans/claude-foundation/sources.md:12` citing the official plugin docs (`${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}`, `${CLAUDE_PROJECT_DIR}`). `claude-foundation/.claude-plugin/plugin.json` has `"name": "foundation"`, matching `detect.py:45`'s `_EXPECTED_PLUGIN_NAME = "foundation"` exactly. |
 | 8 | The symlink-loop bug (`Path.resolve()` raising `RuntimeError`, not `OSError`) is real, and a test exercises it | **CONFIRMED, and mutation-tested** | Verified empirically on this sandbox's Python 3.11.15: `Path(<self-referencing symlink>).resolve()` raises `RuntimeError: Symlink loop from '...'`, not `OSError`. `tests/test_detect.py:78-86` creates a genuine self-referencing symlink (`loop.symlink_to(loop)`, no monkeypatching) and asserts `detect_dispatch_path` still returns `degraded` cleanly. Further verified the test is load-bearing, not vacuous: removed the `except RuntimeError:` clause from `detect.py` and reran the test — it fails with an **uncaught `RuntimeError`** propagating out of `detect_dispatch_path`; restored the file afterward (`git status --porcelain` clean throughout). |
-| 9 | CLI run against a real, already-landed change (`test-skill-validator-library`) behaves as claimed | **CONFIRMED, all three sub-claims** | `locate --change test-skill-validator-library` → `tasks.md: 15/16 checked (incomplete)`, names the one unchecked item, which sits under a real `## Archive` heading in `openspec/changes/test-skill-validator-library/tasks.md:120`. `detect` against the real tree with the real process environment → `recommended_path: degraded` (no `CLAUDE_PLUGIN_ROOT` set in this session). `validate --change test-skill-validator-library` → `verdict: APPROVE WITH FOLLOW-UPS`, correctly extracted from the real `review.md`'s `## Verdict` section. |
+| 9 | CLI run against a real, already-landed change (`test-skill-validator-library`) behaves as claimed | **CONFIRMED, all three sub-claims** | `locate --change test-skill-validator-library` → `tasks.md: 15/16 checked (incomplete)`, names the one unchecked item, which sits under a real `## Archive` heading in `openspec/changes/archive/test-skill-validator-library/tasks.md:120`. `detect` against the real tree with the real process environment → `recommended_path: degraded` (no `CLAUDE_PLUGIN_ROOT` set in this session). `validate --change test-skill-validator-library` → `verdict: APPROVE WITH FOLLOW-UPS`, correctly extracted from the real `review.md`'s `## Verdict` section. |
 | 10 | `skills/marketplace.yaml`, `.github/workflows/skills-ci.yml`'s new job, and `openspec/README.md`'s index entry are syntactically valid and consistent | **CONFIRMED** | `python scripts/skill_marketplace.py validate` → `Skill marketplace OK ✓`. `python scripts/check_skill_script_drift.py` → `OK - 18 copy/copies match their canonical source` (up from 17, one new vendored copy registered). `openspec/README.md:96-97` links `changes/add-openspec-implementation-review/`. The `all-skills` job's own embedded reconciliation script was extracted verbatim from `.github/workflows/skills-ci.yml` and run directly against the real tree: `skill-coverage: OK - 14 skill(s) registered and CI-covered.` — `openspec-implementation-review` needs no `EXEMPT` entry because its job name (`skills-ci.yml:342`) matches the skill directory name exactly. |
 | 11 | The vendored `scripts/validate_skill.py` is byte-identical to the canonical root copy | **CONFIRMED** | `diff scripts/validate_skill.py skills/openspec-implementation-review/scripts/validate_skill.py` → empty. |
 | 12 | Evals: 7 cases, including a real subprocess round trip that exercises create-then-append | **CONFIRMED** | `evals/evals.json` has exactly 7 entries (`no-such-change`, `locate-happy-path`, `locate-incomplete-tasks-blocks-by-default`, `locate-incomplete-tasks-allow-override`, `detect-degraded-without-foundation`, `validate-hand-written-review-fixture`, `compose-appends-without-clobbering`). The last case's `setup.py` performs a real first `compose` subprocess call, and its own `run` performs a second, real subprocess call against the same scratch repo — read directly, not assumed. |
@@ -145,11 +145,11 @@ observation, not a confirmed defect).
 
 **CONFIRMED, by directly reading both files.**
 
-Read `openspec/changes/harden-quality-gate-integrity/review.md` in full: it ends with a
+Read `openspec/changes/archive/harden-quality-gate-integrity/review.md` in full: it ends with a
 distinct, file-final `## Overall verdict` heading (lines 427–453), restating **APPROVE WITH
 FOLLOW-UPS** and listing four numbered follow-ups.
 
-Read `openspec/changes/test-skill-validator-library/review.md` in full: it has **no** such
+Read `openspec/changes/archive/test-skill-validator-library/review.md` in full: it has **no** such
 heading anywhere. Its last section is `## Residual risk / follow-ups (non-blocking)` (starting
 line 245), and the document ends there — the verdict is stated exactly once, under `##
 Verdict` near the top (line 16), never restated.
@@ -166,7 +166,7 @@ re-run as part of the full suite in Pass 1, all pass.
 **Attack refuted — the compose/CLI surface itself is safe; no corruption or truncation path
 found.**
 
-Copied `openspec/changes/test-skill-validator-library/review.md` (the one real change with an
+Copied `openspec/changes/archive/test-skill-validator-library/review.md` (the one real change with an
 existing `review.md`) into a scratch repo (`sha256sum` matched the tracked file exactly before
 starting). Ran the real CLI's `compose` subcommand against the scratch copy with a
 newly-constructed follow-up body:

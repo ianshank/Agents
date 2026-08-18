@@ -11,7 +11,7 @@
   `coverage.py` matches with `re.search` — so it silently excluded any line merely
   *containing* three consecutive dots (e.g. `arr[..., 0]`), not just a standalone stub body.
   Corrected to the anchored pattern in all four packages by
-  `openspec/changes/harden-quality-gate-integrity/`; each package's full coverage suite was
+  `openspec/changes/archive/harden-quality-gate-integrity/`; each package's full coverage suite was
   re-run against the corrected pattern and stayed comfortably above its `fail_under` floor.
 - Related: `scripts/_cli.py`, `scripts/check_skill_script_drift.py`,
   `.github/workflows/quality-gates.yml`, `.github/workflows/skills-ci.yml`

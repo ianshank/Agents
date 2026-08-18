@@ -210,6 +210,39 @@
      advisory — the opposite of what these blocking gates need. A ~15-line
      `freshness_main(render, path, hint)` helper is the right size; candidate 3 subsumes the
      rest.
+  6. **`openspec-archive` mechanical helper — reconsidered, not rejected.** A 2026-08-18
+     ledger-refresh pass archiving 6 proposals by hand made two real mistakes a script
+     wouldn't: an ad-hoc `grep ... | grep -v "changes/archive"` link check silently excluded
+     its own results (grepping *inside* `changes/archive/` means the matched filename itself
+     contains the exclude string), missing 6 relative links broken by the directory move
+     until CI caught them post-push; and cross-references *between* the archived proposals
+     themselves (their `design.md`/`review.md` citing each other's pre-move paths) were
+     missed on the first pass, caught only by a second, independent review. Given more
+     proposals will reach archive-eligibility as the roadmap lands (the four core reliability
+     changes, at minimum), this is a recurring operation, not the one-time pass the original
+     "declined" verdict assumed — worth a small deterministic script (git mv + Status flip +
+     `openspec/README.md` index update + repo-wide path-reference rewrite + the relative-link
+     check, run automatically as its last step) next time three or more proposals queue up
+     for archiving at once.
+  7. **`openspec-implementation-review`'s "plugin path" has never actually run.** Its
+     `detect.py` branches on whether `claude-foundation` is plugin-loaded, but every real
+     precedent (`test-skill-validator-library`, `harden-quality-gate-integrity`,
+     `add-foundation-reviewer-charters`'s own dogfood task) has only exercised the "degraded"
+     branch. A 2026-08-18 session proved `foundation:spec-guardian`/`foundation:peer-reviewer`
+     dispatch works when hand-invoked via `claude --plugin-dir claude-foundation`, but did
+     *not* run this skill's own `scripts/run.py plan`/`compose` from inside that session — so
+     the plugin-path code itself remains unverified end-to-end. Tracked in
+     `add-openspec-implementation-review/tasks.md` §7 as an explicit, still-open follow-on;
+     worth doing the next time a `--plugin-dir` session is available.
+  8. **Two smaller hygiene notes from the same pass, not worth their own items.** (a)
+     `docs.yml`'s relative-link check is CI-only and advisory (`continue-on-error: true`,
+     deliberately "soaking") — nothing lets a contributor run the identical check locally
+     before pushing; a documented one-liner (not a new hook or a hand-edit to the *generated*
+     root `Makefile`) would have caught item 6's link breakage pre-push. (b) Any script/skill
+     that diffs "this branch vs. main" should diff against `origin/main`, not a possibly-stale
+     local ref — this session's own `code-review` skill invocation self-corrected for exactly
+     this after a raw `git diff main...HEAD` picked up 267 commits of drift; not every
+     diff-consuming script in the tree is known to do the same.
 - [x] **Reasoning & Planning Skills** — added three composable reasoning skills to the marketplace (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`).
 - [x] **Dynamic drift guard script tech-debt resolution** — resolved tech debt in the dynamic drift guard scripts.
 - [x] **Proxy-correlation measurement, PPI++ report estimator & audit propensity (F-047,
@@ -424,12 +457,19 @@
   call sites); G8 (the two dead `IsotonicCalibrator.predict` lines now carry
   `# pragma: no cover`); G9 (`agent_confidence.py` added to `quality-gates.yml`'s `--cov=`
   allowlist).
-  Remaining, none of which can change a gate decision: **G7**, two `configure_logging`
-  implementations with different signatures and formats still coexist (`scripts/_cli.py` is
-  the one `AGENTS.md` names as canonical) — `9d68d44` migrated 7 stray `logging.basicConfig()`
-  callers onto the canonical helpers but did not unify the two signatures themselves, plus
-  byte-identical copies in `skills/architecture-drift-guard` and
-  `experiments/backend-validation`.
+  Remaining, none of which can change a gate decision: **G7**, four `configure_logging`
+  implementations across two incompatible signature families still coexist (`scripts/_cli.py`
+  is the one `AGENTS.md` names as canonical) — `9d68d44` migrated 7 stray
+  `logging.basicConfig()` callers onto the canonical helpers but did not unify the
+  implementations themselves. `agent_core/logging_util.py` and
+  `skills/architecture-drift-guard/scripts/adguard/logging_util.py` are genuinely
+  byte-identical to each other (`level: str = "INFO"`, explicit `force` kwarg) but share
+  neither shape nor behavior with the canonical `scripts/_cli.py`
+  (`verbose: bool, level: int | None`, no `force`). `experiments/backend-validation`'s copy
+  matches `scripts/_cli.py`'s *signature* but silently hardcodes `force=True` in the body —
+  every call there tears down and replaces existing handlers, where the canonical version is a
+  no-op once one exists; a future dedup that trusts these as interchangeable would silently
+  change that reconfiguration behavior.
 - [ ] **Merge-gate soak** — accumulate shadow decisions and weekly audits before
   revisiting the ADR 0005 enablement checklist. **The "N≥20" this entry used to quote is a
   soak *counter*, not the activation bar**: the peer review in
