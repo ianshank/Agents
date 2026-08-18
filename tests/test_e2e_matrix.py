@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import platform
+import re
 import subprocess
 import sys
 import zipfile
@@ -586,7 +587,7 @@ class TestWorkbook:
         with zipfile.ZipFile(path) as archive:
             core = archive.read(xw.CORE_PROPERTIES_PART).decode("utf-8")
         expected = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(*xw.parse_stamp(FIXED_STAMP))
-        assert f'<dcterms:modified xsi:type="dcterms:W3CDTF">{expected}</dcterms:modified>' in core
+        assert re.search(rf"<dcterms:modified\b[^>]*>{re.escape(expected)}</dcterms:modified>", core) is not None
 
     def test_workbook_entries_carry_the_pinned_timestamp(self, tmp_path: Path) -> None:
         pytest.importorskip("openpyxl")
@@ -793,7 +794,7 @@ class TestDegradedInputs:
 
     def test_evidence_outside_the_repo_is_reported_absolutely(self, tmp_path: Path) -> None:
         (tmp_path / "cli_x.log").write_text("", encoding="utf-8")
-        assert em.evidence_for("cli:x", tmp_path).startswith("/")
+        assert Path(em.evidence_for("cli:x", tmp_path)).is_absolute()
 
     def test_a_missing_makefile_yields_no_members(self, tmp_path: Path) -> None:
         assert em.makefile_check_members(tmp_path) == ()

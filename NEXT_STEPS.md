@@ -1,5 +1,12 @@
 # Next Steps
 
+> **Roadmap Index**: Detailed, domain-specific epics have been decomposed into [`docs/roadmap/`](docs/roadmap/README.md):
+> - [Epic 1: Eval Matrix & Reliability](docs/roadmap/epic-1-eval-matrix-and-reliability.md)
+> - [Epic 2: Calibrated Merge Gate](docs/roadmap/epic-2-calibrated-merge-gate.md)
+> - [Epic 3: Monorepo & CI Infrastructure](docs/roadmap/epic-3-monorepo-and-ci-infrastructure.md)
+> - [Epic 4: Skills & Marketplace](docs/roadmap/epic-4-skills-and-marketplace.md)
+> - [Epic 5: Integrations & Plugins](docs/roadmap/epic-5-integrations-and-plugins.md)
+
 ## Recently Landed — Quality & Eval-Integrity Gates
 
 - [x] **Agent trajectory evaluation + its hardening pass (F-051, ADR 0031)** — an external

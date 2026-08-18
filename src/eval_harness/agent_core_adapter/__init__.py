@@ -28,7 +28,7 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -309,7 +309,7 @@ class BudgetedJudge(Judge):
         self._on_rate_limited = on_rate_limited
         self._lock = threading.Lock()
 
-    def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict:
+    def evaluate(self, prompt: str, context: dict[str, Any] | None = None) -> JudgeVerdict:
         from agent_core import BudgetExceededError
 
         with self._lock:

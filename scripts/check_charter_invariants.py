@@ -77,12 +77,11 @@ _EXPECTED_GATE_SCRIPTS = (
 )
 
 # Interfaces that must be typing.Protocol (charter §4 invariant 3), by class name. Scorer
-# is deliberately excluded: it carries a concrete, inherited __init__ that
-# typing.Protocol does not reliably propagate to subclasses on Python 3.10 (this repo's
-# CI matrix includes 3.10), so it stays abc.ABC — see core/interfaces.py's module
-# docstring for the confirmed regression.
-_PROTOCOL_INTERFACES = ("DatasetSource", "TargetRunner", "ResultSink", "Judge")
-_ABC_INTERFACES = ("Scorer",)
+# Scorer was historically in _ABC_INTERFACES because Protocol.__init__ did not
+# reliably propagate on Python 3.10. With the floor raised to >=3.11 (ADR 0034),
+# the fix is universally available and Scorer is now a Protocol like the rest.
+_PROTOCOL_INTERFACES = ("DatasetSource", "TargetRunner", "ResultSink", "Judge", "Scorer")
+_ABC_INTERFACES: tuple[str, ...] = ()
 
 # Numeric literals excluded from the magic-number heuristic: pure identity/sentinel values
 # (0, empty/singular counts, sign flip). Deliberately does NOT include round operational

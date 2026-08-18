@@ -40,7 +40,7 @@ class MockJudge(Judge):
         self.default_score = float(default_score)
         self.rules = rules or []
 
-    def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict:
+    def evaluate(self, prompt: str, context: dict[str, Any] | None = None) -> JudgeVerdict:
         for rule in self.rules:
             needle = rule.get("contains", "")
             if needle and needle in prompt:
@@ -75,7 +75,7 @@ class BedrockJudge(Judge):  # pragma: no cover - requires boto3 + network
         self.system = system or 'Respond ONLY with JSON: {"score": <0..1>, "reasoning": <str>}.'
         self.score_field = score_field
 
-    def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict:
+    def evaluate(self, prompt: str, context: dict[str, Any] | None = None) -> JudgeVerdict:
         body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": self.max_tokens,

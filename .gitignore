@@ -27,6 +27,10 @@ build/
 .skill-validation/
 grading.json
 
+# Scratch scripts and agent runtime caches
+scratch/
+.agent/
+
 # grimp import-graph cache (architecture-drift-guard)
 .grimp_cache/
 

@@ -139,7 +139,18 @@ class TestM4Interface:
 
     @pytest.mark.parametrize("name", SCORERS.names())
     def test_scorer_is_scorer(self, name: str) -> None:
-        assert issubclass(SCORERS.get(name), Scorer)
+        # Scorer is a Protocol; check explicit MRO inheritance for all registered scorers
+        cls = SCORERS.get(name)
+        assert Scorer in cls.__mro__
+
+    def test_scorer_protocol_duck_typing(self) -> None:
+        class DuckScorer:
+            name: str = "duck"
+
+            def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+                return ScoreResult(name=self.name, value=1.0)
+
+        assert isinstance(DuckScorer(), Scorer)
 
     @pytest.mark.parametrize("name", DATASETS.names())
     def test_dataset_is_dataset_source(self, name: str) -> None:

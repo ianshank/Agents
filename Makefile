@@ -55,7 +55,14 @@ matrix-update: ## Regenerate docs/matrix-coverage.md from the live registry cens
 	@# Refuses to write while the matrix itself has holes -- fix the rows first.
 	$(PYTHON) tests/test_matrix_coverage.py --update
 
-.PHONY: e2e-matrix-check e2e-matrix-update
+.PHONY: e2e-matrix-check e2e-matrix-update invariants e2e-matrix
+
+invariants: ## Verify charter invariants and architecture drift
+	$(PYTHON) scripts/check_charter_invariants.py
+	$(PYTHON) scripts/check_charter_drift.py
+
+e2e-matrix: ## Run the full end-to-end matrix test suite
+	$(PYTHON) -m pytest tests/test_e2e_matrix.py -v
 
 e2e-matrix-check: ## Verify docs/e2e-matrix/ matches a live regeneration (ADR 0033)
 	$(PYTHON) tests/test_e2e_matrix.py --check
