@@ -52,7 +52,7 @@ C4Container
         Container(cli, "CLI", "Python / argparse", "Entry point — parses args, loads config, runs engine")
         Container(engine, "EvalEngine", "Python", "Orchestrates: load → sample → run → score → aggregate → emit")
         Container(config, "Config Loader", "Python / Pydantic", "YAML → migrate → interpolate → validate → EvalConfig")
-        Container(core, "Core (core)", "Python", "Component contracts + generic Registry[T] with alias support (src/eval_harness/core/registry.py)")
+        Container(core, "Core (core)", "Python", "Structural Protocol contracts (Scorer, Judge, DatasetSource, TargetRunner, ResultSink) + generic Registry[T] with structured logging and alias support (src/eval_harness/core/)")
         Container(plugins, "Plugin Loader (plugins)", "Python", "Central registries (SCORERS, JUDGES, ...) — built-in self-registration + entry-point discovery via the eval_harness.plugins group (src/eval_harness/plugins.py)")
     }
 

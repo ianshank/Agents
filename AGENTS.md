@@ -25,10 +25,12 @@ Before writing code, read in order:
 
 0. `docs/CHARTER.md` — the north-star charter: Vision / Mission / Scope (+ non-goals) / Invariants / Roadmap. Changes rarely; keep work within its §3 scope and §4 invariants and escalate anything that would violate them. Its markdown links are drift-checked by `scripts/check_charter_drift.py`; its actual claims (package roles, invariants, default-off flags, ...) are mechanically re-checked by `scripts/check_charter_invariants.py`. See `docs/CHARTER_ALIGNMENT_AUDIT.md` for the audit that motivated the latter.
 1. `README.md` — install / test / gate commands and repo layout.
-2. `architecture.mmd` + `architecture.yaml` — the canonical **import-edge component view** (package-level import dependencies, drift-gated in CI). Agents MUST update it when adding or removing a component or import edge — by editing `architecture.yaml` and regenerating (`python skills/architecture-drift-guard/scripts/mermaid_gen.py --manifest architecture.yaml -o architecture.mmd`), never by hand-editing the `.mmd`. Runtime/call-semantics diagrams (C4 context, containers, sub-component internals) live in `docs/c4_architecture.md`.
-3. `docs/decisions/` — Architecture Decision Records. **`ADR-0009`** is the tech-debt baseline: no hard-coded secrets, config-driven defaults, per-package coverage gates. **New code should not regress that baseline.**
-4. `CHANGELOG.md` `[1.3.0-dev]` — the section to add entries to for any user-visible change. Follow the existing `Hardening` / `Added` / `Changed` / `Fixed` structure.
-5. `docs/phoenix-spike.md` — reversible-adoption pattern the Phoenix seam demonstrates. Reference model for any future "SDK-optional" integration.
+2. `docs/quickstart.md` — 5-minute onboarding guide (install → config → run → Langfuse).
+3. `architecture.mmd` + `architecture.yaml` — the canonical **import-edge component view** (package-level import dependencies, drift-gated in CI). Agents MUST update it when adding or removing a component or import edge — by editing `architecture.yaml` and regenerating (`python skills/architecture-drift-guard/scripts/mermaid_gen.py --manifest architecture.yaml -o architecture.mmd`), never by hand-editing the `.mmd`. Runtime/call-semantics diagrams (C4 context, containers, sub-component internals) live in `docs/c4_architecture.md`.
+4. `docs/decisions/` — Architecture Decision Records. **`ADR-0009`** is the tech-debt baseline: no hard-coded secrets, config-driven defaults, per-package coverage gates. **New code should not regress that baseline.**
+5. `CHANGELOG.md` `[1.3.0-dev]` — the section to add entries to for any user-visible change. Follow the existing `Hardening` / `Added` / `Changed` / `Fixed` structure.
+6. `docs/roadmap/` — domain-specific engineering epics (Epic 1–5).
+7. `docs/phoenix-spike.md` — reversible-adoption pattern the Phoenix seam demonstrates. Reference model for any future "SDK-optional" integration.
 
 ## Reasoning & Planning Skills
 
@@ -50,9 +52,11 @@ enterprise-docs pass and point at the charter as the single source of truth:
 | File | Answers | Currency |
 |---|---|---|
 | `README.md` | How do I install / run / test this? | Kept current with each release |
+| `docs/quickstart.md` | How do I run my first evaluation in 5 minutes? | Canonical onboarding guide |
 | `AGENTS.md` (this file) | What must an agent read or avoid before editing? | Manually maintained — see "Rebuilding this file" below |
 | `HARNESS_SPEC.md` | What is the canonical spec (features, gates, checkpoints)? | Canonical source of truth (see its own header) |
-| `NEXT_STEPS.md` | What shipped recently, what's next? | A rolling log of intent — an entry's `[x]` reflects the state *when written*, not necessarily now. Cross-check `features.yaml` / `scripts/validations/F_*.py` (run `python scripts/validate.py --tier fast`) for a feature's current enforced state rather than trusting the checkbox alone |
+| `NEXT_STEPS.md` | What shipped recently, what's next? | A rolling log of intent; decomposed into `docs/roadmap/` epics |
+| `docs/roadmap/` | Detailed active engineering epics (Epics 1–5)? | Active epic tracking |
 | `CHANGELOG.md` | What changed, release by release? | Keep-a-changelog format; append to the `[Unreleased]`/dev section |
 | `progress.md` | What happened in each work session? | Rotates to `progress-archive/YYYY-MM.md` once large (see `HARNESS_SPEC.md`'s "progress-archive/" section) |
 | `docs/README.md` | Where is every doc, by category? | The documentation index (mirrors this table) |

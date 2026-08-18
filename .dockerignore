@@ -23,6 +23,10 @@ htmlcov/
 .skill-validation/
 grading.json
 
+# Scratch scripts and agent runtime caches
+scratch/
+.agent/
+
 # Import-graph & property-test caches
 .grimp_cache/
 .hypothesis/

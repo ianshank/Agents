@@ -6,6 +6,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — Architecture, CI, Documentation & Reliability Hardening
+- **Nightly E2E CI Workflow (`.github/workflows/nightly-e2e.yml`).** Scheduled daily
+  at 04:00 UTC plus manual `workflow_dispatch`, running the complete monorepo test
+  matrix across Python 3.11, 3.12, and 3.13 on Ubuntu. Executes invariant guards,
+  drift verification, full pytest suites across all 5 monorepo packages, and E2E
+  matrix freshness validation.
+- **Onboarding Quickstart Guide (`docs/quickstart.md`).** A 5-minute practical guide
+  walking users through installation, first eval execution, custom YAML configuration,
+  JSONL dataset loading, real LLM judge configuration, Langfuse cloud score tracking,
+  and multi-model comparison workflows. Wired into `mkdocs.yml`, `docs/README.md`,
+  and root `README.md`.
+- **Roadmap Epic Decomposition (`docs/roadmap/`).** Decomposed the 569-line monolithic
+  `NEXT_STEPS.md` into five domain-specific, actionable engineering epic roadmaps:
+  * `epic-1-eval-matrix-and-reliability.md` (Trajectory, repeated-run $pass^k$, panel judge)
+  * `epic-2-calibrated-merge-gate.md` (Calibrator health, soak stats, outcome store)
+  * `epic-3-monorepo-and-ci-infrastructure.md` (Packages, CI delegation, operational scripts)
+  * `epic-4-skills-and-marketplace.md` (Deterministic generators, skill marketplace, assertion registries)
+  * `epic-5-integrations-and-plugins.md` (BrainTrust, Phoenix, Claude Foundation, backend validation)
+- **Scorer `typing.Protocol` Migration (`src/eval_harness/core/interfaces.py`).**
+  Migrated `Scorer` from `abc.ABC` to structural `@runtime_checkable typing.Protocol`,
+  bringing all 5 core harness interfaces (`Judge`, `DatasetSource`, `TargetRunner`,
+  `ResultSink`, `Scorer`) into 100% protocol alignment. Updated charter invariant guards
+  and tests; verified duck-typing support across Python 3.11+.
+- **Structured Registry Logging & Strict Typing (`src/eval_harness/core/registry.py`).**
+  Added debug-level structured logging to `register_class` and `create` for verbose plugin
+  discovery diagnostics. Fortified `create()` params with `dict[str, Any]` and annotated
+  `register()` decorator method for full `mypy --strict` compliance.
+
+### Fixed — Cross-Platform Windows Portability & Test Flake Remediation
+- **Interpreter WMI Shim Version Guard (`scripts/e2e_shims/sitecustomize.py`).**
+  Guarded `platform._wmi_query` inactive notice with `sys.version_info >= (3, 12)`,
+  eliminating false-positive stderr pollution on Python 3.11 Windows hosts.
+- **OpenXML Core Properties Modified Timestamp (`tests/test_e2e_matrix.py`).**
+  Replaced brittle XML string matching with regex pattern matching independent of
+  inline namespace attribute ordering across openpyxl/etree versions.
+- **Cross-Platform Evidence Log Path Assertions (`tests/test_e2e_matrix.py`).**
+  Replaced POSIX-only `.startswith("/")` assertion with `Path.is_absolute()`,
+  achieving 100% test pass rate across `tests/test_e2e_matrix.py` on Windows.
+- **Judge Signature Type Hint Consistency.** Standardized `evaluate()` method type
+  signatures across `MockJudge`, `BedrockJudge`, and `BudgetedJudge` to `dict[str, Any]`.
+
 ### Added — backend-validation: full Opik matrix coverage + air-gap P4 (PR #147)
 - **Air-gap phase P4 exists now (`experiments/backend-validation/`).** `make airgap` and
   `make status` invoked CLI subcommands that did not exist (argparse exit 2); no compose
