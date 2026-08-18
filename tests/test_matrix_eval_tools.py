@@ -150,6 +150,9 @@ class TestM4Interface:
             def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
                 return ScoreResult(name=self.name, value=1.0)
 
+            def uses_judge(self) -> bool:
+                return False
+
         assert isinstance(DuckScorer(), Scorer)
 
     @pytest.mark.parametrize("name", DATASETS.names())
