@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections.abc import Iterable
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from .types import EvalItem, JudgeVerdict, RunContext, RunResult, ScoreResult, TargetOutput
 
@@ -31,13 +31,13 @@ class Scorer(Protocol):
     """Scores a single (item, output) pair. ``name`` labels the emitted score."""
 
     default_name: str = "score"
+    name: str
 
     def __init__(self, name: str | None = None) -> None:
         self.name = name or self.default_name
 
     @abstractmethod
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult: ...
-
 
 
 @runtime_checkable
@@ -65,4 +65,5 @@ class Judge(Protocol):
     """LLM-as-judge abstraction. Implementations call a model; tests use a mock."""
 
     @abstractmethod
-    def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict: ...
+    def evaluate(self, prompt: str, context: dict[str, Any] | None = None) -> JudgeVerdict: ...
+
