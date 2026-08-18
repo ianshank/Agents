@@ -11,7 +11,7 @@
     {
       "name": "foundation",
       "source": "./",
-      "description": "Reusable skills (foundation:plan, foundation:code-review, foundation:test-first, foundation:c4-docs), explorer/test-runner subagents, and lifecycle hook guards.",
+      "description": "Reusable skills (foundation:plan, foundation:code-review, foundation:test-first, foundation:c4-docs), explorer/test-runner/spec-guardian/peer-reviewer subagents, and lifecycle hook guards.",
       "version": "1.0.0"
     }
   ]

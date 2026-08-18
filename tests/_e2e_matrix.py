@@ -721,11 +721,17 @@ def _floor_from_pyproject(path: Path) -> int | None:
 
 
 def _floor_from_gate_script(path: Path) -> int | None:
-    """``COV_FAIL_UNDER="${COV_FAIL_UNDER:-N}"`` from a generated quality-gate script."""
+    """``--cov-fail-under=N`` from a generated quality-gate script.
+
+    The threshold is a generation-time literal, never a live env override (the
+    ``harden-quality-gate-integrity`` change closed the ``COV_FAIL_UNDER=0`` evasion), so a
+    bare ``--cov-fail-under=N`` is the only form a freshly generated script can contain — the
+    pre-hardening ``COV_FAIL_UNDER="${COV_FAIL_UNDER:-N}"`` form no longer appears anywhere.
+    """
     text = _read_text_or_none(path)
     if text is None:
         return None
-    match = re.search(r"COV_FAIL_UNDER=\"\$\{COV_FAIL_UNDER:-(?P<n>\d+)\}\"", text)
+    match = re.search(r"--cov-fail-under=(?P<n>\d+)", text)
     return int(match.group("n")) if match else None
 
 

@@ -8,8 +8,6 @@
 set -euo pipefail
 
 PYTHON="${PYTHON:-python3}"
-COVERAGE_SOURCE="${COVERAGE_SOURCE:-eval_harness}"
-COV_FAIL_UNDER="${COV_FAIL_UNDER:-96}"
 
 log() { printf '\n\033[1m[quality-gate] %s\033[0m\n' "$1"; }
 
@@ -29,12 +27,18 @@ do_typecheck() {
 
 do_test() {
   log "test"
+  if [ -n "${PYTEST_ADDOPTS:-}" ]; then echo "quality-gate: PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" >&2; fi
+  unset PYTEST_ADDOPTS
   "$PYTHON" -m pytest
 }
 
 do_coverage() {
   log "coverage"
-  "$PYTHON" -m pytest --cov="$COVERAGE_SOURCE" --cov-branch --cov-report=term-missing --cov-fail-under="$COV_FAIL_UNDER"
+  if [ -n "${COVERAGE_SOURCE:-}" ]; then echo "quality-gate: COVERAGE_SOURCE is ignored; targets are fixed at generation time" >&2; fi
+  if [ -n "${COV_FAIL_UNDER:-}" ]; then echo "quality-gate: COV_FAIL_UNDER is ignored; targets are fixed at generation time" >&2; fi
+  if [ -n "${PYTEST_ADDOPTS:-}" ]; then echo "quality-gate: PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" >&2; fi
+  unset PYTEST_ADDOPTS
+  "$PYTHON" -m pytest --cov="eval_harness" --cov-branch --cov-report=term-missing --cov-fail-under=96
 }
 
 do_all() {
@@ -66,6 +70,11 @@ main() {
 do_extra() {
   log "scripts-coverage"
   # Operational-scripts gate (F-031): floor comes from scripts/.coveragerc, not a literal here.
+  # PYTEST_ADDOPTS guard (harden-quality-gate-integrity): this stage invokes pytest directly,
+  # below the marker, so the generator cannot inject the guard -- kept in sync by hand with
+  # the same shell idiom gategen.render._pytest_addopts_guard() emits above the marker.
+  if [ -n "${PYTEST_ADDOPTS:-}" ]; then echo "quality-gate: PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" >&2; fi
+  unset PYTEST_ADDOPTS
   "$PYTHON" -m pytest tests --cov=scripts --cov-config=scripts/.coveragerc --cov-report=term-missing
 }
 

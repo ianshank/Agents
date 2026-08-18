@@ -32,7 +32,7 @@ C4Container
   title Containers — claude-foundation repository
   Container(manifest, "Plugin Manifest", ".claude-plugin/", "plugin.json + marketplace.json; discovery & versioning")
   Container(skills, "Skills", "Markdown + evals", "foundation:plan / code-review / test-first / c4-docs, each with evals/evals.json (skill-creator format)")
-  Container(agents, "Subagents", "Markdown frontmatter", "explorer, test-runner; least-privilege tools; restricted plugin-agent frontmatter")
+  Container(agents, "Subagents", "Markdown frontmatter", "explorer, test-runner, spec-guardian, peer-reviewer; least-privilege tools; restricted plugin-agent frontmatter")
   Container(hooks, "Hooks", "Python + hooks.json", "pre_tool_guard.py, post_edit_verify.py, session_logger.py sharing hooks/_lib.py; env-var configured; JSONL logging")
   Container(tools, "foundation_tools", "Python 3.11+, stdlib logging", "Doc-derived schema validator, no-hardcode scanner, skill-creator eval-gate wrapper, JSONL log emitter")
   Container(ci, "CI Pipeline", "GitHub Actions", "Merge gate per PR; release gate on tags incl. backwards-compat fixture")

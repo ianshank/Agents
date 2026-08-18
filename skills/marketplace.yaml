@@ -37,7 +37,7 @@ skills:
     description: Generate a deterministic, self-documenting Makefile for a Python project from its detected toolchain (monorepo workspace fan-out supported).
     compatibility: python>=3.10 (tomli on 3.10)
   - name: quality-gate
-    version: 1.1.0
+    version: 1.2.0
     path: skills/quality-gate
     description: Generate a deterministic quality-gate shell script (lint + type + test + coverage) that CI and make check both call.
     compatibility: python>=3.10 (tomli on 3.10)
@@ -70,4 +70,9 @@ skills:
     version: 1.0.0
     path: skills/repo-invariant-review
     description: Predict CI collisions with this repo's enforced invariants (protected paths, airgap, size budget, frozen baselines, CHARTER invariant 1) before pushing.
+    compatibility: python>=3.10
+  - name: openspec-implementation-review
+    version: 1.0.0
+    path: skills/openspec-implementation-review
+    description: Reviews a shipped OpenSpec change's implementation against its own proposal/design/tasks/spec, producing a dated, two-pass review.md (dispatches spec-guardian/peer-reviewer when the claude-foundation plugin is loaded, degrades to a general-purpose subagent with the method inlined otherwise).
     compatibility: python>=3.10

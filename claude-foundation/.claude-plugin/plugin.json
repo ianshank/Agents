@@ -1,7 +1,7 @@
 {
   "name": "foundation",
   "version": "1.0.0",
-  "description": "Reusable Claude Code foundation: planning/review/test-first/C4-docs skills, least-privilege explorer and test-runner subagents, and deterministic lifecycle guards (env-configured, no hardcoded values).",
+  "description": "Reusable Claude Code foundation: planning/review/test-first/C4-docs skills, least-privilege explorer, test-runner, spec-guardian and peer-reviewer subagents, and deterministic lifecycle guards (env-configured, no hardcoded values).",
   "author": {
     "name": "Ian Cruickshank"
   },
