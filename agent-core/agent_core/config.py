@@ -135,6 +135,35 @@ class GoldenConfig:
 
 
 @dataclass(frozen=True)
+class ProbeConfig:
+    """Tunables for judge bias probes (order, verbosity, self-preference).
+
+    Tolerances bound how much bias a judge may exhibit and still be considered
+    validated; ``min_pairs`` mirrors ``CalibrationConfig.min_eval_samples`` — a
+    floor on sample size before a probe's verdict means anything.
+    """
+
+    wilson_z: float = 1.96  # 95% interval by default, matching CalibrationConfig
+    order_flip_tolerance: float = 0.15
+    verbosity_delta_tolerance: float = 0.15
+    self_preference_tolerance: float = 0.15
+    min_pairs: int = 1
+
+    def __post_init__(self) -> None:
+        if self.wilson_z <= 0:
+            raise ConfigError("probe.wilson_z must be > 0")
+        for name in (
+            "order_flip_tolerance",
+            "verbosity_delta_tolerance",
+            "self_preference_tolerance",
+        ):
+            if not 0.0 <= getattr(self, name) <= 1.0:
+                raise ConfigError(f"probe.{name} must be in [0, 1]")
+        if self.min_pairs < 1:
+            raise ConfigError(f"probe.min_pairs must be >= 1 (got {self.min_pairs!r})")
+
+
+@dataclass(frozen=True)
 class RecalibrationConfig:
     default_calibrator: str = "isotonic"
     fallback_policy: str = "global"  # "global" | "error"
@@ -182,6 +211,7 @@ class FrameworkConfig:
     golden: GoldenConfig = field(default_factory=GoldenConfig)
     recalibration: RecalibrationConfig = field(default_factory=RecalibrationConfig)
     async_exec: AsyncConfig = field(default_factory=AsyncConfig)
+    probe: ProbeConfig = field(default_factory=ProbeConfig)
 
     @property
     def reserve_units(self) -> float:
@@ -209,6 +239,7 @@ class FrameworkConfig:
             "golden": GoldenConfig,
             "recalibration": RecalibrationConfig,
             "async_exec": AsyncConfig,
+            "probe": ProbeConfig,
         }
         kwargs: dict[str, Any] = {}
         for key, klass in sections.items():
