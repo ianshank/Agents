@@ -53,6 +53,25 @@ class TargetRunner(Protocol):
     @abstractmethod
     def run(self, item: EvalItem) -> TargetOutput: ...
 
+    def is_deterministic(self) -> bool | None:
+        """Whether repeated ``run()`` calls on the same item return the same output.
+
+        A plain method, not a ``@property``: a ``runtime_checkable`` Protocol's
+        ``issubclass()`` support requires every member to be callable
+        (``typing``'s ``_is_callable_members_only``) — a data-descriptor member
+        would raise ``TypeError`` at ``issubclass(SomeTarget, TargetRunner)``,
+        which ``tests/test_matrix_eval_tools.py``'s ``TestM4Interface`` exercises
+        for every registered target.
+
+        ``None`` (the default) means undeclared, never an implicit ``False`` — the
+        engine falls back to observing actual attempt outputs when this is unknown.
+        Concrete and non-abstract, so every existing target — including ones that
+        predate this method and never override it — stays a valid ``TargetRunner``
+        unchanged (ADR 0031 obligation 1). Targets that know their own sampling
+        behaviour override it, e.g. ``ModelTarget`` from ``temperature == 0.0``.
+        """
+        return None
+
 
 @runtime_checkable
 class ResultSink(Protocol):

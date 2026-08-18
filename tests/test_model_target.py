@@ -72,6 +72,27 @@ def test_zero_retry_bounds_are_still_accepted():
     assert target.retry_max_seconds == 0
 
 
+# ------------------------------------------------------------- is_deterministic
+def test_is_deterministic_true_at_temperature_zero():
+    """temperature=0.0 is ModelTargetConfig's own default — the harness's only
+    case treated as deterministic (F-056 reliability metrics)."""
+    target = ModelTarget(provider="openai", model="m", temperature=0.0, client=MagicMock())
+    assert target.is_deterministic() is True
+
+
+def test_is_deterministic_false_at_nonzero_temperature():
+    target = ModelTarget(provider="openai", model="m", temperature=0.7, client=MagicMock())
+    assert target.is_deterministic() is False
+
+
+def test_is_deterministic_unknown_when_temperature_omitted():
+    """temperature=None means the param is omitted entirely (some models reject
+    it) — the provider's own default sampling behaviour is opaque to this
+    harness, so this is genuinely unknown, not False."""
+    target = ModelTarget(provider="openai", model="m", temperature=None, client=MagicMock())
+    assert target.is_deterministic() is None
+
+
 # ----------------------------------------------------------------------- openai
 def test_openai_returns_joined_content_with_latency_and_metadata():
     client = _openai_client([_openai_chunk("hel"), _openai_chunk("lo")])

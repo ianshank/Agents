@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..version import SCHEMA_VERSION
 
@@ -35,6 +35,15 @@ class RunSettings(BaseModel):
             "1 = sequential (default, identical to legacy behaviour). "
             ">1 = parallel via ThreadPoolExecutor. Note: Langfuse per-item "
             "trace linking is unavailable in parallel mode."
+        ),
+    )
+    repetitions: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Number of independent target.run(item) attempts per item. "
+            "1 = legacy behaviour, byte-identical output (default). "
+            ">1 computes pass@k/pass^k reliability metrics over k independent attempts."
         ),
     )
 
@@ -155,15 +164,15 @@ class PromptSourceConfig(BaseModel):
 
 class GateRule(BaseModel):
     score: str
-    metric: str = "mean"  # "mean" | "pass_rate"
+    metric: str = "mean"  # "mean" | "pass_rate" | "pass_at_k" | "pass_power_k"
     min: float | None = None
     max: float | None = None
 
     @field_validator("metric")
     @classmethod
     def _check_metric(cls, v: str) -> str:
-        if v not in ("mean", "pass_rate"):
-            raise ValueError("metric must be 'mean' or 'pass_rate'")
+        if v not in ("mean", "pass_rate", "pass_at_k", "pass_power_k"):
+            raise ValueError("metric must be 'mean', 'pass_rate', 'pass_at_k' or 'pass_power_k'")
         return v
 
 
@@ -263,6 +272,8 @@ class PhoenixConfig(BaseModel):
 
 
 class EvalConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     schema_version: str
     run: RunSettings = Field(default_factory=RunSettings)
     dataset: ComponentSpec
