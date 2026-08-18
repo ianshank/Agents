@@ -1,6 +1,6 @@
 # Change: harden-quality-gate-integrity
 
-**Status:** proposed · **Date:** 2026-08-17 · **Author track:** `claude/` agent lane
+**Status:** implemented · **Date:** 2026-08-17 · **Author track:** `claude/` agent lane
 **Motivated by:** a file-by-file comparison of this repo's Claude Code tooling against a
 sibling project (`docs/plans/orbital-drift-alignment/PLAN.md`), independently fact-checked
 against the actual code rather than trusted — the comparison's own claims were wrong twice

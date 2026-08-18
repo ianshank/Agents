@@ -65,7 +65,7 @@ touches no Python source, only agent markdown, docs, and one regenerated JSON fi
 
 ## 4. Proof (dogfood)
 
-- [ ] Dogfood: apply `spec-guardian`'s then `peer-reviewer`'s stated procedure, in character,
+- [x] Dogfood: apply `spec-guardian`'s then `peer-reviewer`'s stated procedure, in character,
       against Phase 1 (`harden-quality-gate-integrity`)'s actual diff, producing
       `openspec/changes/harden-quality-gate-integrity/review.md`.
       **Blocked from this worktree — not fabricated.** Checked, not assumed:
@@ -83,11 +83,17 @@ touches no Python source, only agent markdown, docs, and one regenerated JSON fi
       directly — confirmed by inspecting this orchestrating session's own available
       subagent types, which do not include `spec-guardian`/`peer-reviewer` (only the
       generic types every session gets). Dispatching these two charters by name requires
-      a session actually started with `claude --plugin-dir claude-foundation`, which
-      this integration was not. Genuinely left open — not something either this task or
-      the orchestrating session can complete today; revisit once `claude-foundation` is
-      extracted to its own repo (ADR 0028's M7) or a session is deliberately started
-      with the plugin loaded.
+      a session actually started with `claude --plugin-dir claude-foundation`.
+      **Closed (2026-08-18):** run for real — `claude -p --plugin-dir claude-foundation
+      --permission-mode dontAsk "<dogfood prompt>"` from this repo's root, confirmed the
+      `foundation:spec-guardian`/`foundation:peer-reviewer` subagent types were available,
+      and dispatched both against Phase 1's diff (now at
+      `openspec/changes/archive/harden-quality-gate-integrity/`, this proposal having since
+      been archived alongside Phase 1). Neither charter reported a clean bill of health —
+      genuine, non-fabricated findings, including one live gate-integrity hole
+      (`COVERAGE_RCFILE`) neither the original implementer nor the original review caught.
+      Full output appended as a dated pass to
+      `openspec/changes/archive/harden-quality-gate-integrity/review.md`.
 
 ## 5. Verification
 

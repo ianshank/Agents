@@ -1,8 +1,8 @@
 """Structural validation of a produced ``review.md``.
 
 The required shape is calibrated against two *real*, already-merged artifacts in this repo —
-``openspec/changes/harden-quality-gate-integrity/review.md`` and
-``openspec/changes/test-skill-validator-library/review.md`` — not against an idealized
+``openspec/changes/archive/harden-quality-gate-integrity/review.md`` and
+``openspec/changes/archive/test-skill-validator-library/review.md`` — not against an idealized
 template. That matters concretely: an earlier draft of this checker required a distinct,
 file-final ``## Overall verdict`` heading, which the second of those two real, accepted
 reviews does not have (it ends on ``## Residual risk / follow-ups``, having already stated its

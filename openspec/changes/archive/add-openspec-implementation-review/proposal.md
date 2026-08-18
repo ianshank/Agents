@@ -1,6 +1,6 @@
 # Change: add-openspec-implementation-review
 
-**Status:** proposed · **Date:** 2026-08-17 · **Author track:** `claude/` agent lane
+**Status:** implemented · **Date:** 2026-08-17 · **Author track:** `claude/` agent lane
 **Motivated by:** `docs/plans/orbital-drift-alignment/PLAN.md` Phase 5, which depends on
 Phase 4 (`add-foundation-reviewer-charters`, merged). `openspec/AGENTS.md`'s lifecycle table
 already names a `review` phase owned by `spec-guardian`/`peer-reviewer`, but nothing locates a

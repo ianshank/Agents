@@ -177,7 +177,7 @@ def test_validate_review_file_reads_a_real_file(tmp_path: Path) -> None:
 
 
 def test_real_harden_quality_gate_integrity_review_is_structurally_valid() -> None:
-    path = REPO_ROOT / "openspec" / "changes" / "harden-quality-gate-integrity" / "review.md"
+    path = REPO_ROOT / "openspec" / "changes" / "archive" / "harden-quality-gate-integrity" / "review.md"
     result = validate_review_file(path, expected_change_id="harden-quality-gate-integrity")
     assert result.ok is True, result.errors
     assert result.verdict == "APPROVE WITH FOLLOW-UPS"
@@ -188,7 +188,7 @@ def test_real_test_skill_validator_library_review_is_structurally_valid() -> Non
     # ends on "## Residual risk / follow-ups") -- the reason this validator checks
     # verdict-first, not verdict-last. If this regresses to requiring a terminal heading, this
     # real, accepted, in-repo review would incorrectly fail.
-    path = REPO_ROOT / "openspec" / "changes" / "test-skill-validator-library" / "review.md"
+    path = REPO_ROOT / "openspec" / "changes" / "archive" / "test-skill-validator-library" / "review.md"
     result = validate_review_file(path, expected_change_id="test-skill-validator-library")
     assert result.ok is True, result.errors
     assert result.verdict == "APPROVE WITH FOLLOW-UPS"

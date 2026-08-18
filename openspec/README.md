@@ -29,12 +29,6 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
-- [`changes/add-eval-matrix-completeness/`](changes/add-eval-matrix-completeness/) —
-  *proposed.* The declared test matrix ("all eval tools × standardized metrics") is silently
-  incomplete — seven registered scorers have zero rows, the M7 lists are hand-maintained and
-  stale, and nothing enforces completeness. Derives the component census from the live
-  registries, sets per-kind dimension floors with reviewable waivers (ADR 0032), freezes the
-  alias→canonical pairings, and generates a freshness-gated `docs/matrix-coverage.md`.
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
   *proposed.* The system has strong internal validation and no external evidence. Replaces the
   rejected "add-business-readiness-wedge" (which would have pulled a public
@@ -61,48 +55,6 @@ before that guard existed.
   **blocked.** Ingesting production traces back into the golden dataset. Blocked on a
   CHARTER §3 ratified amendment plus its own ADR — §3 lists "a general observability
   platform" as a non-goal — and on the three changes above.
-- [`changes/harden-quality-gate-integrity/`](changes/harden-quality-gate-integrity/) —
-  *proposed.* The generated `quality-gate.sh` coverage gate could be made to report green
-  without meeting its real threshold: `COV_FAIL_UNDER` and single-source `COVERAGE_SOURCE`
-  were live, unguarded environment overrides, `PYTEST_ADDOPTS` passed through to pytest
-  unguarded, and four packages' coverage-exclude regex was unanchored (excluding any line
-  containing `...`, not just a standalone stub body) despite ADR 0009 claiming it was aligned
-  with root's already-anchored pattern. All four are closed with generation-time literals, an
-  active `PYTEST_ADDOPTS` guard, an anchored regex verified safe against each package's real
-  coverage suite, and positive-control tests that run the real gate against a real
-  under-covered fixture.
-- [`changes/add-foundation-reviewer-charters/`](changes/add-foundation-reviewer-charters/) —
-  *proposed.* `claude-foundation/agents/` holds only `explorer`/`test-runner` — no
-  spec-guardian/peer-reviewer-equivalent charter exists, and no sequential review-loop
-  convention exists to slot one into. Adds `spec-guardian` (read-only conformance check of a
-  change against its own declared spec/plan/decision surface) and `peer-reviewer` (read-only
-  two-pass adversarial review — mechanical fact-check, then a separately labeled adversarial
-  pass whose refuted attacks are kept, not deleted). Both discover a consumer repo's own
-  planning conventions at invocation time instead of hardcoding this repo's paths, per
-  `claude-foundation`'s own portability contract.
-- [`changes/pin-lockstep-tool-versions/`](changes/pin-lockstep-tool-versions/) —
-  *implemented.* `ruff==0.15.20`/`mypy==2.1.0` were hand-duplicated across 7
-  `pyproject.toml` dev extras and 9 `skills-ci.yml` pip-install lines with a "bump in
-  lockstep" comment but no automated check. `scripts/tool_versions.py` is now the single
-  source of truth and `scripts/validations/F_055.py` (F-055) asserts every copy matches
-  it, read-only on `skills-ci.yml`. See ADR 0034.
-- [`changes/test-skill-validator-library/`](changes/test-skill-validator-library/) —
-  *proposed.* `skills/common/skill_validator.py` is the grading engine every other skill's
-  vendored `validate_skill.py` imports from — real library code with zero measured coverage
-  and no lint/mypy pass today. Adds a standalone test suite (100% branch coverage measured),
-  a dedicated `common` CI job (structural-tier-only, since it has no behavioral surface of
-  its own to grade — a third case ADR 0030 didn't explicitly name), and removes `common`'s
-  now-stale `EXEMPT` entry. No new F-ID or ADR.
-- [`changes/add-openspec-implementation-review/`](changes/add-openspec-implementation-review/) —
-  *proposed.* New skill `openspec-implementation-review`: reviews a *shipped* OpenSpec
-  change's implementation against its own proposal/design/tasks/spec, producing a dated,
-  two-pass `review.md` — dispatching `spec-guardian` then `peer-reviewer` when
-  `claude-foundation` is plugin-loaded, degrading to a `general-purpose` subagent with the
-  same method inlined when it is not (the case this repo's own sessions actually hit today,
-  per ADR 0028). Advisory/opt-in tooling, not a CI gate (Decision Point 2). Complements, and
-  is named to not collide with, `openspec-peer-review` (which reviews a *plan* before
-  implementation starts).
-
 ## Archived changes
 
 Landed; kept for provenance. Each carries its F-ID and the commit it landed in.
@@ -113,6 +65,12 @@ Landed; kept for provenance. Each carries its F-ID and the commit it landed in.
 | [`changes/archive/merge-gate-health-integrity/`](changes/archive/merge-gate-health-integrity/) | F-049 | `8f7affd6c0` |
 | [`changes/archive/skills-ci-coverage-floor/`](changes/archive/skills-ci-coverage-floor/) | F-050 | `c5e7227c6a` |
 | [`changes/archive/add-agent-trajectory-evaluation/`](changes/archive/add-agent-trajectory-evaluation/) | F-051 | `a5e1a7847f` |
+| [`changes/archive/add-eval-matrix-completeness/`](changes/archive/add-eval-matrix-completeness/) | F-053 | `bc0ae2c494` |
+| [`changes/archive/harden-quality-gate-integrity/`](changes/archive/harden-quality-gate-integrity/) | F-054 | `711564123e` |
+| [`changes/archive/pin-lockstep-tool-versions/`](changes/archive/pin-lockstep-tool-versions/) | F-055 | `86eeb5cf1d` |
+| [`changes/archive/test-skill-validator-library/`](changes/archive/test-skill-validator-library/) | — | `8a8e25c` |
+| [`changes/archive/add-openspec-implementation-review/`](changes/archive/add-openspec-implementation-review/) | — | `3f6bd6c` |
+| [`changes/archive/add-foundation-reviewer-charters/`](changes/archive/add-foundation-reviewer-charters/) | — | `537d1f2` |
 
 ## Removing this spike
 
