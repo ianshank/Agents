@@ -38,11 +38,11 @@ jobs:
 
       - name: Install monorepo dependencies
         run: |
-          pip install -e "./agent-core"
-          pip install -e "./flow-protocol"
-          pip install -e "./flow-corpus"
-          pip install -e "./behavioral-regression"
-          pip install -e ".[dev,langfuse,openai,parquet,autoevals]"
+          pip install -e "./agent-core[dev]"
+          pip install -e "./flow-protocol[dev]"
+          pip install -e "./flow-corpus[dev]"
+          pip install -e "./behavioral-regression[dev]"
+          pip install -e ".[dev,langfuse,openai,parquet,autoevals,e2e-matrix]"
 
       - name: Invariant & architectural integrity check
         run: |

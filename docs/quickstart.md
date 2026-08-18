@@ -10,7 +10,7 @@
 ```bash
 # Clone and install (editable, dev extras)
 git clone https://github.com/ianshank/Agents.git
-cd Agents/Enterprise/files/langfuse-eval-harness/langfuse-eval-harness
+cd Agents
 pip install -e ".[dev]"
 ```
 

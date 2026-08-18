@@ -30,11 +30,10 @@ from .types import EvalItem, JudgeVerdict, RunContext, RunResult, ScoreResult, T
 class Scorer(Protocol):
     """Scores a single (item, output) pair. ``name`` labels the emitted score."""
 
-    default_name: str = "score"
     name: str
 
     def __init__(self, name: str | None = None) -> None:
-        self.name = name or self.default_name
+        self.name = name or getattr(self, "default_name", "score")
 
     @abstractmethod
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult: ...
