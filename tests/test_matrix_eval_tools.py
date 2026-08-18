@@ -139,7 +139,10 @@ class TestM4Interface:
 
     @pytest.mark.parametrize("name", SCORERS.names())
     def test_scorer_is_scorer(self, name: str) -> None:
-        assert issubclass(SCORERS.get(name), Scorer)
+        # Scorer is a Protocol with a non-method member (default_name), so issubclass()
+        # raises TypeError. Check the MRO directly — all built-in scorers explicitly
+        # inherit from Scorer, so it appears in __mro__.
+        assert Scorer in SCORERS.get(name).__mro__
 
     @pytest.mark.parametrize("name", DATASETS.names())
     def test_dataset_is_dataset_source(self, name: str) -> None:

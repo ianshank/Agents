@@ -201,7 +201,7 @@ Each ADR contains:
 
 | Tool | Version / Notes |
 |------|-----------------|
-| Python | 3.10+ |
+| Python | 3.11+ (ADR 0034) |
 | Package management | pip / setuptools |
 | Testing | pytest + pytest-cov |
 | Linting | ruff |
