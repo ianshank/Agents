@@ -69,6 +69,20 @@ def test_unknown_schema_version_raises():
         migrate_to_current({"schema_version": "0.1"})
 
 
+def test_unknown_top_level_key_rejected():
+    # A typo'd `gates:` (the field is `gate`) must fail loudly, not be silently
+    # ignored — a silently-dropped gate config is a correctness bug, not a warning.
+    bad = dict(BASE, gates={"rules": []})
+    with pytest.raises(ValueError):
+        load_config_dict(bad)
+
+
+def test_config_without_repetitions_parses_unchanged():
+    cfg = load_config_dict(dict(BASE))
+    assert cfg.run.repetitions == 1
+    assert cfg.schema_version == SCHEMA_VERSION == "1.0"
+
+
 def test_load_config_from_file(tmp_path):
     import textwrap
 

@@ -153,8 +153,22 @@ class EvalEngine:
         return [it for it in items if self.rng.random() < rate]
 
     @observe()
-    def _run_one(self, item: EvalItem, ctx: RunContext) -> ItemResult:
-        """Execute the target and all scorers for a single dataset item."""
+    def _run_one(
+        self,
+        item: EvalItem,
+        ctx: RunContext,
+        *,
+        attempt_index: int | None = None,
+        item_run_id: str | None = None,
+    ) -> ItemResult:
+        """Execute the target and all scorers for a single dataset item.
+
+        ``attempt_index``/``item_run_id`` are set only for one of several repeated
+        attempts (``repetitions > 1``); left ``None`` for the legacy single-attempt
+        call, so the returned ``ItemResult`` serializes byte-identically to the
+        pre-reliability-metrics harness (mirrors the ``trajectory`` precedent,
+        ADR 0031 obligation 4).
+        """
         from .langfuse_client import langfuse_context
 
         output = self.target.run(item)
@@ -186,19 +200,48 @@ class EvalEngine:
                     run_name=run_name,
                 )
 
-        return ItemResult(item=item, output=output, scores=scores)
+        attempt_id = f"{item.id}:{attempt_index}" if attempt_index is not None else None
+        return ItemResult(
+            item=item,
+            output=output,
+            scores=scores,
+            attempt_index=attempt_index,
+            attempt_id=attempt_id,
+            item_run_id=item_run_id,
+        )
 
-    def _run_one_safe(self, index: int, item: EvalItem, ctx: RunContext) -> tuple[int, ItemResult | Exception]:
+    def _run_one_safe(
+        self,
+        index: int,
+        item: EvalItem,
+        ctx: RunContext,
+        *,
+        attempt_index: int | None = None,
+        item_run_id: str | None = None,
+    ) -> tuple[int, ItemResult | Exception]:
         """Thread-safe wrapper around ``_run_one``.
 
         Returns ``(index, result)`` on success or ``(index, exception)`` on
         failure, so the caller can reconstruct submission-order results and
-        handle errors without losing track of which item failed.
+        handle errors without losing track of which item failed. ``index`` is the
+        item's position, shared by every attempt of that item — list.sort's
+        stability then preserves attempt submission order within each item without
+        needing a compound sort key.
         """
-        item_logger = logging.LoggerAdapter(logger, {"item_id": item.id, "item_index": index})
+        log_extra: dict[str, Any] = {"item_id": item.id, "item_index": index}
+        if attempt_index is not None:
+            log_extra["attempt_index"] = attempt_index
+        item_logger = logging.LoggerAdapter(logger, log_extra)
         try:
             item_logger.debug("Starting item %s (index=%d)", item.id, index)
-            result = self._run_one(item, ctx)
+            # At repetitions=1 this calls _run_one(item, ctx) — the exact original
+            # two-argument call — rather than always passing the new kwargs, so a
+            # caller holding a reference to the old two-parameter signature (e.g. a
+            # test double replacing _run_one) keeps working unchanged.
+            if attempt_index is None and item_run_id is None:
+                result = self._run_one(item, ctx)
+            else:
+                result = self._run_one(item, ctx, attempt_index=attempt_index, item_run_id=item_run_id)
             item_logger.debug("Completed item %s (index=%d)", item.id, index)
             return (index, result)
         except Exception as exc:
@@ -224,18 +267,27 @@ class EvalEngine:
             )
         return aggregate
 
-    def _run_parallel(self, items: list[EvalItem], started: datetime) -> list[ItemResult]:
-        """Execute items in parallel via ``ThreadPoolExecutor``.
+    def _run_parallel(self, items: list[EvalItem], started: datetime, run_id: str) -> list[ItemResult]:
+        """Execute items — and, when ``repetitions > 1``, each item's attempts —
+        in parallel via ``ThreadPoolExecutor``.
 
-        Each item gets a per-item ``RunContext`` with a deterministic RNG seeded
-        from ``base_seed + item_index``.  Results are collected in submission
-        order.  On ``fail_fast``, the executor is shut down immediately.
+        Every ``(item, attempt)`` pair gets its own submission and its own
+        ``RunContext``, RNG freshly seeded from ``base_seed + item_index`` —
+        never advanced across attempts of the same item, only ever re-derived
+        from this loop's own ``enumerate()`` index (not ``ctx.item_index``, which
+        nothing reads back). At ``repetitions == 1`` this submits exactly one
+        future per item with ``attempt_index=None``, identical to the pre-
+        reliability-metrics engine. Results are collected in submission order —
+        item-major, attempts ascending within an item. On ``fail_fast``, the
+        executor is shut down immediately.
         """
         max_workers = self.config.run.max_workers
         base_seed = self.config.run.seed
+        repetitions = self.config.run.repetitions
         logger.info(
-            "Parallel execution: %d items with max_workers=%d",
+            "Parallel execution: %d items x %d repetitions with max_workers=%d",
             len(items),
+            repetitions,
             max_workers,
         )
 
@@ -245,15 +297,27 @@ class EvalEngine:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures: list[Future[tuple[int, ItemResult | Exception]]] = []
             for idx, item in enumerate(items):
-                item_rng = _make_item_rng(base_seed, idx)
-                ctx = RunContext(
-                    config=self.config,
-                    judge=self.judge,
-                    rng=item_rng,
-                    now=started,
-                    item_index=idx,
-                )
-                futures.append(executor.submit(self._run_one_safe, idx, item, ctx))
+                item_run_id = f"{run_id}:{item.id}" if repetitions > 1 else None
+                for attempt in range(repetitions):
+                    attempt_index = attempt if repetitions > 1 else None
+                    item_rng = _make_item_rng(base_seed, idx)
+                    ctx = RunContext(
+                        config=self.config,
+                        judge=self.judge,
+                        rng=item_rng,
+                        now=started,
+                        item_index=idx,
+                    )
+                    futures.append(
+                        executor.submit(
+                            self._run_one_safe,
+                            idx,
+                            item,
+                            ctx,
+                            attempt_index=attempt_index,
+                            item_run_id=item_run_id,
+                        )
+                    )
 
             for future in futures:
                 index, result_or_exc = future.result()
@@ -279,7 +343,12 @@ class EvalEngine:
 
         When ``max_workers == 1``, items are processed sequentially (identical
         to the original engine behaviour).  When ``max_workers > 1``, items are
-        dispatched to a thread pool for parallel execution.
+        dispatched to a thread pool for parallel execution. When
+        ``run.repetitions > 1``, each item is attempted that many independent
+        times through the full scorer lifecycle (see ``_run_sequential_repeated``
+        / ``_run_parallel``) — attempt expansion happens here, after the
+        duplicate-item-ID check below, so a legitimately repeated item never
+        trips it.
         """
         started = self.clock()
         items = self._sample(list(self.dataset.load()))
@@ -296,19 +365,24 @@ class EvalEngine:
             else:
                 seen_ids.add(item.id)
 
+        run_id = self.config.run.run_id or f"{self.config.run.name}-{uuid.uuid4().hex[:8]}"
         max_workers = self.config.run.max_workers
+        repetitions = self.config.run.repetitions
 
         if max_workers == 1:
-            # --- Sequential path: EXACTLY the original behaviour ---
-            ctx = RunContext(config=self.config, judge=self.judge, rng=self.rng, now=started)
-            results = [self._run_one(item, ctx) for item in items]
+            if repetitions == 1:
+                # --- Sequential path: EXACTLY the original behaviour ---
+                ctx = RunContext(config=self.config, judge=self.judge, rng=self.rng, now=started)
+                results = [self._run_one(item, ctx) for item in items]
+            else:
+                results = self._run_sequential_repeated(items, started, run_id)
         else:
             # --- Parallel path ---
-            results = self._run_parallel(items, started)
+            results = self._run_parallel(items, started, run_id)
 
         aggregate = self._aggregate(results)
+        diagnostics = self._reliability_diagnostics(results)
 
-        run_id = self.config.run.run_id or f"{self.config.run.name}-{uuid.uuid4().hex[:8]}"
         run = RunResult(
             run_id=run_id,
             config_name=self.config.run.name,
@@ -316,7 +390,96 @@ class EvalEngine:
             aggregate=aggregate,
             started_at=started,
             finished_at=self.clock(),
+            diagnostics=diagnostics,
         )
         for sink in self.sinks:
             sink.emit(run)
         return run
+
+    def _run_sequential_repeated(self, items: list[EvalItem], started: datetime, run_id: str) -> list[ItemResult]:
+        """Execute items sequentially with ``repetitions > 1``.
+
+        The single-attempt sequential path (``run()``, above) threads one shared,
+        continuously-advancing ``self.rng`` across every item — the original
+        engine behaviour, preserved unchanged for ``repetitions == 1``. Here, each
+        attempt instead gets its own RNG freshly constructed from ``base_seed +
+        item_index`` — the same per-item seed every attempt, never advanced
+        between attempts of that item — so a scorer that draws from ``ctx.rng``
+        cannot manufacture cross-attempt flakiness from RNG drift alone (see
+        design.md "Seeding — and why it is not the lever"). Seeds are derived
+        from this loop's own ``enumerate()`` index, never ``ctx.item_index``
+        (which the single-attempt sequential path never sets, and nothing reads).
+        """
+        base_seed = self.config.run.seed
+        repetitions = self.config.run.repetitions
+        results: list[ItemResult] = []
+        for idx, item in enumerate(items):
+            item_run_id = f"{run_id}:{item.id}"
+            for attempt in range(repetitions):
+                ctx = RunContext(
+                    config=self.config,
+                    judge=self.judge,
+                    rng=_make_item_rng(base_seed, idx),
+                    now=started,
+                    item_index=idx,
+                )
+                results.append(self._run_one(item, ctx, attempt_index=attempt, item_run_id=item_run_id))
+        return results
+
+    def _reliability_diagnostics(self, results: list[ItemResult]) -> list[dict[str, str]]:
+        """Detect the ADR 0029 vacuous-pass case: every attempt of some item
+        passed (``pass^k == 1.0``) only because sampling is deterministic, not
+        because the target is reliable.
+
+        Deliberately local and minimal, not a call into ``ReliabilityAggregator``
+        (``reliability.py``): this needs one boolean per item to decide whether a
+        single run-level caveat applies, and it ships in PR1 (this group), before
+        that module exists (PR2). ``ReliabilityAggregator`` computes the richer,
+        standalone per-item ``pass^k``/distributions later; some overlap between
+        the two is expected and acceptable — they serve different consumers.
+
+        Detection is (1) declared/derived, via ``self.target.is_deterministic``
+        when the target states one; (2) observed, when unknown, by checking
+        whether every attempt of that item returned an equal ``TargetOutput.output``.
+        Returns at most one diagnostic — the message carries no per-item detail,
+        so repeating it per affected item would add no information.
+        """
+        if self.config.run.repetitions <= 1:
+            return []
+
+        # Past the guard above, every result in this run came from the
+        # repetitions>1 loops, so attempt_index is always set — no filter needed.
+        by_item: dict[str, list[ItemResult]] = {}
+        for ir in results:
+            by_item.setdefault(ir.item.id, []).append(ir)
+
+        declared = self.target.is_deterministic()
+
+        for attempts in by_item.values():
+            by_scorer: dict[str, list[ScoreResult]] = {}
+            for ir in attempts:
+                for s in ir.scores:
+                    if s.passed is not None:
+                        by_scorer.setdefault(s.name, []).append(s)
+
+            item_pass_power_k = any(
+                len(scores) == len(attempts) and all(s.passed for s in scores) for scores in by_scorer.values()
+            )
+            if not item_pass_power_k:
+                continue
+
+            is_deterministic = declared
+            if is_deterministic is None:
+                first_output = attempts[0].output.output
+                is_deterministic = all(ir.output.output == first_output for ir in attempts[1:])
+            if is_deterministic:
+                return [
+                    {
+                        "code": "deterministic_sampling",
+                        "message": (
+                            "pass^k is 1.0 because sampling is deterministic, not because the agent is reliable."
+                        ),
+                    }
+                ]
+
+        return []

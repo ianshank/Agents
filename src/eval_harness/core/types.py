@@ -142,9 +142,22 @@ class JudgeVerdict:
 
 @dataclass
 class ItemResult:
+    """One target run against one item, plus its scores.
+
+    ``attempt_index``, ``attempt_id`` and ``item_run_id`` are appended last and
+    default to ``None`` — the legacy, single-attempt shape (``repetitions=1``) — so
+    existing positional construction and historical result JSON keep working
+    unchanged (mirrors the ``trajectory`` precedent, ADR 0031). The engine sets all
+    three together only when ``repetitions > 1``; they are never populated
+    independently of one another.
+    """
+
     item: EvalItem
     output: TargetOutput
     scores: list[ScoreResult] = field(default_factory=list)
+    attempt_index: int | None = None
+    attempt_id: str | None = None
+    item_run_id: str | None = None
 
 
 @dataclass
@@ -156,15 +169,20 @@ class ScoreAggregate:
 
 @dataclass
 class RunResult:
+    """Appended last: ``diagnostics``, defaulting to ``[]`` so historical positional
+    construction and byte-identical serialization at ``repetitions=1`` both hold
+    (ADR 0031 obligation 1/4, extended to reliability diagnostics)."""
+
     run_id: str
     config_name: str
     items: list[ItemResult]
     aggregate: dict[str, ScoreAggregate]
     started_at: datetime
     finished_at: datetime
+    diagnostics: list[dict[str, str]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "run_id": self.run_id,
             "config_name": self.config_name,
             "started_at": self.started_at.isoformat(),
@@ -174,14 +192,19 @@ class RunResult:
             },
             "items": [self._item_to_dict(ir) for ir in self.items],
         }
+        if self.diagnostics:
+            payload["reliability"] = {"diagnostics": self.diagnostics}
+        return payload
 
     @staticmethod
     def _item_to_dict(ir: ItemResult) -> dict[str, Any]:
         """Serialize one item result.
 
-        ``trajectory`` is emitted only when the target produced one, so a run with
-        no trajectories serializes byte-identically to the pre-trajectory harness
-        (ADR 0031 obligation 4).
+        ``trajectory`` is emitted only when the target produced one, and the
+        attempt-identity keys only when the engine populated them (``repetitions >
+        1``), so a `repetitions=1` run serializes byte-identically to the
+        pre-reliability-metrics harness (ADR 0031 obligation 4; same contract
+        extended to attempt identity).
         """
         payload: dict[str, Any] = {
             "id": ir.item.id,
@@ -203,6 +226,10 @@ class RunResult:
         }
         if ir.output.trajectory is not None:
             payload["trajectory"] = trajectory_to_dict(ir.output.trajectory)
+        if ir.attempt_index is not None:
+            payload["attempt_index"] = ir.attempt_index
+            payload["attempt_id"] = ir.attempt_id
+            payload["item_run_id"] = ir.item_run_id
         return payload
 
 

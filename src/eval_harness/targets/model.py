@@ -159,6 +159,17 @@ class ModelTarget(TargetRunner):
         # DI seam: tests inject a stub; production builds the real SDK client.
         self.client = client if client is not None else self._build_client()
 
+    def is_deterministic(self) -> bool | None:
+        """``temperature == 0.0`` is the only case treated as deterministic.
+
+        ``temperature is None`` means the param is omitted entirely (some models
+        reject it) — the provider's own default sampling behaviour is opaque to
+        this harness, so that case is genuinely unknown, not ``False``.
+        """
+        if self.temperature is None:
+            return None
+        return self.temperature == 0.0
+
     # ------------------------------------------------------------------ client
     def _build_client(self) -> Any:  # pragma: no cover - pure dispatch to SDK-network construction
         if self.provider == "openai":
