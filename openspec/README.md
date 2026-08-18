@@ -34,10 +34,10 @@ before that guard existed.
   rejected "add-business-readiness-wedge" (which would have pulled a public
   `merge_gate_report` CLI into the harness) with a measurement wedge that does not widen the
   public surface.
-- [`changes/extend-judge-calibration/`](changes/extend-judge-calibration/) — *proposed.*
-  Answers the external analysis's "judge calibration: Not Covered" grade, which is refuted —
-  Cohen's κ with a statistical-power floor already ships — and scopes what is genuinely
-  missing on top of it.
+- [`changes/extend-judge-calibration/`](changes/extend-judge-calibration/) — *implemented,
+  pending archive.* Answers the external analysis's "judge calibration: Not Covered" grade,
+  which is refuted — Cohen's κ with a statistical-power floor already ships — and scopes what
+  is genuinely missing on top of it. Claims F-057.
 - [`changes/add-panel-judge/`](changes/add-panel-judge/) — *proposed.* A `panel` judge: one
   registered component fanning an evaluation out to N member judges and aggregating under an
   explicit strategy, surfacing disagreement instead of averaging it away and abstaining
@@ -46,8 +46,8 @@ before that guard existed.
   redundancy κ, named-artifact gating — that keep a council advisory until it earns trust.
   Aligned with `extend-judge-calibration`.
 - [`changes/add-repeat-reliability-metrics/`](changes/add-repeat-reliability-metrics/) —
-  *proposed.* `pass^k` over k independent attempts per item. Depends on
-  `add-agent-trajectory-evaluation` (landed); authorised by ADR 0031.
+  *implemented, pending archive.* `pass^k` over k independent attempts per item. Depends on
+  `add-agent-trajectory-evaluation` (landed); authorised by ADR 0031. Claims F-056.
 - [`changes/add-stateful-outcome-evaluation/`](changes/add-stateful-outcome-evaluation/) —
   *proposed.* Evaluating end-state rather than final text. Depends on
   `add-repeat-reliability-metrics`, which defines per-attempt reset/isolation.
