@@ -33,7 +33,7 @@ try:
     # is no WMI to shim off Windows, so there is nothing to warn about there.
     if hasattr(platform, "_wmi_query"):
         platform._wmi_query = _wmi_query_disabled  # type: ignore[attr-defined]
-    elif sys.platform == "win32":
+    elif sys.platform == "win32" and sys.version_info >= (3, 12):
         print(
             "sitecustomize(e2e_shims): platform._wmi_query not found; WMI shim inactive",
             file=sys.stderr,

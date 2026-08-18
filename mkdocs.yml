@@ -58,6 +58,13 @@ nav:
       - Matrix coverage: matrix-coverage.md
   - Decisions:
       - Overview: decisions/README.md
+  - Roadmap:
+      - Overview: roadmap/README.md
+      - "Epic 1: Eval Matrix & Reliability": roadmap/epic-1-eval-matrix-and-reliability.md
+      - "Epic 2: Calibrated Merge Gate": roadmap/epic-2-calibrated-merge-gate.md
+      - "Epic 3: Monorepo & CI Infrastructure": roadmap/epic-3-monorepo-and-ci-infrastructure.md
+      - "Epic 4: Skills & Marketplace": roadmap/epic-4-skills-and-marketplace.md
+      - "Epic 5: Integrations & Plugins": roadmap/epic-5-integrations-and-plugins.md
   - Runbooks:
       - End-to-end harness: e2e-runbook.md
       - End-to-end test matrix: e2e-matrix/README.md

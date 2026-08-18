@@ -35,6 +35,16 @@ agents share one source of navigation. Prose docs also render as a site — see
 Numbered Architecture Decision Records live in [decisions/](decisions/README.md).
 See that index for the full list and the (intentional) numbering gap.
 
+## Roadmap & Epics
+
+Active engineering epics and architectural roadmap live in [roadmap/](roadmap/README.md):
+- [Epic 1: Eval Matrix & Reliability](roadmap/epic-1-eval-matrix-and-reliability.md)
+- [Epic 2: Calibrated Merge Gate](roadmap/epic-2-calibrated-merge-gate.md)
+- [Epic 3: Monorepo & CI Infrastructure](roadmap/epic-3-monorepo-and-ci-infrastructure.md)
+- [Epic 4: Skills & Marketplace](roadmap/epic-4-skills-and-marketplace.md)
+- [Epic 5: Integrations & Plugins](roadmap/epic-5-integrations-and-plugins.md)
+
+
 ## Runbooks & operations
 
 - [e2e-runbook.md](e2e-runbook.md) — running and reading the one-command
