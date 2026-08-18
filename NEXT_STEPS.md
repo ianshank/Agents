@@ -29,18 +29,21 @@
   (`frozen=True` blocks rebinding, not `record.arguments["k"] = v`), an O(n²) recovery scorer
   on exactly the looping agent it exists to catch (5,000 errors: quadratic → 1.6 ms), and two
   paths where unscoreable input reported `passed=False` because the engine converts a scorer
-  exception into a failing verdict. **Still open:** the four remaining OpenSpec changes below.
+  exception into a failing verdict. **Still open:** the three remaining OpenSpec changes below
+  (repeated-run reliability, the fourth, has since shipped — see below).
 
-- [ ] **Repeated-run reliability (`openspec/changes/add-repeat-reliability-metrics/`)** — next
-  in the delivery order. The proposal's original "fold the attempt index into the seed" trap was
-  **retracted** on 2026-08-06 after verification: `target.run(item)` never receives the RNG
-  (it goes to scorers via `RunContext`), so re-seeding cannot change a target's output, and with
-  `ModelTarget`'s default `temperature=0.0` a `pass^k` of 1.0 is *correct* rather than fabricated.
-  The real requirements are k genuinely independent `target.run` calls, **no** harness-injected
-  variance (that would measure the harness, not the agent), and a diagnostic whenever a
-  deterministic configuration makes `pass^k` structurally uninformative.
+- [x] **Repeated-run reliability (`openspec/changes/add-repeat-reliability-metrics/`)** —
+  **implemented, claiming F-056.** `run.repetitions` executes k independent `target.run(item)`
+  attempts per item with the scorer RNG reset every attempt (never re-seeding what the target
+  itself receives — the original "fold the attempt index into the seed" trap was retracted on
+  2026-08-06 after verification, since `target.run(item)` never receives the RNG at all); a
+  `deterministic_sampling` diagnostic fires when a deterministic configuration makes `pass^k`
+  structurally uninformative; a new pure `ReliabilityAggregator`
+  (`src/eval_harness/reliability.py`) computes `pass@k`/`pass^k` per item, never pooled across
+  items; `GateRule.metric` gates on `pass_at_k`/`pass_power_k`. Landed as PR #159 (merged;
+  Groups 1-3) and PR #160 (draft, `eval-change-approved` label requested; Groups 4-7).
 - [ ] **Stateful outcome evaluation (`openspec/changes/add-stateful-outcome-evaluation/`)** —
-  depends on attempt isolation from the above.
+  its attempt-isolation dependency now ships (above); no longer blocked.
 - [ ] **Judge bias calibration (`openspec/changes/extend-judge-calibration/`)** — the only one
   of the four with no blocking dependency; probe math goes in `agent_core` so the
   `eval_harness ⇎ flow_corpus` airgap holds.
