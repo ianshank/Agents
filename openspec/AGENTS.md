@@ -2,7 +2,11 @@
 
 How the agent/sub-agent fleet drives an OpenSpec change through to the enforced back-end.
 This is the concrete "using all agents and sub-agents" mapping. Fleet members are used in
-their **native roles**; nothing here invents a new agent.
+their **native roles**, with one stated exception: `spec-guardian` and `peer-reviewer` are
+new `claude-foundation/agents/` charters that `add-foundation-reviewer-charters` adds to the
+fleet, filling the `review` role between `verify` and `archive` that no existing member
+held — a read-only conformance gate, then a read-only adversarial second pass. Every other
+row invents nothing.
 
 ## Lifecycle → owner mapping
 
@@ -14,7 +18,18 @@ their **native roles**; nothing here invents a new agent.
 | each scenario | `scripts/validations/F_0NN.py` proof | `foundation:test-first` | `scripts/validate.py` in CI |
 | `apply` (implement tasks) | source under `agent-core/agent_core/` etc. | **general-purpose** sub-agent | `foundation:code-review` (forked, read-only) |
 | verify | `make -C <pkg> check` (coverage floor) | `test-runner` sub-agent | package CI |
+| `review` (conformance pass, new) | `openspec/changes/<id>/review.md` — verdict + numbered findings | `spec-guardian` sub-agent | advisory — a `tasks.md` checklist item, never CI-blocking |
+| `review` (adversarial pass, new) | `openspec/changes/<id>/review.md` — two-pass fact-check + attack section; persists into `changes/archive/<id>/review.md` | `peer-reviewer` sub-agent | advisory — a `tasks.md` checklist item, never CI-blocking |
 | `archive` | `features.yaml` `status: done` + `implemented_in:<sha>` | **general-purpose** sub-agent | `quality-gates.yml` |
+
+**Staging precondition** (stated, not assumed): every fleet member sourced from
+`claude-foundation/` above — the three `foundation:*` skills, plus `test-runner`,
+`spec-guardian`, and `peer-reviewer` — comes from a plugin that is staged in-tree, not
+installed, in this repo's own sessions (ADR 0028). Dispatching any of them here requires a
+session started with `claude --plugin-dir claude-foundation`; absent that, the corresponding
+row degrades to a `general-purpose` sub-agent inlining the same method — Phase 5
+(`add-openspec-implementation-review`, `docs/plans/orbital-drift-alignment/PLAN.md`) is
+required to do exactly this for `review` rather than silently failing to find the agents.
 
 ## Always-on guards (run under every agent action)
 

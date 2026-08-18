@@ -26,6 +26,7 @@ the marketplace itself doesn't provide.
 | [`openspec-quality-plan`](openspec-quality-plan/) | 1.0.0 | Generate a complete OpenSpec change package (proposal, design, tasks, spec deltas) |
 | [`openspec-peer-review`](openspec-peer-review/) | 1.1.0 | Emit objective peer-review findings and rewrite an OpenSpec package to meet quality standards |
 | [`repo-invariant-review`](repo-invariant-review/) | 1.0.0 | Predict CI collisions with this repo's enforced invariants (protected paths, airgap, size budget, frozen baselines, CHARTER invariant 1) before pushing |
+| [`openspec-implementation-review`](openspec-implementation-review/) | 1.0.0 | Review a shipped OpenSpec change's implementation against its own plan, producing a dated, two-pass `review.md` (dispatches `spec-guardian`/`peer-reviewer` when loaded, degrades to a `general-purpose` subagent with the method inlined otherwise) |
 | [`common`](common/) | 1.0.0 | Shared skill validator and utility library — a library, not a standalone skill (no evals; `EXEMPT` in `skills-ci.yml`'s registration guard) |
 
 ## Three kinds of skill
@@ -35,10 +36,13 @@ the marketplace itself doesn't provide.
 
 - **Inference skills** consume a model (e.g. `openai-judge`, `model-bench`).
 - **Guard/review skills** (`architecture-drift-guard`, `dataset-lint`,
-  `repo-invariant-review`) mechanically check a tree or a dataset against rules that already
-  exist, so a finding predicts a concrete failure rather than expressing an opinion. They
-  carry the full CI contract — library code, tests at the coverage floor, and behavioral
-  evals against committed fixtures.
+  `repo-invariant-review`, `openspec-implementation-review`) mechanically check a tree or a
+  dataset against rules that already exist, so a finding predicts a concrete failure rather
+  than expressing an opinion. They carry the full CI contract — library code, tests at the
+  coverage floor, and behavioral evals against committed fixtures.
+  `openspec-implementation-review` is the one exception to "mechanical": its substantive
+  review content comes from a dispatched subagent (its own code only locates, detects,
+  composes prompts, and structurally validates the result — see its `SKILL.md`).
 - **Deterministic generator skills** (`project-setup`, `quality-gate`, `deploy`)
   emit committed artifacts (Makefiles, gate scripts) and contain **no**
   model-backed logic — see [ADR 0020](../docs/decisions/0020-deterministic-generator-skills.md)

@@ -1,0 +1,90 @@
+{
+  "skill": "openspec-implementation-review",
+  "evals": [
+    {
+      "id": "no-such-change",
+      "prompt": "Locate an OpenSpec change id that does not exist and confirm it fails loudly.",
+      "run": "python scripts/run.py locate --repo evals/fixtures/no-such-change/repo --change totally-bogus-id-xyz",
+      "assertions": [
+        { "type": "exit_nonzero", "text": "a bogus change id is a hard failure, not a silent no-op" },
+        { "type": "output_contains", "contains": "no such change", "text": "reports 'no such change' explicitly" },
+        { "type": "output_contains", "contains": "totally-bogus-id-xyz", "text": "names the id that was not found" }
+      ]
+    },
+    {
+      "id": "locate-happy-path",
+      "prompt": "Locate a real, fully-checked-off OpenSpec change and confirm it reports ready.",
+      "run": "python scripts/run.py locate --repo evals/fixtures/locate-happy-path/repo --change demo-change",
+      "assertions": [
+        { "type": "exit_zero", "text": "a complete, existing change locates cleanly" },
+        { "type": "output_contains", "contains": "demo-change", "text": "reports the change id" },
+        { "type": "output_contains", "contains": "2/2 checked", "text": "reports the exact checkbox tally" },
+        { "type": "output_contains", "contains": "(complete)", "text": "reports the change as complete" }
+      ]
+    },
+    {
+      "id": "locate-incomplete-tasks-blocks-by-default",
+      "prompt": "Locate a change whose tasks.md has unchecked boxes and confirm the default behavior blocks.",
+      "run": "python scripts/run.py locate --repo evals/fixtures/locate-incomplete/repo --change wip-change",
+      "assertions": [
+        { "type": "exit_nonzero", "text": "an incomplete tasks.md blocks by default (the documented precondition)" },
+        { "type": "output_contains", "contains": "(incomplete)", "text": "reports the change as incomplete" },
+        { "type": "output_contains", "contains": "second task, still open", "text": "names the unchecked item" }
+      ]
+    },
+    {
+      "id": "locate-incomplete-tasks-allow-override",
+      "prompt": "Locate the same incomplete change with the explicit override and confirm it now succeeds.",
+      "run": "python scripts/run.py locate --repo evals/fixtures/locate-incomplete/repo --change wip-change --allow-incomplete",
+      "assertions": [
+        { "type": "exit_zero", "text": "--allow-incomplete is a documented, working override" }
+      ]
+    },
+    {
+      "id": "detect-degraded-without-foundation",
+      "prompt": "Run dispatch-path detection against a repo with no claude-foundation staging directory at all.",
+      "run": "python scripts/run.py detect --repo evals/fixtures/no-such-change/repo --json",
+      "assertions": [
+        { "type": "exit_zero", "text": "detection itself always succeeds -- it reports, never gates" },
+        { "type": "output_contains", "contains": "\"charters_present\": false", "text": "correctly reports the charters as absent" },
+        { "type": "output_contains", "contains": "\"recommended_path\": \"degraded\"", "text": "recommends the degraded path when the plugin cannot be available" }
+      ]
+    },
+    {
+      "id": "plan-degraded-path-real-subprocess",
+      "prompt": "Plan the dispatch prompt for a real change via a real `python scripts/run.py plan` subprocess (not an in-process call) and confirm the degraded path's general-purpose dispatch is what actually comes out of the real CLI entry point.",
+      "run": "python scripts/run.py plan --repo evals/fixtures/locate-happy-path/repo --change demo-change --force-path degraded --tree-sha eval00001abc",
+      "assertions": [
+        { "type": "exit_zero", "text": "planning a real, existing change via the real CLI process succeeds" },
+        { "type": "output_contains", "contains": "dispatch path: degraded", "text": "reports the forced degraded path" },
+        { "type": "output_contains", "contains": "general-purpose", "text": "the degraded path dispatches a general-purpose subagent" },
+        { "type": "output_contains", "contains": "changes/demo-change", "text": "names the change directory" },
+        { "type": "output_contains", "contains": "eval00001abc", "text": "pins the given tree SHA into the dispatch prompt" }
+      ]
+    },
+    {
+      "id": "validate-hand-written-review-fixture",
+      "prompt": "Validate a hand-authored review.md fixture against the required structural shape.",
+      "run": "python scripts/run.py validate --path evals/fixtures/validate-hand-written-review/review.md --change demo-fixture-change",
+      "assertions": [
+        { "type": "exit_zero", "text": "a well-formed, hand-written review.md passes structural validation" },
+        { "type": "output_contains", "contains": "ok: True", "text": "reports ok" },
+        { "type": "output_contains", "contains": "APPROVE WITH FOLLOW-UPS", "text": "extracts the correct verdict token" }
+      ]
+    },
+    {
+      "id": "compose-appends-without-clobbering",
+      "prompt": "Compose a review twice for the same change (two real subprocess runs) and confirm the second call appends a dated follow-up rather than overwriting the first pass.",
+      "setup": "python evals/fixtures/compose-append/setup.py",
+      "run": "python scripts/run.py compose --repo .skill-validation/compose-append-repo --change demo-change --body-file evals/fixtures/compose-append/body2.md --tree-sha bbb222secondpass --dispatch-path degraded --date 2026-09-02",
+      "assertions": [
+        { "type": "exit_zero", "text": "the second compose call succeeds" },
+        { "type": "output_contains", "contains": "appended:", "text": "reports append mode, not created/overwritten" },
+        { "type": "file_contains", "path": ".skill-validation/compose-append-repo/openspec/changes/demo-change/review.md", "contains": "FIRST-PASS-MARKER-XYZ", "text": "the first pass's content survives the second compose call" },
+        { "type": "file_contains", "path": ".skill-validation/compose-append-repo/openspec/changes/demo-change/review.md", "contains": "SECOND-PASS-MARKER-XYZ", "text": "the second pass's content is present" },
+        { "type": "file_contains", "path": ".skill-validation/compose-append-repo/openspec/changes/demo-change/review.md", "contains": "## Follow-up review -- 2026-09-02", "text": "the second pass is a dated follow-up section" },
+        { "type": "command_exit_zero", "cmd": "python scripts/run.py validate --path .skill-validation/compose-append-repo/openspec/changes/demo-change/review.md --change demo-change", "text": "the merged two-pass document is still structurally valid" }
+      ]
+    }
+  ]
+}

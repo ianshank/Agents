@@ -1,0 +1,13 @@
+# Auto-discovered by pytest-cov's --cov-config default. Needed because --cov=. (path-based)
+# would otherwise blend tests/ and conftest.py into the reported total; omit keeps the 95%
+# floor scoped to exactly the production code skills-ci.yml's `common` job already lints and
+# type-checks as such (skill_validator.py, __init__.py). See CHANGELOG.md "coverage gate
+# silently measured 0%" for why --cov=skill_validator (bare module name) doesn't work here.
+[run]
+branch = True
+omit =
+    tests/*
+
+[report]
+fail_under = 95
+show_missing = True

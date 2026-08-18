@@ -6,46 +6,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
-### Added — Architecture, CI, Documentation & Reliability Hardening
-- **Nightly E2E CI Workflow (`.github/workflows/nightly-e2e.yml`).** Scheduled daily
-  at 04:00 UTC plus manual `workflow_dispatch`, running the complete monorepo test
-  matrix across Python 3.11, 3.12, and 3.13 on Ubuntu. Executes invariant guards,
-  drift verification, full pytest suites across all 5 monorepo packages, and E2E
-  matrix freshness validation.
-- **Onboarding Quickstart Guide (`docs/quickstart.md`).** A 5-minute practical guide
-  walking users through installation, first eval execution, custom YAML configuration,
-  JSONL dataset loading, real LLM judge configuration, Langfuse cloud score tracking,
-  and multi-model comparison workflows. Wired into `mkdocs.yml`, `docs/README.md`,
-  and root `README.md`.
-- **Roadmap Epic Decomposition (`docs/roadmap/`).** Decomposed the 569-line monolithic
-  `NEXT_STEPS.md` into five domain-specific, actionable engineering epic roadmaps:
-  * `epic-1-eval-matrix-and-reliability.md` (Trajectory, repeated-run $pass^k$, panel judge)
-  * `epic-2-calibrated-merge-gate.md` (Calibrator health, soak stats, outcome store)
-  * `epic-3-monorepo-and-ci-infrastructure.md` (Packages, CI delegation, operational scripts)
-  * `epic-4-skills-and-marketplace.md` (Deterministic generators, skill marketplace, assertion registries)
-  * `epic-5-integrations-and-plugins.md` (BrainTrust, Phoenix, Claude Foundation, backend validation)
-- **Scorer `typing.Protocol` Migration (`src/eval_harness/core/interfaces.py`).**
-  Migrated `Scorer` from `abc.ABC` to structural `@runtime_checkable typing.Protocol`,
-  bringing all 5 core harness interfaces (`Judge`, `DatasetSource`, `TargetRunner`,
-  `ResultSink`, `Scorer`) into 100% protocol alignment. Updated charter invariant guards
-  and tests; verified duck-typing support across Python 3.11+.
-- **Structured Registry Logging & Strict Typing (`src/eval_harness/core/registry.py`).**
-  Added debug-level structured logging to `register_class` and `create` for verbose plugin
-  discovery diagnostics. Fortified `create()` params with `dict[str, Any]` and annotated
-  `register()` decorator method for full `mypy --strict` compliance.
+### Fixed — skills-ci.yml `common` job: coverage gate silently measured 0%
+- `python -m pytest tests --cov=skill_validator ...` (a bare module name) resolved against
+  `sys.modules`, not a file path — and `skill_validator` was already cached there (directly via
+  the test file's own `import skill_validator`, and via `common/__init__.py`'s re-export under
+  the qualified name `common.skill_validator`) before pytest-cov's tracer attached. Every run
+  reported `Total coverage: 0.00%` and failed the `--cov-fail-under=95` gate regardless of test
+  quality — found while merging an independent, unrelated PR's own new test suite for the same
+  module and empirically confirmed against *both* suites, ruling out a test-content cause.
+  `--cov=.` (path-based, sidesteps module-name resolution entirely) plus a new
+  `skills/common/.coveragerc` (`omit = tests/*`) restores the original intent — the 95% floor
+  scoped to exactly `skill_validator.py` + `__init__.py` — verified clean at 100%/72 passed.
 
-### Fixed — Cross-Platform Windows Portability & Test Flake Remediation
-- **Interpreter WMI Shim Version Guard (`scripts/e2e_shims/sitecustomize.py`).**
-  Guarded `platform._wmi_query` inactive notice with `sys.version_info >= (3, 12)`,
-  eliminating false-positive stderr pollution on Python 3.11 Windows hosts.
-- **OpenXML Core Properties Modified Timestamp (`tests/test_e2e_matrix.py`).**
-  Replaced brittle XML string matching with regex pattern matching independent of
-  inline namespace attribute ordering across openpyxl/etree versions.
-- **Cross-Platform Evidence Log Path Assertions (`tests/test_e2e_matrix.py`).**
-  Replaced POSIX-only `.startswith("/")` assertion with `Path.is_absolute()`,
-  achieving 100% test pass rate across `tests/test_e2e_matrix.py` on Windows.
-- **Judge Signature Type Hint Consistency.** Standardized `evaluate()` method type
-  signatures across `MockJudge`, `BedrockJudge`, and `BudgetedJudge` to `dict[str, Any]`.
+### Fixed — quality-gate: coverage-threshold and PYTEST_ADDOPTS env-override evasion closed (F-054)
+- **`COV_FAIL_UNDER` and single-source `COVERAGE_SOURCE` were live, unguarded environment
+  overrides.** `COV_FAIL_UNDER=0 ./scripts/quality-gate.sh coverage` made every generated
+  package's coverage gate trivially pass — the generated script never `unset` anything and
+  never warned. `skills/quality-gate/scripts/gategen/render.py`'s `_coverage_command()` now
+  interpolates both as generation-time literals (`--cov-fail-under=95`, `--cov="demo"`) in
+  both the single- and multi-source branches, and unconditionally warns to stderr
+  (`quality-gate: COV_FAIL_UNDER is ignored; ...`) when either is set anyway — exit code
+  unaffected either way. `_variables()` no longer declares either as an overridable shell
+  variable.
+- **`PYTEST_ADDOPTS` passed through to pytest completely unguarded.** A coverage-weakening
+  flag (`--no-cov`, `-k`, `--override-ini`) set in the environment silently applied to every
+  pytest invocation the gate made. A new `_pytest_addopts_guard()` warns then `unset`s it
+  ahead of every pytest call the generated script makes (`do_test`, `do_coverage`); root
+  `scripts/quality-gate.sh`'s hand-maintained `do_extra()` (below the marker, out of the
+  generator's reach) carries the identical guard by hand.
+- **Coverage-exclude regex was unanchored in 4 packages, contradicting ADR 0009's own
+  "aligned" claim.** `agent-core`, `behavioral-regression`, `flow-protocol`, and
+  `flow-corpus`'s `pyproject.toml` `exclude_also` used `"\.\.\."` (matches ANY line
+  containing three dots — `coverage.py` uses `re.search`, not a full-line match) instead of
+  the anchored `"^\s*\.\.\.$"` root `pyproject.toml`/`scripts/.coveragerc` already used.
+  Corrected in all four; each package's full test suite was re-run for real afterward and
+  stayed clear of its floor (`agent-core` 98.49%/95%, `behavioral-regression` 100%/95%,
+  `flow-corpus` 100%/95%, `flow-protocol` 100%/95% — the anchored pattern's removal of the
+  one-line `Protocol`-stub exclusion does not regress coverage; verified, not assumed).
+  `docs/decisions/0009-tech-debt-audit-and-compat-surface.md` carries an Errata recording the
+  correction (factual, no superseding ADR).
+- **`tests/_e2e_matrix.py`'s `_floor_from_gate_script`** updated to match the new
+  `--cov-fail-under=N` literal form; the real cross-package floor-agreement check
+  (`test_floor_anchors_agree_with_each_other`) was re-verified to still compare two
+  independent anchors per package, not one silently left unmatched.
+- All 7 generated `scripts/quality-gate.sh` copies regenerated (root, `agent-core/`,
+  `behavioral-regression/`, `claude-foundation/`, `experiments/backend-validation/`,
+  `flow-corpus/`, `flow-protocol/`); the frozen `skills/project-setup` eval fixture is
+  untouched. New subprocess-level positive-control tests
+  (`skills/quality-gate/tests/test_coverage_gate_integrity.py`) run the real rendered gate
+  against a real under/over-covered fixture and confirm all evasions above stay closed —
+  nothing here is mocked. `quality-gate` skill bumped `1.1.0` → `1.2.0`. New
+  `scripts/validations/F_054.py`, `features.yaml` F-054. Full design and the branch-coverage
+  regex-safety experiment: `openspec/changes/harden-quality-gate-integrity/design.md`.
+
+### Added — tool-version lockstep gate (F-055, ADR 0034)
+- **`ruff==0.15.20`/`mypy==2.1.0` are now checked, not just commented, across every copy.**
+  The pins are hand-duplicated — each carrying a "bump deliberately, in lockstep" comment
+  but no automated check — across the `dev` extra of 7 `pyproject.toml` files (root,
+  `agent-core`, `behavioral-regression`, `flow-protocol`, `flow-corpus`,
+  `claude-foundation`, `experiments/backend-validation`) and every `pip install` line in
+  `.github/workflows/skills-ci.yml`'s per-skill jobs. New `scripts/tool_versions.py` is the
+  single source of truth; new `scripts/validations/F_055.py` (read-only — no installs, no
+  subprocess, no edits to `skills-ci.yml`) asserts every occurrence matches it exactly, and
+  fails if a pin is dropped entirely, not just mistyped. Full CI templating of the
+  install lines was considered and explicitly deferred (ADR 0034) as a separate, larger
+  follow-on. `AGENTS.md`'s existing pin bullet now points at `scripts/tool_versions.py`.
+- **`agent-core/.pre-commit-config.yaml`'s `ruff-pre-commit` pin was drifted at `v0.8.0`** —
+  live, contributor-facing, and the exact version ADR 0034's own Context section cites as the
+  historical incident that motivated this change. Bumped to `v0.15.20`; not covered by
+  `F_055.py` (different YAML shape than the `tool==version` regex it matches), noted in the
+  ADR as a known, separately-tracked surface.
 
 ### Added — backend-validation: full Opik matrix coverage + air-gap P4 (PR #147)
 - **Air-gap phase P4 exists now (`experiments/backend-validation/`).** `make airgap` and

@@ -84,18 +84,33 @@ def _typecheck_env_form(facts: GateFacts) -> bool:
     return len(facts.typecheck_paths) == 1
 
 
-def _coverage_env_form(facts: GateFacts) -> bool:
-    """Single source of truth for 'coverage uses the $COVERAGE_SOURCE env form'."""
-    return len(facts.coverage_source) == 1
-
-
 def _ignored_override_notice(var: str) -> str:
     """A shell line that warns when a generation-time-literal step ignores an env override.
 
     Multi-path/multi-source steps hardcode their targets (the quoted env var cannot hold a
-    list), so an exported single-value override would otherwise be swallowed silently.
+    list), so an exported single-value override would otherwise be swallowed silently. The
+    coverage gate ALSO uses this unconditionally (single- or multi-source alike) for
+    ``COVERAGE_SOURCE`` and ``COV_FAIL_UNDER``: both are gate-integrity values, not a debug
+    affordance, so neither is ever a live env override, regardless of how many sources exist.
     """
     return f'if [ -n "${{{var}:-}}" ]; then echo "quality-gate: {var} is ignored; targets are fixed at generation time" >&2; fi'
+
+
+def _pytest_addopts_guard() -> list[str]:
+    """Warn-then-clear guard so a live ``PYTEST_ADDOPTS`` cannot weaken a pytest gate step.
+
+    Unlike ``COVERAGE_SOURCE``/``COV_FAIL_UNDER`` (values THIS generator itself interpolates,
+    so simply never referencing the env var is enough to neutralize an override), pytest
+    reads ``PYTEST_ADDOPTS`` directly from its own environment. A warning alone would not
+    stop a coverage-weakening flag (``--no-cov``, ``-k``, ``--override-ini``, ...) from
+    taking effect, so this guard also unsets it immediately before pytest runs. Emitted
+    ahead of every pytest invocation the gate makes (``do_test`` and ``do_coverage``) — a
+    gate stage has no opt-out.
+    """
+    return [
+        'if [ -n "${PYTEST_ADDOPTS:-}" ]; then echo "quality-gate: PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" >&2; fi',
+        "unset PYTEST_ADDOPTS",
+    ]
 
 
 def _lint_commands(facts: GateFacts) -> list[str]:
@@ -119,15 +134,26 @@ def _typecheck_commands(facts: GateFacts) -> list[str]:
 
 
 def _coverage_command(facts: GateFacts) -> list[str]:
-    if _coverage_env_form(facts):
-        cov = '--cov="$COVERAGE_SOURCE"'
-        prefix: list[str] = []
-    else:
-        cov = " ".join(f"--cov={_quoted((src,))}" for src in facts.coverage_source)
-        prefix = [_ignored_override_notice("COVERAGE_SOURCE")]
+    """The coverage step's shell lines: an env-override guard, then the pytest-cov call.
+
+    ``--cov=`` and ``--cov-fail-under=`` are ALWAYS generation-time literals now — a live
+    ``COVERAGE_SOURCE``/``COV_FAIL_UNDER`` cannot widen the measured source or lower the
+    threshold at runtime, single-source or multi-source alike. That closes the gap where
+    ``COV_FAIL_UNDER=0`` (or a narrow ``COVERAGE_SOURCE``) made the gate trivially pass; see
+    the ``harden-quality-gate-integrity`` change.
+
+    One ``--cov=`` flag per source, unconditionally. There used to be a dedicated
+    single-source form that built the flag from ``_quoted(facts.coverage_source)`` directly;
+    for exactly one source that is byte-identical to this general, repeat-the-flag form
+    (joining one element is a no-op), so the dedicated form was dead weight, not a behavior
+    difference. Collapsing to one path removes that now-pointless branch.
+    """
+    cov = " ".join(f"--cov={_quoted((src,))}" for src in facts.coverage_source)
     return [
-        *prefix,
-        f'"$PYTHON" -m pytest {cov} --cov-branch --cov-report=term-missing --cov-fail-under="$COV_FAIL_UNDER"',
+        _ignored_override_notice("COVERAGE_SOURCE"),
+        _ignored_override_notice("COV_FAIL_UNDER"),
+        *_pytest_addopts_guard(),
+        f'"$PYTHON" -m pytest {cov} --cov-branch --cov-report=term-missing --cov-fail-under={facts.cov_fail_under}',
     ]
 
 
@@ -139,7 +165,7 @@ def _step_commands(facts: GateFacts) -> dict[str, list[str]]:
     if facts.type_checker in ("mypy", "pyright"):
         steps["typecheck"] = _typecheck_commands(facts)
     if facts.has_pytest:
-        steps["test"] = ['"$PYTHON" -m pytest']
+        steps["test"] = [*_pytest_addopts_guard(), '"$PYTHON" -m pytest']
     if facts.has_pytest_cov:
         steps["coverage"] = _coverage_command(facts)
     return steps
@@ -174,13 +200,17 @@ def _header(regen_args: tuple[str, ...], regen_program: str) -> list[str]:
 
 
 def _variables(facts: GateFacts, steps: dict[str, list[str]]) -> list[str]:
+    """Overridable ``${VAR:-default}`` declarations for the steps this project supports.
+
+    ``COVERAGE_SOURCE``/``COV_FAIL_UNDER`` are deliberately NOT declared here (unlike
+    ``TYPECHECK_PATHS``, whose single-path env-override stays a documented debug affordance
+    for a non-thresholded check): both are gate-integrity values baked into the coverage
+    command as generation-time literals by :func:`_coverage_command`, so a variable
+    declaration here would just be dead, unreferenced shell.
+    """
     out = [f'PYTHON="${{PYTHON:-{_sh_escape(facts.python)}}}"']
     if "typecheck" in steps and _typecheck_env_form(facts):
         out.append(f'TYPECHECK_PATHS="${{TYPECHECK_PATHS:-{_sh_escape(facts.typecheck_paths[0])}}}"')
-    if "coverage" in steps:
-        if _coverage_env_form(facts):
-            out.append(f'COVERAGE_SOURCE="${{COVERAGE_SOURCE:-{_sh_escape(facts.coverage_source[0])}}}"')
-        out.append(f'COV_FAIL_UNDER="${{COV_FAIL_UNDER:-{facts.cov_fail_under}}}"')
     return out
 
 

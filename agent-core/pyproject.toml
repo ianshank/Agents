@@ -64,7 +64,7 @@ fail_under = 95
 exclude_also = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
-    "\\.\\.\\.",                 # Protocol / abstract method bodies
+    "^\\s*\\.\\.\\.$",           # Protocol / abstract method bodies (anchored: a whole line, not any "...")
     "if __name__ == .__main__.:",
 ]
 

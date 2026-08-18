@@ -12,12 +12,12 @@
 `claude-foundation` is a versioned Claude Code plugin (plugin name: **`foundation`**)
 plus a self-hosted marketplace, packaging the reusable generic layer of an agentic
 workflow: constraint-programming planning, code review, test-first enforcement, and C4
-documentation skills; least-privilege explorer and test-runner subagents; and
-deterministic lifecycle hook guards. Components are namespaced `foundation:*`, carry no
-hardcoded values (all configuration is via environment variables), and ship with a full
-validation and eval suite. Consumer repositories install it via the marketplace and pin
-a semver tag — the single-source-of-truth alternative to copy-pasting agent config
-across repos.
+documentation skills; least-privilege explorer, test-runner, spec-guardian and
+peer-reviewer subagents; and deterministic lifecycle hook guards. Components are
+namespaced `foundation:*`, carry no hardcoded values (all configuration is via
+environment variables), and ship with a full validation and eval suite. Consumer
+repositories install it via the marketplace and pin a semver tag — the
+single-source-of-truth alternative to copy-pasting agent config across repos.
 
 ## Install
 
@@ -55,6 +55,8 @@ claude plugin validate .
 | Skill | `foundation:c4-docs` | Generates/updates C4 Mermaid diagrams for the host repo |
 | Subagent | `explorer` | Read-only codebase scanner; cheap model alias; Read/Grep only |
 | Subagent | `test-runner` | Runs the verification loop in isolation, returns a summary |
+| Subagent | `spec-guardian` | Read-only conformance check of a change against its own declared spec/plan/decisions, discovered per-repo |
+| Subagent | `peer-reviewer` | Read-only two-pass adversarial review — fact-check, then attack — with refuted attacks kept, not deleted |
 | Hook | `pre-tool-guard` | PreToolUse: blocks `.env` reads and denied-glob writes — **fails closed** |
 | Hook | `post-edit-verify` | PostToolUse: verifies touched files — **fails open**, findings as context |
 | Hook | `session-logger` | Structured JSONL audit log of tool calls when enabled |

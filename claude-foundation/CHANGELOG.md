@@ -16,6 +16,21 @@ Component names (skills, subagents, hooks) are append-only within a major versio
   removal without a corresponding major version bump, never on additions. `--update`
   regenerates the baseline pre-release. Wired into the `release-gate` CI job
   alongside `eval_gate`.
+- Two least-privilege subagents, `spec-guardian` and `peer-reviewer`, filling the
+  review-loop role `explorer`/`test-runner` left unstaffed. `spec-guardian` is a
+  read-only conformance check of a change against its own declared spec, plan, and
+  decision surface, plus a protected-path discipline check, reporting
+  `Verdict: conforms`/`Verdict: drift`. `peer-reviewer` is a read-only two-pass
+  adversarial review: pass 1 mechanically fact-checks every falsifiable claim
+  (CONFIRMED/CORRECTED/REFUTED with evidence), pass 2 is a separately labeled
+  adversarial pass whose refuted attacks are kept, not deleted. Both discover a
+  consumer repo's own conventions at invocation time (`CLAUDE.md`, `AGENTS.md`,
+  `openspec/`, `docs/decisions/`, `specs/`, `.specify/`, whichever exist) instead of
+  assuming this repo's layout, and both ship `tools: Read, Grep, Glob` only, no Bash.
+  No eval suite (parity with `explorer`/`test-runner`, neither of which has one);
+  structural validation is the proof today — a live dogfooded review remains blocked
+  pending `claude-foundation`'s plugin installation (ADR 0028), tracked in this
+  change's `tasks.md`.
 
 ### Changed
 

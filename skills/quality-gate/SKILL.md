@@ -3,7 +3,7 @@ name: quality-gate
 description: Generate a deterministic quality-gate shell script (scripts/quality-gate.sh) that runs lint, type-check, tests and a coverage threshold for a Python project, using bash strict mode. Use this whenever the user wants a single command that runs all checks, a CI-and-local quality gate, a pre-merge or pre-commit check script, to enforce a coverage threshold, or to stop lint/test commands drifting between the Makefile and CI. Detects ruff, mypy/pyright, pytest and coverage config and bakes them into one ShellCheck-clean script that CI and `make check` both call.
 validator_version: '2.0'
 compatibility: python>=3.10 (tomli on 3.10)
-version: 1.1.0
+version: 1.2.0
 ---
 
 # quality-gate — gate-script writer
@@ -47,9 +47,15 @@ python scripts/gen_gate.py --root <project> [--lint-path P]... [--typecheck-path
    `all` runs it automatically — project-specific steps join the gate without the generator
    guessing them.
 5. **Wire CI to the same script** (`--print-ci` prints a ready GitHub Actions step) so CI == local.
-6. **Review** and commit. Variables (`PYTHON`, `COVERAGE_SOURCE`, `COV_FAIL_UNDER`,
-   `TYPECHECK_PATHS`) are `${VAR:-default}` overridable in single-path/source mode; multi-path
-   and multi-source commands render literal (quoted, escaped) arguments instead.
+6. **Review** and commit. `PYTHON` is always `${PYTHON:-default}` overridable. `TYPECHECK_PATHS`
+   is `${TYPECHECK_PATHS:-default}` overridable in single-path mode (a documented debug
+   affordance for a non-thresholded check); multi-path type-check commands render literal
+   (quoted, escaped) arguments instead, with a stderr notice if the env var is set anyway.
+   `COVERAGE_SOURCE` and `COV_FAIL_UNDER` are gate-integrity values, not a debug affordance:
+   **both are always generation-time literals**, single-source or multi-source alike — never a
+   live env override. Setting either at runtime prints an "is ignored" notice to stderr and has
+   no other effect. `PYTEST_ADDOPTS` is read natively by pytest, so the coverage and test steps
+   additionally warn and `unset` it before invoking pytest — a gate stage has no opt-out.
 
 ## 3. Output contract (postconditions — what "done" means)
 
@@ -59,6 +65,10 @@ python scripts/gen_gate.py --root <project> [--lint-path P]... [--typecheck-path
 - `./scripts/quality-gate.sh all` exits 0 when every check passes and non-zero on the first
   failure; an unknown subcommand exits 2.
 - ShellCheck-clean: every variable expansion is double-quoted; no variables in printf formats.
+- The coverage threshold cannot be weakened at runtime: `COV_FAIL_UNDER`, `COVERAGE_SOURCE`, and
+  `PYTEST_ADDOPTS` set in the environment have **no effect** on `coverage`/`test` — each is
+  either baked in as a generation-time literal or explicitly cleared before pytest runs, with a
+  stderr notice either way.
 
 ## 4. Failure handling
 
