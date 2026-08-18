@@ -136,6 +136,14 @@ def test_skill_validation_artifacts_are_skipped(tmp_path: Path) -> None:
     )
 
 
+def test_experiments_directory_is_skipped(tmp_path: Path) -> None:
+    _write(tmp_path, "mod.py", "x = 1\n")
+    _write(tmp_path, "experiments/backend-validation/huge.py", _lines(sb.MAX_FILE_LINES + 200))
+    files = sb.iter_source_files([tmp_path], tmp_path)
+    assert [p.name for p in files] == ["mod.py"]
+    assert not [f for f in sb.scan([tmp_path], repo_root=tmp_path) if f.hard]
+
+
 def test_in_tree_virtualenv_is_skipped(tmp_path: Path) -> None:
     _write(tmp_path, "mod.py", "x = 1\n")
     _write(tmp_path, ".venv/lib/site-packages/huge.py", _lines(sb.MAX_FILE_LINES + 50))

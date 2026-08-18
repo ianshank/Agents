@@ -66,4 +66,3 @@ class Judge(Protocol):
 
     @abstractmethod
     def evaluate(self, prompt: str, context: dict[str, Any] | None = None) -> JudgeVerdict: ...
-

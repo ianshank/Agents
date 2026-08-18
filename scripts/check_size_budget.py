@@ -75,6 +75,7 @@ EXCLUDED_DIR_NAMES = frozenset(
         ".tox",
         ".nox",
         ".eggs",
+        "experiments",
     }
 )
 
