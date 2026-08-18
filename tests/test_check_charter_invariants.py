@@ -264,9 +264,9 @@ def test_quality_gates_workflow_missing_is_hard_finding(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _interfaces_body(protocol_base: str = "Protocol", scorer_base: str = "ABC") -> str:
+def _interfaces_body(protocol_base: str = "Protocol") -> str:
     lines = [f"class {name}({protocol_base}): ...\n" for name in guard._PROTOCOL_INTERFACES]
-    lines += [f"class {name}({scorer_base}): ...\n" for name in guard._ABC_INTERFACES]
+    lines += [f"class {name}({protocol_base}): ...\n" for name in guard._ABC_INTERFACES]
     return "\n".join(lines)
 
 
@@ -277,10 +277,10 @@ def test_abc_interfaces_are_hard_findings(tmp_path: Path) -> None:
     assert all(f.hard and f.kind == "interface_not_protocol" for f in findings)
 
 
-def test_scorer_as_protocol_is_hard_finding(tmp_path: Path) -> None:
-    _write(tmp_path, "src/eval_harness/core/interfaces.py", _interfaces_body(scorer_base="Protocol"))
-    findings = guard.check_protocol_interfaces(tmp_path)
-    assert findings == [guard.Finding("interface_not_abc", "Scorer(bases=['Protocol'])", hard=True)]
+def test_all_interfaces_are_protocols_now(tmp_path: Path) -> None:
+    """Post py3.11-floor: all five interfaces (including Scorer) must be Protocol."""
+    _write(tmp_path, "src/eval_harness/core/interfaces.py", _interfaces_body())
+    assert guard.check_protocol_interfaces(tmp_path) == []
 
 
 def test_protocol_interfaces_are_clean(tmp_path: Path) -> None:
