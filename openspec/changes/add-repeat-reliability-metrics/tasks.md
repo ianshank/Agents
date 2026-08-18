@@ -121,23 +121,123 @@ passing them. Restores compatibility with any caller holding the old two-paramet
 without touching the two tests.
 
 ## 4. Aggregation — PR 2
-- [ ] Add a pure `ReliabilityAggregator` (no I/O, clock or RNG).
-- [ ] Per item: success count, empirical pass rate, `pass@k`, `pass^k`.
-- [ ] Distributions: score, latency, usage, cost, step count, failure category.
-- [ ] Cost and latency per **successful** attempt, not per raw run.
-- [ ] `[P]` Assert `pass^k` is aggregated per item and never pooled across items.
+- [x] Add a pure `ReliabilityAggregator` (no I/O, clock or RNG).
+      New `src/eval_harness/reliability.py` — `ReliabilityAggregator.aggregate(items:
+      list[ItemResult]) -> ReliabilityReport`, `ReliabilityReport.per_item: tuple[ItemReliability,
+      ...]`, one entry per `(item_id, scorer_name)` pair. No `diagnostics` field on this report —
+      **scope correction**: `reliability.diagnostics` is fully owned by Group 3's
+      `RunResult.diagnostics`/`EvalEngine._reliability_diagnostics` (already shipped in PR1); this
+      module has no `target_is_deterministic` parameter either, since that was only needed for
+      diagnostics. Test: `TestPurity` asserts calling `aggregate` twice on the same input yields
+      an identical (`==`) `ReliabilityReport`.
+- [x] Per item: success count, empirical pass rate, `pass@k`, `pass^k`.
+      `pass@k`/`pass^k` are booleans (matches `proposal.md`'s "at least one of k … succeeds" /
+      "all k … succeed" framing — a single set of k attempts, not multiple probabilistic trials
+      to average over). An inconclusive (`passed=None`) attempt counts toward neither a pass nor
+      `pass^k`'s "all k" requirement — tested explicitly
+      (`test_abstained_attempt_excluded_from_pass_power_k`).
+- [x] Distributions: score, latency, cost, failure category.
+      **Scope correction**: dropped "usage" and "step count" from this task's own list — neither
+      appears anywhere in `design.md`'s actual aggregation contract (only in this checklist line),
+      and no target in the tree populates a token-usage field today, so there is no real data to
+      aggregate; adding one would be a fabricated schema (`AGENTS.md`'s no-hardcoded-values spirit
+      extends to not inventing fields ahead of a data source). `score_quantiles` covers **all**
+      attempts (pass and fail alike — the full distribution is the point); `latency_quantiles`
+      and `cost_per_success` are successful-attempts-only (see next item). Quantiles are p50/p90/
+      p99 via `statistics.quantiles(..., n=100)`, with a single-value special case (`len==1`
+      raises in the stdlib but is mathematically well-defined: p50=p90=p99=that value). Failure
+      categories: `target_error` (`TargetOutput.error` set), `scorer_fail` (`passed=False`),
+      `inconclusive` (`passed=None`) — a 3-category taxonomy grounded entirely in fields that
+      already exist, not an invented one.
+- [x] Cost and latency per **successful** attempt, not per raw run.
+      Test: `test_latency_and_cost_scoped_to_successful_attempts_only` — a failed attempt with
+      wildly different latency/cost values does not shift either distribution.
+      `cost_per_success` reads `TargetOutput.metadata["cost"]`, an **optional** convention key —
+      `None` (not a fabricated `0`) when absent, which is every target in this repo today
+      (verified: no target populates it) — tested
+      (`test_cost_per_success_none_when_no_target_populates_it`).
+- [x] `[P]` Assert `pass^k` is aggregated per item and never pooled across items.
+      Test: `TestNeverPooledAcrossItems::test_pass_power_k_is_per_item_not_pooled` — 9 all-pass
+      items plus 1 item passing only 1-of-5 attempts; the unreliable item's `pass_power_k` stays
+      `False` and its own `pass_rate` (0.2) is directly inspectable — nothing pools it into a
+      falsely-reassuring run-wide average, because `ReliabilityReport` only ever exposes per-item
+      entries.
 
 ## 5. Gating — PR 2
-- [ ] `[P]` Wire `pass_at_k` / `pass_power_k` into `eval_harness.gating`.
-- [ ] `[P]` Assert a failing reliability gate exits non-zero.
+- [x] `[P]` Wire `pass_at_k` / `pass_power_k` into `eval_harness.gating`.
+      **Design decision, not pre-specified in tasks.md**: computed **lazily, on demand**, inside
+      `evaluate_gate()` itself — `ReliabilityAggregator.aggregate(run.items)` is called at most
+      once per `evaluate_gate()` call (memoised across every `pass_at_k`/`pass_power_k` rule in
+      the same gate, not just the first), only when a rule actually needs it. Rejected the
+      alternative of extending `ScoreAggregate`/`EvalEngine._aggregate()` to eagerly precompute
+      these on every run: that would touch `RunResult` serialization again (a second byte-identical
+      obligation to protect, on top of Group 2/3's), and would compute reliability stats even for
+      runs whose gate never asks for them. The gate value is the **fraction of items** whose own
+      per-item `pass_at_k`/`pass_power_k` boolean is `True` — a reduction of `ReliabilityAggregator`'s
+      per-item output, never a re-derivation from pooled raw attempts (keeps design.md's
+      never-pooled invariant intact one layer up). Tests:
+      `tests/test_matrix_eval_tools.py::TestReliabilityGating` (6 cases, including one asserting
+      `ReliabilityAggregator.aggregate` is called exactly once for a gate with two reliability rules).
+- [x] `[P]` Assert a failing reliability gate exits non-zero.
+      `cli.py`'s eval command already maps `GateResult.passed is False` to `return 1` →
+      `sys.exit(1)` unconditionally, for every metric — verified this pre-existing wiring needed no
+      change; `test_pass_power_k_gate_fails_when_one_item_is_unreliable` asserts
+      `GateResult.passed is False` at the `evaluate_gate()` level, the same layer
+      `test_gate_fail` (Group 1 precedent) already asserts at for `pass_rate`.
 
 ## 6. Governance — PR 3
-- [ ] `[P]` Claim the next free F-ID in `features.yaml`.
-- [ ] `[P]` Add an executable `scripts/validations/F_0NN.py` proof.
-- [ ] `[P]` Regenerate both `tests/*_baseline.json`.
-- [ ] `[P]` Update `architecture.yaml` / `architecture.mmd`.
-- [ ] CHANGELOG + user documentation.
+- [x] `[P]` Claim the next free F-ID in `features.yaml`.
+      F-056, as predicted throughout Wave 1 planning — still free at land, confirmed by
+      `grep -oE 'F-0[0-9]+' features.yaml | sort -u | tail -1` returning F-055 immediately
+      before this edit.
+- [x] `[P]` Add an executable `scripts/validations/F_0NN.py` proof.
+      `scripts/validations/F_056.py` — 27 checks spanning Groups 1-5 end to end (config
+      strictness, attempt identity, exact-call-count + byte-identical input in both dispatch
+      paths, per-attempt RNG reset in both dispatch paths, the `ctx.item_index` seed trap,
+      `is_deterministic()`, the diagnostic present/absent, `ReliabilityAggregator`'s pass@k/pass^k
+      and never-pooled invariant, and gating). All 27 pass on a clean run; exits 0.
+- [x] `[P]` Regenerate both `tests/*_baseline.json`.
+      Ran `python tests/test_public_surface.py` / `python tests/test_plugin_registry_surface.py`
+      (no `--update` needed — both passed unchanged): neither `reliability.py` nor the
+      `gating/__init__.py` additions declare `__all__`, and no new scorer/target/judge/dataset/
+      sink was permanently registered, so neither tracked surface actually changed. Verified,
+      not assumed — both suites were run and their pass/fail read directly.
+- [x] `[P]` Update `architecture.yaml` / `architecture.mmd`.
+      New `reliability: [core]` component; `gating: [config, core, reliability]` (gating imports
+      `ReliabilityAggregator` on demand). **Correction to this plan's own earlier prediction**
+      ("engine/gating edges into it"): `engine.py` has **no** edge into `reliability` — its
+      `_reliability_diagnostics` stayed a deliberately local, self-contained check (see Group 3),
+      so only `gating` gained the edge. Verified against the real import graph, not just declared:
+      `python skills/architecture-drift-guard/scripts/drift_check.py --manifest architecture.yaml`
+      reports "No undocumented dependencies. Architecture matches the manifest." — the one
+      pre-existing warning (`engine -> agent_core_adapter`, declared-but-unused) predates this
+      change (confirmed via `git stash`). `architecture.mmd` regenerated via `mermaid_gen.py`, not
+      hand-edited; freshness re-verified after.
+- [x] Also regenerated `docs/matrix-coverage.md` (`python tests/test_matrix_coverage.py --update`)
+      — stale after the new M8 pipeline (Group 7) and after deleting the stale `FOLLOW_ON` row
+      below. Not originally listed in this task, but the same "generated artifact, regenerate via
+      its own tool" discipline as the two items above.
+- [x] Deleted the stale `FOLLOW_ON` entry for this change in `tests/_matrix_coverage.py` (not
+      enforced by the guard, but stale bookkeeping once this lands) — its three named obligations
+      are now genuinely satisfied, not just declared satisfied: the gating floor already covered
+      M1/M2/M6 and this change's pass_at_k/pass_power_k tests ride on it
+      (`TestReliabilityGating`); `ReliabilityAggregator`'s determinism is tested
+      (`TestPurity.test_calling_twice_yields_identical_results`); and the M8 pipeline now exists
+      (`PIPELINES["repeated_attempts"]`, Group 7).
+- [x] CHANGELOG + user documentation.
+      `CHANGELOG.md` `[1.3.0-dev] > Added` — new top entry (this change is the most recent).
 
 ## 7. Verification
-- [ ] Full gate suite per `docs/plans/agent-eval-coverage/PLAN.md`.
-- [ ] End-to-end: one-of-five success passes `pass@5` and fails `pass^5`; all five succeed before `pass^5` passes.
+- [x] Full gate suite per `docs/plans/agent-eval-coverage/PLAN.md`.
+      `./scripts/quality-gate.sh all` — PASS (root: 1677+ passed, coverage 98%+/floor 96%;
+      scripts: coverage 95%+/floor 85%); `ruff check .` and `python -m mypy src/eval_harness tests
+      scripts` both clean across the whole repo, not just touched files.
+- [x] End-to-end: one-of-five success passes `pass@5` and fails `pass^5`; all five succeed before
+      `pass^5` passes.
+      `tests/test_matrix_eval_tools.py::TestM8Composability::test_m8_repeated_attempts_pipeline` —
+      a real `EvalEngine.from_config(...).run()` over a `repetitions=5` config with one item that
+      always succeeds (`pass@5`/`pass^5` both `True`) and one that succeeds on exactly one of five
+      attempts (`pass@5` `True`, `pass^5` `False`), through `ReliabilityAggregator` AND
+      `evaluate_gate()` together — not each in isolation. Also exercised directly (hand-built
+      `ItemResult`s, no engine) in `tests/test_reliability.py::TestBasicCounts` and
+      `scripts/validations/F_056.py` check 8.

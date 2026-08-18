@@ -6,6 +6,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — repeated-attempt reliability metrics: `pass@k` / `pass^k` (F-056)
+- **`run.repetitions`** — a new, optional `RunSettings` field (`ge=1`, default `1`) that expands
+  each selected item into `k` independent `target.run(item)` calls through the full scorer
+  lifecycle, in both the sequential and parallel dispatch paths, retaining every raw attempt
+  before any aggregate is computed. Default `1` reproduces the exact pre-change engine behaviour
+  — the sequential path's single continuously-advancing RNG, one `ItemResult` per item, no new
+  serialized keys — verified byte-identical by test, not just by inspection.
+- **Attempt identity** — `ItemResult` gains `attempt_index` / `attempt_id` / `item_run_id`,
+  appended last and emitted from `RunResult.to_dict()` only when set (mirrors the `trajectory`
+  precedent, ADR 0031).
+- **The scorer RNG is reset every attempt** — each attempt gets `RunContext.rng` freshly
+  constructed from the item's own seed, never advanced across attempts of the same item, so a
+  scorer that draws from `ctx.rng` cannot manufacture cross-attempt flakiness that would be
+  misread as agent unreliability. `TargetRunner` gains an optional `is_deterministic()` method
+  (a plain method, not a `@property` — a `runtime_checkable` Protocol's `issubclass()` support
+  requires every member to be callable); `ModelTarget` derives it from `temperature == 0.0`.
+- **`deterministic_sampling` diagnostic** — a new `RunResult.diagnostics` field carries the
+  caveat *"`pass^k` is 1.0 because sampling is deterministic, not because the agent is
+  reliable"* when an item's `pass^k` is 1.0 only because the target is declared, derived, or
+  observed deterministic (ADR 0029's vacuous-pass lesson); omitted entirely when empty.
+- **`ReliabilityAggregator`** — a new, pure `src/eval_harness/reliability.py` (no I/O, clock or
+  RNG) computing per `(item, scorer)`: success count, empirical pass rate, `pass@k` (at least one
+  of `k` attempts passes) and `pass^k` (all `k` attempts pass) as booleans, score quantiles over
+  every attempt, and latency/cost quantiles scoped to successful attempts only. `pass^k` is
+  aggregated strictly per item and never pooled across items — a suite of easy items cannot mask
+  one that fails half the time.
+- **Gating** — `GateRule.metric` accepts `pass_at_k` / `pass_power_k`, wired into
+  `evaluate_gate()` as the fraction of items whose own per-item boolean is `True`, computed
+  lazily and at most once per gate call (never eagerly on every run, and never re-derived from
+  pooled raw attempts).
+- **Config strictness** — `EvalConfig` now rejects an unknown top-level key (`extra="forbid"`),
+  closing a real gap found while implementing this change: a `gates:` typo of the real `gate:`
+  field was previously silently ignored rather than raising.
+- Landed as F-056 (`openspec/changes/add-repeat-reliability-metrics/`, ADR 0031), the second of
+  five ordered changes from `docs/plans/agent-eval-coverage/PLAN.md` (F-051 was the first). Full
+  proof: `python scripts/validations/F_056.py`; end-to-end: `PIPELINES["repeated_attempts"]` in
+  `tests/test_matrix_eval_tools.py`.
+
 ### Docs — ledger refresh: archive 6 landed OpenSpec proposals, correct 5 stale claims
 - **Archived `harden-quality-gate-integrity` (F-054), `add-eval-matrix-completeness` (F-053),
   `pin-lockstep-tool-versions` (F-055), `test-skill-validator-library`,
