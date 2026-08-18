@@ -33,7 +33,8 @@ class Scorer(Protocol):
     name: str
 
     def __init__(self, name: str | None = None) -> None:
-        self.name = name or getattr(self, "default_name", "score")
+        default: str = str(getattr(self, "default_name", "score"))
+        self.name = name if name is not None else default
 
     @abstractmethod
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult: ...
