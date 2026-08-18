@@ -234,5 +234,20 @@
       landed yet, not a permanent structural blind spot) and regenerated `docs/matrix-coverage.md`.
 
 ## 6. Verification
-- [ ] Full gate suite; `make check-agent-core` at its own floor.
-- [ ] End-to-end: swapping answer order exposes a biased judge; an uncalibrated judge cannot gate.
+- [x] Full gate suite; `make check-agent-core` at its own floor.
+      Root `./scripts/quality-gate.sh all` (98%+ coverage, floor 96%), `agent-core`'s own
+      `make check` (98.71% coverage, floor 95%, 855 passed), `behavioral-regression`'s own
+      `make check` (100% coverage, floor 95%), `python scripts/validate.py --tier fast
+      --strict` (55/55 features including F-057), `python tests/test_matrix_coverage.py
+      --check` (fresh) — all green.
+- [x] End-to-end: swapping answer order exposes a biased judge; an uncalibrated judge cannot gate.
+      New `agent-core/tests/test_judge_calibration_end_to_end.py` (3 tests), mirroring
+      `add-repeat-reliability-metrics`' own M8-pipeline precedent: a synthetic
+      "always prefers whichever candidate is shown first" judge is actually graded in both
+      answer orders (not hand-typed verdict strings) — its own collected verdicts feed
+      `order_flip_rate`, which reports `flip_rate=1.0`/`passes=False`; that *measured* result
+      then feeds `build_judge_calibration_report`, whose `may_gate` is `False` with
+      `order_flip` named in `failing_checks` even though `percent_agreement`/`kappa` are
+      deliberately set high — proving agreement alone cannot rescue a biased judge. A third
+      test covers spec.md's sibling "underpowered" scenario (`directional_only=True` ->
+      `may_gate=False`, `agreement_or_power` named), independent of any bias probe passing.
