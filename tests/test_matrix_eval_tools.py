@@ -143,7 +143,8 @@ class TestM4Interface:
         cls = SCORERS.get(name)
         assert Scorer in cls.__mro__
         # Verify instance satisfies the runtime-checkable Protocol
-        instance = cls()
+        params = {"components": [{"type": "exact_match"}]} if name == "weighted" else {}
+        instance = SCORERS.create(name, params)
         assert isinstance(instance, Scorer)
 
     @pytest.mark.parametrize("name", DATASETS.names())
