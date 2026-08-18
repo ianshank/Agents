@@ -6,6 +6,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — judge bias calibration: order, verbosity and self-preference probes (F-057)
+- **Bias probes** — new `agent_core/judge_calibration.py`: `order_flip_rate` (grades a pair in
+  both answer orders and reports the disagreement/preference-shift rate), `verbosity_preference_delta`
+  (deviation from 50/50 among semantically-equivalent concise/expanded pairs, symmetric — a judge
+  that penalises length is biased too, not just one that rewards it), and `self_preference_breakdown`
+  (win-rate broken down by whether the winner shares the judge's model family). All three reuse the
+  existing `wilson_interval` for their confidence intervals; a new `ProbeConfig` (frozen dataclass,
+  registered in `FrameworkConfig` like every sibling `*Config`) carries every tolerance — no numeric
+  literals at call sites.
+- **Pairwise calibration corpus** — new `agent_core/pairwise.py`: `PairwiseItem` /
+  `PairwiseSet` (not `GoldenItem`/`GoldenSet`, which are binary-label with no pair concept), with
+  known-equal / clearly-better / clearly-worse canaries cross-validated against their own expected
+  verdict at construction — an internally-inconsistent canary is a corpus-authoring bug caught
+  immediately, not silently scored wrong later.
+- **`JudgeCalibrationReport`** — new `agent_core/judge_calibration_report.py`: versioned,
+  composes agreement, Cohen's κ (via a new standalone `agent_core.golden.percent_agreement`), every
+  bias probe and canary pass rate into a `may_gate` verdict and a `failing_checks` tuple naming
+  every currently-failing check, not just the first. Canary results are diagnostic only — spec
+  names agreement, power and the three bias tolerances as the gating conditions, not canaries.
+- **Programmatic scorers ordered ahead of judges** — `Scorer` gains `uses_judge()` (a plain
+  method, not a `@property`, mirroring `TargetRunner.is_deterministic()`'s reasoning); the engine
+  stable-sorts scorers on it and skips a judge entirely — no `ScoreResult` recorded — once a
+  programmatic scorer has already failed the item, so a judge's verdict can never convert that item
+  into a pass. Deliberately does not record a synthetic placeholder score for the skip: that would
+  silently pollute the judge's aggregate mean and `reliability.py`'s per-scorer quantiles with a
+  number that was never actually judged.
+- **Gating requires a named calibration artifact** — new `JudgeCalibrationGateConfig`
+  (`calibration_artifact_id`, required, non-empty) on `EvalConfig`; `eval_harness.gating.
+  require_calibration_for_judge_gating` rejects a gate rule that targets a judge-backed scorer
+  (checked against the real, constructed `Scorer`'s resolved name/`uses_judge()`, not guessed from
+  raw config) with no named artifact. `eval_harness.agent_core_adapter.require_report_to_gate`
+  then enforces a real `JudgeCalibrationReport` against that name: the report's `artifact_id` must
+  match, and it must actually authorise gating (`may_gate`), with every failing check named in the
+  error.
+- **`behavioral_regression` wiring** — new `build_judge_calibration_report`, exported alongside
+  `validate_judge`, composing `validate_judge`'s own `KappaReport` (agreement, κ, power) and
+  `agent_core.golden.percent_agreement` over the same codeterminate pairs with pre-computed bias
+  probes into a full report — the three probes come from a separate pairwise corpus this function
+  does not itself run.
+- Landed as F-057 (`openspec/changes/extend-judge-calibration/`, ADR 0031), the third of five
+  ordered changes from `docs/plans/agent-eval-coverage/PLAN.md` (F-051, F-056 came first). No new
+  `architecture.yaml` component edge — `agent_core` cannot import `flow_corpus` (the airgap holds;
+  agreement is computed by `behavioral_regression`, which already depends on both, not by
+  `agent_core` itself). Full proof: `python scripts/validations/F_057.py`.
+
 ### Added — repeated-attempt reliability metrics: `pass@k` / `pass^k` (F-056)
 - **`run.repetitions`** — a new, optional `RunSettings` field (`ge=1`, default `1`) that expands
   each selected item into `k` independent `target.run(item)` calls through the full scorer

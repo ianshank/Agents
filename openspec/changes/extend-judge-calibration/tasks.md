@@ -198,10 +198,40 @@
       all` PASS (98.22% coverage, floor 96%), `ruff` and `mypy` clean on every touched file.
 
 ## 5. Governance — PR 3
-- [ ] `[P]` Claim the next free F-ID; add an executable proof.
-- [ ] `[P]` Regenerate both `tests/*_baseline.json`.
-- [ ] Verify `architecture.yaml` is **unchanged** — a diff here means the airgap was breached.
-- [ ] CHANGELOG + documentation.
+- [x] `[P]` Claim the next free F-ID; add an executable proof.
+      F-057 (F-056 claimed first by `add-repeat-reliability-metrics`, per the plan's landing
+      order). New `scripts/validations/F_057.py`, 26 `_check()` calls across 5 helper functions
+      (`main()` delegates to each — a single flat `main()` tripped ruff's `C901` cyclomatic-
+      complexity budget, the same shape fix as every other multi-section proof script's
+      *density*, just organised differently) covering: probe math (order-flip, verbosity,
+      self-preference, including a genuinely uninformative pair correctly excluded); the
+      pairwise corpus's canary cross-validation and dedup; `JudgeCalibrationReport.may_gate`/
+      `failing_checks`; `build_judge_calibration_report`'s canary pass rate and empty-canary
+      rejection; the engine's scorer ordering and judge-skip (plus the duck-typed-scorer
+      fallback, `# type: ignore[list-item]`'d at the two call sites that deliberately pass a
+      non-conforming scorer to prove the runtime path a static check can't model);
+      `JudgeCalibrationGateConfig`; both `require_calibration_for_judge_gating` and
+      `require_report_to_gate`; and `behavioral_regression.build_judge_calibration_report`'s
+      composition. Verified passing standalone (`PYTHONPATH=src python
+      scripts/validations/F_057.py`, exit 0) before wiring into `features.yaml`.
+- [x] `[P]` Regenerate both `tests/*_baseline.json`.
+      Both already regenerated in Group 4's commit (`agent-core/tests/public_surface_baseline.json`
+      needed no change there — no new agent_core public name in this group;
+      `behavioral-regression/tests/public_surface_baseline.json` gained
+      `build_judge_calibration_report`; root `tests/public_surface_baseline.json` gained
+      `require_report_to_gate` on `eval_harness.agent_core_adapter`). No further changes needed
+      in Group 5 itself.
+- [x] Verify `architecture.yaml` is **unchanged** — a diff here means the airgap was breached.
+      Confirmed via `git diff origin/main -- architecture.yaml`: the only delta is the
+      `add-repeat-reliability-metrics` `reliability` component (F-056, landed separately);
+      nothing from this proposal touches it — matches design.md's "no new component edge"
+      claim exactly, not just approximately.
+- [x] CHANGELOG + documentation.
+      New `### Added — judge bias calibration...` section at the top of `## [1.3.0-dev] —
+      Unreleased` in `CHANGELOG.md` (newest-first, ahead of F-056's own section). Deleted the
+      now-stale `FollowOn("extend-judge-calibration", ...)` entry from `tests/_matrix_coverage.py`
+      (mirrors the F-056 `FollowOn` cleanup precedent — the note tracked a proposal that hadn't
+      landed yet, not a permanent structural blind spot) and regenerated `docs/matrix-coverage.md`.
 
 ## 6. Verification
 - [ ] Full gate suite; `make check-agent-core` at its own floor.

@@ -154,13 +154,6 @@ FOLLOW_ON: tuple[FollowOn, ...] = (
         "adapters and the two state scorers (whose registered names must also land in "
         "both READMEs for the registry-drift guard).",
     ),
-    FollowOn(
-        "extend-judge-calibration",
-        "judge",
-        None,
-        "bias-probe math lands in agent_core (airgap-preserving); the agent-core matrix "
-        "suite gains probe rows in the fleet phase. Not auto-caught by this census.",
-    ),
 )
 
 #: Files the cell map is read from (glob, so a future split of the matrix suite into
