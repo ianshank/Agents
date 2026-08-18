@@ -1,6 +1,6 @@
 # Design: add-eval-matrix-completeness
 
-Promotes to [ADR 0032](../../../docs/decisions/0032-matrix-completeness-policy.md) (authored
+Promotes to [ADR 0032](../../../../docs/decisions/0032-matrix-completeness-policy.md) (authored
 with this proposal as *Proposed*; flipped to Accepted at land). The normative policy — the
 per-kind dim floors, the waiver rules, the checked-declaration principle — lives in the ADR;
 this file records the mechanism trade-offs.
