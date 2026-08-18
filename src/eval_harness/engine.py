@@ -39,9 +39,7 @@ def _utcnow() -> datetime:
 
 
 def _uses_judge(scorer: Scorer) -> bool:
-    """Whether *scorer* is judge-backed, tolerating a duck-typed scorer that
-    predates ``Scorer.uses_judge`` and never defines it (unlike a nominal
-    ``Scorer`` subclass, which always has the Protocol's own default)."""
+    """Whether *scorer* is judge-backed; tolerates one predating ``Scorer.uses_judge``."""
     method = getattr(scorer, "uses_judge", None)
     return bool(method()) if callable(method) else False
 
@@ -78,10 +76,7 @@ class EvalEngine:
         self.config = config
         self.dataset = dataset
         self.target = target
-        # Stable partition: every scorer keeps its relative order within its own
-        # group, but judge-backed scorers move after every programmatic one, so a
-        # judge is never even called once a programmatic scorer has already
-        # failed the item (F-057: scorers ordered ahead of judges).
+        # F-057: judges sort after programmatic scorers; a judge never runs once one has failed.
         self.scorers = sorted(scorers, key=_uses_judge)
         self.sinks = sinks
         self.judge = judge
@@ -187,24 +182,11 @@ class EvalEngine:
         scores: list[ScoreResult] = []
         programmatic_failed = False
         for scorer in self.scorers:
-            # self.scorers is already ordered programmatic-before-judge (see
-            # __init__); once a programmatic scorer has failed, a later judge
-            # is never even called, so its verdict cannot convert the item
-            # into a pass (F-057). No ScoreResult is recorded at all — a
-            # synthetic value would pollute this scorer's aggregate mean and
-            # reliability.py's quantiles/attempt-count with a number that was
-            # never actually judged (unlike the genuine-error branch below,
-            # whose 0.0/False is a real outcome, not a routing decision).
+            # F-057: skip a judge once a programmatic scorer has failed (routing, not an outcome).
             if _uses_judge(scorer) and programmatic_failed:
-                logger.debug(
-                    "Skipping judge scorer %r for item %s: a programmatic scorer already failed it",
-                    scorer.name,
-                    item.id,
-                )
                 continue
             try:
-                result = scorer.score(item, output, ctx)
-                scores.append(result)
+                scores.append(result := scorer.score(item, output, ctx))
                 if not _uses_judge(scorer) and result.passed is False:
                     programmatic_failed = True
             except Exception as exc:

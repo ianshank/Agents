@@ -101,7 +101,44 @@
 - [ ] Wire into `behavioral_regression` alongside `validate_judge`.
 - [ ] `[P]` Require an explicit calibration artifact ID in gating configuration.
 - [ ] `[P]` Assert an uncalibrated or biased judge cannot gate.
-- [ ] `[P]` Assert programmatic scorers are ordered ahead of judges.
+- [x] `[P]` Assert programmatic scorers are ordered ahead of judges.
+      `Scorer.uses_judge()` (`core/interfaces.py`) — a plain method, not a `@property`, for the
+      same `runtime_checkable`-Protocol reason as `TargetRunner.is_deterministic`. Defaults
+      `False`; `CompositeScorer` delegates to its children, `LLMJudgeScorer` returns `True`.
+      `EvalEngine.__init__` stable-sorts `self.scorers` on it, so judge-backed scorers always run
+      after every programmatic one without disturbing relative order within each group.
+      `_run_one`'s loop then skips a judge scorer entirely — no `ScoreResult` is recorded — once
+      a programmatic scorer has already failed the item, satisfying spec.md's literal "the
+      judge's verdict cannot convert that item into a pass."
+      **Real bug found and fixed by running the full suite, not just new tests**: the first
+      implementation recorded a synthetic `value=0.0, passed=None` placeholder for a skipped
+      judge, mirroring `AutoevalsScorer`'s existing `on_skip` convention. That convention is
+      opt-in and rare (a provider genuinely returning no score); this skip fires on any ordinary
+      failing programmatic scorer and is common. The synthetic 0.0 silently dragged down that
+      judge's aggregate `mean` for every downstream `mean`-based gate — caught concretely by
+      `config/eval.example.yaml`'s own CLI smoke test flipping from PASS to FAIL with no real
+      quality regression — and would have equally corrupted `reliability.py`'s per-scorer
+      quantiles/attempt-counts (`attempts = len(pairs)` counts only entries actually present).
+      Fixed by not appending anything at all for a skipped judge, so the item is excluded from
+      that scorer's aggregate the same way a sampled-out item is excluded from the whole run —
+      distinct from the adjacent genuine-error branch, whose `value=0.0, passed=False` is a real
+      outcome and rightly still counts.
+      **Second gap, also found by the full suite**: a duck-typed scorer that predates
+      `uses_judge()` and never defines it crashed with `AttributeError` at the `sorted(...)` call
+      site. Fixed with a defensive `_uses_judge()` module-level helper
+      (`getattr(scorer, "uses_judge", None)`, `callable()`-guarded) used at every call site.
+      **Third gap**: a judge-backed scorer's own exception must not itself trip the
+      skip-later-judges guard — that guard exists only for a *programmatic* scorer having failed,
+      not for a judge failing to run at all. Covered by a dedicated test (two judge-backed
+      scorers, the first raises) after the full-suite run showed this branch uncovered.
+      Tests: `tests/test_engine.py` (`test_engine_end_to_end_aggregate` re-asserted for the new
+      skip semantics, `test_engine_writes_scores_to_langfuse` recount, new
+      `test_a_judge_scorer_error_does_not_skip_a_later_judge_scorer`);
+      `tests/test_matrix_eval_tools.py`'s `TestM4Interface.test_scorer_protocol_duck_typing`
+      fixture updated with a trivial `uses_judge` override to keep satisfying the now-tightened
+      structural `isinstance()` check.
+      Verified: full root suite green (`python -m pytest tests/ -q`), `./scripts/quality-gate.sh
+      all` PASS (98.22% coverage, floor 96%), `ruff` and `mypy` clean on every touched file.
 
 ## 5. Governance — PR 3
 - [ ] `[P]` Claim the next free F-ID; add an executable proof.
