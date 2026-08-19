@@ -169,6 +169,15 @@ The offline suite must pass on Windows as well as Linux CI. Known traps (all wer
 
 Standard library `logging` module. Modules obtain a logger via `logger = logging.getLogger(__name__)`. Do not call `logging.basicConfig` inside library code — it belongs in `scripts/_cli.configure_logging()` or a CLI entry point. When you add debug output to a new integration, prefer `logger.debug` for verbose per-call detail and `logger.info` for once-per-run summaries; test with `pytest -o log_cli=true --log-cli-level=DEBUG`.
 
+## Claude Code hooks (`.claude/`)
+
+- `SessionStart` → `.claude/hooks/session-start.sh` — installs every sibling package + extras
+  (hypothesis, pydantic, etc.) so a fresh session's toolchain matches CI before any work starts;
+  idempotent, never fails the session.
+- `PostToolUse` (Edit|Write) → `.claude/hooks/post-edit-size-budget.py` — fail-open, advisory
+  re-check of the ADR 0019 500-line file budget on just the edited `.py` file, so a crossing is
+  caught at the edit rather than only at `make check-all`/CI time. Never blocks.
+
 ## Where to put a design decision
 
 - **Single-file change with clear reason:** commit message and a bullet in `CHANGELOG.md`.

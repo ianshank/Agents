@@ -395,9 +395,14 @@ src/eval_harness/
                      langfuse_client — see docs/phoenix-spike.md)
   braintrust_client/ BrainTrust experiment export (SDK-optional seam; mirrors
                      phoenix_client — see docs/braintrust-spike.md)
-  agent_core_adapter/  agent_core bridge (BudgetLedger, calibration surface, and the
-                       BudgetedJudge cost-cap wrapper applied around another judge)
-  gating/            config-driven quality gate
+  agent_core_adapter/  agent_core bridge (BudgetLedger, calibration surface, the
+                       BudgetedJudge cost-cap wrapper, and require_report_to_gate,
+                       which checks a JudgeCalibrationReport before a judge may gate, F-057)
+  reliability.py     ReliabilityAggregator: pure per-(item, scorer) pass@k / pass^k
+                     aggregation over repeated attempts, consumed by gating (F-056)
+  gating/            config-driven quality gate (mean / pass_rate / pass_at_k / pass_power_k
+                     rule metrics; require_calibration_for_judge_gating blocks gating on a
+                     judge-backed scorer with no named calibration artifact, F-057)
   engine.py          orchestration
   cli.py             entry point
 
