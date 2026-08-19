@@ -6,6 +6,19 @@ Coverage floor: **96%** (root `eval_harness`).
 ## 1. Configuration — PR 1
 - [x] `[P]` Add `repetitions: int = 1` (ge=1) to `RunSettings` in `config/models.py`.
 - [x] `[P]` Extend `GateRule.metric` to `{mean, pass_rate, pass_at_k, pass_power_k}`.
+      **Correction, found by an SR-Developer/QA-lens review of the whole branch, not this
+      proposal's own tests**: `GateRule` had no cross-field validation at all — a rule with
+      neither `min` nor `max` set parsed successfully but was a silent no-op in `evaluate_gate()`
+      (both bound checks are `if rule.X is not None`, so neither ever fires), and a rule with
+      `min > max` parsed successfully but could never be satisfied by any observed value. Both are
+      config-authoring footguns this file's own `ComparisonConfig`/`ABCampaignConfig` already
+      guard against for their own cross-field constraints via `@model_validator(mode="after")`.
+      Fixed with two such validators on `GateRule` itself. Ripple: `scripts/validations/F_056.py`
+      constructed two `GateRule`s with only `score`/`metric` set (testing `.metric` acceptance,
+      not gating behavior) — both now also pass a `min=`. Tests:
+      `TestGating::test_m6_error_neither_bound_set_rejected_at_parse` /
+      `test_m6_error_min_exceeds_max_rejected_at_parse` in `tests/test_matrix_eval_tools.py`;
+      `docs/matrix-coverage.md` regenerated (`M6×2` → `M6×4` for the `gating` matrix kind).
 - [x] `[P]` Assert an unknown top-level `gates:` key is still rejected at parse time.
       **Correction**: this was empirically false before this change (Pydantic v2 default
       `extra='ignore'` silently dropped unknown top-level keys, including a `gates:` typo of the
@@ -162,6 +175,21 @@ without touching the two tests.
       `False` and its own `pass_rate` (0.2) is directly inspectable — nothing pools it into a
       falsely-reassuring run-wide average, because `ReliabilityReport` only ever exposes per-item
       entries.
+      **Correction, found by a QA-lens review of the whole branch after `extend-judge-calibration`
+      (F-057) landed its own judge-after-programmatic-failure skip logic in `engine.py`, not by
+      this proposal's own tests**: a judge-backed scorer conditionally skipped on some of an
+      item's attempts produces a `ScoreResult` on only the attempts where it actually ran, so
+      `ItemReliability.attempts` (`len(pairs)`, this scorer's own recorded count) silently
+      undercounted the item's true repetition count for that scorer — e.g. `attempts=2` for a
+      judge that only ran twice out of 5 real attempts, with no way to tell from the entry alone.
+      Fixed additively: `ItemReliability` gains `item_attempts` (the item's true repetition count,
+      shared by every scorer for that item — `len(item_results)` in `aggregate()`'s own outer
+      loop, threaded through `_aggregate_one` as a keyword-only parameter), leaving `attempts`'
+      existing, already-tested semantics untouched. `ItemReliability` has exactly one production
+      construction site (`_aggregate_one` itself; confirmed by repo-wide grep), so the new field
+      could be made required rather than silently defaulted. Test:
+      `TestMultiScorer::test_item_attempts_reflects_the_true_count_even_when_a_scorer_is_
+      conditionally_absent`.
 
 ## 5. Gating — PR 2
 - [x] `[P]` Wire `pass_at_k` / `pass_power_k` into `eval_harness.gating`.

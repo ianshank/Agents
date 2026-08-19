@@ -191,6 +191,41 @@ class TestMultiScorer:
         assert quality.pass_power_k is False
         assert quality.success_count == 2
 
+    def test_item_attempts_reflects_the_true_count_even_when_a_scorer_is_conditionally_absent(self):
+        """F-057's engine.py skips a judge-backed scorer on any attempt where a
+        programmatic scorer already failed, so a judge's own `attempts` (how many
+        ScoreResults it actually produced) can be lower than the item's true
+        repetition count. `item_attempts` must still report the true count for
+        every scorer -- including the one that was conditionally absent -- so a
+        reader isn't misled into treating a partial-participation scorer's
+        `attempts` as the number of repetitions the item received."""
+        # 5 attempts total; "judge" only ran (and always passed) on the 2 where "acc" passed.
+        acc_passed = [True, False, True, False, False]
+        items = [
+            ItemResult(
+                item=_item("i1"),
+                output=TargetOutput(output="x"),
+                scores=(
+                    [ScoreResult(name="acc", value=1.0, passed=passed)]
+                    + ([ScoreResult(name="judge", value=1.0, passed=True)] if passed else [])
+                ),
+                attempt_index=a,
+                attempt_id=f"i1:{a}",
+                item_run_id="run:i1",
+            )
+            for a, passed in enumerate(acc_passed)
+        ]
+        report = ReliabilityAggregator.aggregate(items)
+
+        acc = _entry(report, "i1", "acc")
+        assert acc.attempts == 5
+        assert acc.item_attempts == 5
+
+        judge = _entry(report, "i1", "judge")
+        assert judge.attempts == 2  # only recorded twice
+        assert judge.item_attempts == 5  # but the item was truly attempted 5 times
+        assert judge.pass_rate == 1.0  # 2/2 among the attempts it did run
+
 
 class TestPurity:
     def test_calling_twice_yields_identical_results(self):

@@ -21,11 +21,21 @@ _QUANTILE_POINTS = {"p50": 49, "p90": 89, "p99": 98}
 
 @dataclass(frozen=True)
 class ItemReliability:
-    """Reliability of one (item, scorer) pair across its recorded attempts."""
+    """Reliability of one (item, scorer) pair across its recorded attempts.
+
+    ``attempts`` and ``item_attempts`` can diverge: a judge-backed scorer may be
+    conditionally skipped on some of an item's attempts (F-057's judge-after-
+    programmatic-failure skip records no ``ScoreResult`` at all for that attempt),
+    so ``attempts`` (this scorer's own recorded count) can be lower than
+    ``item_attempts`` (the item's true repetition count, shared by every scorer).
+    Reading ``attempts`` alone as "how many times this item was run" is the trap;
+    both fields together make a partial-participation scorer's coverage visible.
+    """
 
     item_id: str
     scorer_name: str
     attempts: int
+    item_attempts: int
     success_count: int
     pass_rate: float
     pass_at_k: bool
@@ -75,14 +85,14 @@ class ReliabilityAggregator:
             by_item.setdefault(ir.item.id, []).append(ir)
 
         per_item: list[ItemReliability] = []
-        for item_id, attempts in by_item.items():
+        for item_id, item_results in by_item.items():
             by_scorer: dict[str, list[tuple[ItemResult, ScoreResult]]] = {}
-            for ir in attempts:
+            for ir in item_results:
                 for s in ir.scores:
                     by_scorer.setdefault(s.name, []).append((ir, s))
 
             for scorer_name, pairs in by_scorer.items():
-                per_item.append(_aggregate_one(item_id, scorer_name, pairs))
+                per_item.append(_aggregate_one(item_id, scorer_name, pairs, item_attempts=len(item_results)))
 
         return ReliabilityReport(per_item=tuple(per_item))
 
@@ -91,6 +101,8 @@ def _aggregate_one(
     item_id: str,
     scorer_name: str,
     pairs: list[tuple[ItemResult, ScoreResult]],
+    *,
+    item_attempts: int,
 ) -> ItemReliability:
     attempts = len(pairs)
     known = [(ir, s) for ir, s in pairs if s.passed is not None]
@@ -119,6 +131,7 @@ def _aggregate_one(
         item_id=item_id,
         scorer_name=scorer_name,
         attempts=attempts,
+        item_attempts=item_attempts,
         success_count=success_count,
         pass_rate=pass_rate,
         pass_at_k=pass_at_k,

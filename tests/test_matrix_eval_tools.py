@@ -1217,6 +1217,26 @@ class TestGating:
         with pytest.raises(pydantic.ValidationError, match="metric"):
             GateConfig.model_validate({"rules": [{"score": "em", "metric": "median", "min": 0.5}]})
 
+    def test_m6_error_neither_bound_set_rejected_at_parse(self) -> None:
+        """A rule with neither min nor max is a silent no-op in evaluate_gate() --
+        reject it at parse time instead, mirroring the unknown-metric rejection above."""
+        import pydantic
+
+        from eval_harness.config.models import GateConfig
+
+        with pytest.raises(pydantic.ValidationError, match="min, max, or both"):
+            GateConfig.model_validate({"rules": [{"score": "em", "metric": "mean"}]})
+
+    def test_m6_error_min_exceeds_max_rejected_at_parse(self) -> None:
+        """min > max can never be satisfied by any observed value -- reject it at
+        parse time rather than let it silently fail every run."""
+        import pydantic
+
+        from eval_harness.config.models import GateConfig
+
+        with pytest.raises(pydantic.ValidationError, match="must not exceed max"):
+            GateConfig.model_validate({"rules": [{"score": "em", "metric": "mean", "min": 0.9, "max": 0.5}]})
+
     def test_m6_error_absent_score_fails_the_gate_with_a_reason(self) -> None:
         from eval_harness.config.models import GateConfig
         from eval_harness.gating import evaluate_gate

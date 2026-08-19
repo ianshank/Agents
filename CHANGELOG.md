@@ -17,7 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   literals at call sites. `ProbeConfig.min_pairs` is enforced in all three: a probe whose
   informative-pair count falls below it fails (with a `degenerate` reason naming the shortfall)
   even when the measured rate already clears its own tolerance, mirroring
-  `agent_core.calibration.evaluate_calibration`'s own sample-size floor.
+  `agent_core.calibration.evaluate_calibration`'s own sample-size floor. Each probe now also logs
+  a `WARNING` when it trips that floor, matching `evaluate_calibration`'s own degeneracy logging
+  — previously silent, so an operator reading logs alone couldn't tell an undersized run from a
+  quiet pass.
 - **Pairwise calibration corpus** — new `agent_core/pairwise.py`: `PairwiseItem` /
   `PairwiseSet` (not `GoldenItem`/`GoldenSet`, which are binary-label with no pair concept), with
   known-equal / clearly-better / clearly-worse canaries cross-validated against their own expected
@@ -34,7 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   programmatic scorer has already failed the item, so a judge's verdict can never convert that item
   into a pass. Deliberately does not record a synthetic placeholder score for the skip: that would
   silently pollute the judge's aggregate mean and `reliability.py`'s per-scorer quantiles with a
-  number that was never actually judged.
+  number that was never actually judged. The skip now logs at `DEBUG` (previously silent), and the
+  duck-typed `uses_judge()` fallback this relies on — previously copy-pasted verbatim into both
+  `engine.py` and `gating/__init__.py` — is now a single shared helper in `core/interfaces.py`.
 - **Gating requires a named calibration artifact** — new `JudgeCalibrationGateConfig`
   (`calibration_artifact_id`, required, non-empty) on `EvalConfig`; `eval_harness.gating.
   require_calibration_for_judge_gating` rejects a gate rule that targets a judge-backed scorer
@@ -80,11 +85,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of `k` attempts passes) and `pass^k` (all `k` attempts pass) as booleans, score quantiles over
   every attempt, and latency/cost quantiles scoped to successful attempts only. `pass^k` is
   aggregated strictly per item and never pooled across items — a suite of easy items cannot mask
-  one that fails half the time.
+  one that fails half the time. `ItemReliability.item_attempts` reports the item's true
+  repetition count alongside its own `attempts` (this scorer's recorded count), so a scorer
+  conditionally absent on some attempts — e.g. a judge-backed one, skipped once a programmatic
+  scorer has already failed the item — is never mistaken for a smaller true repetition count.
 - **Gating** — `GateRule.metric` accepts `pass_at_k` / `pass_power_k`, wired into
   `evaluate_gate()` as the fraction of items whose own per-item boolean is `True`, computed
   lazily and at most once per gate call (never eagerly on every run, and never re-derived from
-  pooled raw attempts).
+  pooled raw attempts). `GateRule` itself now rejects a rule with neither `min` nor `max` set (a
+  silent no-op) and one with `min > max` (mathematically unsatisfiable), mirroring
+  `ComparisonConfig`/`ABCampaignConfig`'s own cross-field validation already established in the
+  same file.
 - **Config strictness** — `EvalConfig` now rejects an unknown top-level key (`extra="forbid"`),
   closing a real gap found while implementing this change: a `gates:` typo of the real `gate:`
   field was previously silently ignored rather than raising.

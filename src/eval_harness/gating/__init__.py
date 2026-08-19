@@ -9,17 +9,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from ..config.models import EvalConfig, GateConfig
-from ..core.interfaces import Scorer
+from ..core.interfaces import Scorer, _uses_judge
 from ..core.types import RunResult
 from ..reliability import ReliabilityAggregator, ReliabilityReport
 
 _RELIABILITY_METRICS = ("pass_at_k", "pass_power_k")
-
-
-def _uses_judge(scorer: Scorer) -> bool:
-    """Whether *scorer* is judge-backed; tolerates one predating ``Scorer.uses_judge``."""
-    method = getattr(scorer, "uses_judge", None)
-    return bool(method()) if callable(method) else False
 
 
 def require_calibration_for_judge_gating(config: EvalConfig, scorers: Iterable[Scorer]) -> None:

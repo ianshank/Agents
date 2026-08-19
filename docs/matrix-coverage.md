@@ -132,7 +132,7 @@ Aliases (target):
 | suite | floor | dims covered (method counts) |
 |---|---|---|
 | engine | M8 | M8×6 |
-| gating | M1, M2, M6 | M1×2, M2×2, M6×2 |
+| gating | M1, M2, M6 | M1×2, M2×2, M6×4 |
 
 ## M8 pipelines — kinds exercised
 

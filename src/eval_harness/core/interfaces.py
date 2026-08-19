@@ -54,6 +54,17 @@ class Scorer(Protocol):
         return False
 
 
+def _uses_judge(scorer: Scorer) -> bool:
+    """Whether *scorer* is judge-backed; tolerates one predating ``Scorer.uses_judge``.
+
+    Shared by ``engine.py`` (scorer ordering, the judge-skip guard) and ``gating``
+    (calibration-artifact enforcement) — both need the exact same duck-typed
+    fallback, so it lives once next to the ``uses_judge()`` method it wraps.
+    """
+    method = getattr(scorer, "uses_judge", None)
+    return bool(method()) if callable(method) else False
+
+
 @runtime_checkable
 class DatasetSource(Protocol):
     @abstractmethod

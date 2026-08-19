@@ -74,15 +74,25 @@ def main() -> int:
     except pydantic.ValidationError:
         _check(True, "RunSettings.repetitions rejects 0 (ge=1)", errors)
     _check(
-        GateRule(score="s", metric="pass_at_k").metric == "pass_at_k",
+        GateRule(score="s", metric="pass_at_k", min=0.5).metric == "pass_at_k",
         "GateRule.metric accepts 'pass_at_k'",
         errors,
     )
     _check(
-        GateRule(score="s", metric="pass_power_k").metric == "pass_power_k",
+        GateRule(score="s", metric="pass_power_k", min=0.5).metric == "pass_power_k",
         "GateRule.metric accepts 'pass_power_k'",
         errors,
     )
+    try:
+        GateRule(score="s", metric="mean")
+        _check(False, "GateRule rejects a rule with neither min nor max set", errors)
+    except pydantic.ValidationError:
+        _check(True, "GateRule rejects a rule with neither min nor max set", errors)
+    try:
+        GateRule(score="s", metric="mean", min=0.9, max=0.5)
+        _check(False, "GateRule rejects min > max as unsatisfiable", errors)
+    except pydantic.ValidationError:
+        _check(True, "GateRule rejects min > max as unsatisfiable", errors)
     base_cfg = {
         "schema_version": SCHEMA_VERSION,
         "dataset": {"type": "inline", "params": {"items": []}},

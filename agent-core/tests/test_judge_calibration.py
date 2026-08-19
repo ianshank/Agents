@@ -74,6 +74,22 @@ def test_order_flip_rate_undersized_and_tolerance_failing_both_hold():
     assert result.passes is False
 
 
+def test_order_flip_rate_mixed_tie_and_decisive_pairs():
+    """A corpus mixing tied and decisive pairs was previously untested -- only
+    all-tie or all-decisive corpora existed."""
+    result = order_flip_rate(["tie", "a"], ["a", "tie"], CFG)
+    assert result.n == 2
+    assert result.flips == 2  # tie->a and a->tie both count as a changed winner
+    assert result.flip_rate == 1.0
+
+
+def test_order_flip_rate_logs_degeneracy_for_operator_visibility(caplog):
+    strict = ProbeConfig(min_pairs=30)
+    with caplog.at_level("WARNING", logger="agent_core.judge_calibration"):
+        order_flip_rate(["a"], ["b"], strict)
+    assert any("insufficient pairs" in r.message for r in caplog.records)
+
+
 def test_order_flip_rate_rejects_mismatched_lengths():
     with pytest.raises(ValueError, match="equal length"):
         order_flip_rate(["a"], ["a", "b"], CFG)
@@ -122,6 +138,21 @@ def test_verbosity_min_pairs_counts_informative_pairs_not_raw_length():
     result = verbosity_preference_delta(verdicts, cfg)
     assert result.n == 2
     assert result.degenerate == "insufficient pairs: n=2 < min_pairs=5"
+
+
+def test_verbosity_single_pair_corpus():
+    """n=1 was the smallest untested corpus size (existing tests start at n=2)."""
+    result = verbosity_preference_delta(["expanded"], CFG)
+    assert result.n == 1
+    assert result.expanded_win_rate == 1.0
+    assert result.preference_delta == 0.5
+
+
+def test_verbosity_logs_degeneracy_for_operator_visibility(caplog):
+    strict = ProbeConfig(min_pairs=30)
+    with caplog.at_level("WARNING", logger="agent_core.judge_calibration"):
+        verbosity_preference_delta(["concise", "expanded"], strict)
+    assert any("insufficient pairs" in r.message for r in caplog.records)
 
 
 def test_verbosity_bias_toward_longer():
@@ -214,6 +245,14 @@ def test_self_preference_min_pairs_counts_informative_pairs_not_raw_length():
     result = self_preference_breakdown("gpt", outcomes, cfg)
     assert result.same_family_n == 2
     assert result.degenerate == "insufficient pairs: n=2 < min_pairs=5"
+
+
+def test_self_preference_logs_degeneracy_for_operator_visibility(caplog):
+    strict = ProbeConfig(min_pairs=30)
+    outcomes = [PairOutcome("gpt", "claude", "a"), PairOutcome("claude", "gpt", "a")]
+    with caplog.at_level("WARNING", logger="agent_core.judge_calibration"):
+        self_preference_breakdown("gpt", outcomes, strict)
+    assert any("insufficient pairs" in r.message for r in caplog.records)
 
 
 def test_self_preference_favours_own_family():

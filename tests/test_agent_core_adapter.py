@@ -438,6 +438,62 @@ class TestRequireReportToGate:
         report = _calibration_report(artifact_id="run-123")
         require_report_to_gate(report, "run-123")  # must not raise
 
+    def test_the_raised_message_lists_every_failing_check_with_degenerate_reasons_where_present(
+        self,
+    ) -> None:
+        """Every existing test triggers exactly one failing check; a report with
+        several simultaneous failures -- some undersized, some genuinely biased --
+        was untested. Each name should carry its own reason only when it has one."""
+        from agent_core import OrderProbeResult, SelfPreferenceResult, VerbosityProbeResult
+
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        undersized_order = OrderProbeResult(
+            n=1,
+            flips=0,
+            flip_rate=0.0,
+            ci_low=0.0,
+            ci_high=1.0,
+            passes=False,
+            degenerate="insufficient pairs: n=1 < min_pairs=30",
+        )
+        biased_verbosity = VerbosityProbeResult(
+            n=10,
+            ties=0,
+            concise_wins=1,
+            expanded_wins=9,
+            expanded_win_rate=0.9,
+            preference_delta=0.4,
+            ci_low=0.6,
+            ci_high=0.98,
+            passes=False,
+        )
+        biased_self_preference = SelfPreferenceResult(
+            judge_family="gpt",
+            same_family_n=10,
+            same_family_win_rate=0.9,
+            same_family_ci_low=0.6,
+            same_family_ci_high=0.98,
+            other_family_n=10,
+            other_family_win_rate=0.1,
+            other_family_ci_low=0.02,
+            other_family_ci_high=0.4,
+            delta=0.8,
+            passes=False,
+        )
+        report = _calibration_report(
+            artifact_id="run-123",
+            order_flip=undersized_order,
+            verbosity=biased_verbosity,
+            self_preference=biased_self_preference,
+        )
+        with pytest.raises(ValueError) as exc_info:
+            require_report_to_gate(report, "run-123")
+        message = str(exc_info.value)
+        assert "order_flip (insufficient pairs: n=1 < min_pairs=30)" in message
+        assert "verbosity" in message and "verbosity (" not in message
+        assert "self_preference" in message and "self_preference (" not in message
+
     def test_the_raised_message_names_an_undersized_probes_degenerate_reason(self) -> None:
         """A probe failing because it's undersized (not because it's biased) must
         say so in the raised message -- a caller shouldn't have to re-fetch the

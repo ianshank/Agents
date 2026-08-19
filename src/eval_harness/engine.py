@@ -18,7 +18,7 @@ from importlib import import_module
 from typing import Any, cast
 
 from .config.models import EvalConfig
-from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
+from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner, _uses_judge
 from .core.types import (
     EvalItem,
     ItemResult,
@@ -36,12 +36,6 @@ logger = logging.getLogger(__name__)
 def _utcnow() -> datetime:
     """Return the current time in UTC."""
     return datetime.now(UTC)
-
-
-def _uses_judge(scorer: Scorer) -> bool:
-    """Whether *scorer* is judge-backed; tolerates one predating ``Scorer.uses_judge``."""
-    method = getattr(scorer, "uses_judge", None)
-    return bool(method()) if callable(method) else False
 
 
 def _make_item_rng(base_seed: int, item_index: int) -> random.Random:
@@ -184,6 +178,11 @@ class EvalEngine:
         for scorer in self.scorers:
             # F-057: skip a judge once a programmatic scorer has failed (routing, not an outcome).
             if _uses_judge(scorer) and programmatic_failed:
+                logger.debug(
+                    "item=%r: skipping judge scorer %r, a programmatic scorer already failed",
+                    item.id,
+                    getattr(scorer, "name", "scorer"),
+                )
                 continue
             try:
                 scores.append(result := scorer.score(item, output, ctx))

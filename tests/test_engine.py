@@ -44,9 +44,10 @@ def _engine(cfg=None, client=None):
     return config, engine
 
 
-def test_engine_end_to_end_aggregate():
+def test_engine_end_to_end_aggregate(caplog):
     _, engine = _engine()
-    run = engine.run()
+    with caplog.at_level("DEBUG", logger="eval_harness.engine"):
+        run = engine.run()
     assert run.run_id == "fixed-1"
     assert len(run.items) == 2
     # exact_match: both outputs equal expected -> mean 1.0
@@ -59,6 +60,8 @@ def test_engine_end_to_end_aggregate():
     # item actually judged, not diluted by a synthetic value for the skipped one.
     assert abs(run.aggregate["quality"].mean - 0.8) < 1e-9
     assert run.aggregate["quality"].count == 1
+    # The skip is diagnosable, not silent: a debug log names the item and scorer.
+    assert any("skipping judge scorer" in r.message and "quality" in r.message for r in caplog.records)
 
 
 def test_a_judge_scorer_error_does_not_skip_a_later_judge_scorer():

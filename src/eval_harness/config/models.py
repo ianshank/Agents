@@ -197,6 +197,20 @@ class GateRule(BaseModel):
             raise ValueError("metric must be 'mean', 'pass_rate', 'pass_at_k' or 'pass_power_k'")
         return v
 
+    @model_validator(mode="after")
+    def _require_at_least_one_bound(self) -> GateRule:
+        # Neither bound set means the rule can never fail evaluate_gate() -- a silent no-op.
+        if self.min is None and self.max is None:
+            raise ValueError(f"gate rule for {self.score!r} must set min, max, or both")
+        return self
+
+    @model_validator(mode="after")
+    def _check_bounds_are_satisfiable(self) -> GateRule:
+        # min > max means no observed value could ever satisfy both -- an unsatisfiable rule.
+        if self.min is not None and self.max is not None and self.min > self.max:
+            raise ValueError(f"gate rule for {self.score!r}: min ({self.min}) must not exceed max ({self.max})")
+        return self
+
 
 class GateConfig(BaseModel):
     rules: list[GateRule] = Field(default_factory=list)

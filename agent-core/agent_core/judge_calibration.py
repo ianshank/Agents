@@ -23,6 +23,9 @@ from dataclasses import dataclass
 
 from .calibration import wilson_interval
 from .config import ProbeConfig
+from .logging_util import get_logger
+
+logger = get_logger(__name__)
 
 #: A judge's verdict for one judged pair: which side won, or a tie.
 Verdict = str  # "a" | "b" | "tie" — not a Literal so callers aren't forced to import one
@@ -76,6 +79,8 @@ def order_flip_rate(
     ci_low, ci_high = wilson_interval(flips, n, cfg.wilson_z)
     undersized = n < cfg.min_pairs
     degenerate = f"insufficient pairs: n={n} < min_pairs={cfg.min_pairs}" if undersized else None
+    if degenerate is not None:
+        logger.warning("order_flip_rate: %s; this probe fails on that basis alone", degenerate)
     return OrderProbeResult(
         n=n,
         flips=flips,
@@ -135,6 +140,10 @@ def verbosity_preference_delta(verdicts: Sequence[str], cfg: ProbeConfig) -> Ver
     ci_low, ci_high = wilson_interval(expanded_wins, n, cfg.wilson_z)
     undersized = n < cfg.min_pairs
     degenerate = f"insufficient pairs: n={n} < min_pairs={cfg.min_pairs}" if undersized else None
+    if degenerate is not None:
+        logger.warning(
+            "verbosity_preference_delta: %s; this probe fails on that basis alone", degenerate
+        )
     return VerbosityProbeResult(
         n=n,
         ties=ties,
@@ -225,6 +234,10 @@ def self_preference_breakdown(
     degenerate = (
         f"insufficient pairs: n={same_total} < min_pairs={cfg.min_pairs}" if undersized else None
     )
+    if degenerate is not None:
+        logger.warning(
+            "self_preference_breakdown: %s; this probe fails on that basis alone", degenerate
+        )
     return SelfPreferenceResult(
         judge_family=judge_family,
         same_family_n=same_total,
