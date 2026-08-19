@@ -49,3 +49,48 @@ judge that has stopped discriminating, the same way F-013's discrimination canar
 - **The corpus is the bottleneck.** Order-swapped pairwise calibration needs roughly twice the judge
   calls per item, and the human labels behind it remain the scarce resource — the same constraint
   `audit_capacity_per_cycle` encodes for the merge gate.
+
+## Follow-up review -- 2026-08-19
+
+Two dispatched multi-lens reviews, each genuine `general-purpose` subagents independently reading
+the live diff and running real commands rather than trusting a summary — not the single-pass method
+above.
+
+**First pass (Product/SWE/SQE/Architect)** — against the `min_pairs` correction (`tasks.md` Group 1).
+Product and Architect independently found the same gap by reading `require_report_to_gate` directly:
+`report.failing_checks` is a bare name tuple, and the raised message joined only those names, never a
+probe's `degenerate` reason — a real bias failure and a merely-undersized run looked identical at the
+one place a human or CI log would see them. Fixed with a small `_describe_failing_check` helper
+(`agent_core_adapter/__init__.py`), without touching `failing_checks`' own contract. SQE adversarially
+confirmed the shipped `min_pairs` logic correct on every case probed and closed three coverage gaps
+(exact `n == min_pairs` boundary, undersized-and-tolerance-failing together, informative-pair-count vs.
+raw input length). Full detail: `tasks.md` Groups 1 and 4.
+
+**Second pass (SR Developer/QA/Architect/Automation)** — against the whole branch (this change plus
+`add-repeat-reliability-metrics`, PR #160 in full):
+
+- **SR Developer** — a verbatim-duplicated `_uses_judge` helper across `engine.py` and
+  `gating/__init__.py` (full function, not a trivial 2-3 line block), hoisted to
+  `core/interfaces.py`. Two logging gaps: an undersized probe's `degenerate` reason and a skipped
+  judge scorer were both silent, where this codebase's own precedents (`calibration.py`'s
+  `evaluate_calibration`, `engine.py`'s existing `item_logger`) already log the equivalent case —
+  both now log. Hardcoded values, reusability and backwards compatibility all confirmed clean.
+- **QA** — full suite green across every touched package. Found a genuine cross-feature interaction
+  gap this proposal's own tests couldn't catch alone: a judge-backed scorer conditionally skipped on
+  some of an item's repeated attempts (this change's own engine.py logic) makes
+  `ItemReliability.attempts` (`add-repeat-reliability-metrics`'s own field) undercount the item's true
+  repetition count. Fixed by adding `item_attempts` alongside it (`reliability.py`) — additive, no
+  change to `attempts`' existing tested semantics.
+- **Architect** — everything genuinely wired (CI, `architecture.yaml`, baselines) except one
+  ledger-drift bullet: `NEXT_STEPS.md` still marked this change `[ ]` open after it had shipped —
+  corrected.
+- **Automation** — recommended (not yet built) an `openspec-landing-checklist` skill and a local
+  `PostToolUse` size-budget hook; declined packaging the N-lens review pattern itself as a skill —
+  ad hoc judgment fits this repo's existing fixed-charter conventions better than a variable lens set
+  would.
+
+Independently found during this pass: `GateRule` (`config/models.py`) allowed a rule with neither
+`min` nor `max` set (a silent no-op in `evaluate_gate()`) and a rule with `min > max`
+(mathematically unsatisfiable) — neither validated, unlike this same file's `ComparisonConfig`/
+`ABCampaignConfig` cross-field checks. Closed with two `@model_validator` methods, mirroring that
+established pattern.

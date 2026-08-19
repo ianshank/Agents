@@ -100,6 +100,12 @@ agent_core/
   logging_util.py  config-driven logging + debug_span
   sanitize.py      RuleSanitizer, Sanitizer protocol, build_sanitized_claims
   golden.py        GoldenSet, split (hash-bucket), cohen_kappa, evaluate_on_split
+  pairwise.py      PairwiseItem/PairwiseSet: order-swapped pairwise corpus for judge bias
+                   probes (JSONL round-trip, canary kinds)
+  judge_calibration.py  order_flip_rate, verbosity_preference_delta, self_preference_breakdown:
+                   pure judge-bias probes (Wilson CIs), each gated by ProbeConfig.min_pairs
+  judge_calibration_report.py  build_judge_calibration_report: composes agreement/kappa with
+                   all three bias probes into JudgeCalibrationReport (REPORT_SCHEMA_VERSION)
   recalibration.py TemperatureScaler, CalibratorRegistry, make_calibrator
   async_loop.py    AsyncLoopController, ParallelClaimRunner (semaphore-capped)
   persistence.py   save_run, load_run, calibrator round-trip serialization
@@ -119,7 +125,7 @@ agent_core/
   merge_gate_ci.py CI entrypoint (exit 0/10/20; 2 = usage/bad input, 1 = internal), audit-logged
   detectors.py     GitRevertDetector, GitHubChecksFailureAttributor, resolve_repo (fail-safe)
   timeutil.py      parse_iso8601 (Z-tolerant, UTC-default)
-tests/             708 tests across all modules
+tests/             872 tests across all modules
 ```
 
 ## Reports & CLIs (read-only)

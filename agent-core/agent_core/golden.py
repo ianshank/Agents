@@ -141,6 +141,18 @@ def split(gs: GoldenSet, config: GoldenConfig, seed: int | None = None) -> Golde
     )
 
 
+def percent_agreement(r1: Sequence[int], r2: Sequence[int]) -> float:
+    """Raw observed agreement rate between two annotators — Cohen's kappa's ``po``,
+    exposed on its own since kappa alone (chance-adjusted) and raw agreement answer
+    different questions and a calibration report wants both."""
+    if len(r1) != len(r2):
+        raise ValueError("percent_agreement: sequences must have equal length")
+    n = len(r1)
+    if n == 0:
+        raise ValueError("percent_agreement: empty sequences")
+    return sum(a == b for a, b in zip(r1, r2, strict=False)) / n
+
+
 def cohen_kappa(r1: Sequence[int], r2: Sequence[int]) -> float:
     """Cohen's kappa for label agreement between two annotators."""
     if len(r1) != len(r2):

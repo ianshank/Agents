@@ -29,21 +29,33 @@
   (`frozen=True` blocks rebinding, not `record.arguments["k"] = v`), an O(n²) recovery scorer
   on exactly the looping agent it exists to catch (5,000 errors: quadratic → 1.6 ms), and two
   paths where unscoreable input reported `passed=False` because the engine converts a scorer
-  exception into a failing verdict. **Still open:** the four remaining OpenSpec changes below.
+  exception into a failing verdict. **Still open:** the three remaining OpenSpec changes below
+  (repeated-run reliability, the fourth, has since shipped — see below).
 
-- [ ] **Repeated-run reliability (`openspec/changes/add-repeat-reliability-metrics/`)** — next
-  in the delivery order. The proposal's original "fold the attempt index into the seed" trap was
-  **retracted** on 2026-08-06 after verification: `target.run(item)` never receives the RNG
-  (it goes to scorers via `RunContext`), so re-seeding cannot change a target's output, and with
-  `ModelTarget`'s default `temperature=0.0` a `pass^k` of 1.0 is *correct* rather than fabricated.
-  The real requirements are k genuinely independent `target.run` calls, **no** harness-injected
-  variance (that would measure the harness, not the agent), and a diagnostic whenever a
-  deterministic configuration makes `pass^k` structurally uninformative.
+- [x] **Repeated-run reliability (`openspec/changes/add-repeat-reliability-metrics/`)** —
+  **implemented, claiming F-056.** `run.repetitions` executes k independent `target.run(item)`
+  attempts per item with the scorer RNG reset every attempt (never re-seeding what the target
+  itself receives — the original "fold the attempt index into the seed" trap was retracted on
+  2026-08-06 after verification, since `target.run(item)` never receives the RNG at all); a
+  `deterministic_sampling` diagnostic fires when a deterministic configuration makes `pass^k`
+  structurally uninformative; a new pure `ReliabilityAggregator`
+  (`src/eval_harness/reliability.py`) computes `pass@k`/`pass^k` per item, never pooled across
+  items; `GateRule.metric` gates on `pass_at_k`/`pass_power_k`. Landed as PR #159 (merged;
+  Groups 1-3) and PR #160 (draft, `eval-change-approved` label requested; Groups 4-7).
 - [ ] **Stateful outcome evaluation (`openspec/changes/add-stateful-outcome-evaluation/`)** —
-  depends on attempt isolation from the above.
-- [ ] **Judge bias calibration (`openspec/changes/extend-judge-calibration/`)** — the only one
-  of the four with no blocking dependency; probe math goes in `agent_core` so the
-  `eval_harness ⇎ flow_corpus` airgap holds.
+  its attempt-isolation dependency now ships (above); no longer blocked.
+- [x] **Judge bias calibration (`openspec/changes/extend-judge-calibration/`)** —
+  **implemented, claiming F-057.** Three probes in `agent_core/judge_calibration.py`
+  (`order_flip_rate`, `verbosity_preference_delta`, `self_preference_breakdown`), a
+  `PairwiseItem`/`PairwiseSet` corpus, and a `JudgeCalibrationReport` (`may_gate`,
+  `failing_checks`) composing them with agreement/κ and canary results; probe math stays in
+  `agent_core` so the `eval_harness ⇎ flow_corpus` airgap holds, with no new
+  `architecture.yaml` edge. `eval_harness.agent_core_adapter.require_report_to_gate` blocks
+  gating on a mismatched or non-authorising report, naming every failing check — including,
+  after a post-landing four-lens review, each undersized probe's `degenerate` reason
+  alongside the bare check name. `ProbeConfig.min_pairs` is enforced in all three probes (a
+  post-landing correction from an automated PR review). Landed as PR #160 (Groups 1-4 of 6;
+  draft, `eval-change-approved` label requested).
 - [ ] **Production eval flywheel (`openspec/changes/add-production-eval-flywheel/`)** —
   **blocked** pending a CHARTER §3 Ratified Amendment: a production ingestion pipeline is a
   scope expansion, not merely a change.
@@ -444,6 +456,30 @@
   `spec.md`/`SKILL.md` and one prior review attack-refutation that over-claimed — full detail
   in the review.md's dated follow-up section; none change the coverage gate's actual
   correctness today.
+- [ ] **Judge-calibration degenerate-message helper (F-057 four-lens review follow-up)** —
+  `agent_core/calibration.py`, `agent_core/proxy_analysis.py` and `agent_core/
+  judge_calibration.py` each independently implement the same "count < floor → formatted
+  degenerate string" shape, and the first two have already drifted in message format
+  (`"min_samples=Y"` vs. no `min_pairs=` label at all). A dispatched Architect-lens review of
+  the F-057 `min_pairs` fix flagged this as the 4th instance of the pattern and recommended a
+  small shared `undersized_reason(n, floor, unit) -> str | None` helper to stop further
+  format drift, explicitly as a separate, non-blocking follow-up rather than folded into the
+  fix it was found alongside. Low priority: each site is independently tested and any further
+  drift is CI-catchable; worth doing opportunistically, not on its own schedule.
+- [ ] **`openspec-landing-checklist` skill (branch-review follow-up)** — a dispatched Automation
+  lens reviewing `add-repeat-reliability-metrics` (F-056) and `extend-judge-calibration` (F-057)
+  found their landing steps executed manually, twice, with the identical shape both times: claim
+  the next free F-ID, add `features.yaml` verification bullets, add a `tasks.md` evidence
+  addendum, regenerate every touched package's `public_surface_baseline.json`, confirm
+  `architecture.yaml`'s diff is either zero or an explicitly reviewed new edge, append a
+  `CHANGELOG.md` entry. No script does this today (`find scripts -iname "*openspec*"` is empty;
+  `openspec-quality-plan` only builds the pre-implementation package). Fits this repo's own
+  "deterministic generator skill" category (ADR 0020) exactly — the same shape as
+  `project-setup`/`quality-gate`/`deploy`. Deliberately not built in the same pass as this
+  bullet: a real skill needs its own `SKILL.md` frontmatter, `skills/marketplace.yaml`
+  registration, `tests/` with a coverage gate, and CI wiring — a larger, separately-scoped unit
+  of work, not a drive-by addition. (Declined for now, not omitted — same posture as this
+  session's original "no new skills this round" call, Decision Point 1.)
 - [ ] **Merge-gate tech debt (`docs/gap-analysis-merge-gate-2026-07-24.md`)** — the three
   HIGH findings (G1 `GatePolicyConfig` unreachable/unvalidated, G2 the duplicated binning
   implementations, G3 `_upper_half_ci_width` returning `0.0` for "no data") are **closed by

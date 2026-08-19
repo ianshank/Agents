@@ -31,6 +31,7 @@ The statistics are **reused** from the monorepo's proven primitives, never re-de
 | Bootstrap CI on the v1→v2 delta | `bootstrap_delta_ci` | `flow_corpus.validation.resampling` |
 | Oracle κ-validation + power gate | `validate_oracle` (over `cohen_kappa` + `is_directional_only`) | `flow_corpus.oracles.kappa_gate` |
 | Ship/hold/escalate layering | pattern of `agent_core.merge_gate.decide` | `agent_core.merge_gate` |
+| Judge bias calibration report | `build_judge_calibration_report` (composes this module's own `validate_judge` plus `agent_core.golden.percent_agreement` over the same codeterminate pairs with 3 pre-computed bias probes) | `agent_core.judge_calibration_report`, `agent_core.judge_calibration` |
 
 Dependency direction is acyclic: `behavioral_regression → flow_corpus → {flow_protocol, agent_core}`.
 This package never imports `eval_harness` (the airgap); the optional **live** `AnthropicJudge`

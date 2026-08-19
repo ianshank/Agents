@@ -154,6 +154,9 @@ class CompositeScorer(Scorer):
         if sum(w for _, w, _ in self._children) <= 0:
             raise ValueError("CompositeScorer total weight must be > 0")
 
+    def uses_judge(self) -> bool:
+        return any(child.uses_judge() for _, _, child in self._children)
+
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
         breakdown: list[dict[str, Any]] = []
         weighted_sum = 0.0
@@ -204,6 +207,9 @@ class LLMJudgeScorer(Scorer):
         super().__init__(name)
         self.prompt_template = prompt_template or self.DEFAULT_TEMPLATE
         self.threshold = float(threshold)
+
+    def uses_judge(self) -> bool:
+        return True
 
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
         if ctx.judge is None:

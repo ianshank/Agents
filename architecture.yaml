@@ -29,6 +29,12 @@ components:
   targets: [eval_harness.targets]
   sinks: [eval_harness.sinks]
   gating: [eval_harness.gating]
+  # Pure reliability-metrics aggregation (pass@k / pass^k over repeated attempts,
+  # F-056). No I/O, clock or RNG; depends on core only. gating imports it on
+  # demand, lazily, when a gate rule asks for pass_at_k/pass_power_k — engine
+  # does NOT depend on it: its own deterministic_sampling diagnostic is a
+  # deliberately local, minimal check that ships before this module exists.
+  reliability: [eval_harness.reliability]
   config: [eval_harness.config]
   langfuse_client: [eval_harness.langfuse_client]
   # Phoenix seam — mirrors langfuse_client. Real arize-phoenix-* packages are imported
@@ -65,9 +71,10 @@ dependencies:
   cli: [config, engine, gating, langfuse_client, phoenix_client, plugins]
   datasets: [braintrust_client, core, langfuse_client, plugins]
   engine: [agent_core_adapter, config, core, langfuse_client, plugins]
-  gating: [config, core]
+  gating: [config, core, reliability]
   judges: [core, langfuse_client, plugins]
   plugins: [core, datasets, judges, scorers, sinks, targets]
+  reliability: [core]
   scorers: [core, plugins]
   sinks: [braintrust_client, core, langfuse_client, phoenix_client, plugins]
   targets: [core, plugins]

@@ -99,3 +99,21 @@ def test_load_config_from_file(tmp_path):
     )
     cfg = load_config(p)
     assert cfg.dataset.type == "inline"
+
+
+def test_judge_calibration_absent_by_default():
+    cfg = load_config_dict(dict(BASE))
+    assert cfg.judge_calibration is None
+
+
+def test_judge_calibration_requires_a_non_empty_artifact_id():
+    with pytest.raises(ValueError):
+        load_config_dict(dict(BASE, judge_calibration={}))
+    with pytest.raises(ValueError):
+        load_config_dict(dict(BASE, judge_calibration={"calibration_artifact_id": ""}))
+
+
+def test_judge_calibration_accepts_a_named_artifact_id():
+    cfg = load_config_dict(dict(BASE, judge_calibration={"calibration_artifact_id": "run-42"}))
+    assert cfg.judge_calibration is not None
+    assert cfg.judge_calibration.calibration_artifact_id == "run-42"

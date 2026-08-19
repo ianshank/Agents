@@ -99,6 +99,7 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 - **`from_dict` is strict.** Unknown keys raise `ConfigError`. Do not add permissive fallbacks.
 - **`ClaimId` is opaque `str`.** Never sanitize `CycleState.unresolved`.
 - **Ruff and mypy are pinned** in the `dev` extra (`ruff==0.15.20`, `mypy==2.1.0`), single-sourced in `scripts/tool_versions.py` and lockstep-checked by `scripts/validations/F_055.py`. Do not bump them casually — CI/local skew broke `ruff format --check` before.
+- **Invoke mypy as `python3 -m mypy`, never a bare `mypy` on `PATH`.** A stray non-project mypy install (e.g. from `uv tool install`) can shadow the project's pinned one and run with none of this repo's dependencies on its own path, producing spurious `import-untyped`/missing-stub errors (`yaml`, etc.) that look like real code defects but vanish under the correct interpreter. `quality-gate.sh`/every `Makefile` already do this correctly; this is only a trap for a manually-typed shell command.
 - **Never word-split an externally-supplied value into a command.** Routing a workflow input through `env` stops *template* injection, but an unquoted `$VAR` in the `run:` block still splits on whitespace — and an appended duplicate flag wins, because argparse is last-wins. Build optional flags as a bash **array** and expand `"${ARR[@]}"`; an empty array vanishes, which is the only reason the unquoted form was ever tempting. This was a real vulnerability in `merge-gate-verdict.yml` (see the CHANGELOG "Security" entry); `F_047.py` now fails if the array expansion is replaced.
 - **A probability is validated through `agent_core.audit_sampler.is_valid_propensity` and rendered through `format_propensity`, never a restated comparison or a local format spec.** `float()` parses `"nan"` and `"inf"` happily, so parsing is not validation, and the naive `0.0 < p <= 1.0` form is correct only by the accident of NaN comparing false. **Rendering is serialisation, not decoration:** the output is pasted into a `gh workflow run` command, so it must parse back to the *same usable value* — fixed-point `.6f` collapsed `1e-7` to `"0.000000"`, which the contract then rejects. Use significant figures and property-test the round trip over the whole domain; hand-picked examples will miss it. Defining a shared helper is not the same as using it — `F_047` fails on a local `.6f` because two sites, including the `selected.txt` writer, had bypassed the helper.
 - **Backwards-compat shims are documented.** `ece`/`expected_calibration_error` alias in `agent-core/agent_core/__init__.py` is deliberate. Do not remove without a separate deprecation ADR. The same applies to the re-exports left by the 500-line file split (ADR 0026): PPI moved to `agent_core/ppi.py` and the calibration report to `report_types.py` + `calibration_report_render.py`, but every previously importable name still resolves from its original module — `calibration_report.__all__` pins that promise and the public-surface guard freezes it.
@@ -168,6 +169,15 @@ The offline suite must pass on Windows as well as Linux CI. Known traps (all wer
 ## Logging
 
 Standard library `logging` module. Modules obtain a logger via `logger = logging.getLogger(__name__)`. Do not call `logging.basicConfig` inside library code — it belongs in `scripts/_cli.configure_logging()` or a CLI entry point. When you add debug output to a new integration, prefer `logger.debug` for verbose per-call detail and `logger.info` for once-per-run summaries; test with `pytest -o log_cli=true --log-cli-level=DEBUG`.
+
+## Claude Code hooks (`.claude/`)
+
+- `SessionStart` → `.claude/hooks/session-start.sh` — installs every sibling package + extras
+  (hypothesis, pydantic, etc.) so a fresh session's toolchain matches CI before any work starts;
+  idempotent, never fails the session.
+- `PostToolUse` (Edit|Write) → `.claude/hooks/post-edit-size-budget.py` — fail-open, advisory
+  re-check of the ADR 0019 500-line file budget on just the edited `.py` file, so a crossing is
+  caught at the edit rather than only at `make check-all`/CI time. Never blocks.
 
 ## Where to put a design decision
 

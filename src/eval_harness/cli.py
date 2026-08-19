@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 from .config import load_config
 from .engine import EvalEngine
-from .gating import evaluate_gate
+from .gating import evaluate_gate, require_calibration_for_judge_gating
 from .langfuse_client import LangfuseClient, NullLangfuseClient
 from .phoenix_client import configure_tracing
 from .plugins import bootstrap
@@ -81,6 +81,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
         client = SDKLangfuseClient()
     engine = EvalEngine.from_config(config, langfuse_client=client)
+    require_calibration_for_judge_gating(config, engine.scorers)
     run = engine.run()
 
     if not any(s.type in ("console",) for s in config.sinks):

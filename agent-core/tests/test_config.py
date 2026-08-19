@@ -8,6 +8,7 @@ from agent_core import (
     ConfigError,
     FrameworkConfig,
     LoopConfig,
+    ProbeConfig,
 )
 
 
@@ -40,11 +41,23 @@ def test_round_trip_to_from_dict():
         lambda: CalibrationConfig(wilson_z=0),
         lambda: CalibrationConfig(min_eval_samples=0),
         lambda: CalibrationConfig(min_eval_samples=-1),
+        lambda: ProbeConfig(wilson_z=0),
+        lambda: ProbeConfig(order_flip_tolerance=-0.1),
+        lambda: ProbeConfig(order_flip_tolerance=1.1),
+        lambda: ProbeConfig(verbosity_delta_tolerance=-0.1),
+        lambda: ProbeConfig(self_preference_tolerance=1.1),
+        lambda: ProbeConfig(min_pairs=0),
     ],
 )
 def test_invalid_values_raise(factory):
     with pytest.raises(ConfigError):
         factory()
+
+
+def test_probe_config_round_trips_through_framework_config():
+    cfg = FrameworkConfig(probe=ProbeConfig(order_flip_tolerance=0.2))
+    restored = FrameworkConfig.from_dict(cfg.to_dict())
+    assert restored.probe == cfg.probe
 
 
 def test_calibration_guard_defaults_are_a_no_op():

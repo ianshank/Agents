@@ -62,7 +62,8 @@ C4Container
         Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust")
         Container(targets, "Targets", "Python", "echo, callable (dynamic import)")
         Container(sinks, "Sinks", "Python", "console, json_file, html_file, langfuse, phoenix, braintrust")
-        Container(gating, "Quality Gate", "Python", "Config-driven pass/fail for CI")
+        Container(gating, "Quality Gate", "Python", "Config-driven pass/fail for CI, including pass_at_k/pass_power_k reliability metrics (F-056) and judge-calibration-artifact enforcement (F-057)")
+        Container(reliability, "Reliability Metrics", "Python", "Pure pass@k/pass^k aggregation over repeated attempts (F-056, src/eval_harness/reliability.py) — no I/O, clock or RNG; gating consumes it lazily, on demand, only when a gate rule asks for it")
     }
 
     Container_Boundary(integration, "Integrations") {
@@ -73,7 +74,7 @@ C4Container
     }
 
     Container_Boundary(siblings, "Sibling Packages (offline, deterministic)") {
-        Container(agent_core_pkg, "agent_core", "Python", "Deterministic control & calibration core — calibration metrics, merge-gate subsystem, store sync (zero runtime deps)")
+        Container(agent_core_pkg, "agent_core", "Python", "Deterministic control & calibration core — calibration metrics, judge bias probes (order-flip, verbosity, self-preference; F-057), merge-gate subsystem, store sync (zero runtime deps)")
         Container(flow_corpus_pkg, "flow_corpus", "Python", "Flow-calibration corpus + oracles, airgapped from the harness behind flow-protocol")
         Container(behavioral_regression_pkg, "behavioral_regression", "Python", "Behavioural-regression detector + ship/hold/escalate gate (bregress CLI); offline + byte-reproducible from (BRConfig, seed)")
     }
@@ -94,6 +95,8 @@ C4Container
     Rel(engine, targets, "run()")
     Rel(engine, sinks, "emit()")
     Rel(engine, gating, "evaluate_gate()")
+    Rel(cli, gating, "require_calibration_for_judge_gating() — rejects a gate rule targeting a judge-backed scorer with no named calibration artifact")
+    Rel(gating, reliability, "aggregate() on demand, at most once per gate call, for pass_at_k/pass_power_k rules")
     Rel(engine, lf_client, "log_score(), link_dataset_item()")
     Rel(lf_client, langfuse, "HTTPS")
     Rel(sinks, px_client, "log_score() as OTel spans")

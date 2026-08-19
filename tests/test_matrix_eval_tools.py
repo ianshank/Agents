@@ -150,6 +150,9 @@ class TestM4Interface:
             def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
                 return ScoreResult(name=self.name, value=1.0)
 
+            def uses_judge(self) -> bool:
+                return False
+
         assert isinstance(DuckScorer(), Scorer)
 
     @pytest.mark.parametrize("name", DATASETS.names())
@@ -1214,6 +1217,26 @@ class TestGating:
         with pytest.raises(pydantic.ValidationError, match="metric"):
             GateConfig.model_validate({"rules": [{"score": "em", "metric": "median", "min": 0.5}]})
 
+    def test_m6_error_neither_bound_set_rejected_at_parse(self) -> None:
+        """A rule with neither min nor max is a silent no-op in evaluate_gate() --
+        reject it at parse time instead, mirroring the unknown-metric rejection above."""
+        import pydantic
+
+        from eval_harness.config.models import GateConfig
+
+        with pytest.raises(pydantic.ValidationError, match="min, max, or both"):
+            GateConfig.model_validate({"rules": [{"score": "em", "metric": "mean"}]})
+
+    def test_m6_error_min_exceeds_max_rejected_at_parse(self) -> None:
+        """min > max can never be satisfied by any observed value -- reject it at
+        parse time rather than let it silently fail every run."""
+        import pydantic
+
+        from eval_harness.config.models import GateConfig
+
+        with pytest.raises(pydantic.ValidationError, match="must not exceed max"):
+            GateConfig.model_validate({"rules": [{"score": "em", "metric": "mean", "min": 0.9, "max": 0.5}]})
+
     def test_m6_error_absent_score_fails_the_gate_with_a_reason(self) -> None:
         from eval_harness.config.models import GateConfig
         from eval_harness.gating import evaluate_gate
@@ -1222,6 +1245,185 @@ class TestGating:
         result = evaluate_gate(gate, _make_run_result())
         assert result.passed is False
         assert any("not present" in reason for reason in result.failures)
+
+
+class TestJudgeCalibrationGating:
+    """extend-judge-calibration Group 4: 'gating requires a named calibration
+    artifact' (spec.md) — checked against real, constructed ``Scorer`` instances'
+    resolved ``.name``/``.uses_judge()``, not guessed from raw config."""
+
+    MATRIX_KIND = "gating"
+
+    @staticmethod
+    def _config(**overrides):
+        from eval_harness.version import SCHEMA_VERSION
+
+        data = {
+            "schema_version": SCHEMA_VERSION,
+            "dataset": {"type": "inline", "params": {"items": []}},
+            "target": {"type": "echo", "params": {}},
+        }
+        data.update(overrides)
+        return EvalConfig.model_validate(data)
+
+    def test_raises_when_a_gate_rule_targets_a_judge_backed_scorer_without_an_artifact(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(
+            judge={"type": "mock", "params": {}},
+            gate={"rules": [{"score": "quality", "metric": "mean", "min": 0.5}]},
+        )
+        scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+        with pytest.raises(ValueError, match="judge_calibration"):
+            require_calibration_for_judge_gating(config, scorers)
+
+    def test_passes_when_a_calibration_artifact_is_named(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(
+            judge={"type": "mock", "params": {}},
+            judge_calibration={"calibration_artifact_id": "run-123"},
+            gate={"rules": [{"score": "quality", "metric": "mean", "min": 0.5}]},
+        )
+        scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+        require_calibration_for_judge_gating(config, scorers)  # must not raise
+
+    def test_no_artifact_needed_when_the_gate_does_not_target_the_judge_scorer(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(
+            judge={"type": "mock", "params": {}},
+            gate={"rules": [{"score": "acc", "metric": "mean", "min": 0.5}]},
+        )
+        scorers = [
+            SCORERS.create("exact_match", {"name": "acc"}),
+            SCORERS.create("llm_judge", {"name": "quality"}),
+        ]
+        require_calibration_for_judge_gating(config, scorers)  # judge isn't gated on -> fine
+
+    def test_no_artifact_needed_when_the_gate_has_no_rules(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(judge={"type": "mock", "params": {}}, gate={"rules": []})
+        scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+        require_calibration_for_judge_gating(config, scorers)  # nothing to gate -> fine
+
+    def test_no_artifact_needed_when_there_is_no_gate_at_all(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(judge={"type": "mock", "params": {}})
+        scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+        require_calibration_for_judge_gating(config, scorers)  # gate is None -> fine
+
+
+def _repeated_attempts_run(per_item_passed: dict[str, list[bool]]) -> RunResult:
+    """A multi-attempt RunResult shaped the way EvalEngine produces one at
+    repetitions>1: one ItemResult per (item, attempt), attempt_index set."""
+    from datetime import datetime
+
+    items = []
+    for item_id, verdicts in per_item_passed.items():
+        item = EvalItem(id=item_id, inputs={})
+        for idx, passed in enumerate(verdicts):
+            items.append(
+                ItemResult(
+                    item=item,
+                    output=TargetOutput(output="x"),
+                    scores=[ScoreResult(name="acc", value=1.0 if passed else 0.0, passed=passed)],
+                    attempt_index=idx,
+                    attempt_id=f"{item_id}:{idx}",
+                    item_run_id=f"run:{item_id}",
+                )
+            )
+    return RunResult(
+        run_id="reliability-gate-test",
+        config_name="test-config",
+        items=items,
+        aggregate={},
+        started_at=datetime(2026, 1, 1, 0, 0, 0),
+        finished_at=datetime(2026, 1, 1, 0, 0, 1),
+    )
+
+
+class TestReliabilityGating:
+    """`pass_at_k` / `pass_power_k` wired into `evaluate_gate` (F-056)."""
+
+    def test_pass_power_k_gate_passes_when_all_items_all_attempts_pass(self) -> None:
+        from eval_harness.config.models import GateConfig
+        from eval_harness.gating import evaluate_gate
+
+        run = _repeated_attempts_run({"i1": [True, True, True], "i2": [True, True, True]})
+        gate = GateConfig.model_validate({"rules": [{"score": "acc", "metric": "pass_power_k", "min": 1.0}]})
+        result = evaluate_gate(gate, run)
+        assert result.passed is True
+
+    def test_pass_power_k_gate_fails_when_one_item_is_unreliable(self) -> None:
+        """A failing reliability gate must exit non-zero — GateResult.passed is
+        what `cli.py`'s eval command maps directly to `sys.exit(1)`."""
+        from eval_harness.config.models import GateConfig
+        from eval_harness.gating import evaluate_gate
+
+        run = _repeated_attempts_run({"i1": [True, True, True], "i2": [True, False, True]})
+        gate = GateConfig.model_validate({"rules": [{"score": "acc", "metric": "pass_power_k", "min": 1.0}]})
+        result = evaluate_gate(gate, run)
+        assert result.passed is False
+        assert any("pass_power_k" in reason for reason in result.failures)
+
+    def test_pass_at_k_gate_is_lenient_to_a_single_success(self) -> None:
+        from eval_harness.config.models import GateConfig
+        from eval_harness.gating import evaluate_gate
+
+        run = _repeated_attempts_run({"i1": [False, False, True], "i2": [True, False, False]})
+        gate = GateConfig.model_validate({"rules": [{"score": "acc", "metric": "pass_at_k", "min": 1.0}]})
+        result = evaluate_gate(gate, run)
+        assert result.passed is True  # both items had at least one success
+
+    def test_reliability_rate_reflects_fraction_of_items_not_pooled_attempts(self) -> None:
+        """9 easy (all-pass) items + 1 unreliable item (1-of-3): the gate must
+        see a 90% pass_power_k rate, not a falsely-inflated pooled number."""
+        from eval_harness.config.models import GateConfig
+        from eval_harness.gating import evaluate_gate
+
+        per_item = {f"easy{i}": [True, True, True] for i in range(9)}
+        per_item["hard"] = [True, False, False]
+        run = _repeated_attempts_run(per_item)
+        gate = GateConfig.model_validate({"rules": [{"score": "acc", "metric": "pass_power_k", "min": 0.95}]})
+        result = evaluate_gate(gate, run)
+        assert result.passed is False
+        assert any("0.900" in reason for reason in result.failures)
+
+    def test_absent_score_fails_the_gate_with_a_reason(self) -> None:
+        from eval_harness.config.models import GateConfig
+        from eval_harness.gating import evaluate_gate
+
+        run = _repeated_attempts_run({"i1": [True, True]})
+        gate = GateConfig.model_validate({"rules": [{"score": "no_such_score", "metric": "pass_power_k", "min": 1.0}]})
+        result = evaluate_gate(gate, run)
+        assert result.passed is False
+        assert any("no_such_score" in reason for reason in result.failures)
+
+    def test_reliability_report_computed_at_most_once_per_gate_call(self) -> None:
+        """Two reliability rules in the same gate share one aggregation pass —
+        not recomputed per rule."""
+        from unittest.mock import patch
+
+        from eval_harness.config.models import GateConfig
+        from eval_harness.gating import evaluate_gate
+        from eval_harness.reliability import ReliabilityAggregator
+
+        run = _repeated_attempts_run({"i1": [True, True, True]})
+        gate = GateConfig.model_validate(
+            {
+                "rules": [
+                    {"score": "acc", "metric": "pass_at_k", "min": 1.0},
+                    {"score": "acc", "metric": "pass_power_k", "min": 1.0},
+                ]
+            }
+        )
+        with patch.object(ReliabilityAggregator, "aggregate", wraps=ReliabilityAggregator.aggregate) as spy:
+            result = evaluate_gate(gate, run)
+        assert result.passed is True
+        assert spy.call_count == 1
 
 
 # ============================================================================
@@ -1361,6 +1563,23 @@ PIPELINES: dict[str, dict] = {
         "judge": {"type": "mock"},
         "sinks": [{"type": "console"}],
     },
+    "repeated_attempts": {
+        "schema_version": "1.0",
+        "run": {"name": "repeated-attempts-test", "seed": 3, "repetitions": 5, "max_workers": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {"id": "reliable", "inputs": {"id": "reliable"}, "expected": "correct"},
+                    {"id": "flaky", "inputs": {"id": "flaky"}, "expected": "correct"},
+                ],
+            },
+        },
+        "target": {"type": "callable", "params": {"path": "tests._sut:reliability_demo"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "sinks": [],
+        "gate": {"rules": [{"score": "em", "metric": "pass_power_k", "min": 1.0}]},
+    },
 }
 
 
@@ -1432,6 +1651,32 @@ class TestM8Composability:
         _, result, _ = self._run("trajectory_mixed")
         assert result.aggregate["trajectory_in_order"].pass_rate == 1.0
         assert result.aggregate["mentions_widget"].pass_rate == 1.0
+
+    def test_m8_repeated_attempts_pipeline(self) -> None:
+        """repetitions=5 through a real engine pipeline (F-056): one-of-five
+        attempts passes pass@5 and fails pass^5; five-of-five passes both. This
+        exercises the attempt loop, ReliabilityAggregator and gating together,
+        not each in isolation — and a failing reliability gate fails the run's
+        own gate, the same way any other metric does."""
+        from eval_harness.reliability import ReliabilityAggregator
+        from tests._sut import reset_reliability_demo
+
+        reset_reliability_demo()
+        config, result, _ = self._run("repeated_attempts")
+
+        assert len(result.items) == 10  # 2 items x 5 attempts, every raw attempt persisted
+
+        report = ReliabilityAggregator.aggregate(result.items)
+        by_item = {e.item_id: e for e in report.per_item}
+        assert by_item["reliable"].pass_at_k is True
+        assert by_item["reliable"].pass_power_k is True
+        assert by_item["flaky"].success_count == 1
+        assert by_item["flaky"].pass_at_k is True
+        assert by_item["flaky"].pass_power_k is False
+
+        gate = evaluate_gate(config.gate, result)
+        assert gate.passed is False
+        assert any("pass_power_k" in f for f in gate.failures)
 
 
 # ============================================================================

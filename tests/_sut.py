@@ -44,3 +44,31 @@ def preset_latency_output(inputs: dict):
     from eval_harness.core.types import TargetOutput
 
     return TargetOutput(output="preset", latency_ms=123.5)
+
+
+#: Per-item call counts for `reliability_demo`, keyed by `inputs["id"]` — every
+#: attempt of an item gets byte-identical `inputs`, so simulating an agent that's
+#: reliable on one item and flaky on another needs state outside the function's
+#: arguments. `reset_reliability_demo` exists because this module is imported
+#: once per process: a test using this SUT must reset it first, nothing else does.
+_reliability_calls: dict[str, int] = {}
+
+
+def reliability_demo(inputs: dict) -> str:
+    """A controlled, reproducible "unreliable agent" for exercising repetitions
+    > 1 through a real engine pipeline (F-056's M8 coverage).
+
+    Item id ``"reliable"`` always returns ``"correct"``. Any other item id
+    returns ``"correct"`` on the first call it ever receives and ``"wrong"``
+    on every call after — a reproducible one-of-k flaky agent.
+    """
+    item_id = inputs.get("id", "")
+    if item_id == "reliable":
+        return "correct"
+    n = _reliability_calls.get(item_id, 0) + 1
+    _reliability_calls[item_id] = n
+    return "correct" if n == 1 else "wrong"
+
+
+def reset_reliability_demo() -> None:
+    _reliability_calls.clear()

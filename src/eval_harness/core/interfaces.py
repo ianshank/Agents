@@ -39,6 +39,31 @@ class Scorer(Protocol):
     @abstractmethod
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult: ...
 
+    def uses_judge(self) -> bool:
+        """Whether this scorer's verdict depends on a ``Judge`` call, directly or
+        (for a composite) through a child scorer.
+
+        A plain method, not a ``@property`` — see ``TargetRunner.is_deterministic``'s
+        docstring for why a ``runtime_checkable`` Protocol needs every member callable.
+        ``False`` by default and non-abstract, so every existing scorer — including
+        ones that predate this method — stays a valid ``Scorer`` unchanged. The engine
+        orders judge-backed scorers after every other scorer and skips them once a
+        programmatic scorer has already failed the item (F-057: a judge's verdict
+        cannot convert an already-failed item into a pass).
+        """
+        return False
+
+
+def _uses_judge(scorer: Scorer) -> bool:
+    """Whether *scorer* is judge-backed; tolerates one predating ``Scorer.uses_judge``.
+
+    Shared by ``engine.py`` (scorer ordering, the judge-skip guard) and ``gating``
+    (calibration-artifact enforcement) — both need the exact same duck-typed
+    fallback, so it lives once next to the ``uses_judge()`` method it wraps.
+    """
+    method = getattr(scorer, "uses_judge", None)
+    return bool(method()) if callable(method) else False
+
 
 @runtime_checkable
 class DatasetSource(Protocol):

@@ -359,3 +359,159 @@ class TestLoopControllerIntegration:
         # Directly usable as initial CycleState.unresolved
         state = agent_core.CycleState(unresolved=store.claim_ids)
         assert len(state.unresolved) == 5
+
+
+# ---------------------------------------------------------------------------
+# require_report_to_gate (extend-judge-calibration Group 4)
+# ---------------------------------------------------------------------------
+
+
+def _calibration_report(**overrides: Any):
+    from agent_core import (
+        JudgeCalibrationReport,
+        OrderProbeResult,
+        VerbosityProbeResult,
+    )
+
+    order_flip = overrides.pop(
+        "order_flip",
+        OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
+    )
+    verbosity = overrides.pop(
+        "verbosity",
+        VerbosityProbeResult(
+            n=10,
+            ties=0,
+            concise_wins=5,
+            expanded_wins=5,
+            expanded_win_rate=0.5,
+            preference_delta=0.0,
+            ci_low=0.2,
+            ci_high=0.8,
+            passes=True,
+        ),
+    )
+    defaults: dict[str, Any] = dict(
+        schema_version="1.0.0",
+        judge_id="j1",
+        artifact_id="run-123",
+        n_total=100,
+        n_codeterminate=90,
+        percent_agreement=0.9,
+        kappa=0.85,
+        directional_only=False,
+        agreement_may_gate=True,
+        order_flip=order_flip,
+        verbosity=verbosity,
+        self_preference=None,
+        canary_pass_rate=1.0,
+    )
+    defaults.update(overrides)
+    return JudgeCalibrationReport(**defaults)
+
+
+class TestRequireReportToGate:
+    """spec.md 'Uncalibrated judges cannot gate releases' — enforced against a real
+    ``agent_core.JudgeCalibrationReport``, not just the config-level artifact-ID
+    presence check in ``eval_harness.gating.require_calibration_for_judge_gating``."""
+
+    def test_raises_when_the_artifact_id_does_not_match(self) -> None:
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        report = _calibration_report(artifact_id="run-123")
+        with pytest.raises(ValueError, match="does not match"):
+            require_report_to_gate(report, "run-999")
+
+    def test_raises_when_the_report_does_not_authorise_gating(self) -> None:
+        from agent_core import OrderProbeResult
+
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        failing_order = OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False)
+        report = _calibration_report(artifact_id="run-123", order_flip=failing_order)
+        with pytest.raises(ValueError, match="order_flip"):
+            require_report_to_gate(report, "run-123")
+
+    def test_passes_when_the_report_authorises_gating_under_the_matching_id(self) -> None:
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        report = _calibration_report(artifact_id="run-123")
+        require_report_to_gate(report, "run-123")  # must not raise
+
+    def test_the_raised_message_lists_every_failing_check_with_degenerate_reasons_where_present(
+        self,
+    ) -> None:
+        """Every existing test triggers exactly one failing check; a report with
+        several simultaneous failures -- some undersized, some genuinely biased --
+        was untested. Each name should carry its own reason only when it has one."""
+        from agent_core import OrderProbeResult, SelfPreferenceResult, VerbosityProbeResult
+
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        undersized_order = OrderProbeResult(
+            n=1,
+            flips=0,
+            flip_rate=0.0,
+            ci_low=0.0,
+            ci_high=1.0,
+            passes=False,
+            degenerate="insufficient pairs: n=1 < min_pairs=30",
+        )
+        biased_verbosity = VerbosityProbeResult(
+            n=10,
+            ties=0,
+            concise_wins=1,
+            expanded_wins=9,
+            expanded_win_rate=0.9,
+            preference_delta=0.4,
+            ci_low=0.6,
+            ci_high=0.98,
+            passes=False,
+        )
+        biased_self_preference = SelfPreferenceResult(
+            judge_family="gpt",
+            same_family_n=10,
+            same_family_win_rate=0.9,
+            same_family_ci_low=0.6,
+            same_family_ci_high=0.98,
+            other_family_n=10,
+            other_family_win_rate=0.1,
+            other_family_ci_low=0.02,
+            other_family_ci_high=0.4,
+            delta=0.8,
+            passes=False,
+        )
+        report = _calibration_report(
+            artifact_id="run-123",
+            order_flip=undersized_order,
+            verbosity=biased_verbosity,
+            self_preference=biased_self_preference,
+        )
+        with pytest.raises(ValueError) as exc_info:
+            require_report_to_gate(report, "run-123")
+        message = str(exc_info.value)
+        assert "order_flip (insufficient pairs: n=1 < min_pairs=30)" in message
+        assert "verbosity" in message and "verbosity (" not in message
+        assert "self_preference" in message and "self_preference (" not in message
+
+    def test_the_raised_message_names_an_undersized_probes_degenerate_reason(self) -> None:
+        """A probe failing because it's undersized (not because it's biased) must
+        say so in the raised message -- a caller shouldn't have to re-fetch the
+        full report to tell the two apart (agent_core.judge_calibration's
+        ``degenerate`` field, threaded through by ``_describe_failing_check``)."""
+        from agent_core import OrderProbeResult
+
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        undersized_order = OrderProbeResult(
+            n=1,
+            flips=0,
+            flip_rate=0.0,
+            ci_low=0.0,
+            ci_high=1.0,
+            passes=False,
+            degenerate="insufficient pairs: n=1 < min_pairs=30",
+        )
+        report = _calibration_report(artifact_id="run-123", order_flip=undersized_order)
+        with pytest.raises(ValueError, match=r"order_flip \(insufficient pairs: n=1 < min_pairs=30\)"):
+            require_report_to_gate(report, "run-123")

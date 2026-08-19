@@ -18,6 +18,7 @@
       "ShipDecision",
       "SyntheticJudge",
       "__version__",
+      "build_judge_calibration_report",
       "decide_ship",
       "run_canary",
       "run_pipeline",

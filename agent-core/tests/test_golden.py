@@ -14,6 +14,7 @@ from agent_core.golden import (
     _bucket,
     cohen_kappa,
     evaluate_on_split,
+    percent_agreement,
     split,
 )
 
@@ -147,6 +148,25 @@ def test_cohen_kappa_length_mismatch_raises() -> None:
 def test_cohen_kappa_empty_raises() -> None:
     with pytest.raises(ValueError, match="empty"):
         cohen_kappa([], [])
+
+
+# ---- percent_agreement tests --------------------------------------------------
+def test_percent_agreement_hand_value() -> None:
+    assert percent_agreement([1, 1, 0, 0], [1, 1, 0, 1]) == 0.75
+
+
+def test_percent_agreement_perfect() -> None:
+    assert percent_agreement([1, 0, 1, 0], [1, 0, 1, 0]) == 1.0
+
+
+def test_percent_agreement_length_mismatch_raises() -> None:
+    with pytest.raises(ValueError, match="equal length"):
+        percent_agreement([1, 0], [1])
+
+
+def test_percent_agreement_empty_raises() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        percent_agreement([], [])
 
 
 # ---- evaluate_on_split tests -------------------------------------------------

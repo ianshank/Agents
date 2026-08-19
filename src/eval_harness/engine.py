@@ -18,7 +18,7 @@ from importlib import import_module
 from typing import Any, cast
 
 from .config.models import EvalConfig
-from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
+from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner, _uses_judge
 from .core.types import (
     EvalItem,
     ItemResult,
@@ -70,7 +70,8 @@ class EvalEngine:
         self.config = config
         self.dataset = dataset
         self.target = target
-        self.scorers = scorers
+        # F-057: judges sort after programmatic scorers; a judge never runs once one has failed.
+        self.scorers = sorted(scorers, key=_uses_judge)
         self.sinks = sinks
         self.judge = judge
         self.rng = rng or random.Random(config.run.seed)
@@ -173,9 +174,20 @@ class EvalEngine:
 
         output = self.target.run(item)
         scores: list[ScoreResult] = []
+        programmatic_failed = False
         for scorer in self.scorers:
+            # F-057: skip a judge once a programmatic scorer has failed (routing, not an outcome).
+            if _uses_judge(scorer) and programmatic_failed:
+                logger.debug(
+                    "item=%r: skipping judge scorer %r, a programmatic scorer already failed",
+                    item.id,
+                    getattr(scorer, "name", "scorer"),
+                )
+                continue
             try:
-                scores.append(scorer.score(item, output, ctx))
+                scores.append(result := scorer.score(item, output, ctx))
+                if not _uses_judge(scorer) and result.passed is False:
+                    programmatic_failed = True
             except Exception as exc:
                 scores.append(
                     ScoreResult(
@@ -187,6 +199,8 @@ class EvalEngine:
                 )
                 if self.config.run.fail_fast:
                     raise
+                if not _uses_judge(scorer):
+                    programmatic_failed = True
 
         # Link trace to dataset item if client is available
         client = getattr(self, "langfuse_client", None)

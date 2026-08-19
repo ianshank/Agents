@@ -36,6 +36,13 @@ judge:
     rules:
       - { contains: "cancel", score: 0.4 }
 
+# Required because 'gate' below has a rule targeting 'helpfulness' (the llm_judge
+# scorer's score): spec.md "Gating requires a named calibration artifact" — an
+# opaque provenance string naming the calibration run that authorised this judge
+# to gate, not a value this harness resolves itself (see JudgeCalibrationGateConfig).
+judge_calibration:
+  calibration_artifact_id: "example-offline-calibration-2026-08-18"
+
 sinks:
   - type: console
     params: { verbose: false }
