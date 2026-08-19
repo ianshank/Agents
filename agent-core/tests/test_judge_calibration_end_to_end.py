@@ -142,3 +142,32 @@ def test_an_underpowered_judge_also_cannot_gate() -> None:
     assert report.directional_only is True
     assert report.may_gate is False
     assert "agreement_or_power" in report.failing_checks
+
+
+def test_an_undersized_probe_also_cannot_gate() -> None:
+    """A probe that clears its tolerance on too few pairs must still block gating,
+    exactly like a tolerance failure -- failing_checks/may_gate need no probe-specific
+    branch to pick this up, since both read only .passes."""
+    strict = ProbeConfig(min_pairs=30)
+    undersized_order = order_flip_rate(["a"], ["b"], strict)  # n=1, 0 flips -> tolerance-passes
+    assert undersized_order.passes is False  # sanity: undersized, not a tolerance failure
+
+    canary = _canary()
+    report = build_judge_calibration_report(
+        "small-sample-judge",
+        "art-e2e-3",
+        n_total=100,
+        n_codeterminate=90,
+        percent_agreement=0.95,
+        kappa=0.9,
+        directional_only=False,
+        agreement_may_gate=True,
+        order_flip=undersized_order,
+        verbosity=_PASSING_VERBOSITY,
+        self_preference=None,
+        canaries=[canary],
+        canary_verdicts=["tie"],
+    )
+
+    assert report.may_gate is False
+    assert "order_flip" in report.failing_checks

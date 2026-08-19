@@ -48,6 +48,10 @@ class OrderProbeResult:
     ci_low: float
     ci_high: float
     passes: bool
+    # Why this probe's n could not evidence a verdict (n < cfg.min_pairs), or None
+    # when the sample clears the floor. Defaulted so existing keyword construction
+    # keeps working. Mirrors agent_core.calibration.CalibrationReport.degenerate.
+    degenerate: str | None = None
 
 
 def order_flip_rate(
@@ -70,13 +74,16 @@ def order_flip_rate(
     flips = sum(1 for ab, ba in zip(verdicts_ab, verdicts_ba, strict=True) if ab != _SWAP[ba])
     flip_rate = flips / n
     ci_low, ci_high = wilson_interval(flips, n, cfg.wilson_z)
+    undersized = n < cfg.min_pairs
+    degenerate = f"insufficient pairs: n={n} < min_pairs={cfg.min_pairs}" if undersized else None
     return OrderProbeResult(
         n=n,
         flips=flips,
         flip_rate=flip_rate,
         ci_low=ci_low,
         ci_high=ci_high,
-        passes=flip_rate <= cfg.order_flip_tolerance,
+        passes=(flip_rate <= cfg.order_flip_tolerance) and not undersized,
+        degenerate=degenerate,
     )
 
 
@@ -92,6 +99,7 @@ class VerbosityProbeResult:
     ci_low: float
     ci_high: float
     passes: bool
+    degenerate: str | None = None
 
 
 def verbosity_preference_delta(verdicts: Sequence[str], cfg: ProbeConfig) -> VerbosityProbeResult:
@@ -125,6 +133,8 @@ def verbosity_preference_delta(verdicts: Sequence[str], cfg: ProbeConfig) -> Ver
     expanded_win_rate = expanded_wins / n
     preference_delta = expanded_win_rate - 0.5
     ci_low, ci_high = wilson_interval(expanded_wins, n, cfg.wilson_z)
+    undersized = n < cfg.min_pairs
+    degenerate = f"insufficient pairs: n={n} < min_pairs={cfg.min_pairs}" if undersized else None
     return VerbosityProbeResult(
         n=n,
         ties=ties,
@@ -134,7 +144,8 @@ def verbosity_preference_delta(verdicts: Sequence[str], cfg: ProbeConfig) -> Ver
         preference_delta=preference_delta,
         ci_low=ci_low,
         ci_high=ci_high,
-        passes=abs(preference_delta) <= cfg.verbosity_delta_tolerance,
+        passes=(abs(preference_delta) <= cfg.verbosity_delta_tolerance) and not undersized,
+        degenerate=degenerate,
     )
 
 
@@ -165,6 +176,7 @@ class SelfPreferenceResult:
     other_family_ci_high: float
     delta: float  # same_family_win_rate - other_family_win_rate
     passes: bool
+    degenerate: str | None = None
 
 
 def self_preference_breakdown(
@@ -209,6 +221,10 @@ def self_preference_breakdown(
     same_ci_low, same_ci_high = wilson_interval(same_wins, same_total, cfg.wilson_z)
     other_ci_low, other_ci_high = wilson_interval(other_wins, other_total, cfg.wilson_z)
     delta = same_rate - other_rate
+    undersized = same_total < cfg.min_pairs
+    degenerate = (
+        f"insufficient pairs: n={same_total} < min_pairs={cfg.min_pairs}" if undersized else None
+    )
     return SelfPreferenceResult(
         judge_family=judge_family,
         same_family_n=same_total,
@@ -220,5 +236,6 @@ def self_preference_breakdown(
         other_family_ci_low=other_ci_low,
         other_family_ci_high=other_ci_high,
         delta=delta,
-        passes=delta <= cfg.self_preference_tolerance,
+        passes=(delta <= cfg.self_preference_tolerance) and not undersized,
+        degenerate=degenerate,
     )

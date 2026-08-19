@@ -437,3 +437,25 @@ class TestRequireReportToGate:
 
         report = _calibration_report(artifact_id="run-123")
         require_report_to_gate(report, "run-123")  # must not raise
+
+    def test_the_raised_message_names_an_undersized_probes_degenerate_reason(self) -> None:
+        """A probe failing because it's undersized (not because it's biased) must
+        say so in the raised message -- a caller shouldn't have to re-fetch the
+        full report to tell the two apart (agent_core.judge_calibration's
+        ``degenerate`` field, threaded through by ``_describe_failing_check``)."""
+        from agent_core import OrderProbeResult
+
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        undersized_order = OrderProbeResult(
+            n=1,
+            flips=0,
+            flip_rate=0.0,
+            ci_low=0.0,
+            ci_high=1.0,
+            passes=False,
+            degenerate="insufficient pairs: n=1 < min_pairs=30",
+        )
+        report = _calibration_report(artifact_id="run-123", order_flip=undersized_order)
+        with pytest.raises(ValueError, match=r"order_flip \(insufficient pairs: n=1 < min_pairs=30\)"):
+            require_report_to_gate(report, "run-123")

@@ -447,6 +447,16 @@
   `spec.md`/`SKILL.md` and one prior review attack-refutation that over-claimed — full detail
   in the review.md's dated follow-up section; none change the coverage gate's actual
   correctness today.
+- [ ] **Judge-calibration degenerate-message helper (F-057 four-lens review follow-up)** —
+  `agent_core/calibration.py`, `agent_core/proxy_analysis.py` and `agent_core/
+  judge_calibration.py` each independently implement the same "count < floor → formatted
+  degenerate string" shape, and the first two have already drifted in message format
+  (`"min_samples=Y"` vs. no `min_pairs=` label at all). A dispatched Architect-lens review of
+  the F-057 `min_pairs` fix flagged this as the 4th instance of the pattern and recommended a
+  small shared `undersized_reason(n, floor, unit) -> str | None` helper to stop further
+  format drift, explicitly as a separate, non-blocking follow-up rather than folded into the
+  fix it was found alongside. Low priority: each site is independently tested and any further
+  drift is CI-catchable; worth doing opportunistically, not on its own schedule.
 - [ ] **Merge-gate tech debt (`docs/gap-analysis-merge-gate-2026-07-24.md`)** — the three
   HIGH findings (G1 `GatePolicyConfig` unreachable/unvalidated, G2 the duplicated binning
   implementations, G3 `_upper_half_ci_width` returning `0.0` for "no data") are **closed by

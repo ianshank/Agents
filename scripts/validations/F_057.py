@@ -4,7 +4,10 @@
 Checks:
     1.  ``ProbeConfig`` validates its fields; ``order_flip_rate``,
         ``verbosity_preference_delta`` and ``self_preference_breakdown`` produce
-        correct counts/rates on hand-crafted examples, reusing ``wilson_interval``.
+        correct counts/rates on hand-crafted examples, reusing ``wilson_interval``,
+        and each fails (with a ``degenerate`` reason) once its informative-pair
+        count is below ``cfg.min_pairs``, even when the measured rate already
+        clears its own tolerance.
     2.  ``PairwiseItem`` cross-validates canary kind against ``expected``;
         ``PairwiseSet`` rejects duplicate IDs.
     3.  ``JudgeCalibrationReport.may_gate`` is false when any bias check fails
@@ -51,6 +54,36 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 for rel in ("agent-core", "flow-protocol", "flow-corpus", "behavioral-regression"):
     sys.path.insert(0, os.path.join(PROJECT_ROOT, rel))
+
+from agent_core import PairwiseItem
+from agent_core.judge_calibration import VerbosityProbeResult
+
+# Shared fixtures: every check below that needs a passing verbosity probe or a
+# canary item wants the same shape, varying at most a couple of fields.
+_PASSING_VERBOSITY = VerbosityProbeResult(
+    n=10,
+    ties=0,
+    concise_wins=5,
+    expanded_wins=5,
+    expanded_win_rate=0.5,
+    preference_delta=0.0,
+    ci_low=0.2,
+    ci_high=0.8,
+    passes=True,
+)
+
+
+def _canary(item_id: str, expected: str, canary_kind: str) -> PairwiseItem:
+    return PairwiseItem(
+        item_id=item_id,
+        prompt="p",
+        answer_a="a",
+        answer_b="b",
+        family_a="gpt",
+        family_b="claude",
+        expected=expected,
+        canary_kind=canary_kind,
+    )
 
 
 def _check_probe_math(errors: list[str]) -> None:
@@ -99,24 +132,49 @@ def _check_probe_math(errors: list[str]) -> None:
         errors,
     )
 
+    # min_pairs enforcement (Copilot review finding, PR #160): a probe that clears its
+    # tolerance on too few pairs must still fail once min_pairs exceeds the sample size.
+    strict_cfg = ProbeConfig(min_pairs=30)
+    tiny_order = order_flip_rate(["a", "b"], ["b", "a"], strict_cfg)  # n=2, 0 flips
+    _check(
+        tiny_order.passes is False and "insufficient pairs" in (tiny_order.degenerate or ""),
+        "order_flip_rate: min_pairs floor fails an undersized probe even when it clears tolerance",
+        errors,
+    )
+    tiny_verbosity = verbosity_preference_delta(["concise", "expanded"], strict_cfg)  # n=2
+    _check(
+        tiny_verbosity.passes is False and tiny_verbosity.degenerate is not None,
+        "verbosity_preference_delta: min_pairs floor fails an undersized probe",
+        errors,
+    )
+    tiny_self_pref = self_preference_breakdown(
+        "gpt",
+        [PairOutcome("gpt", "claude", "a"), PairOutcome("claude", "gpt", "a")],
+        strict_cfg,
+    )
+    _check(
+        tiny_self_pref.passes is False and tiny_self_pref.degenerate is not None,
+        "self_preference_breakdown: min_pairs floor fails an undersized probe",
+        errors,
+    )
+    # order.passes is already False under the default cfg (a real tolerance failure,
+    # unrelated to min_pairs -- flip_rate=0.5 exceeds order_flip_tolerance=0.15), so this
+    # only asserts the floor specifically, not the unrelated tolerance outcome.
+    _check(
+        order.degenerate is None,
+        "order_flip_rate: default ProbeConfig (min_pairs=1) never trips the floor",
+        errors,
+    )
+
 
 def _check_corpus_and_report(errors: list[str]) -> None:
-    from agent_core import PairwiseItem, PairwiseSet
+    from agent_core import PairwiseSet
     from agent_core import build_judge_calibration_report as agent_core_build_report
-    from agent_core.judge_calibration import OrderProbeResult, VerbosityProbeResult
+    from agent_core.judge_calibration import OrderProbeResult
     from agent_core.judge_calibration_report import JudgeCalibrationReport
 
     try:
-        PairwiseItem(
-            item_id="x",
-            prompt="p",
-            answer_a="a",
-            answer_b="b",
-            family_a="gpt",
-            family_b="claude",
-            expected="a",
-            canary_kind="known_equal",
-        )
+        _canary("x", expected="a", canary_kind="known_equal")  # inconsistent: known_equal implies 'tie'
         _check(False, "PairwiseItem rejects a known_equal canary with expected != 'tie'", errors)
     except Exception:
         _check(True, "PairwiseItem rejects a known_equal canary with expected != 'tie'", errors)
@@ -130,17 +188,6 @@ def _check_corpus_and_report(errors: list[str]) -> None:
 
     passing_order = OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True)
     failing_order = OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False)
-    passing_verbosity = VerbosityProbeResult(
-        n=10,
-        ties=0,
-        concise_wins=5,
-        expanded_wins=5,
-        expanded_win_rate=0.5,
-        preference_delta=0.0,
-        ci_low=0.2,
-        ci_high=0.8,
-        passes=True,
-    )
 
     def _mkreport(order_flip: OrderProbeResult, agreement_may_gate: bool) -> JudgeCalibrationReport:
         return JudgeCalibrationReport(
@@ -154,7 +201,7 @@ def _check_corpus_and_report(errors: list[str]) -> None:
             directional_only=False,
             agreement_may_gate=agreement_may_gate,
             order_flip=order_flip,
-            verbosity=passing_verbosity,
+            verbosity=_PASSING_VERBOSITY,
             self_preference=None,
             canary_pass_rate=1.0,
         )
@@ -176,26 +223,8 @@ def _check_corpus_and_report(errors: list[str]) -> None:
     )
 
     canaries = [
-        PairwiseItem(
-            item_id="c1",
-            prompt="p",
-            answer_a="a",
-            answer_b="b",
-            family_a="gpt",
-            family_b="claude",
-            expected="tie",
-            canary_kind="known_equal",
-        ),
-        PairwiseItem(
-            item_id="c2",
-            prompt="p",
-            answer_a="a",
-            answer_b="b",
-            family_a="gpt",
-            family_b="claude",
-            expected="a",
-            canary_kind="clearly_better",
-        ),
+        _canary("c1", expected="tie", canary_kind="known_equal"),
+        _canary("c2", expected="a", canary_kind="clearly_better"),
     ]
     built = agent_core_build_report(
         "j1",
@@ -207,7 +236,7 @@ def _check_corpus_and_report(errors: list[str]) -> None:
         directional_only=False,
         agreement_may_gate=True,
         order_flip=passing_order,
-        verbosity=passing_verbosity,
+        verbosity=_PASSING_VERBOSITY,
         self_preference=None,
         canaries=canaries,
         canary_verdicts=["tie", "b"],
@@ -224,7 +253,7 @@ def _check_corpus_and_report(errors: list[str]) -> None:
             directional_only=False,
             agreement_may_gate=True,
             order_flip=passing_order,
-            verbosity=passing_verbosity,
+            verbosity=_PASSING_VERBOSITY,
             self_preference=None,
             canaries=[],
             canary_verdicts=[],
@@ -361,69 +390,64 @@ def _check_gating_config(errors: list[str]) -> None:
     )
     _check(True, "require_calibration_for_judge_gating needs nothing when the gate doesn't target the judge", errors)
 
-    from agent_core.judge_calibration import OrderProbeResult, VerbosityProbeResult
+    from agent_core import ProbeConfig, order_flip_rate
+    from agent_core.judge_calibration import OrderProbeResult
     from agent_core.judge_calibration_report import JudgeCalibrationReport
 
-    passing_verbosity = VerbosityProbeResult(
-        n=10,
-        ties=0,
-        concise_wins=5,
-        expanded_wins=5,
-        expanded_win_rate=0.5,
-        preference_delta=0.0,
-        ci_low=0.2,
-        ci_high=0.8,
-        passes=True,
-    )
-    ok_report = JudgeCalibrationReport(
-        schema_version="1.0.0",
-        judge_id="j",
-        artifact_id="a",
-        n_total=100,
-        n_codeterminate=90,
-        percent_agreement=0.9,
-        kappa=0.85,
-        directional_only=False,
-        agreement_may_gate=True,
-        order_flip=OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
-        verbosity=passing_verbosity,
-        self_preference=None,
-        canary_pass_rate=1.0,
-    )
+    def _mkreport(order_flip: OrderProbeResult) -> JudgeCalibrationReport:
+        return JudgeCalibrationReport(
+            schema_version="1.0.0",
+            judge_id="j",
+            artifact_id="a",
+            n_total=100,
+            n_codeterminate=90,
+            percent_agreement=0.9,
+            kappa=0.85,
+            directional_only=False,
+            agreement_may_gate=True,
+            order_flip=order_flip,
+            verbosity=_PASSING_VERBOSITY,
+            self_preference=None,
+            canary_pass_rate=1.0,
+        )
+
+    ok_report = _mkreport(OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True))
     try:
         require_report_to_gate(ok_report, "wrong-id")
         _check(False, "require_report_to_gate rejects an artifact_id mismatch", errors)
     except ValueError:
         _check(True, "require_report_to_gate rejects an artifact_id mismatch", errors)
 
-    biased_report = JudgeCalibrationReport(
-        schema_version="1.0.0",
-        judge_id="j",
-        artifact_id="a",
-        n_total=100,
-        n_codeterminate=90,
-        percent_agreement=0.9,
-        kappa=0.85,
-        directional_only=False,
-        agreement_may_gate=True,
-        order_flip=OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False),
-        verbosity=passing_verbosity,
-        self_preference=None,
-        canary_pass_rate=1.0,
-    )
+    biased_report = _mkreport(OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False))
     try:
         require_report_to_gate(biased_report, "a")
         _check(False, "require_report_to_gate rejects a report that does not authorise gating", errors)
     except ValueError as exc:
         _check("order_flip" in str(exc), "require_report_to_gate names the failing check in the error", errors)
 
+    # min_pairs review follow-up (4-lens review of PR #160): the degenerate reason must
+    # reach the raised message itself, not just a bare check name -- Product and Architect
+    # independently found this gap by reading require_report_to_gate directly.
+    undersized_probe = order_flip_rate(["a"], ["b"], ProbeConfig(min_pairs=30))
+    undersized_report = _mkreport(undersized_probe)
+    try:
+        require_report_to_gate(undersized_report, "a")
+        _check(False, "require_report_to_gate rejects an undersized-probe report", errors)
+    except ValueError as exc:
+        _check(
+            undersized_probe.degenerate in str(exc),
+            "require_report_to_gate's error names an undersized probe's degenerate reason, "
+            "not just the bare check name",
+            errors,
+        )
+
     require_report_to_gate(ok_report, "a")
     _check(True, "require_report_to_gate allows a matching, authorising report", errors)
 
 
 def _check_behavioral_regression(errors: list[str]) -> None:
-    from agent_core import PairwiseItem, percent_agreement
-    from agent_core.judge_calibration import OrderProbeResult, VerbosityProbeResult
+    from agent_core import percent_agreement
+    from agent_core.judge_calibration import OrderProbeResult
     from behavioral_regression import BRConfig
     from behavioral_regression import build_judge_calibration_report as br_build_report
     from behavioral_regression.judge import JVerdict
@@ -431,16 +455,6 @@ def _check_behavioral_regression(errors: list[str]) -> None:
     br_cfg = BRConfig(power_min_sample=5, min_judge_kappa=0.6)
     labels = [True, False] * 20
     br_verdicts = [JVerdict(label=lbl, confidence=0.9) for lbl in labels]
-    br_canary = PairwiseItem(
-        item_id="c1",
-        prompt="p",
-        answer_a="a",
-        answer_b="b",
-        family_a="gpt",
-        family_b="claude",
-        expected="tie",
-        canary_kind="known_equal",
-    )
     br_report = br_build_report(
         "j1",
         "art-1",
@@ -448,19 +462,9 @@ def _check_behavioral_regression(errors: list[str]) -> None:
         labels,
         br_cfg,
         order_flip=OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
-        verbosity=VerbosityProbeResult(
-            n=10,
-            ties=0,
-            concise_wins=5,
-            expanded_wins=5,
-            expanded_win_rate=0.5,
-            preference_delta=0.0,
-            ci_low=0.2,
-            ci_high=0.8,
-            passes=True,
-        ),
+        verbosity=_PASSING_VERBOSITY,
         self_preference=None,
-        canaries=[br_canary],
+        canaries=[_canary("c1", expected="tie", canary_kind="known_equal")],
         canary_verdicts=["tie"],
     )
     _check(

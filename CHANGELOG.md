@@ -14,7 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (win-rate broken down by whether the winner shares the judge's model family). All three reuse the
   existing `wilson_interval` for their confidence intervals; a new `ProbeConfig` (frozen dataclass,
   registered in `FrameworkConfig` like every sibling `*Config`) carries every tolerance — no numeric
-  literals at call sites.
+  literals at call sites. `ProbeConfig.min_pairs` is enforced in all three: a probe whose
+  informative-pair count falls below it fails (with a `degenerate` reason naming the shortfall)
+  even when the measured rate already clears its own tolerance, mirroring
+  `agent_core.calibration.evaluate_calibration`'s own sample-size floor.
 - **Pairwise calibration corpus** — new `agent_core/pairwise.py`: `PairwiseItem` /
   `PairwiseSet` (not `GoldenItem`/`GoldenSet`, which are binary-label with no pair concept), with
   known-equal / clearly-better / clearly-worse canaries cross-validated against their own expected
@@ -39,7 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raw config) with no named artifact. `eval_harness.agent_core_adapter.require_report_to_gate`
   then enforces a real `JudgeCalibrationReport` against that name: the report's `artifact_id` must
   match, and it must actually authorise gating (`may_gate`), with every failing check named in the
-  error.
+  error — alongside its `degenerate` reason when the failure is an undersized probe rather than a
+  genuine bias, so the two don't look identical in the one message a human or CI log actually sees.
 - **`behavioral_regression` wiring** — new `build_judge_calibration_report`, exported alongside
   `validate_judge`, composing `validate_judge`'s own `KappaReport` (agreement, κ, power) and
   `agent_core.golden.percent_agreement` over the same codeterminate pairs with pre-computed bias

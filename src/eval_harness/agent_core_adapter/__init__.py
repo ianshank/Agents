@@ -385,6 +385,20 @@ def build_budgeted_judge(
     )
 
 
+def _describe_failing_check(report: JudgeCalibrationReport, name: str) -> str:
+    """Append a probe's degenerate reason to its bare check name when present.
+
+    ``failing_checks`` only ever names a check (``"order_flip"``, ...); the probe
+    it points at may separately be undersized (``.degenerate`` set) rather than
+    genuinely biased. Without this, a caller has to re-fetch the full report to
+    tell those two apart. ``"agreement_or_power"`` has no corresponding probe, so
+    ``getattr`` falls through to the bare name with no special-casing needed.
+    """
+    probe = getattr(report, name, None)
+    reason = getattr(probe, "degenerate", None)
+    return f"{name} ({reason})" if reason else name
+
+
 def require_report_to_gate(report: JudgeCalibrationReport, expected_artifact_id: str) -> None:
     """Raise unless *report* authorises gating under *expected_artifact_id*.
 
@@ -404,5 +418,5 @@ def require_report_to_gate(report: JudgeCalibrationReport, expected_artifact_id:
             f"configured judge_calibration.calibration_artifact_id {expected_artifact_id!r}"
         )
     if not report.may_gate:
-        reason = ", ".join(report.failing_checks) or "agreement/power"
+        reason = ", ".join(_describe_failing_check(report, name) for name in report.failing_checks) or "agreement/power"
         raise ValueError(f"judge calibration artifact {expected_artifact_id!r} does not authorise gating: {reason}")

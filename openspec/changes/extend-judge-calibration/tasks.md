@@ -37,6 +37,35 @@
       `mypy --strict` clean, `ruff` clean), `public_surface_baseline.json` regenerated
       (purely additive: 7 new names). Tests: `agent-core/tests/test_judge_calibration.py`
       (20 cases) + `test_config.py` (7 new `ProbeConfig` cases).
+      **Correction, found post-implementation by an automated PR review (Copilot), not the
+      test suite**: `ProbeConfig.min_pairs` was documented as a sample-size floor but never
+      read anywhere in this file — all three functions computed `passes` from a tolerance
+      check alone, so a probe on a handful of pairs could report `passes=True` purely by
+      chance, invisible only because every existing config used the default `min_pairs=1`.
+      Fixed by mirroring `agent_core.calibration.evaluate_calibration`'s own already-shipped
+      pattern for the same class of floor: each result dataclass gains a `degenerate: str |
+      None = None` field (matching `CalibrationReport.degenerate`'s exact name/position/
+      default), and `passes` becomes `(tolerance check) and not undersized`. Gated on each
+      function's own informative-pair count (`n` for order-flip/verbosity, `same_total` for
+      self-preference), not raw input length. Confirmed exhaustively (grepped every
+      construction site across 10 files) that a defaulted trailing field breaks nothing, and
+      that `JudgeCalibrationReport.failing_checks`/`.may_gate` need no change since both
+      already read only `.passes`. 3 new unit tests + 3 one-line `degenerate is None`
+      additions to existing passing tests (`test_judge_calibration.py`), 1 new end-to-end
+      test (`test_judge_calibration_end_to_end.py`), 4 new proof checks (`F_057.py`).
+      **Further coverage, found by a dispatched SQE-lens adversarial review of the
+      correction above** (not a bug — the review independently confirmed the fix
+      behaviorally correct on every case it probed): the exact boundary `n == cfg.min_pairs`
+      was untested (the floor is at-least semantics, `n < cfg.min_pairs`, not `<=`); no test
+      exercised a sample that is undersized *and* independently tolerance-failing at once;
+      and no test proved `min_pairs` compares against the informative-pair count rather than
+      raw input length when ties/uninformative entries pad the sample — the one gap judged
+      "worth a real test" since it depends on which variable a future refactor reads, not
+      just control-flow ordering. 6 further cases added (`test_judge_calibration.py`, 9 new
+      cases total this section): one boundary test per function, one combined
+      undersized-and-tolerance-failing test, and one informative-vs-raw-length padding test
+      each for `verbosity_preference_delta`/`self_preference_breakdown` (`order_flip_rate`'s
+      `n` is raw length by design, so that case doesn't apply to it).
 
 ## 2. Corpus type — `agent_core` (unprotected)
 - [x] Add a pairwise calibration item type (not `GoldenItem`, which is binary-label and has no pair).
@@ -109,6 +138,23 @@
       artifact-registry precedent exists in this codebase (Group 3's finding, unchanged).
       Tests: `tests/test_agent_core_adapter.py::TestRequireReportToGate` (3 cases: mismatched
       ID, failing bias check named in the error, and the passing path).
+      **Correction, found by an internal four-lens (Product/SWE/SQE/Architect) review of the
+      min_pairs fix above, not the test suite**: Product and Architect independently
+      converged on the same gap by reading this function directly — `report.failing_checks`
+      is a bare name tuple (`"order_flip"`, ...), and the raised message joined only those
+      names, never a probe's `degenerate` reason. A judge failing because it's genuinely
+      biased and one failing because a run was simply too small to evidence anything looked
+      identical at the one real call site a human or CI log would ever see. Fixed with a
+      small `_describe_failing_check(report, name)` helper that appends the reason in
+      parentheses when present (`"order_flip (insufficient pairs: n=1 < min_pairs=30)"`);
+      `"agreement_or_power"` has no corresponding probe, so it falls through to the bare name
+      via `getattr` with no special-casing. Deliberately does not add a field to
+      `JudgeCalibrationReport` or touch `failing_checks` itself — that would be redundant with
+      this fix and would loosen `failing_checks`' own "pure check names" contract. No
+      `REPORT_SCHEMA_VERSION` bump (confirmed nothing serializes these dataclasses anywhere in
+      the repo). 1 new test (`tests/test_agent_core_adapter.py`), 1 new proof check
+      (`F_057.py`, in `_check_gating_config`, alongside the existing `require_report_to_gate`
+      checks it already owned).
 - [x] Wire into `behavioral_regression` alongside `validate_judge`.
       New `build_judge_calibration_report(...)` in `oracle.py`, exported from
       `behavioral_regression/__init__.py` next to `validate_judge` (both in `__all__`).

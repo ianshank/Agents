@@ -21,6 +21,7 @@ def test_order_flip_rate_no_flips_when_position_independent():
     assert result.flips == 0
     assert result.flip_rate == 0.0
     assert result.passes is True
+    assert result.degenerate is None  # default min_pairs=1 never trips the floor
 
 
 def test_order_flip_rate_all_flips_when_first_position_always_wins():
@@ -45,6 +46,34 @@ def test_order_flip_rate_respects_tolerance():
     assert result.passes is True
 
 
+def test_order_flip_rate_undersized_fails_despite_clearing_tolerance():
+    """A 1-pair sample clears the default tolerance (0 flips) but not a strict min_pairs floor."""
+    strict = ProbeConfig(min_pairs=30)
+    result = order_flip_rate(["a"], ["b"], strict)
+    assert result.flip_rate == 0.0  # would tolerance-pass on its own
+    assert result.passes is False  # min_pairs=30 > n=1
+    assert result.degenerate == "insufficient pairs: n=1 < min_pairs=30"
+
+
+def test_order_flip_rate_boundary_n_equals_min_pairs_clears_the_floor():
+    """The floor is at-least semantics (n < cfg.min_pairs, not <=) -- n exactly
+    equal to min_pairs must clear it, not trip it."""
+    exact = ProbeConfig(min_pairs=2)
+    result = order_flip_rate(["a", "b"], ["b", "a"], exact)  # n=2
+    assert result.n == 2
+    assert result.degenerate is None
+
+
+def test_order_flip_rate_undersized_and_tolerance_failing_both_hold():
+    """A sample can fail its own tolerance *and* be undersized at once -- passes
+    must stay False and degenerate must still be set, not just one or the other."""
+    strict = ProbeConfig(min_pairs=30)
+    result = order_flip_rate(["a", "a"], ["a", "a"], strict)  # n=2, flip_rate=1.0
+    assert result.flip_rate > strict.order_flip_tolerance  # genuinely tolerance-fails too
+    assert result.degenerate == "insufficient pairs: n=2 < min_pairs=30"
+    assert result.passes is False
+
+
 def test_order_flip_rate_rejects_mismatched_lengths():
     with pytest.raises(ValueError, match="equal length"):
         order_flip_rate(["a"], ["a", "b"], CFG)
@@ -67,6 +96,32 @@ def test_verbosity_no_bias_when_evenly_split():
     result = verbosity_preference_delta(["concise", "expanded"], CFG)
     assert result.preference_delta == 0.0
     assert result.passes is True
+    assert result.degenerate is None  # default min_pairs=1 never trips the floor
+
+
+def test_verbosity_undersized_fails_despite_zero_delta():
+    strict = ProbeConfig(min_pairs=30)
+    result = verbosity_preference_delta(["concise", "expanded"], strict)  # n=2, delta=0.0
+    assert result.preference_delta == 0.0
+    assert result.passes is False
+    assert result.degenerate == "insufficient pairs: n=2 < min_pairs=30"
+
+
+def test_verbosity_boundary_n_equals_min_pairs_clears_the_floor():
+    exact = ProbeConfig(min_pairs=2)
+    result = verbosity_preference_delta(["concise", "expanded"], exact)  # n=2
+    assert result.n == 2
+    assert result.degenerate is None
+
+
+def test_verbosity_min_pairs_counts_informative_pairs_not_raw_length():
+    """Padding with ties inflates raw input length without inflating n -- min_pairs
+    must compare against the informative (non-tied) count, not len(verdicts)."""
+    cfg = ProbeConfig(min_pairs=5)
+    verdicts = ["tie"] * 10 + ["concise", "expanded"]  # n=2, raw length=12
+    result = verbosity_preference_delta(verdicts, cfg)
+    assert result.n == 2
+    assert result.degenerate == "insufficient pairs: n=2 < min_pairs=5"
 
 
 def test_verbosity_bias_toward_longer():
@@ -120,6 +175,45 @@ def test_self_preference_none_when_balanced():
     assert result.same_family_win_rate == 0.5
     assert result.delta == 0.0
     assert result.passes is True
+    assert result.degenerate is None  # default min_pairs=1 never trips the floor
+
+
+def test_self_preference_undersized_fails_despite_balanced_delta():
+    strict = ProbeConfig(min_pairs=30)
+    outcomes = [
+        PairOutcome("gpt", "claude", "a"),
+        PairOutcome("claude", "gpt", "a"),
+    ]  # same_family_n=2, delta=0.0
+    result = self_preference_breakdown("gpt", outcomes, strict)
+    assert result.delta == 0.0
+    assert result.passes is False
+    assert result.degenerate == "insufficient pairs: n=2 < min_pairs=30"
+
+
+def test_self_preference_boundary_n_equals_min_pairs_clears_the_floor():
+    exact = ProbeConfig(min_pairs=2)
+    outcomes = [
+        PairOutcome("gpt", "claude", "a"),
+        PairOutcome("claude", "gpt", "a"),
+    ]  # same_family_n=2
+    result = self_preference_breakdown("gpt", outcomes, exact)
+    assert result.same_family_n == 2
+    assert result.degenerate is None
+
+
+def test_self_preference_min_pairs_counts_informative_pairs_not_raw_length():
+    """Padding with uninformative pairs (both/neither judge-family) inflates raw
+    input length without inflating same_family_n -- min_pairs must compare
+    against the informative count, not len(outcomes)."""
+    cfg = ProbeConfig(min_pairs=5)
+    outcomes = (
+        [PairOutcome("gpt", "gpt", "a")] * 5  # both judge family -- uninformative
+        + [PairOutcome("claude", "mistral", "a")] * 5  # neither judge family -- uninformative
+        + [PairOutcome("gpt", "claude", "a"), PairOutcome("claude", "gpt", "a")]  # informative
+    )  # same_family_n=2, raw length=12
+    result = self_preference_breakdown("gpt", outcomes, cfg)
+    assert result.same_family_n == 2
+    assert result.degenerate == "insufficient pairs: n=2 < min_pairs=5"
 
 
 def test_self_preference_favours_own_family():
