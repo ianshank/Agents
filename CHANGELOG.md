@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Docs — pre-PR currency sweep for F-056/F-057 (SQE/SWE/Architect review)
+- **`docs/c4_architecture.md`** — the Level 2 container diagram had no mention of either
+  feature landed on this branch. Added a `reliability` container (F-056's pure pass@k/pass^k
+  aggregation, consumed lazily by gating), extended `gating`'s and `agent_core`'s own
+  descriptions, and added two runtime edges confirmed by direct read of `cli.py`:
+  `cli → gating` (`require_calibration_for_judge_gating()`, undocumented even before this
+  branch) and `gating → reliability`. `require_report_to_gate` deliberately gets no edge —
+  confirmed by repo-wide grep to have no production caller yet.
+- **Root `README.md` / `agent-core/README.md`** — both `## Layout` sections are exhaustive
+  per-file listings (the convention F-051 already set); added `reliability.py`,
+  `pairwise.py`, `judge_calibration.py`, `judge_calibration_report.py`, and
+  `agent_core_adapter`'s new `require_report_to_gate`. `agent-core/README.md`'s stated test
+  count (708) was also stale — corrected to 872, verified by summing
+  `pytest --collect-only`'s own per-file counts twice, independently.
+- **`behavioral-regression/README.md`** — its "Reuse, not reinvention" table (which exists
+  specifically to name every reused-composition point in `oracle.py`) was missing a row for
+  `build_judge_calibration_report`, verified against the function's own docstring to compose
+  `validate_judge` + `agent_core.golden.percent_agreement` with the three bias probes, never
+  re-deriving any of them.
+- **`AGENTS.md`** — added a `.claude/` hooks section (none existed anywhere in the repo,
+  for either this branch's new `post-edit-size-budget.py` or the pre-existing
+  `session-start.sh`) and a mypy-invocation caveat: a stray non-project `mypy` shadowing
+  `PATH` (e.g. from `uv tool install`) produces spurious `import-untyped`/missing-stub errors
+  that look like real code defects but vanish under the project's own pinned interpreter
+  (`python3 -m mypy`, what every `Makefile`/`quality-gate.sh` already uses) — found and
+  root-caused during this sweep's own validation run.
+- **Verified current, no change needed:** `.gitignore`/`.dockerignore` (the new
+  `.claude/hooks/post-edit-size-budget.py` is correctly tracked, not ignored; no new
+  untracked artifacts appear after a full test collection); `skills/README.md`/
+  `skills/marketplace.yaml` (14 skills, matching); every `Makefile`'s `check` target (package/
+  directory-globbed at every layer — Makefile, `quality-gate.sh`, `pyproject.toml` coverage
+  `source` — so new files are picked up automatically, no hardcoded list anywhere); `docs/
+  quickstart.md` (re-run end to end, still accurate).
+- **`gitleaks`** — ran the exact CI invocation locally (pinned v8.18.4, both the fail-closed
+  working-tree scan and the report-only history scan). Working tree: clean. History: the 25
+  hits are all the single known, already-documented `generic-api-key` match on the literal
+  word "REDACTED" in 3 files (the incident's own placeholder text, not a real secret) —
+  exactly the accepted situation `.gitleaks.toml`'s own header already describes.
+
 ### Added — judge bias calibration: order, verbosity and self-preference probes (F-057)
 - **Bias probes** — new `agent_core/judge_calibration.py`: `order_flip_rate` (grades a pair in
   both answer orders and reports the disagreement/preference-shift rate), `verbosity_preference_delta`
