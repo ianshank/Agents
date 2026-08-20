@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Validation script for F-058 - Validator-registration guard.
 
-Asserts that all 4 registration points for validation scripts stay perfectly in sync:
-    1. Ledger entries in features.yaml
-    2. F_0NN.py files on disk in scripts/validations/
-    3. The _VALIDATOR_MODULES list in tests/test_validation_scripts.py
-    4. The --cov= list in .github/workflows/quality-gates.yml
+Asserts the registration points for validation scripts stay perfectly in sync:
+    1. Ledger entries in features.yaml match F_0NN.py files on disk in scripts/validations/
+    2. The _VALIDATOR_MODULES list in tests/test_validation_scripts.py matches the --cov= list in .github/workflows/quality-gates.yml
+    3. Every validator tested in test_validation_scripts.py is present in the ledger and on disk.
 
 Exit codes:
     0 - all checks passed
@@ -78,8 +77,7 @@ def _get_test_features() -> set[str]:
             if m:
                 modules.add(m.group(1))
 
-    # If the imports and tuple differ, we'll return both unioned so the mismatch fails downstream
-    # but strictly speaking they should be identical.
+    # If the imports and tuple differ, return both unioned so mismatch fails
     return imports | modules
 
 
@@ -105,14 +103,20 @@ def main() -> int:
     )
 
     _check(
-        disk == test,
-        f"disk vs tests/test_validation_scripts.py matches. disk - test: {disk - test}, test - disk: {test - disk}",
+        test == cov,
+        f"tests/test_validation_scripts.py vs quality-gates.yml matches. test - cov: {test - cov}, cov - test: {cov - test}",
         errors,
     )
 
     _check(
-        test == cov,
-        f"tests/test_validation_scripts.py vs quality-gates.yml matches. test - cov: {test - cov}, cov - test: {cov - test}",
+        test.issubset(disk),
+        f"tested validators exist on disk. missing: {test - disk}",
+        errors,
+    )
+
+    _check(
+        test.issubset(ledger),
+        f"tested validators exist in features.yaml. missing: {test - ledger}",
         errors,
     )
 

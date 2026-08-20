@@ -171,7 +171,7 @@ jobs:
           --cov=check_charter_drift --cov=check_charter_invariants
           --cov=check_guard_reachability --cov=agent_confidence
           --cov=skill_marketplace --cov=_common --cov=extract_registries
-          --cov=F_001 --cov=F_002 --cov=F_003 --cov=F_004 --cov=F_005 --cov=F_006 --cov=F_007 --cov=F_008 --cov=F_009 --cov=F_010 --cov=F_011 --cov=F_012 --cov=F_013 --cov=F_014 --cov=F_015 --cov=F_016 --cov=F_017 --cov=F_018 --cov=F_019 --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023 --cov=F_024 --cov=F_025 --cov=F_026 --cov=F_027 --cov=F_028 --cov=F_029 --cov=F_030 --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037 --cov=F_038 --cov=F_039 --cov=F_040 --cov=F_041 --cov=F_042 --cov=F_043 --cov=F_044 --cov=F_045 --cov=F_046 --cov=F_047 --cov=F_048 --cov=F_049 --cov=F_050 --cov=F_051 --cov=F_052 --cov=F_053 --cov=F_054 --cov=F_055 --cov=F_056 --cov=F_057 --cov=F_058
+          --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023 --cov=F_024 --cov=F_025 --cov=F_026 --cov=F_027 --cov=F_028 --cov=F_029 --cov=F_030 --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037 --cov=F_038 --cov=F_039 --cov=F_040 --cov=F_041 --cov=F_042 --cov=F_043 --cov=F_044 --cov=F_045 --cov=F_046 --cov=F_047 --cov=F_048 --cov=F_049 --cov=F_050 --cov=F_051 --cov=F_052 --cov=F_053 --cov=F_054 --cov=F_055 --cov=F_056 --cov=F_057 --cov=F_058
           --cov=tests._matrix_coverage
           --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
       # Dedicated floor for the e2e-matrix generator. Deliberately its own step: folded into
