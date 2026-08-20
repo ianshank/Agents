@@ -36,12 +36,12 @@ import difflib
 import json
 import logging
 import re
-import subprocess
-import sys
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+
+from tests._registry_probe import run_probe
 
 #: Module logger, following the repo convention (``getLogger(__name__)`` + lazy %s
 #: formatting). Records are emitted at DEBUG/INFO and are therefore invisible by
@@ -54,7 +54,6 @@ logger = logging.getLogger(__name__)
 _TESTS_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _TESTS_DIR.parent
 _DOC_PATH = _REPO_ROOT / "docs" / "matrix-coverage.md"
-_PROBE_TIMEOUT_SECONDS = 30
 
 #: Dimension floors per registry kind (ADR 0032). M4 and M7 are global-dynamic
 #: (``TestM4Interface`` parametrizes the live registries; ``TestM7Registry``
@@ -209,71 +208,7 @@ _DIM_METHOD_RE = re.compile(rf"^test_m([{min(_DIM_TITLES)}-{max(_DIM_TITLES)}])_
 # --------------------------------------------------------------------------- census
 
 # Mirrors tests/conftest.py's sys.path setup because a bare `python -c` child gets no
-# conftest handling; registries are discovered by isinstance over the plugins module
-# namespace, keyed by each registry's own `.kind`. `_aliases` is read directly —
-# there is no public accessor, and the alias map is exactly what FROZEN_ALIAS_MAP
-# freezes. See tests/test_plugin_registry_surface.py for the failure-mode rationale
-# this probe copies (timeout, non-zero exit, garbled stdout).
-_PROBE = """\
-import sys
-from pathlib import Path
-
-_root = Path.cwd()
-for _p in (str(_root), str(_root / "src")):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
-import json
-
-from eval_harness import plugins
-from eval_harness.core.registry import Registry
-
-plugins.load_builtin_plugins()
-registries = {obj.kind: obj for obj in vars(plugins).values() if isinstance(obj, Registry)}
-census = {
-    kind: {"names": sorted(reg.names()), "aliases": dict(sorted(reg._aliases.items()))}
-    for kind, reg in registries.items()
-}
-print(json.dumps(census))
-"""
-
-
-def _run_probe() -> subprocess.CompletedProcess[str]:
-    """One fresh-interpreter census run. Split out so tests can monkeypatch it.
-
-    ``OSError`` is translated rather than allowed to escape: this is called from module
-    scope in the guard suite, so a raw ``FileNotFoundError`` / exec-format error on
-    ``sys.executable`` would surface as a pytest *collection* error rather than a test
-    failure, losing the context. The named conditions mirror
-    ``agent_core.subprocess_util``'s three degradation cases, but this raises where that
-    degrades: a completeness guard that reports "no signal observed" passes vacuously,
-    which is the failure mode ADR 0029 records.
-    """
-    logger.debug(
-        "census probe: %s (cwd %s, timeout %ss)",
-        sys.executable,
-        _REPO_ROOT,
-        _PROBE_TIMEOUT_SECONDS,
-    )
-    try:
-        return subprocess.run(
-            [sys.executable, "-c", _PROBE],
-            capture_output=True,
-            text=True,
-            cwd=_REPO_ROOT,
-            timeout=_PROBE_TIMEOUT_SECONDS,
-        )
-    except OSError as exc:  # missing/unexecutable interpreter, permission denied
-        raise RuntimeError(f"matrix census probe could not start ({sys.executable!r}): {exc}") from exc
-
-
-def _as_stream_text(stream: str | bytes | None) -> str:
-    """A captured stream rendered for a human, whatever shape it arrives in."""
-    if stream is None:
-        return ""
-    if isinstance(stream, bytes):
-        return stream.decode("utf-8", errors="replace")
-    return stream
+# The probe is extracted to tests/registry_probe_hook.py to allow mypy/ruff validation.
 
 
 def _parse_census(raw: object, *, source: str) -> dict[str, dict[str, object]]:
@@ -306,29 +241,13 @@ def registry_census() -> dict[str, dict[str, object]]:
     Pythons) — the cache keeps that to one probe per pytest process, shared by the
     policy tests, the alias freeze and the freshness test.
     """
+    probe_args = ["tests/registry_probe_hook.py", "--mode", "census"]
+    logger.debug(f"census probe: running {' '.join(probe_args)}")
+    stdout = run_probe(probe_args)
     try:
-        completed = _run_probe()
-    except subprocess.TimeoutExpired as exc:
-        # Carry the partial streams: a probe that hangs mid-import (a blocking import, a
-        # lock) leaves its most useful evidence there, and only the message reaches a CI
-        # log. `text=True` should make these str, but TimeoutExpired's contract allows
-        # bytes, so decode defensively rather than rendering a b'...' repr.
-        raise RuntimeError(
-            f"matrix census probe did not finish within {_PROBE_TIMEOUT_SECONDS}s\n"
-            f"partial stdout:\n{_as_stream_text(exc.stdout)}\n"
-            f"partial stderr:\n{_as_stream_text(exc.stderr)}"
-        ) from exc
-    if completed.returncode != 0:
-        raise RuntimeError(
-            f"matrix census probe failed (exit {completed.returncode})\n"
-            f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
-        )
-    try:
-        data = json.loads(completed.stdout)
+        data = json.loads(stdout)
     except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"matrix census probe output: not valid JSON ({exc})\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
-        ) from exc
+        raise ValueError(f"matrix census probe output: not valid JSON ({exc})\nstdout:\n{stdout}") from exc
     census = _parse_census(data, source="census probe")
     # Once-per-run summary (lru_cache guarantees a single emission per process), per the
     # AGENTS.md logging convention: info for run summaries, debug for per-call detail.

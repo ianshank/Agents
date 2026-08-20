@@ -104,3 +104,6 @@ def validate_f026() -> int:
 
 if __name__ == "__main__":
     sys.exit(validate_f026())
+
+
+main = validate_f026

@@ -408,10 +408,12 @@ C4Component
 
 ```python
 class GradingReader(Protocol):
-    def read(self, skill: SkillRef) -> GradeReport: ...   # parses grading.json
+    def read(self, skill: SkillRef) -> GradeReport: ...  # parses grading.json
+
 
 class EvalInvoker(Protocol):
-    async def run(self, skill: SkillRef) -> None: ...     # headless skill-creator invocation
+    async def run(self, skill: SkillRef) -> None: ...  # headless skill-creator invocation
+
 
 class EvalGate:
     def __init__(self, invoker: EvalInvoker, reader: GradingReader, log: BoundLogger): ...

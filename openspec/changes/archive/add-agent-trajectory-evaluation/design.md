@@ -12,6 +12,7 @@ class ToolCallRecord:
     arguments: Mapping[str, Any]
     call_id: str | None = None
 
+
 @dataclass(frozen=True)
 class TrajectoryStep:
     kind: Literal["model_decision", "tool_call", "tool_observation", "tool_error", "final"]
@@ -20,18 +21,20 @@ class TrajectoryStep:
     content: Any = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+
 @dataclass(frozen=True)
 class AgentTrajectory:
     steps: tuple[TrajectoryStep, ...]
     schema_version: str
 
-@dataclass                                    # unchanged: mutable, existing field order
+
+@dataclass  # unchanged: mutable, existing field order
 class TargetOutput:
     output: Any
     latency_ms: float | None = None
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    trajectory: AgentTrajectory | None = None    # appended last
+    trajectory: AgentTrajectory | None = None  # appended last
 ```
 
 The externally proposed contract froze `TargetOutput` and reordered it to

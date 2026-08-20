@@ -42,7 +42,7 @@ pip install -e ./agent-core -e ./flow-protocol -e ./flow-corpus
 ```
 
 ```python
-from flow_corpus.config import CorpusConfig      # every threshold is a config field
+from flow_corpus.config import CorpusConfig  # every threshold is a config field
 # build/validate the corpus via the validation runner (see flow_corpus/validation/)
 ```
 

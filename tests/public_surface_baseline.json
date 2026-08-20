@@ -16,6 +16,14 @@
       "build_budgeted_judge",
       "require_report_to_gate"
     ],
+    "eval_harness.config": [
+      "ConfigError",
+      "EvalConfig",
+      "apply_overrides",
+      "interpolate",
+      "load_config",
+      "load_config_dict"
+    ],
     "eval_harness.core": [
       "AgentTrajectory",
       "DatasetSource",

@@ -66,3 +66,6 @@ def validate_f028() -> int:
 
 if __name__ == "__main__":
     sys.exit(validate_f028())
+
+
+main = validate_f028

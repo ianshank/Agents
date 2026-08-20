@@ -55,8 +55,8 @@ streamlit run behavioral-regression/behavioral_regression/dashboard.py
 from behavioral_regression import BRConfig, run_pipeline
 
 report = run_pipeline(BRConfig(v2_sycophancy_mean=0.55), seed=7)
-print(report.decision.value)        # ship | hold | escalate
-print(report.to_dict()["estimate"]) # p_regression, CIs, cant_tell, ...
+print(report.decision.value)  # ship | hold | escalate
+print(report.to_dict()["estimate"])  # p_regression, CIs, cant_tell, ...
 ```
 
 ## No hard-coded values

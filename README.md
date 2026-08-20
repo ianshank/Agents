@@ -190,12 +190,15 @@ from eval_harness.core.interfaces import Scorer
 from eval_harness.core.types import ScoreResult
 from eval_harness.plugins import SCORERS
 
+
 @SCORERS.register("length_ok", aliases=("len",))
 class LengthScorer(Scorer):
     default_name = "length_ok"
+
     def __init__(self, name=None, max_chars=280):
         super().__init__(name)
         self.max_chars = max_chars
+
     def score(self, item, output, ctx):
         ok = len(str(output.output)) <= self.max_chars
         return ScoreResult(self.name, 1.0 if ok else 0.0, ok)
@@ -420,6 +423,8 @@ scripts/
   check_skill_script_drift.py  CI guard: vendored skill scripts == canonical copy
   check_charter_drift.py       CI guard: every docs/CHARTER.md markdown link resolves
   check_charter_invariants.py  CI guard: docs/CHARTER.md's claims still hold in the code
+  extract_registries.py        AST registry discovery, component extraction, and doc drift CLI
+  check_readme_registries.py   CI hook: verifies READMEs match component registries
   _config.py              shared changed-file + strict-YAML-loader helpers (merge-gate seeding)
   merge_gate_context.py   composes the merge-gate ChangeContext / seed (--confidence seam, F-042)
   agent_confidence.py     deterministic agent-lane proxy confidence for seeding (F-042, no network)

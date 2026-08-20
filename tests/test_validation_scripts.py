@@ -24,52 +24,130 @@ if _VALIDATIONS not in sys.path:
     sys.path.insert(0, _VALIDATIONS)
 
 import _common  # noqa: E402
+import F_001  # noqa: E402
+import F_002  # noqa: E402
+import F_003  # noqa: E402
+import F_004  # noqa: E402
+import F_005  # noqa: E402
+import F_006  # noqa: E402
+import F_007  # noqa: E402
+import F_008  # noqa: E402
+import F_009  # noqa: E402
+import F_010  # noqa: E402
+import F_011  # noqa: E402
+import F_012  # noqa: E402
+import F_013  # noqa: E402
+import F_014  # noqa: E402
+import F_015  # noqa: E402
+import F_016  # noqa: E402
+import F_017  # noqa: E402
+import F_018  # noqa: E402
+import F_019  # noqa: E402
 import F_020  # noqa: E402
 import F_021  # noqa: E402
 import F_022  # noqa: E402
 import F_023  # noqa: E402
+import F_024  # noqa: E402
+import F_025  # noqa: E402
+import F_026  # noqa: E402
+import F_027  # noqa: E402
+import F_028  # noqa: E402
+import F_029  # noqa: E402
+import F_030  # noqa: E402
 import F_031  # noqa: E402
 import F_032  # noqa: E402
 import F_033  # noqa: E402
 import F_034  # noqa: E402
 import F_035  # noqa: E402
 import F_037  # noqa: E402
+import F_038  # noqa: E402
 import F_039  # noqa: E402
+import F_040  # noqa: E402
 import F_041  # noqa: E402
+import F_042  # noqa: E402
+import F_043  # noqa: E402
+import F_044  # noqa: E402
 import F_045  # noqa: E402
+import F_046  # noqa: E402
+import F_047  # noqa: E402
+import F_048  # noqa: E402
+import F_049  # noqa: E402
 import F_050  # noqa: E402
+import F_051  # noqa: E402
 import F_052  # noqa: E402
 import F_053  # noqa: E402
 import F_054  # noqa: E402
 import F_055  # noqa: E402
+import F_056  # noqa: E402
+import F_057  # noqa: E402
+import F_058  # noqa: E402
 
 #: Single source of truth for which validators this file exercises. The ids are derived
 #: from each module's own ``__name__`` rather than restated, so the list cannot drift
 #: from its own labels (the previous parallel ``ids=`` list was 16 hand-kept strings).
 _VALIDATOR_MODULES = (
+    F_001,
+    F_002,
+    F_003,
+    F_004,
+    F_005,
+    F_006,
+    F_007,
+    F_008,
+    F_009,
+    F_010,
+    F_011,
+    F_012,
+    F_013,
+    F_014,
+    F_015,
+    F_016,
+    F_017,
+    F_018,
+    F_019,
     F_020,
     F_021,
     F_022,
     F_023,
+    F_024,
+    F_025,
+    F_026,
+    F_027,
+    F_028,
+    F_029,
+    F_030,
     F_031,
     F_032,
     F_033,
     F_034,
     F_035,
     F_037,
+    F_038,
     F_039,
+    F_040,
     F_041,
+    F_042,
+    F_043,
+    F_044,
     F_045,
+    F_046,
+    F_047,
+    F_048,
+    F_049,
     F_050,
+    F_051,
     F_052,
     F_053,
     F_054,
     F_055,
+    F_056,
+    F_057,
+    F_058,
 )
 
 
 @pytest.mark.parametrize("module", _VALIDATOR_MODULES, ids=lambda m: m.__name__)
-def test_validator_main_passes(module):
+def test_validator_main_passes(module) -> None:
     # Each validator returns 0 on success (F_022 returns 0 even if agent_core is
     # absent, per its lazy-import contract).
     #
@@ -112,7 +190,7 @@ class TestCiEnforces:
         assert not _common.delegates_to_gate(self.NEITHER)
 
 
-def test_imported_validators_and_the_ci_cov_list_agree():
+def test_imported_validators_and_the_ci_cov_list_agree() -> None:
     """The two lists that must never drift: what this file imports, and what the
     tooling-coverage step measures.
 
@@ -136,7 +214,7 @@ def test_imported_validators_and_the_ci_cov_list_agree():
     )
 
 
-def test_common_check_records_failure():
+def test_common_check_records_failure() -> None:
     errors: list[str] = []
     assert _common.check(True, "ok", errors) is True
     assert errors == []
@@ -144,7 +222,7 @@ def test_common_check_records_failure():
     assert errors == ["boom"]
 
 
-def test_common_report_exit_codes():
+def test_common_report_exit_codes() -> None:
     import logging
 
     log = logging.getLogger("test")

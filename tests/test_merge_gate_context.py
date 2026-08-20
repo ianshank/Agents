@@ -30,7 +30,7 @@ def _write_mapping(tmp_path: Path, doc: object) -> str:
 
 
 # --- mapping load ---------------------------------------------------------------
-def test_load_valid_mapping(tmp_path):
+def test_load_valid_mapping(tmp_path) -> None:
     mapping = mgc.DomainMapping.load(_write_mapping(tmp_path, _VALID))
     assert mapping.default_domain == "repo-misc"
     assert mapping.human_namespace == "human/"
@@ -53,27 +53,27 @@ def test_load_valid_mapping(tmp_path):
         lambda d: d.update(default_domain=""),  # empty domain
     ],
 )
-def test_load_rejects_invalid_mapping(tmp_path, mutate):
+def test_load_rejects_invalid_mapping(tmp_path, mutate) -> None:
     doc = {k: (list(v) if isinstance(v, list) else v) for k, v in _VALID.items()}
     mutate(doc)
     with pytest.raises(ConfigError):
         mgc.DomainMapping.load(_write_mapping(tmp_path, doc))
 
 
-def test_load_accepts_minor_schema_bumps(tmp_path):
+def test_load_accepts_minor_schema_bumps(tmp_path) -> None:
     doc = dict(_VALID, schema_version="1.2.0")
     mapping = mgc.DomainMapping.load(_write_mapping(tmp_path, doc))
     assert mapping.schema_version == "1.2.0"  # additive evolution loads fine
 
 
-def test_load_rejects_unreadable_and_non_mapping(tmp_path):
+def test_load_rejects_unreadable_and_non_mapping(tmp_path) -> None:
     with pytest.raises(ConfigError):
         mgc.DomainMapping.load(str(tmp_path / "missing.yaml"))
     with pytest.raises(ConfigError):
         mgc.DomainMapping.load(_write_mapping(tmp_path, ["not", "a", "mapping"]))
 
 
-def test_committed_mapping_loads_and_never_emits_human(tmp_path):
+def test_committed_mapping_loads_and_never_emits_human(tmp_path) -> None:
     import _config
 
     mapping = mgc.DomainMapping.load(mgc.DEFAULT_MAPPING_PATH)
@@ -83,14 +83,14 @@ def test_committed_mapping_loads_and_never_emits_human(tmp_path):
 
 
 # --- domain classification --------------------------------------------------------
-def test_classify_first_match_wins_in_rule_order(tmp_path):
+def test_classify_first_match_wins_in_rule_order(tmp_path) -> None:
     mapping = mgc.DomainMapping.load(_write_mapping(tmp_path, _VALID))
     files = ["src/eval_harness/core.py", "agent-core/agent_core/loop.py"]
     # agent-core rule precedes src rule, so it wins even though both match.
     assert mgc.classify_domain(files, mapping) == "agent-core"
 
 
-def test_classify_nested_markdown_and_default(tmp_path):
+def test_classify_nested_markdown_and_default(tmp_path) -> None:
     mapping = mgc.DomainMapping.load(_write_mapping(tmp_path, _VALID))
     assert mgc.classify_domain(["docs/plans/x/PLAN.md"], mapping) == "docs"
     assert mgc.classify_domain(["Makefile"], mapping) == "repo-misc"
@@ -98,7 +98,7 @@ def test_classify_nested_markdown_and_default(tmp_path):
 
 
 # --- context composition ------------------------------------------------------------
-def test_build_context_shape_and_protected_detection(tmp_path):
+def test_build_context_shape_and_protected_detection(tmp_path) -> None:
     mapping = mgc.DomainMapping.load(_write_mapping(tmp_path, _VALID))
     ctx = mgc.build_context(["config/eval.example.yaml"], mapping, mech_pass=True, human=False, confidence=0.9)
     assert ctx == {
@@ -113,7 +113,7 @@ def test_build_context_shape_and_protected_detection(tmp_path):
     assert ctx2["domain"] == "agent-core"
 
 
-def test_build_context_human_namespace_forces_zero_confidence(tmp_path):
+def test_build_context_human_namespace_forces_zero_confidence(tmp_path) -> None:
     mapping = mgc.DomainMapping.load(_write_mapping(tmp_path, _VALID))
     ctx = mgc.build_context(["src/eval_harness/core.py"], mapping, mech_pass=False, human=True, confidence=0.7)
     assert ctx["domain"] == "human/eval-harness"
@@ -121,14 +121,14 @@ def test_build_context_human_namespace_forces_zero_confidence(tmp_path):
 
 
 # --- file-set resolution -------------------------------------------------------------
-def test_resolve_files_from_nul_delimited_file(tmp_path):
+def test_resolve_files_from_nul_delimited_file(tmp_path) -> None:
     listing = tmp_path / "files.z"
     listing.write_text("a.py\0dir/b.md\0\0", encoding="utf-8")
     args = mgc.build_parser().parse_args(["--files-from", str(listing)])
     assert mgc.resolve_files(args) == ["a.py", "dir/b.md"]
 
 
-def test_main_empty_files_from_defaults_domain(tmp_path, capsys):
+def test_main_empty_files_from_defaults_domain(tmp_path, capsys) -> None:
     """The seed's real cold case: an empty merge diff still composes a context."""
     mapping_path = _write_mapping(tmp_path, _VALID)
     empty = tmp_path / "empty.z"
@@ -140,13 +140,13 @@ def test_main_empty_files_from_defaults_domain(tmp_path, capsys):
     assert payload["touches_protected"] is False
 
 
-def test_resolve_files_missing_files_from_raises(tmp_path):
+def test_resolve_files_missing_files_from_raises(tmp_path) -> None:
     args = mgc.build_parser().parse_args(["--files-from", str(tmp_path / "missing.z")])
     with pytest.raises(ConfigError):
         mgc.resolve_files(args)
 
 
-def test_resolve_files_git_fallback_uses_base_ref_resolution(monkeypatch):
+def test_resolve_files_git_fallback_uses_base_ref_resolution(monkeypatch) -> None:
     calls: list[str] = []
 
     def fake_diff(base_ref: str) -> list[str]:
@@ -165,7 +165,7 @@ def test_resolve_files_git_fallback_uses_base_ref_resolution(monkeypatch):
 
 
 # --- CLI --------------------------------------------------------------------------
-def test_main_writes_output_file(tmp_path):
+def test_main_writes_output_file(tmp_path) -> None:
     mapping_path = _write_mapping(tmp_path, _VALID)
     out = tmp_path / "context.json"
     rc = mgc.main(
@@ -188,7 +188,7 @@ def test_main_writes_output_file(tmp_path):
     }
 
 
-def test_main_prints_to_stdout_and_human_flag(tmp_path, capsys):
+def test_main_prints_to_stdout_and_human_flag(tmp_path, capsys) -> None:
     mapping_path = _write_mapping(tmp_path, _VALID)
     rc = mgc.main(["--mapping", mapping_path, "--files", "src/x.py", "--human"])
     assert rc == 0
@@ -197,11 +197,11 @@ def test_main_prints_to_stdout_and_human_flag(tmp_path, capsys):
     assert payload["mech_pass"] is False  # fail-safe default
 
 
-def test_main_config_error_exits_2(tmp_path):
+def test_main_config_error_exits_2(tmp_path) -> None:
     assert mgc.main(["--mapping", str(tmp_path / "missing.yaml"), "--files", "x"]) == 2
 
 
-def test_main_human_and_confidence_mutually_exclusive(tmp_path):
+def test_main_human_and_confidence_mutually_exclusive(tmp_path) -> None:
     mapping_path = _write_mapping(tmp_path, _VALID)
     with pytest.raises(SystemExit) as exc:
         mgc.main(["--mapping", mapping_path, "--files", "x", "--human", "--confidence", "0.5"])

@@ -37,14 +37,14 @@ from tests._trajectory_helpers import call, final, observation, run_result, tool
 # --- ADR 0031 compatibility obligations -------------------------------------------
 
 
-def test_historical_positional_construction_still_works():
+def test_historical_positional_construction_still_works() -> None:
     """Obligation 1: the field is appended, so old positional calls keep working."""
     out = TargetOutput("text", 12.5, "boom", {"k": "v"})
     assert (out.output, out.latency_ms, out.error, out.metadata) == ("text", 12.5, "boom", {"k": "v"})
     assert out.trajectory is None
 
 
-def test_target_output_is_still_mutable():
+def test_target_output_is_still_mutable() -> None:
     """Obligation 2: freezing TargetOutput would break every existing mutation site."""
     out = TargetOutput(output="a")
     out.output = "b"
@@ -53,14 +53,14 @@ def test_target_output_is_still_mutable():
     assert out.trajectory is not None
 
 
-def test_trajectory_free_run_serializes_without_the_key():
+def test_trajectory_free_run_serializes_without_the_key() -> None:
     """Obligation 4: historical result JSON is byte-identical."""
     payload = run_result(TargetOutput(output="plain")).to_dict()
     assert "trajectory" not in payload["items"][0]
     assert set(payload["items"][0]) == {"id", "inputs", "expected", "output", "error", "latency_ms", "scores"}
 
 
-def test_trajectory_is_emitted_when_present():
+def test_trajectory_is_emitted_when_present() -> None:
     trajectory = AgentTrajectory(steps=(tool_call("search", {"q": "x"}), observation("hit"), final("done")))
     payload = run_result(TargetOutput(output="ok", trajectory=trajectory)).to_dict()
     emitted = payload["items"][0]["trajectory"]
@@ -71,12 +71,12 @@ def test_trajectory_is_emitted_when_present():
     assert json.loads(json.dumps(payload, default=str))["items"][0]["trajectory"] == emitted
 
 
-def test_serialization_omits_empty_optional_keys():
+def test_serialization_omits_empty_optional_keys() -> None:
     rendered = trajectory_to_dict(AgentTrajectory(steps=(TrajectoryStep(kind="model_decision"),)))
     assert rendered["steps"] == [{"kind": "model_decision"}]
 
 
-def test_serialization_includes_populated_optional_keys():
+def test_serialization_includes_populated_optional_keys() -> None:
     step = TrajectoryStep(
         kind="tool_call",
         timestamp_ms=99,
@@ -91,14 +91,14 @@ def test_serialization_includes_populated_optional_keys():
     assert rendered["metadata"] == {"m": 1}
 
 
-def test_value_objects_are_frozen():
+def test_value_objects_are_frozen() -> None:
     with pytest.raises(dataclasses.FrozenInstanceError):
         ToolCallRecord("t").name = "other"  # type: ignore[misc]
     with pytest.raises(dataclasses.FrozenInstanceError):
         AgentTrajectory().steps = ()  # type: ignore[misc]
 
 
-def test_trajectory_schema_version_is_independent_of_config_schema_version():
+def test_trajectory_schema_version_is_independent_of_config_schema_version() -> None:
     from eval_harness.version import SCHEMA_VERSION
 
     assert TRAJECTORY_SCHEMA_VERSION is not SCHEMA_VERSION
@@ -107,86 +107,86 @@ def test_trajectory_schema_version_is_independent_of_config_schema_version():
 # --- tool_calls() -----------------------------------------------------------------
 
 
-def test_tool_calls_returns_calls_in_order_ignoring_other_steps():
+def test_tool_calls_returns_calls_in_order_ignoring_other_steps() -> None:
     trajectory = AgentTrajectory(
         steps=(tool_call("a"), observation("x"), tool_call("b"), final("done")),
     )
     assert [c.name for c in trajectory.tool_calls()] == ["a", "b"]
 
 
-def test_tool_calls_preserves_duplicates():
+def test_tool_calls_preserves_duplicates() -> None:
     """Duplicates are the precision and loop signal; collapsing them destroys it."""
     trajectory = AgentTrajectory(steps=(tool_call("a"), tool_call("a"), tool_call("a")))
     assert len(trajectory.tool_calls()) == 3
 
 
-def test_empty_trajectory_has_no_calls():
+def test_empty_trajectory_has_no_calls() -> None:
     assert AgentTrajectory().tool_calls() == ()
 
 
 # --- normalization ----------------------------------------------------------------
 
 
-def test_names_are_case_insensitive_and_stripped_by_default():
+def test_names_are_case_insensitive_and_stripped_by_default() -> None:
     cfg = NormalizationConfig()
     assert normalize_name("  Search ", cfg) == "search"
 
 
-def test_name_normalization_is_configurable():
+def test_name_normalization_is_configurable() -> None:
     assert normalize_name(" Search ", NormalizationConfig(case_sensitive_names=True)) == "Search"
     assert normalize_name(" Search ", NormalizationConfig(strip_names=False)) == " search "
 
 
-def test_argument_key_order_is_not_significant():
+def test_argument_key_order_is_not_significant() -> None:
     cfg = NormalizationConfig()
     assert canonical_call(call("t", {"a": 1, "b": 2}), cfg) == canonical_call(call("t", {"b": 2, "a": 1}), cfg)
 
 
-def test_nested_argument_key_order_is_not_significant():
+def test_nested_argument_key_order_is_not_significant() -> None:
     cfg = NormalizationConfig()
     left = call("t", {"outer": {"a": 1, "b": [{"y": 2, "x": 1}]}})
     right = call("t", {"outer": {"b": [{"x": 1, "y": 2}], "a": 1}})
     assert canonical_call(left, cfg) == canonical_call(right, cfg)
 
 
-def test_sequence_order_is_significant():
+def test_sequence_order_is_significant() -> None:
     cfg = NormalizationConfig()
     assert canonical_call(call("t", {"xs": [1, 2]}), cfg) != canonical_call(call("t", {"xs": [2, 1]}), cfg)
 
 
-def test_ignored_fields_are_dropped_at_any_depth():
+def test_ignored_fields_are_dropped_at_any_depth() -> None:
     cfg = NormalizationConfig(ignore_fields=frozenset({"req_id"}))
     left = call("t", {"q": "x", "req_id": "1", "nested": {"req_id": "a", "keep": 1}})
     right = call("t", {"q": "x", "req_id": "2", "nested": {"req_id": "b", "keep": 1}})
     assert canonical_call(left, cfg) == canonical_call(right, cfg)
 
 
-def test_call_id_never_affects_identity():
+def test_call_id_never_affects_identity() -> None:
     cfg = NormalizationConfig()
     assert canonical_call(ToolCallRecord("t", {}, "c1"), cfg) == canonical_call(ToolCallRecord("t", {}, "c2"), cfg)
 
 
-def test_compare_arguments_false_matches_on_name_alone():
+def test_compare_arguments_false_matches_on_name_alone() -> None:
     cfg = NormalizationConfig(compare_arguments=False)
     assert canonical_call(call("t", {"a": 1}), cfg) == canonical_call(call("t", {"b": 2}), cfg)
 
 
-def test_strings_are_scalars_not_sequences():
+def test_strings_are_scalars_not_sequences() -> None:
     assert normalize_arguments("abc", NormalizationConfig()) == "abc"
 
 
-def test_none_and_scalars_pass_through():
+def test_none_and_scalars_pass_through() -> None:
     cfg = NormalizationConfig()
     assert normalize_arguments(None, cfg) is None
     assert normalize_arguments(7, cfg) == 7
 
 
-def test_non_json_native_values_do_not_raise():
+def test_non_json_native_values_do_not_raise() -> None:
     cfg = NormalizationConfig()
     assert canonical_call(call("t", {"when": object()}), cfg)[0] == "t"
 
 
-def test_canonical_calls_preserves_order_and_duplicates():
+def test_canonical_calls_preserves_order_and_duplicates() -> None:
     cfg = NormalizationConfig()
     canonical = canonical_calls([call("b"), call("a"), call("a")], cfg)
     assert [name for name, _ in canonical] == ["b", "a", "a"]
@@ -206,14 +206,14 @@ def test_canonical_calls_preserves_order_and_duplicates():
         (["A", "A"], ["A", "X"], False),
     ],
 )
-def test_is_subsequence(reference, candidate, expected):
+def test_is_subsequence(reference, candidate, expected) -> None:
     assert is_subsequence(reference, candidate) is expected
 
 
 # --- engine aggregation interaction -----------------------------------------------
 
 
-def test_none_verdicts_are_excluded_from_pass_rate_but_not_from_mean():
+def test_none_verdicts_are_excluded_from_pass_rate_but_not_from_mean() -> None:
     """The property the not-applicable verdict relies on, asserted at its source."""
     from eval_harness.engine import EvalEngine
 
@@ -230,7 +230,7 @@ def test_none_verdicts_are_excluded_from_pass_rate_but_not_from_mean():
 # --- helpers used above are themselves exercised ----------------------------------
 
 
-def test_helpers_build_the_step_kinds_they_claim():
+def test_helpers_build_the_step_kinds_they_claim() -> None:
     assert tool_call("t").kind == "tool_call"
     assert observation("x").kind == "tool_observation"
     assert tool_error("t").kind == "tool_error"
@@ -253,7 +253,7 @@ print(canonical_call(ToolCallRecord("t", {{
 """
 
 
-def test_canonicalization_is_stable_across_interpreter_processes():
+def test_canonicalization_is_stable_across_interpreter_processes() -> None:
     """Sets and unknown objects must canonicalize identically under any PYTHONHASHSEED.
 
     This has to be a *cross-process* assertion: set iteration order and ``str(object())``
@@ -275,14 +275,14 @@ def test_canonicalization_is_stable_across_interpreter_processes():
     assert len(outputs) == 1, f"canonical form varies with PYTHONHASHSEED: {outputs}"
 
 
-def test_unknown_objects_never_render_a_memory_address():
+def test_unknown_objects_never_render_a_memory_address() -> None:
     cfg = NormalizationConfig()
     rendered = canonical_call(call("t", {"v": object()}), cfg)[1]
     assert "0x" not in rendered
     assert "builtins.object" in rendered
 
 
-def test_distinct_types_with_equal_str_no_longer_collide():
+def test_distinct_types_with_equal_str_no_longer_collide() -> None:
     """The collision F9 described is resolved by rendering the *type*, not ``str()``."""
 
     class Alpha:
@@ -297,7 +297,7 @@ def test_distinct_types_with_equal_str_no_longer_collide():
     assert canonical_call(call("t", {"v": Alpha()}), cfg) != canonical_call(call("t", {"v": Beta()}), cfg)
 
 
-def test_value_derived_payload_is_preserved_alongside_the_type():
+def test_value_derived_payload_is_preserved_alongside_the_type() -> None:
     """Decimal/UUID keep their value, tagged with the type that produced it."""
     from decimal import Decimal
     from uuid import UUID
@@ -308,7 +308,7 @@ def test_value_derived_payload_is_preserved_alongside_the_type():
     assert "UUID:00000000-0000-0000-0000-000000000007" in rendered
 
 
-def test_a_typed_value_is_distinct_from_a_string_that_reads_the_same():
+def test_a_typed_value_is_distinct_from_a_string_that_reads_the_same() -> None:
     """Decimal("1.50") and the string "1.50" must not canonicalize equal."""
     from decimal import Decimal
 
@@ -316,14 +316,14 @@ def test_a_typed_value_is_distinct_from_a_string_that_reads_the_same():
     assert canonical_call(call("t", {"v": Decimal("1.50")}), cfg) != canonical_call(call("t", {"v": "1.50"}), cfg)
 
 
-def test_sets_compare_equal_regardless_of_construction_order():
+def test_sets_compare_equal_regardless_of_construction_order() -> None:
     cfg = NormalizationConfig()
     assert canonical_call(call("t", {"s": {"a", "b", "c"}}), cfg) == canonical_call(
         call("t", {"s": {"c", "a", "b"}}), cfg
     )
 
 
-def test_bytes_render_stably_by_length():
+def test_bytes_render_stably_by_length() -> None:
     cfg = NormalizationConfig()
     assert "<bytes:len=3>" in canonical_call(call("t", {"b": b"abc"}), cfg)[1]
 
@@ -331,19 +331,19 @@ def test_bytes_render_stably_by_length():
 # --- deep immutability (F-051 review finding F12) ---------------------------------
 
 
-def test_tool_call_arguments_are_read_only():
+def test_tool_call_arguments_are_read_only() -> None:
     record = ToolCallRecord("t", {"a": 1})
     with pytest.raises(TypeError):
         record.arguments["a"] = 999  # type: ignore[index]
 
 
-def test_trajectory_step_metadata_is_read_only():
+def test_trajectory_step_metadata_is_read_only() -> None:
     step = TrajectoryStep(kind="final")
     with pytest.raises(TypeError):
         step.metadata["injected"] = True  # type: ignore[index]
 
 
-def test_a_constructed_record_cannot_change_its_own_canonical_form():
+def test_a_constructed_record_cannot_change_its_own_canonical_form() -> None:
     cfg = NormalizationConfig()
     source = {"a": 1}
     record = ToolCallRecord("t", source)
@@ -352,7 +352,7 @@ def test_a_constructed_record_cannot_change_its_own_canonical_form():
     assert canonical_call(record, cfg) == before
 
 
-def test_read_only_arguments_still_serialize():
+def test_read_only_arguments_still_serialize() -> None:
     payload = trajectory_to_dict(AgentTrajectory(steps=(tool_call("t", {"a": 1}),)))
     assert payload["steps"][0]["tool_call"]["arguments"] == {"a": 1}
 
@@ -360,7 +360,7 @@ def test_read_only_arguments_still_serialize():
 # --- bounded recursion (F-051 review finding F3) ----------------------------------
 
 
-def test_deep_nesting_raises_a_narrow_error_not_recursion_error():
+def test_deep_nesting_raises_a_narrow_error_not_recursion_error() -> None:
     from eval_harness.core._trajectory import DepthLimitError
 
     deep: dict = {}
@@ -372,18 +372,18 @@ def test_deep_nesting_raises_a_narrow_error_not_recursion_error():
         canonical_call(call("t", deep), NormalizationConfig(max_depth=50))
 
 
-def test_depth_limit_can_truncate_instead_of_raising():
+def test_depth_limit_can_truncate_instead_of_raising() -> None:
     from eval_harness.core._trajectory import TRUNCATED
 
     cfg = NormalizationConfig(max_depth=2, truncate_over_max_depth=True)
     assert TRUNCATED in canonical_call(call("t", {"a": {"b": {"c": 1}}}), cfg)[1]
 
 
-def test_max_depth_must_be_positive():
+def test_max_depth_must_be_positive() -> None:
     with pytest.raises(ValueError, match="max_depth must be >= 1"):
         NormalizationConfig(max_depth=0)
 
 
-def test_ordinary_nesting_is_well_within_the_default_limit():
+def test_ordinary_nesting_is_well_within_the_default_limit() -> None:
     cfg = NormalizationConfig()
     assert canonical_call(call("t", {"a": {"b": {"c": {"d": 1}}}}), cfg)[0] == "t"

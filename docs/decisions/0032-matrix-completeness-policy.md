@@ -38,15 +38,15 @@ The matrix is governed by a single policy, single-sourced in `tests/_matrix_cove
 enforced by `tests/test_matrix_coverage.py`:
 
 ```python
-REQUIRED_DIMS = {                     # M4/M7 are global-dynamic; M8: ≥1 pipeline per kind
-    "scorer":  {1, 2, 3, 5, 6},
-    "judge":   {1, 2, 3, 6},          # M5 excluded: verdict determinism is the provider's
-    "dataset": {1, 2, 3, 6},          #   property, not the wrapper's
-    "target":  {1, 2, 3, 6},          # M6 required: the model target is the kind's
-    "sink":    {1, 2, 6},             #   riskiest error surface
-}                                     # sink M2 = empty-run emit; M6 = degrade/error path;
-                                      # sink M3/M5 are extra rows where an artifact exists
-EXTRA_SUITES = {"gating": {1, 2, 6}, "engine": {8}}   # non-registry rows, same enforcement
+REQUIRED_DIMS = {  # M4/M7 are global-dynamic; M8: ≥1 pipeline per kind
+    "scorer": {1, 2, 3, 5, 6},
+    "judge": {1, 2, 3, 6},  # M5 excluded: verdict determinism is the provider's
+    "dataset": {1, 2, 3, 6},  #   property, not the wrapper's
+    "target": {1, 2, 3, 6},  # M6 required: the model target is the kind's
+    "sink": {1, 2, 6},  #   riskiest error surface
+}  # sink M2 = empty-run emit; M6 = degrade/error path;
+# sink M3/M5 are extra rows where an artifact exists
+EXTRA_SUITES = {"gating": {1, 2, 6}, "engine": {8}}  # non-registry rows, same enforcement
 WAIVED = {  # snapshot at acceptance; tests/_matrix_coverage.py is authoritative
     ("target", "echo", 6): "no failure modes by design (pure dict access)",
     ("dataset", "inline", 6): "config-embedded items have no I/O failure path; a malformed record fails loudly at load",

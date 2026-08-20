@@ -40,7 +40,7 @@ pip install -e ./flow-protocol            # or `pip install flow-protocol`
 ```python
 from flow_protocol import FlowResult, OracleResult, ConfidenceChannel, PROTOCOL_VERSION
 
-result = FlowResult(...)                   # frozen; validated at construction
+result = FlowResult(...)  # frozen; validated at construction
 ```
 
 ## Test (run from this directory)
