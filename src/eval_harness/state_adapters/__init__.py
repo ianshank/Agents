@@ -145,7 +145,6 @@ class SqliteStateAdapter(StateAdapter):
         self.conn.executescript(schema_sql)
         self.conn.executescript(seed_sql)
         self.conn.commit()
-        self._tables = self._discover_tables()
         self.conn.execute(f"SAVEPOINT {_SAVEPOINT}")
 
     def _discover_tables(self) -> tuple[str, ...]:
@@ -153,11 +152,18 @@ class SqliteStateAdapter(StateAdapter):
         return tuple(row[0] for row in cursor.fetchall())
 
     def _query_table(self, table: str) -> tuple[tuple[Any, ...], ...]:
-        cursor = self.conn.execute(f"SELECT * FROM {table} ORDER BY 1")
+        # Quoted (with embedded quotes doubled, the standard SQL escape) so a
+        # table name that is a reserved word (e.g. "order") or contains spaces
+        # -- both legal via schema_sql's CREATE TABLE -- still parses.
+        quoted = '"' + table.replace('"', '""') + '"'
+        cursor = self.conn.execute(f"SELECT * FROM {quoted} ORDER BY 1")
         return tuple(tuple(row) for row in cursor.fetchall())
 
     def snapshot(self, ctx: RunContext) -> StateSnapshot:
-        return StateSnapshot(data={table: self._query_table(table) for table in self._tables})
+        # Discovered fresh on every call, not cached at __init__, so a table the
+        # target creates or drops mid-attempt (schema_sql only seeds the starting
+        # schema) is still reflected in the before/after snapshots.
+        return StateSnapshot(data={table: self._query_table(table) for table in self._discover_tables()})
 
     def evaluate(self, *, item: EvalItem, before: StateSnapshot, after: StateSnapshot) -> StateEvaluation:
         return evaluate_key_value_state(

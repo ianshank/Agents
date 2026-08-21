@@ -319,7 +319,29 @@ class TestSqliteStateAdapter:
         assert ev.goal_reached is True
         assert ev.policy_violated is True
 
+    def test_m1_correctness_table_created_during_the_attempt_is_reflected_in_after_snapshot(self) -> None:
+        """Regression: snapshot() must re-discover tables every call, not reuse a
+        list cached at construction -- otherwise a table the target creates via
+        schema-changing SQL mid-attempt would be invisible to the after snapshot,
+        exactly the kind of claimed-but-unobserved state change F-060 exists to catch."""
+        adapter = self._adapter()
+        before = adapter.snapshot(_CTX)
+        assert "bonus" not in before.data
+        adapter.conn.execute("CREATE TABLE bonus (id INTEGER PRIMARY KEY, amount INTEGER)")
+        adapter.conn.execute("INSERT INTO bonus VALUES (1, 500)")
+        after = adapter.snapshot(_CTX)
+        assert after.data["bonus"] == ((1, 500),)
+
     # -------------------------------------------------------------- M2: edge cases
+
+    def test_m2_edge_reserved_word_table_name_is_quoted_correctly(self) -> None:
+        """A table named after a SQL keyword is legal via CREATE TABLE and must
+        not break snapshot()'s generated SELECT."""
+        adapter = SqliteStateAdapter(
+            schema_sql='CREATE TABLE "order" (id INTEGER PRIMARY KEY, item TEXT);',
+            seed_sql="INSERT INTO \"order\" VALUES (1, 'widget');",
+        )
+        assert adapter.snapshot(_CTX).data["order"] == ((1, "widget"),)
 
     def test_m2_edge_default_db_path_is_isolated_per_instance(self) -> None:
         a1 = self._adapter()

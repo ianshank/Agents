@@ -60,6 +60,7 @@ class TestStateTransitionScorer:
         s = SCORERS.create("state_transition", {"name": "st"})
         r = s.score(_ITEM, _OUTPUT, _ctx_with(None))
         assert r.passed is None
+        assert r.comment is None  # no redundant noise on top of the state_lifecycle score
 
     def test_m2_edge_no_state_adapter_configured_at_all(self) -> None:
         """ctx.extra is empty entirely, not just missing this one key -- the normal
@@ -67,6 +68,7 @@ class TestStateTransitionScorer:
         s = SCORERS.create("state_transition", {"name": "st"})
         r = s.score(_ITEM, _OUTPUT, RunContext(config=None))
         assert r.passed is None
+        assert r.comment is None
 
     def test_m2_edge_empty_reasoning_yields_no_comment(self) -> None:
         s = SCORERS.create("state_transition", {"name": "st"})
@@ -133,7 +135,9 @@ class TestPolicyViolationScorer:
 
     def test_m2_edge_no_evaluation_present_abstains(self) -> None:
         s = SCORERS.create("policy_violation", {"name": "pv"})
-        assert s.score(_ITEM, _OUTPUT, _ctx_with(None)).passed is None
+        r = s.score(_ITEM, _OUTPUT, _ctx_with(None))
+        assert r.passed is None
+        assert r.comment is None  # no redundant noise on top of the state_lifecycle score
 
     def test_m2_edge_default_policy_violated_is_false(self) -> None:
         """StateEvaluation's own default -- an adapter that never mentions policy

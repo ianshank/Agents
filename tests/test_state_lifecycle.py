@@ -124,6 +124,46 @@ class _FailingEvaluateAdapter:
         raise RuntimeError("evaluate crashed")
 
 
+class _FailsFromSecondAttemptAdapter:
+    """The first attempt's full lifecycle succeeds cleanly; every attempt after
+    that fails snapshot(before) -- proving a later attempt whose lifecycle
+    fails cannot inherit an earlier attempt's stale StateEvaluation from a
+    RunContext the sequential single-attempt path shares across items."""
+
+    def __init__(self) -> None:
+        self.attempt = 0
+
+    def reset(self, ctx: RunContext) -> None:
+        self.attempt += 1
+
+    def snapshot(self, ctx: RunContext) -> StateSnapshot:
+        if self.attempt > 1:
+            raise RuntimeError("snapshot backend outage")
+        return StateSnapshot(data={"attempt": self.attempt})
+
+    def evaluate(self, *, item, before, after) -> StateEvaluation:
+        return StateEvaluation(goal_reached=True, reasoning="attempt-1-succeeded")
+
+
+class _PerItemCapturingScorer:
+    """Records ctx.extra["state_evaluation"] as seen at scoring time, once per
+    item scored -- unlike the single-shot capture in
+    test_state_evaluation_reaches_the_scorer_context, this tracks a sequence
+    across every item in a multi-item run."""
+
+    name = "capture"
+
+    def __init__(self) -> None:
+        self.seen: list[object] = []
+
+    def score(self, item, output, ctx):
+        self.seen.append(ctx.extra.get("state_evaluation"))
+        return ScoreResult(self.name, value=1.0, passed=True)
+
+    def uses_judge(self) -> bool:
+        return False
+
+
 class _CountingTargetThatFailsOnce:
     """Raises on its first call, succeeds thereafter -- proves reset for a later
     attempt does not depend on an earlier attempt's target having succeeded."""
@@ -334,6 +374,25 @@ class TestNoLeakageAcrossRepeatedAttempts:
         engine.state_adapter = adapter
         engine.run()
         assert adapter.calls.count("reset") == 6  # 2 items x 3 attempts
+
+
+class TestNoLeakageAcrossSequentialItems:
+    def test_a_later_items_lifecycle_failure_does_not_inherit_an_earlier_items_evaluation(self):
+        """Regression: the max_workers==1/repetitions==1 path shares one
+        RunContext across every item (run(), the "EXACTLY the original
+        behaviour" branch). Before the fix, item 2's failed snapshot(before)
+        left ctx.extra["state_evaluation"] holding item 1's genuine
+        StateEvaluation, so the state scorers would score item 2 using item
+        1's data instead of correctly abstaining."""
+        adapter = _FailsFromSecondAttemptAdapter()
+        capture = _PerItemCapturingScorer()
+        engine = _engine(_config(n_items=2))
+        engine.state_adapter = adapter
+        engine.scorers = [capture]
+        engine.run()
+        assert len(capture.seen) == 2
+        assert isinstance(capture.seen[0], StateEvaluation)  # item 1: genuine evaluation
+        assert capture.seen[1] is None  # item 2: must not see item 1's stale evaluation
 
 
 class TestConcurrencyLock:

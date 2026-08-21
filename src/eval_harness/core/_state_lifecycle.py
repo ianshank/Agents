@@ -53,6 +53,13 @@ def run_state_bracketed_attempt(
     — never caught here — when ``reset`` itself fails.
     """
     with lock:
+        # Cleared unconditionally, before anything else: the legacy
+        # max_workers==1/repetitions==1 path reuses one RunContext across every
+        # item, so without this a later item's snapshot/evaluate failure would
+        # leave an earlier item's stale StateEvaluation readable by the state
+        # scorers instead of correctly reading as "no evaluation" for this item.
+        ctx.extra.pop("state_evaluation", None)
+
         try:
             state_adapter.reset(ctx)
         except Exception as exc:

@@ -120,7 +120,7 @@ Aliases (sink):
 | `filesystem` | 3 | 4 | 1 | 1 | 2 |
 | `in_memory` | 3 | 3 | 1 | 1 | 3 |
 | `mock_http` | 5 | 3 | 1 | 1 | 3 |
-| `sqlite` | 3 | 3 | 1 | 1 | 2 |
+| `sqlite` | 4 | 4 | 1 | 1 | 2 |
 
 ## target (floor: M1, M2, M3, M6)
 

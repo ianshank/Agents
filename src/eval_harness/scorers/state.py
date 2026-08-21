@@ -40,7 +40,7 @@ class StateTransitionScorer(Scorer):
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
         evaluation = _read_evaluation(ctx)
         if evaluation is None:
-            return ScoreResult(self.name, value=0.0, passed=None, comment="no state evaluation available")
+            return ScoreResult(self.name, value=0.0, passed=None, comment=None)
         return ScoreResult(
             self.name,
             value=1.0 if evaluation.goal_reached else 0.0,
@@ -64,7 +64,7 @@ class PolicyViolationScorer(Scorer):
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
         evaluation = _read_evaluation(ctx)
         if evaluation is None:
-            return ScoreResult(self.name, value=0.0, passed=None, comment="no state evaluation available")
+            return ScoreResult(self.name, value=0.0, passed=None, comment=None)
         passed = not evaluation.policy_violated
         return ScoreResult(
             self.name,
