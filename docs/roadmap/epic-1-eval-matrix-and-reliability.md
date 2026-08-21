@@ -6,19 +6,15 @@ Core evaluation capabilities, trajectory evaluation, matrix coverage completenes
 ## Landed Features & Milestones
 - **[x] Agent Trajectory Evaluation (F-051, ADR 0031)**: Deterministic normalization, structural immutability, canonical trajectory hash generation, O(n) loop detection, and trajectory scoring.
 - **[x] Matrix Completeness & Freshness Gate (F-053, ADR 0032)**: Registry census + AST cell map + per-kind dim floors + `docs/matrix-coverage.md` freshness verification.
-- **[x] Core Interfaces Protocol Migration**: All 5 core interfaces (`Scorer`, `Judge`, `DatasetSource`, `TargetRunner`, `ResultSink`) declared as structural `typing.Protocol` with Python 3.11 floor (ADR 0034).
+- **[x] Core Interfaces Protocol Migration**: All 6 core interfaces (`Scorer`, `Judge`, `DatasetSource`, `TargetRunner`, `ResultSink`, `StateAdapter`) declared as structural `typing.Protocol` with Python 3.11 floor (ADR 0034; `StateAdapter` added by F-060).
+- **[x] Repeated-Run Reliability (F-056, `pass^k`)**: `run.repetitions` executes $k$ independent `target.run` invocations; `ReliabilityAggregator` computes `pass@k`/`pass^k` per item, never pooled; a `deterministic_sampling` diagnostic fires when a deterministic target makes variance structurally uninformative. Landed as PR #159 and PR #160 (merged 2026-08-18).
+- **[x] Panel / Council Judge (F-059, `add-panel-judge`)**: Aggregates $N$ member judges under explicit strategies (`median`, `mean`, `majority`); surfaces per-member verdicts, disagreement spread, and inter-rater agreement ($\kappa$); `BudgetedJudge` charges `calls_per_evaluate` per member so an N-member panel is billed correctly, not under-charged by factor N. Landed as PR #162 (merged 2026-08-21).
+- **[x] Judge Bias Probing & Calibration (F-057)**: Order-flip, verbosity-preference, and self-preference probes in `agent_core/judge_calibration.py`, isolated from `eval_harness` to preserve the `eval_harness ⇎ flow_corpus` airgap; `JudgeCalibrationReport.may_gate` blocks gating on an uncalibrated or biased judge. Landed as PR #160 (merged 2026-08-18).
 
 ## In Progress & Planned
-1. **Repeated-Run Reliability (`pass^k`)**:
-   - Execute $k$ independent `target.run` invocations.
-   - Calculate binomial confidence intervals without synthetic variance injection.
-   - Diagnostic warning when deterministic target configuration makes variance uninformative.
-2. **Panel / Council Judge (PR #142, `add-panel-judge`)**:
-   - Aggregate $N$ member judges under explicit strategies (`median`, `mean`, `majority`).
-   - Surface per-member verdicts, disagreement spread, and inter-rater agreement ($\kappa$).
-   - Multi-call budget accounting in `agent_core_adapter`.
-3. **Stateful Outcome Evaluation**:
-   - Sequential step evaluation with state-transition validation.
-   - Attempt isolation and rollbacks for stateful environment targets.
-4. **Judge Bias Probing & Calibration**:
-   - Probe math isolated in `agent_core` to preserve the `eval_harness ⇎ flow_corpus` airgap.
+1. **Stateful Outcome Evaluation (F-060, `add-stateful-outcome-evaluation`)**:
+   - Implemented: `StateAdapter` protocol (`snapshot`/`evaluate`/`reset`) with the engine
+     bracketing each attempt `reset → snapshot(before) → target.run → snapshot(after) →
+     evaluate` under a lock; `state_transition`/`policy_violation` scorers; four local
+     deterministic adapters (`in_memory`, `filesystem`, `sqlite`, `mock_http`).
+   - Landed as PR #163 — open, all CI green, review findings addressed, not yet merged.

@@ -20,7 +20,7 @@ from typing import Any, cast
 
 from .config.models import EvalConfig
 from .core._reliability_diagnostics import _reliability_diagnostics
-from .core._state_lifecycle import run_state_bracketed_attempt
+from .core._state_lifecycle import log_state_adapter_configured, run_state_bracketed_attempt
 from .core.interfaces import (
     DatasetSource,
     Judge,
@@ -130,7 +130,7 @@ class EvalEngine:
         state_adapter = None
         if config.state_adapter is not None:
             state_adapter = STATE_ADAPTERS.create(config.state_adapter.type, config.state_adapter.params)
-
+            log_state_adapter_configured(config.state_adapter.type, config.run.max_workers)
         # Wrap the judge with a cost cap when enabled (F-022). Imported lazily so
         # the offline path never pulls in agent_core unless budgeting is on.
         #

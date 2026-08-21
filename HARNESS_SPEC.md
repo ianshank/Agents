@@ -22,8 +22,8 @@ first-class Langfuse and Phoenix integration for observability, analytics, and
 regression tracking.
 
 The harness is offline-first, test-driven, and extensible: new judges,
-scorers, sinks, datasets, and targets slot in via registry patterns without
-touching core orchestration code.
+scorers, sinks, datasets, targets, and state adapters slot in via registry
+patterns without touching core orchestration code.
 
 ---
 
@@ -36,7 +36,7 @@ see [docs/CHARTER.md](docs/CHARTER.md) §3.
 ### In-scope
 - LLM-as-judge evaluation pipelines (multi-provider)
 - Langfuse and Phoenix trace/score/dataset integration (SDK-optional seams)
-- Pluggable scorer, judge, sink, dataset, and target registries
+- Pluggable scorer, judge, sink, dataset, target, and state adapter registries
 - Automated validation of every feature via harness scripts
 - Config-driven evaluation runs (YAML/env)
 - CLI and programmatic API
@@ -59,7 +59,7 @@ This package applies them via the specific mechanisms below:
 
 | Charter invariant | How `eval_harness` enforces it |
 |---|-----------|
-| Open/closed extensibility | Judges, scorers, sinks, datasets, and targets register via `eval_harness.plugins`' `SCORERS`/`JUDGES`/`SINKS`/`DATASETS`/`TARGETS` registries — never by editing the engine |
+| Open/closed extensibility | Judges, scorers, sinks, datasets, targets, and state adapters register via `eval_harness.plugins`' `SCORERS`/`JUDGES`/`SINKS`/`DATASETS`/`TARGETS`/`STATE_ADAPTERS` registries — never by editing the engine |
 | No raw `print()` in production paths | Lint rule (ruff) |
 | External API calls mocked in tests | Full offline deterministic matrix coverage (`tests/test_matrix_eval_tools.py`); completeness enforced by `tests/test_matrix_coverage.py` — derived registry census, per-kind dimension floors (ADR 0032) — and rendered in the generated, freshness-gated `docs/matrix-coverage.md` |
 | Dependency-direction discipline | `architecture.yaml` + `skills/architecture-drift-guard` (grimp-based import-graph diff, CI-enforced) |

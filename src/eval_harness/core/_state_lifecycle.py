@@ -24,6 +24,26 @@ from .types import EvalItem, RunContext, ScoreResult, StateSnapshot, TargetOutpu
 logger = logging.getLogger(__name__)
 
 
+def log_state_adapter_configured(adapter_type: str, max_workers: int) -> None:
+    """Log that a ``state_adapter`` was wired into an engine, warning when it will
+    serialize ``target.run()`` under Decision C's concurrency lock.
+
+    Runtime visibility for a real, already-documented behaviour change: under
+    ``max_workers>1`` a configured adapter forces attempts to run one at a time,
+    not just its own reset/snapshot/evaluate calls -- an operator watching
+    throughput should see why, not have to find this module's docstring.
+    """
+    logger.info("state_adapter configured: type=%r", adapter_type)
+    if max_workers > 1:
+        logger.warning(
+            "state_adapter %r configured with max_workers=%d: target.run() will be "
+            "serialized under the adapter's lock for the whole attempt span, not just "
+            "the adapter's own calls",
+            adapter_type,
+            max_workers,
+        )
+
+
 def _failed_state_score(reason: str) -> ScoreResult:
     """A synthetic failing score reporting a StateAdapter lifecycle failure.
 

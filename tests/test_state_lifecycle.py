@@ -436,3 +436,31 @@ class TestConfigWiring:
         config = load_config_dict(_config(n_items=1))
         engine = EvalEngine.from_config(config)
         assert engine.state_adapter is None
+
+    def test_state_adapter_configured_logs_at_info(self, caplog):
+        cfg = _config(n_items=1)
+        cfg["state_adapter"] = {"type": "in_memory", "params": {}}
+        with caplog.at_level("INFO", logger="eval_harness.core._state_lifecycle"):
+            EvalEngine.from_config(load_config_dict(cfg))
+        assert any(
+            r.levelname == "INFO" and "state_adapter configured" in r.message and "in_memory" in r.message
+            for r in caplog.records
+        )
+
+    def test_state_adapter_with_max_workers_over_1_logs_a_warning(self, caplog):
+        """Decision C's concurrency cost, surfaced live -- not just documented."""
+        cfg = _config(n_items=1, extra_run={"max_workers": 2})
+        cfg["state_adapter"] = {"type": "in_memory", "params": {}}
+        with caplog.at_level("WARNING", logger="eval_harness.core._state_lifecycle"):
+            EvalEngine.from_config(load_config_dict(cfg))
+        assert any(
+            r.levelname == "WARNING" and "serialized" in r.message and "max_workers=2" in r.message
+            for r in caplog.records
+        )
+
+    def test_state_adapter_with_default_max_workers_does_not_warn(self, caplog):
+        cfg = _config(n_items=1)
+        cfg["state_adapter"] = {"type": "in_memory", "params": {}}
+        with caplog.at_level("WARNING", logger="eval_harness.core._state_lifecycle"):
+            EvalEngine.from_config(load_config_dict(cfg))
+        assert not [r for r in caplog.records if r.levelname == "WARNING"]
