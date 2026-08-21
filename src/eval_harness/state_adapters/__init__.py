@@ -167,3 +167,52 @@ class SqliteStateAdapter(StateAdapter):
     def reset(self, ctx: RunContext) -> None:
         self.conn.execute(f"ROLLBACK TO SAVEPOINT {_SAVEPOINT}")
         self.conn.execute(f"SAVEPOINT {_SAVEPOINT}")
+
+
+@STATE_ADAPTERS.register("mock_http")
+class MockHttpStateAdapter(StateAdapter):
+    """An in-process mock HTTP service, reset to its initial resources per attempt.
+
+    No network on the offline path (``design.md`` "Adapter scope") —
+    :meth:`request` is a plain in-process method call, not a socket, mirroring
+    :class:`InMemoryStateAdapter`'s ``set()``/``update()`` as this adapter's
+    own mutation surface.
+
+    Tracks two things per endpoint path: the current resource body, and how
+    many times the path has been called — so an item's ``state_expectation``
+    can declare either "resource X now looks like Y" (keyed by the path
+    itself) or "endpoint X was called N times" (keyed by ``"calls:X"``,
+    prefixed so it never collides with a literal resource path), both
+    through the same flat key -> value shape :func:`evaluate_key_value_state`
+    already handles.
+    """
+
+    def __init__(self, initial_resources: dict[str, Any] | None = None) -> None:
+        self._initial: dict[str, Any] = dict(initial_resources or {})
+        self._resources: dict[str, Any] = dict(self._initial)
+        self._call_counts: dict[str, int] = {}
+
+    def request(self, method: str, path: str, body: Any = None) -> Any:
+        """Simulate one HTTP call. GET reads; PUT/POST write ``body``; DELETE removes."""
+        method = method.upper()
+        self._call_counts[path] = self._call_counts.get(path, 0) + 1
+        if method == "GET":
+            return self._resources.get(path)
+        if method in ("PUT", "POST"):
+            self._resources[path] = body
+            return body
+        if method == "DELETE":
+            return self._resources.pop(path, None)
+        raise ValueError(f"MockHttpStateAdapter: unsupported method {method!r}")
+
+    def snapshot(self, ctx: RunContext) -> StateSnapshot:
+        data: dict[str, Any] = dict(self._resources)
+        data.update({f"calls:{path}": count for path, count in self._call_counts.items()})
+        return StateSnapshot(data=data)
+
+    def evaluate(self, *, item: EvalItem, before: StateSnapshot, after: StateSnapshot) -> StateEvaluation:
+        return evaluate_key_value_state(item, before, after)
+
+    def reset(self, ctx: RunContext) -> None:
+        self._resources = dict(self._initial)
+        self._call_counts = {}

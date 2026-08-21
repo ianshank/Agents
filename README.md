@@ -399,7 +399,8 @@ src/eval_harness/
                      majority, quorum + disagreement-threshold abstention; F-059)
   state_adapters/    in_memory (deterministic key/value store), filesystem (sandboxed
                      directory tree, content-hashed snapshots), sqlite (transactional
-                     SAVEPOINT/ROLLBACK TO reset; F-060) — the engine brackets
+                     SAVEPOINT/ROLLBACK TO reset), mock_http (in-process request/
+                     resource simulation, no network; F-060) — the engine brackets
                      target.run with reset/snapshot/evaluate when configured,
                      detecting an agent that reports success without changing anything
   langfuse_client/   Langfuse tracing + score export (SDK-optional seam)

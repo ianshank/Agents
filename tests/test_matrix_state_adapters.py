@@ -1,5 +1,5 @@
-"""Test Matrix: the ``in_memory``/``filesystem``/``sqlite`` state adapters
-(F-060, ``add-stateful-outcome-evaluation``).
+"""Test Matrix: the ``in_memory``/``filesystem``/``sqlite``/``mock_http`` state
+adapters (F-060, ``add-stateful-outcome-evaluation``).
 
 Split into its own file rather than grown inside ``test_matrix_eval_tools.py`` —
 the cell-map extractor globs ``test_matrix_*.py``, so a per-feature file is a
@@ -30,7 +30,12 @@ import pytest
 
 from eval_harness.core.types import EvalItem, RunContext, StateEvaluation, StateSnapshot
 from eval_harness.plugins import bootstrap
-from eval_harness.state_adapters import FilesystemStateAdapter, InMemoryStateAdapter, SqliteStateAdapter
+from eval_harness.state_adapters import (
+    FilesystemStateAdapter,
+    InMemoryStateAdapter,
+    MockHttpStateAdapter,
+    SqliteStateAdapter,
+)
 
 _ACCOUNTS_SCHEMA = "CREATE TABLE accounts (id INTEGER PRIMARY KEY, name TEXT, balance INTEGER);"
 _ACCOUNTS_SEED = "INSERT INTO accounts VALUES (1, 'alice', 100), (2, 'bob', 50);"
@@ -365,6 +370,119 @@ class TestSqliteStateAdapter:
 
     def test_m6_error_non_iterable_forbidden_keys_rejected(self) -> None:
         adapter = self._adapter()
+        snap = adapter.snapshot(_CTX)
+        with pytest.raises(TypeError, match="state_forbidden_keys must be an iterable"):
+            adapter.evaluate(item=_item(state_forbidden_keys=42), before=snap, after=snap)
+
+
+class TestMockHttpStateAdapter:
+    """``mock_http`` state adapter test matrix."""
+
+    MATRIX_KIND = "state_adapter"
+    MATRIX_COMPONENTS = ("mock_http",)
+
+    # -------------------------------------------------------------- M1: correctness
+
+    def test_m1_correctness_goal_reached_on_resource_content(self) -> None:
+        adapter = MockHttpStateAdapter()
+        before = adapter.snapshot(_CTX)
+        adapter.request("PUT", "/users/1", {"name": "alice"})
+        after = adapter.snapshot(_CTX)
+        ev = adapter.evaluate(
+            item=_item(state_expectation={"/users/1": {"name": "alice"}}), before=before, after=after
+        )
+        assert ev.goal_reached is True
+
+    def test_m1_correctness_goal_reached_on_call_count(self) -> None:
+        """An item can assert 'endpoint X was called N times' via the calls: prefix,
+        not just resource content -- proving an agent actually made the request."""
+        adapter = MockHttpStateAdapter()
+        before = adapter.snapshot(_CTX)
+        adapter.request("POST", "/webhook", {"event": "done"})
+        adapter.request("POST", "/webhook", {"event": "done"})
+        after = adapter.snapshot(_CTX)
+        ev = adapter.evaluate(item=_item(state_expectation={"calls:/webhook": 2}), before=before, after=after)
+        assert ev.goal_reached is True
+
+    def test_m1_correctness_goal_reached_via_forbidden_call_still_flags_policy(self) -> None:
+        """The exact scenario tasks.md names: goal true, policy check failed, overall fail."""
+        adapter = MockHttpStateAdapter(initial_resources={"/config": "locked"})
+        before = adapter.snapshot(_CTX)
+        adapter.request("PUT", "/users/1", {"name": "alice"})
+        adapter.request("PUT", "/config", "unlocked")  # forbidden mutation
+        after = adapter.snapshot(_CTX)
+        ev = adapter.evaluate(
+            item=_item(
+                state_expectation={"/users/1": {"name": "alice"}},
+                state_forbidden_keys=["/config"],
+            ),
+            before=before,
+            after=after,
+        )
+        assert ev.goal_reached is True
+        assert ev.policy_violated is True
+
+    def test_m1_correctness_get_reads_without_mutating(self) -> None:
+        adapter = MockHttpStateAdapter(initial_resources={"/users/1": {"name": "alice"}})
+        assert adapter.request("GET", "/users/1") == {"name": "alice"}
+        assert adapter.snapshot(_CTX).data["/users/1"] == {"name": "alice"}
+
+    def test_m1_correctness_delete_removes_the_resource(self) -> None:
+        adapter = MockHttpStateAdapter(initial_resources={"/users/1": {"name": "alice"}})
+        adapter.request("DELETE", "/users/1")
+        assert "/users/1" not in adapter.snapshot(_CTX).data
+
+    # -------------------------------------------------------------- M2: edge cases
+
+    def test_m2_edge_no_calls_yet_has_no_call_count_keys(self) -> None:
+        adapter = MockHttpStateAdapter()
+        assert not [k for k in adapter.snapshot(_CTX).data if k.startswith("calls:")]
+
+    def test_m2_edge_reset_restores_initial_resources_and_clears_call_counts(self) -> None:
+        adapter = MockHttpStateAdapter(initial_resources={"/seed": "value"})
+        adapter.request("PUT", "/users/1", {"name": "alice"})
+        adapter.reset(_CTX)
+        assert adapter.snapshot(_CTX).data == {"/seed": "value"}
+
+    def test_m2_edge_method_is_case_insensitive(self) -> None:
+        adapter = MockHttpStateAdapter()
+        adapter.request("put", "/x", "v")
+        assert adapter.snapshot(_CTX).data["/x"] == "v"
+
+    # -------------------------------------------------------------- M3: type safety
+
+    def test_m3_type_safety(self) -> None:
+        adapter = MockHttpStateAdapter()
+        snap = adapter.snapshot(_CTX)
+        assert isinstance(snap, StateSnapshot)
+        assert isinstance(snap.data, Mapping)
+        ev = adapter.evaluate(item=_item(), before=snap, after=snap)
+        assert isinstance(ev, StateEvaluation)
+        assert isinstance(ev.goal_reached, bool)
+
+    # -------------------------------------------------------------- M5: determinism
+
+    def test_m5_determinism(self) -> None:
+        adapter = MockHttpStateAdapter()
+        adapter.request("PUT", "/users/1", {"name": "alice"})
+        results = [adapter.snapshot(_CTX).data for _ in range(10)]
+        assert all(r == results[0] for r in results)
+
+    # -------------------------------------------------------------- M6: error handling
+
+    def test_m6_error_unsupported_method_rejected(self) -> None:
+        adapter = MockHttpStateAdapter()
+        with pytest.raises(ValueError, match="unsupported method"):
+            adapter.request("PATCH", "/users/1", {})
+
+    def test_m6_error_non_mapping_state_expectation_rejected(self) -> None:
+        adapter = MockHttpStateAdapter()
+        snap = adapter.snapshot(_CTX)
+        with pytest.raises(TypeError, match="state_expectation must be a mapping"):
+            adapter.evaluate(item=_item(state_expectation=["not", "a", "mapping"]), before=snap, after=snap)
+
+    def test_m6_error_non_iterable_forbidden_keys_rejected(self) -> None:
+        adapter = MockHttpStateAdapter()
         snap = adapter.snapshot(_CTX)
         with pytest.raises(TypeError, match="state_forbidden_keys must be an iterable"):
             adapter.evaluate(item=_item(state_forbidden_keys=42), before=snap, after=snap)
