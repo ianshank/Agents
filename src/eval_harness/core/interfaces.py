@@ -121,6 +121,29 @@ class Judge(Protocol):
     def evaluate(self, prompt: str, context: dict[str, Any] | None = None) -> JudgeVerdict: ...
 
 
+class StateSnapshotError(RuntimeError):
+    """Wraps a ``StateAdapter.snapshot()``/``evaluate()`` failure.
+
+    Always fails just the item: caught inside ``EvalEngine._run_one`` and
+    reported as a synthetic failing score, never propagated, regardless of
+    ``fail_fast``. A state check that silently degrades to "no opinion" on
+    adapter failure is worse than no state check at all (``design.md``
+    "Failure semantics") — the item must visibly fail, not vanish the way an
+    uncaught target error can under parallel execution with ``fail_fast=False``.
+    """
+
+
+class StateResetError(RuntimeError):
+    """Wraps a ``StateAdapter.reset()`` failure.
+
+    Always aborts the run: continuing would score subsequent attempts against
+    contaminated state (``design.md`` "Failure semantics"). Never
+    ``fail_fast``-gated, unlike every other engine failure path — propagates
+    uncaught out of ``EvalEngine._run_one``, and ``_run_one_safe``/
+    ``_run_parallel`` are taught to re-raise rather than swallow it.
+    """
+
+
 @runtime_checkable
 class StateAdapter(Protocol):
     """Captures and judges world-state transitions the target's own account can't be trusted for.

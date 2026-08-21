@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import random
 import statistics
+import threading
 import uuid
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -19,7 +20,17 @@ from typing import Any, cast
 
 from .config.models import EvalConfig
 from .core._reliability_diagnostics import _reliability_diagnostics
-from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner, _uses_judge
+from .core._state_lifecycle import run_state_bracketed_attempt
+from .core.interfaces import (
+    DatasetSource,
+    Judge,
+    ResultSink,
+    Scorer,
+    StateAdapter,
+    StateResetError,
+    TargetRunner,
+    _uses_judge,
+)
 from .core.types import (
     EvalItem,
     ItemResult,
@@ -29,7 +40,7 @@ from .core.types import (
     ScoreResult,
 )
 from .langfuse_client import LangfuseClient, observe
-from .plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS, bootstrap
+from .plugins import DATASETS, JUDGES, SCORERS, SINKS, STATE_ADAPTERS, TARGETS, bootstrap
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +76,7 @@ class EvalEngine:
         scorers: list[Scorer],
         sinks: list[ResultSink],
         judge: Judge | None = None,
+        state_adapter: StateAdapter | None = None,
         rng: random.Random | None = None,
         clock: Callable[[], datetime] = _utcnow,
     ) -> None:
@@ -75,6 +87,10 @@ class EvalEngine:
         self.scorers = sorted(scorers, key=_uses_judge)
         self.sinks = sinks
         self.judge = judge
+        self.state_adapter = state_adapter
+        # Serializes target.run() itself when a state adapter is configured -- see
+        # core/_state_lifecycle.py's module docstring for the concurrency rationale.
+        self._state_lock = threading.Lock()
         self.rng = rng or random.Random(config.run.seed)
         self.clock = clock
         self.langfuse_client: LangfuseClient | None = None
@@ -111,6 +127,9 @@ class EvalEngine:
                     judge_params = {**judge_params, "system": resolved}
             judge = JUDGES.create(config.judge.type, judge_params)
         sinks = [SINKS.create(s.type, s.params) for s in config.sinks]
+        state_adapter = None
+        if config.state_adapter is not None:
+            state_adapter = STATE_ADAPTERS.create(config.state_adapter.type, config.state_adapter.params)
 
         # Wrap the judge with a cost cap when enabled (F-022). Imported lazily so
         # the offline path never pulls in agent_core unless budgeting is on.
@@ -143,6 +162,7 @@ class EvalEngine:
             scorers=scorers,
             sinks=sinks,
             judge=judge,
+            state_adapter=state_adapter,
         )
         engine.langfuse_client = langfuse_client
         return engine
@@ -170,12 +190,27 @@ class EvalEngine:
         call, so the returned ``ItemResult`` serializes byte-identically to the
         pre-reliability-metrics harness (mirrors the ``trajectory`` precedent,
         ADR 0031 obligation 4).
+
+        When ``self.state_adapter`` is configured, ``run_state_bracketed_attempt``
+        (``core/_state_lifecycle.py``) brackets ``target.run`` with the adapter's
+        reset/snapshot/evaluate lifecycle; unconfigured is a strict no-op (ADR
+        0031 obligation 1).
         """
         from .langfuse_client import langfuse_context
 
-        output = self.target.run(item)
+        state_score: ScoreResult | None = None
+        if self.state_adapter is not None:
+            output, state_score = run_state_bracketed_attempt(
+                target=self.target, state_adapter=self.state_adapter, lock=self._state_lock, item=item, ctx=ctx
+            )
+        else:
+            output = self.target.run(item)
+
         scores: list[ScoreResult] = []
         programmatic_failed = False
+        if state_score is not None:
+            scores.append(state_score)
+            programmatic_failed = True
         for scorer in self.scorers:
             # F-057: skip a judge once a programmatic scorer has failed (routing, not an outcome).
             if _uses_judge(scorer) and programmatic_failed:
@@ -259,6 +294,8 @@ class EvalEngine:
                 result = self._run_one(item, ctx, attempt_index=attempt_index, item_run_id=item_run_id)
             item_logger.debug("Completed item %s (index=%d)", item.id, index)
             return (index, result)
+        except StateResetError:
+            raise  # never swallowed -- always aborts the run, regardless of fail_fast
         except Exception as exc:
             item_logger.error("Item %s (index=%d) failed: %s", item.id, index, exc)
             return (index, exc)
@@ -335,7 +372,12 @@ class EvalEngine:
                     )
 
             for future in futures:
-                index, result_or_exc = future.result()
+                try:
+                    index, result_or_exc = future.result()
+                except StateResetError:
+                    # Never fail_fast-gated -- continuing risks scoring against dirty state.
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    raise
                 if isinstance(result_or_exc, Exception):
                     if first_error is None:
                         first_error = result_or_exc
