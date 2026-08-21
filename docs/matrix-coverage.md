@@ -117,6 +117,7 @@ Aliases (sink):
 
 | component | M1 | M2 | M3 | M5 | M6 |
 |---|---|---|---|---|---|
+| `filesystem` | 3 | 4 | 1 | 1 | 2 |
 | `in_memory` | 3 | 3 | 1 | 1 | 3 |
 
 ## target (floor: M1, M2, M3, M6)

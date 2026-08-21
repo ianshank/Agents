@@ -63,6 +63,7 @@
     "phoenix"
   ],
   "state_adapter": [
+    "filesystem",
     "in_memory"
   ],
   "target": [

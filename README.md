@@ -397,7 +397,8 @@ src/eval_harness/
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
                      phoenix_evals, panel (aggregates N member judges — median/mean/
                      majority, quorum + disagreement-threshold abstention; F-059)
-  state_adapters/    in_memory (deterministic key/value store; F-060) — the engine
+  state_adapters/    in_memory (deterministic key/value store), filesystem (sandboxed
+                     directory tree, content-hashed snapshots; F-060) — the engine
                      brackets target.run with reset/snapshot/evaluate when configured,
                      detecting an agent that reports success without changing anything
   langfuse_client/   Langfuse tracing + score export (SDK-optional seam)

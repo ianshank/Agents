@@ -9,12 +9,17 @@ same ``StateAdapter`` seam (``core/interfaces.py``).
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+import hashlib
+import shutil
+import tempfile
+from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from ..core.interfaces import StateAdapter
 from ..core.types import EvalItem, RunContext, StateEvaluation, StateSnapshot
 from ..plugins import STATE_ADAPTERS
+from ._common import evaluate_key_value_state
 
 
 @STATE_ADAPTERS.register("in_memory")
@@ -56,36 +61,49 @@ class InMemoryStateAdapter(StateAdapter):
         return StateSnapshot(data=dict(self._store))
 
     def evaluate(self, *, item: EvalItem, before: StateSnapshot, after: StateSnapshot) -> StateEvaluation:
-        expectation = item.metadata.get("state_expectation")
-        if expectation is not None and not isinstance(expectation, Mapping):
-            raise TypeError(
-                f"item {item.id!r}: state_expectation must be a mapping, got {type(expectation).__name__}"
-            )
-        forbidden = item.metadata.get("state_forbidden_keys", ())
-        if not isinstance(forbidden, Iterable) or isinstance(forbidden, (str, bytes)):
-            raise TypeError(
-                f"item {item.id!r}: state_forbidden_keys must be an iterable of keys, "
-                f"got {type(forbidden).__name__}"
-            )
-
-        if expectation:
-            goal_reached = all(after.data.get(k) == v for k, v in expectation.items())
-            reasoning = "state_expectation met" if goal_reached else "state_expectation not met"
-        else:
-            goal_reached = after.data != before.data
-            reasoning = "no state_expectation declared; goal_reached reports whether the store changed"
-
-        violated_keys = [k for k in forbidden if before.data.get(k) != after.data.get(k)]
-        policy_violated = bool(violated_keys)
-        if policy_violated:
-            reasoning = f"{reasoning}; forbidden keys mutated: {violated_keys}"
-
-        return StateEvaluation(
-            goal_reached=goal_reached,
-            policy_violated=policy_violated,
-            reasoning=reasoning,
-            metadata={"before": dict(before.data), "after": dict(after.data)},
-        )
+        return evaluate_key_value_state(item, before, after)
 
     def reset(self, ctx: RunContext) -> None:
         self._store = dict(self._initial)
+
+
+@STATE_ADAPTERS.register("filesystem")
+class FilesystemStateAdapter(StateAdapter):
+    """A sandboxed directory tree, reset to empty per attempt.
+
+    ``root`` defaults to a fresh, unique temp directory. Confinement is
+    achieved by exposing this single directory as the sandbox surface —
+    whatever plays the role of the target's world writes under :attr:`root`
+    — not by intercepting writes elsewhere; the same trust boundary
+    :class:`InMemoryStateAdapter` has for its own ``set()``/``update()``.
+
+    :meth:`snapshot` walks ``root`` recursively and hashes each file's
+    content (sha256) rather than storing raw bytes, so a snapshot stays
+    lightweight regardless of file size. ``evaluate`` reuses
+    :func:`evaluate_key_value_state`'s ``state_expectation``/
+    ``state_forbidden_keys`` conventions, with expected content hashed the
+    same way before comparing — since the snapshot never stores raw content.
+    """
+
+    def __init__(self, root: str | None = None) -> None:
+        self.root = Path(root) if root is not None else Path(tempfile.mkdtemp(prefix="eval-harness-fs-state-"))
+        self.root.mkdir(parents=True, exist_ok=True)
+
+    def _hash_tree(self) -> dict[str, Any]:
+        return {
+            path.relative_to(self.root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(self.root.rglob("*"))
+            if path.is_file()
+        }
+
+    def snapshot(self, ctx: RunContext) -> StateSnapshot:
+        return StateSnapshot(data=self._hash_tree())
+
+    def evaluate(self, *, item: EvalItem, before: StateSnapshot, after: StateSnapshot) -> StateEvaluation:
+        return evaluate_key_value_state(
+            item, before, after, expected_transform=lambda content: hashlib.sha256(content.encode()).hexdigest()
+        )
+
+    def reset(self, ctx: RunContext) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+        self.root.mkdir(parents=True, exist_ok=True)

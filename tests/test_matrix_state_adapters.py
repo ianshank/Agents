@@ -1,4 +1,5 @@
-"""Test Matrix: the ``in_memory`` state adapter (F-060, ``add-stateful-outcome-evaluation``).
+"""Test Matrix: the ``in_memory``/``filesystem`` state adapters (F-060,
+``add-stateful-outcome-evaluation``).
 
 Split into its own file rather than grown inside ``test_matrix_eval_tools.py`` —
 the cell-map extractor globs ``test_matrix_*.py``, so a per-feature file is a
@@ -8,15 +9,28 @@ M5 exclusion — because every adapter shipped here is deterministic by design
 (``design.md`` "Adapter scope"), not a provider-owned property (ADR 0032 errata,
 2026-08-21).
 
+Adapters are constructed directly (``InMemoryStateAdapter(...)``, not
+``STATE_ADAPTERS.create("in_memory", ...)``) — these tests exercise each
+adapter's own extended surface (``set``/``update``, ``root``) beyond the
+``StateAdapter`` Protocol, which the registry's ``create()`` cannot statically
+type. Registry wiring itself is proven separately
+(``tests/test_state_adapter_contracts.py``, ``tests/test_state_lifecycle.py``'s
+``TestConfigWiring``); ``bootstrap()`` here only keeps ``STATE_ADAPTERS``
+populated for the census cross-check ``tests/_matrix_coverage.py`` runs
+against ``MATRIX_COMPONENTS`` in a separate process.
+
 Run: pytest tests/test_matrix_state_adapters.py -v --tb=short
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import pytest
 
 from eval_harness.core.types import EvalItem, RunContext, StateEvaluation, StateSnapshot
-from eval_harness.plugins import STATE_ADAPTERS, bootstrap
+from eval_harness.plugins import bootstrap
+from eval_harness.state_adapters import FilesystemStateAdapter, InMemoryStateAdapter
 
 bootstrap()
 
@@ -36,7 +50,7 @@ class TestInMemoryStateAdapter:
     # -------------------------------------------------------------- M1: correctness
 
     def test_m1_correctness_goal_reached_when_expectation_met(self) -> None:
-        adapter = STATE_ADAPTERS.create("in_memory", {"initial": {"balance": 0}})
+        adapter = InMemoryStateAdapter(initial={"balance": 0})
         before = adapter.snapshot(_CTX)
         adapter.set("balance", 100)
         after = adapter.snapshot(_CTX)
@@ -45,7 +59,7 @@ class TestInMemoryStateAdapter:
         assert ev.policy_violated is False
 
     def test_m1_correctness_goal_not_reached_when_expectation_unmet(self) -> None:
-        adapter = STATE_ADAPTERS.create("in_memory", {"initial": {"balance": 0}})
+        adapter = InMemoryStateAdapter(initial={"balance": 0})
         before = adapter.snapshot(_CTX)
         after = adapter.snapshot(_CTX)  # nothing written
         ev = adapter.evaluate(item=_item(state_expectation={"balance": 100}), before=before, after=after)
@@ -53,7 +67,7 @@ class TestInMemoryStateAdapter:
 
     def test_m1_correctness_goal_reached_via_forbidden_mutation_still_flags_policy(self) -> None:
         """The exact scenario tasks.md names: goal true, policy check failed, overall fail."""
-        adapter = STATE_ADAPTERS.create("in_memory", {"initial": {"balance": 0, "audit_log": "clean"}})
+        adapter = InMemoryStateAdapter(initial={"balance": 0, "audit_log": "clean"})
         before = adapter.snapshot(_CTX)
         adapter.set("balance", 100)
         adapter.set("audit_log", "tampered")
@@ -69,7 +83,7 @@ class TestInMemoryStateAdapter:
     # -------------------------------------------------------------- M2: edge cases
 
     def test_m2_edge_no_expectation_declared_reports_whether_anything_changed(self) -> None:
-        adapter = STATE_ADAPTERS.create("in_memory")
+        adapter = InMemoryStateAdapter()
         before = adapter.snapshot(_CTX)
         after = adapter.snapshot(_CTX)
         assert adapter.evaluate(item=_item(), before=before, after=after).goal_reached is False
@@ -77,14 +91,14 @@ class TestInMemoryStateAdapter:
         assert adapter.evaluate(item=_item(), before=before, after=adapter.snapshot(_CTX)).goal_reached is True
 
     def test_m2_edge_no_forbidden_keys_declared_never_flags_policy(self) -> None:
-        adapter = STATE_ADAPTERS.create("in_memory")
+        adapter = InMemoryStateAdapter()
         before = adapter.snapshot(_CTX)
         adapter.set("anything", "changed")
         after = adapter.snapshot(_CTX)
         assert adapter.evaluate(item=_item(), before=before, after=after).policy_violated is False
 
     def test_m2_edge_reset_restores_the_initial_store_not_an_empty_one(self) -> None:
-        adapter = STATE_ADAPTERS.create("in_memory", {"initial": {"seed_key": "seed_value"}})
+        adapter = InMemoryStateAdapter(initial={"seed_key": "seed_value"})
         adapter.set("scratch", "temp")
         adapter.reset(_CTX)
         assert adapter.snapshot(_CTX).data == {"seed_key": "seed_value"}
@@ -92,7 +106,7 @@ class TestInMemoryStateAdapter:
     # -------------------------------------------------------------- M3: type safety
 
     def test_m3_type_safety(self) -> None:
-        adapter = STATE_ADAPTERS.create("in_memory", {"initial": {"k": 1}})
+        adapter = InMemoryStateAdapter(initial={"k": 1})
         snap = adapter.snapshot(_CTX)
         assert isinstance(snap, StateSnapshot)
         with pytest.raises(TypeError):
@@ -106,7 +120,7 @@ class TestInMemoryStateAdapter:
     # -------------------------------------------------------------- M5: determinism
 
     def test_m5_determinism(self) -> None:
-        adapter = STATE_ADAPTERS.create("in_memory", {"initial": {"balance": 0}})
+        adapter = InMemoryStateAdapter(initial={"balance": 0})
         before = adapter.snapshot(_CTX)
         adapter.set("balance", 100)
         after = adapter.snapshot(_CTX)
@@ -119,13 +133,13 @@ class TestInMemoryStateAdapter:
     # -------------------------------------------------------------- M6: error handling
 
     def test_m6_error_non_mapping_state_expectation_rejected(self) -> None:
-        adapter = STATE_ADAPTERS.create("in_memory")
+        adapter = InMemoryStateAdapter()
         snap = adapter.snapshot(_CTX)
         with pytest.raises(TypeError, match="state_expectation must be a mapping"):
             adapter.evaluate(item=_item(state_expectation=["not", "a", "mapping"]), before=snap, after=snap)
 
     def test_m6_error_non_iterable_forbidden_keys_rejected(self) -> None:
-        adapter = STATE_ADAPTERS.create("in_memory")
+        adapter = InMemoryStateAdapter()
         snap = adapter.snapshot(_CTX)
         with pytest.raises(TypeError, match="state_forbidden_keys must be an iterable"):
             adapter.evaluate(item=_item(state_forbidden_keys=42), before=snap, after=snap)
@@ -133,7 +147,110 @@ class TestInMemoryStateAdapter:
     def test_m6_error_a_bare_string_forbidden_keys_is_rejected_not_iterated_as_chars(self) -> None:
         """A str is technically Iterable[str] -- guarding against the common footgun of
         one key ``"audit_log"`` silently being treated as ['a', 'u', 'd', 'i', 't', ...]."""
-        adapter = STATE_ADAPTERS.create("in_memory")
+        adapter = InMemoryStateAdapter()
         snap = adapter.snapshot(_CTX)
         with pytest.raises(TypeError, match="state_forbidden_keys must be an iterable"):
             adapter.evaluate(item=_item(state_forbidden_keys="audit_log"), before=snap, after=snap)
+
+
+class TestFilesystemStateAdapter:
+    """``filesystem`` state adapter test matrix."""
+
+    MATRIX_KIND = "state_adapter"
+    MATRIX_COMPONENTS = ("filesystem",)
+
+    def _write(self, adapter: FilesystemStateAdapter, relative_path: str, content: str) -> None:
+        path = adapter.root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+
+    # -------------------------------------------------------------- M1: correctness
+
+    def test_m1_correctness_goal_reached_when_file_content_matches(self, tmp_path) -> None:
+        adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        before = adapter.snapshot(_CTX)
+        self._write(adapter, "output.txt", "hello world")
+        after = adapter.snapshot(_CTX)
+        ev = adapter.evaluate(item=_item(state_expectation={"output.txt": "hello world"}), before=before, after=after)
+        assert ev.goal_reached is True
+
+    def test_m1_correctness_goal_not_reached_on_content_mismatch(self, tmp_path) -> None:
+        adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        before = adapter.snapshot(_CTX)
+        self._write(adapter, "output.txt", "wrong content")
+        after = adapter.snapshot(_CTX)
+        ev = adapter.evaluate(item=_item(state_expectation={"output.txt": "hello world"}), before=before, after=after)
+        assert ev.goal_reached is False
+
+    def test_m1_correctness_goal_reached_via_forbidden_write_still_flags_policy(self, tmp_path) -> None:
+        adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        self._write(adapter, "audit.log", "clean")
+        before = adapter.snapshot(_CTX)
+        self._write(adapter, "output.txt", "hello world")
+        self._write(adapter, "audit.log", "tampered")
+        after = adapter.snapshot(_CTX)
+        ev = adapter.evaluate(
+            item=_item(state_expectation={"output.txt": "hello world"}, state_forbidden_keys=["audit.log"]),
+            before=before,
+            after=after,
+        )
+        assert ev.goal_reached is True
+        assert ev.policy_violated is True
+
+    # -------------------------------------------------------------- M2: edge cases
+
+    def test_m2_edge_default_root_is_a_fresh_unique_temp_directory(self) -> None:
+        a1 = FilesystemStateAdapter()
+        a2 = FilesystemStateAdapter()
+        assert a1.root != a2.root
+        assert a1.root.is_dir()
+
+    def test_m2_edge_empty_sandbox_snapshots_as_an_empty_mapping(self, tmp_path) -> None:
+        adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        assert adapter.snapshot(_CTX).data == {}
+
+    def test_m2_edge_reset_removes_files_written_during_the_attempt(self, tmp_path) -> None:
+        adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        self._write(adapter, "scratch.txt", "temp")
+        adapter.reset(_CTX)
+        assert adapter.snapshot(_CTX).data == {}
+        assert adapter.root.is_dir()  # the root itself survives reset, just emptied
+
+    def test_m2_edge_nested_directories_are_hashed_by_their_full_relative_path(self, tmp_path) -> None:
+        adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        self._write(adapter, "a/b/c.txt", "nested")
+        assert list(adapter.snapshot(_CTX).data) == ["a/b/c.txt"]
+
+    # -------------------------------------------------------------- M3: type safety
+
+    def test_m3_type_safety(self, tmp_path) -> None:
+        adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        snap = adapter.snapshot(_CTX)
+        assert isinstance(snap, StateSnapshot)
+        assert isinstance(snap.data, Mapping)
+        ev = adapter.evaluate(item=_item(), before=snap, after=snap)
+        assert isinstance(ev, StateEvaluation)
+        assert isinstance(ev.goal_reached, bool)
+
+    # -------------------------------------------------------------- M5: determinism
+
+    def test_m5_determinism(self, tmp_path) -> None:
+        adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        self._write(adapter, "output.txt", "hello world")
+        snap = adapter.snapshot(_CTX)
+        results = [snap.data for _ in range(5)] + [adapter.snapshot(_CTX).data for _ in range(5)]
+        assert all(r == results[0] for r in results)  # same content -> same hash, every time
+
+    # -------------------------------------------------------------- M6: error handling
+
+    def test_m6_error_non_mapping_state_expectation_rejected(self, tmp_path) -> None:
+        adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        snap = adapter.snapshot(_CTX)
+        with pytest.raises(TypeError, match="state_expectation must be a mapping"):
+            adapter.evaluate(item=_item(state_expectation=["not", "a", "mapping"]), before=snap, after=snap)
+
+    def test_m6_error_non_iterable_forbidden_keys_rejected(self, tmp_path) -> None:
+        adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        snap = adapter.snapshot(_CTX)
+        with pytest.raises(TypeError, match="state_forbidden_keys must be an iterable"):
+            adapter.evaluate(item=_item(state_forbidden_keys=42), before=snap, after=snap)
