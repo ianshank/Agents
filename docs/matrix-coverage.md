@@ -42,6 +42,7 @@ Aliases (dataset):
 | `bedrock` | 1 | 1 | 1 | — | 1 |
 | `mock` | 3 | 2 | 1 | 1 | 1 |
 | `openai` | 1 | 1 | 1 | — | 1 |
+| `panel` | 3 | 3 | 1 | 1 | 3 |
 | `phoenix_evals` | 1 | 1 | 1 | — | 1 |
 
 Aliases (judge):
@@ -151,5 +152,4 @@ Self-guarded: a row whose component appears in the census fails the guard as
 
 | change | note |
 |---|---|
-| `add-panel-judge` | a `panel` judge aggregating N member judges: registering it owes the judge floor M1/M2/M3/M6, plus M5 voluntarily — the floor excludes M5 because 'verdict determinism is the provider's', which does not hold for a panel whose aggregation, quorum and abstention logic are repo-owned. Its registered name must also land in both READMEs for the registry-drift guard, and any alias in FROZEN_ALIAS_MAP. Unlike the rows below this one names a component, so this guard auto-catches it: the row fails as satisfied the moment `panel` enters the census. |
 | `add-stateful-outcome-evaluation` | STATE_ADAPTERS is a sixth registry: the census discovers it automatically and this guard fails until it has a REQUIRED_DIMS row plus rows for the four local adapters and the two state scorers (whose registered names must also land in both READMEs for the registry-drift guard). |

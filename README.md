@@ -392,7 +392,8 @@ src/eval_harness/
                      OpenAI-compatible / LM Studio / Nemotron endpoint)
   sinks/             console, json_file, html_file, langfuse, phoenix, braintrust
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
-                     phoenix_evals
+                     phoenix_evals, panel (aggregates N member judges — median/mean/
+                     majority, quorum + disagreement-threshold abstention; F-059)
   langfuse_client/   Langfuse tracing + score export (SDK-optional seam)
   phoenix_client/    Phoenix tracing + score export (SDK-optional seam; mirrors
                      langfuse_client — see docs/phoenix-spike.md)

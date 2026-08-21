@@ -16,6 +16,7 @@
     "deterministic",
     "mock",
     "openai",
+    "panel",
     "phoenix-evals",
     "phoenix_evals"
   ],
