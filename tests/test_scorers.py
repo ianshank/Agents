@@ -68,3 +68,20 @@ def test_llm_judge_requires_judge():
     s = SCORERS.create("llm_judge", {})
     with pytest.raises(RuntimeError):
         s.score(_item(), TargetOutput(output="y"), _ctx(None))
+
+
+def test_llm_judge_scorer_treats_abstained_verdict_as_passed_none():
+    from eval_harness.core.interfaces import Judge
+    from eval_harness.core.types import JudgeVerdict
+
+    class _AbstainingJudge(Judge):
+        def evaluate(self, prompt, context=None):
+            return JudgeVerdict(score=0.0, reasoning="below quorum", raw={"abstained": True})
+
+    # threshold=0.0: score 0.0 would otherwise satisfy `score >= threshold` and pass --
+    # proves the abstained branch actually overrides the threshold comparison, not just
+    # coincides with a failing one.
+    s = SCORERS.create("llm_judge", {"threshold": 0.0})
+    r = s.score(_item(expected="x"), TargetOutput(output="y"), _ctx(_AbstainingJudge()))
+    assert r.passed is None
+    assert r.value == 0.0

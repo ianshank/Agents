@@ -366,3 +366,8 @@ class PhoenixEvalJudge(Judge):
             reasoning=getattr(result, "explanation", "") or "",
             raw={"label": label, "score": raw_score},
         )
+
+
+# Split into panel.py purely to stay under the 500-line file budget; imported here,
+# at the bottom, for its @JUDGES.register("panel") side effect (mirrors scorers/__init__.py + trajectory.py).
+from . import panel  # noqa: E402, F401
