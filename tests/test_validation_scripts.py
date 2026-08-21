@@ -7,9 +7,7 @@ the quality-gate tooling coverage floor.
 
 Registration is explicit (import + parametrize + ids — no discovery): a new
 validator must be added here AND to quality-gates.yml's ``--cov=`` list, or its
-coverage silently never counts. F_052 was exactly that gap: listed in ``--cov=``
-but imported by nothing here, so the step warned "Module F_052 was never
-imported" and measured nothing for it.
+coverage silently never counts. F_058 enforces that the lists stay synchronized.
 """
 
 from __future__ import annotations
@@ -28,59 +26,93 @@ import F_020  # noqa: E402
 import F_021  # noqa: E402
 import F_022  # noqa: E402
 import F_023  # noqa: E402
+import F_024  # noqa: E402
+import F_025  # noqa: E402
+import F_026  # noqa: E402
+import F_027  # noqa: E402
+import F_028  # noqa: E402
+import F_029  # noqa: E402
+import F_030  # noqa: E402
 import F_031  # noqa: E402
 import F_032  # noqa: E402
 import F_033  # noqa: E402
 import F_034  # noqa: E402
 import F_035  # noqa: E402
 import F_037  # noqa: E402
+import F_038  # noqa: E402
 import F_039  # noqa: E402
+import F_040  # noqa: E402
 import F_041  # noqa: E402
+import F_042  # noqa: E402
+import F_043  # noqa: E402
+import F_044  # noqa: E402
 import F_045  # noqa: E402
+import F_046  # noqa: E402
+import F_047  # noqa: E402
+import F_048  # noqa: E402
+import F_049  # noqa: E402
 import F_050  # noqa: E402
+import F_051  # noqa: E402
 import F_052  # noqa: E402
 import F_053  # noqa: E402
 import F_054  # noqa: E402
 import F_055  # noqa: E402
+import F_056  # noqa: E402
+import F_057  # noqa: E402
+import F_058  # noqa: E402
 
 #: Single source of truth for which validators this file exercises. The ids are derived
 #: from each module's own ``__name__`` rather than restated, so the list cannot drift
-#: from its own labels (the previous parallel ``ids=`` list was 16 hand-kept strings).
+#: from its own labels.
 _VALIDATOR_MODULES = (
     F_020,
     F_021,
     F_022,
     F_023,
+    F_024,
+    F_025,
+    F_026,
+    F_027,
+    F_028,
+    F_029,
+    F_030,
     F_031,
     F_032,
     F_033,
     F_034,
     F_035,
     F_037,
+    F_038,
     F_039,
+    F_040,
     F_041,
+    F_042,
+    F_043,
+    F_044,
     F_045,
+    F_046,
+    F_047,
+    F_048,
+    F_049,
     F_050,
+    F_051,
     F_052,
     F_053,
     F_054,
     F_055,
+    F_056,
+    F_057,
+    F_058,
 )
 
 
 @pytest.mark.parametrize("module", _VALIDATOR_MODULES, ids=lambda m: m.__name__)
-def test_validator_main_passes(module):
+def test_validator_main_passes(module: object) -> None:
     # Each validator returns 0 on success (F_022 returns 0 even if agent_core is
     # absent, per its lazy-import contract).
-    #
-    # F_031/F_037 are here deliberately: both read .github/workflows/ and used to pin
-    # inline CI command strings, so the ADR 0021 delegation (PR #64) broke them while the
-    # underlying guarantees were intact. That break went unnoticed because quality-gates.yml
-    # -- the only workflow running validate.py -- is path-filtered and does not fire on
-    # `.github/`-only PRs. Asserting them here puts them in the *offline pytest suite*, which
-    # eval-harness CI does run on workflow edits, so the same class of regression now fails
-    # at a second, unfiltered layer.
-    assert module.main() == 0
+    main_fn = getattr(module, "main", None) or getattr(module, "validate", None)
+    assert main_fn is not None, f"No main/validate function in {module}"
+    assert main_fn() == 0
 
 
 class TestCiEnforces:
@@ -91,36 +123,30 @@ class TestCiEnforces:
     INLINE = "- run: mypy tests"
     NEITHER = "- run: echo nothing-to-see-here"
 
-    def test_inline_spelling_passes(self):
+    def test_inline_spelling_passes(self) -> None:
         assert _common.ci_enforces(self.INLINE, "", inline="mypy tests", in_gate='mypy "tests"')
 
-    def test_delegated_wiring_passes_when_the_gate_runs_the_step(self):
+    def test_delegated_wiring_passes_when_the_gate_runs_the_step(self) -> None:
         assert _common.ci_enforces(self.DELEGATED, self.GATE, inline="mypy tests", in_gate='mypy "tests"')
 
-    def test_delegated_wiring_fails_when_the_gate_drops_the_step(self):
+    def test_delegated_wiring_fails_when_the_gate_drops_the_step(self) -> None:
         # The regression that matters: CI delegates, but the gate no longer type-checks.
         assert not _common.ci_enforces(self.DELEGATED, "", inline="mypy tests", in_gate='mypy "tests"')
 
-    def test_fails_when_neither_inline_nor_delegated(self):
+    def test_fails_when_neither_inline_nor_delegated(self) -> None:
         assert not _common.ci_enforces(self.NEITHER, self.GATE, inline="mypy tests", in_gate='mypy "tests"')
 
     @pytest.mark.parametrize("token", ["run-quality-gate", "quality-gate.sh", "make check"])
-    def test_every_delegation_token_is_recognised(self, token):
+    def test_every_delegation_token_is_recognised(self, token: str) -> None:
         assert _common.delegates_to_gate(f"steps:\n  - run: {token}")
 
-    def test_unrelated_workflow_is_not_treated_as_delegating(self):
+    def test_unrelated_workflow_is_not_treated_as_delegating(self) -> None:
         assert not _common.delegates_to_gate(self.NEITHER)
 
 
-def test_imported_validators_and_the_ci_cov_list_agree():
+def test_imported_validators_and_the_ci_cov_list_agree() -> None:
     """The two lists that must never drift: what this file imports, and what the
     tooling-coverage step measures.
-
-    Both directions have already bitten. F-052 was in the ``--cov=`` list but imported
-    nowhere, so coverage warned "Module F_052 was never imported" and measured nothing;
-    F_031/F_037/F_039/F_041/F_045 were the inverse — executed here every run, measured
-    never. Asserting the agreement is the same two-list-drift fix F-052 applied to the
-    protected-path filters, so neither direction can recur silently.
     """
     import re
     from pathlib import Path
@@ -136,7 +162,7 @@ def test_imported_validators_and_the_ci_cov_list_agree():
     )
 
 
-def test_common_check_records_failure():
+def test_common_check_records_failure() -> None:
     errors: list[str] = []
     assert _common.check(True, "ok", errors) is True
     assert errors == []
@@ -144,7 +170,7 @@ def test_common_check_records_failure():
     assert errors == ["boom"]
 
 
-def test_common_report_exit_codes():
+def test_common_report_exit_codes() -> None:
     import logging
 
     log = logging.getLogger("test")

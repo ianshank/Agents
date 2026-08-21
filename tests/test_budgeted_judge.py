@@ -22,20 +22,20 @@ def _budget(**kw):
     return JudgeBudgetConfig(**base)
 
 
-def test_under_budget_records_spend():
+def test_under_budget_records_spend() -> None:
     j = build_budgeted_judge(MockJudge(default_score=0.6), _budget(cap=2.0))
     assert j.evaluate("p").score == 0.6
     assert j.evaluate("p").score == 0.6
 
 
-def test_exhausted_budget_raises():
+def test_exhausted_budget_raises() -> None:
     j = build_budgeted_judge(MockJudge(), _budget(cap=1.0))
     j.evaluate("p")
     with pytest.raises(BudgetExceededError):
         j.evaluate("p")
 
 
-def test_usable_budget_equals_cap_reserve_zero():
+def test_usable_budget_equals_cap_reserve_zero() -> None:
     j = build_budgeted_judge(MockJudge(), _budget(cap=3.0, cost_per_call=1.0))
     admitted = 0
     for _ in range(10):
@@ -47,7 +47,7 @@ def test_usable_budget_equals_cap_reserve_zero():
     assert admitted == 3
 
 
-def test_cost_per_call_scales():
+def test_cost_per_call_scales() -> None:
     j = build_budgeted_judge(MockJudge(), _budget(cap=5.0, cost_per_call=2.0))
     j.evaluate("p")  # 2
     j.evaluate("p")  # 4
@@ -55,7 +55,7 @@ def test_cost_per_call_scales():
         j.evaluate("p")  # would be 6 > 5
 
 
-def test_on_exceeded_skip_returns_sentinel():
+def test_on_exceeded_skip_returns_sentinel() -> None:
     j = build_budgeted_judge(MockJudge(default_score=0.9), _budget(cap=1.0, on_exceeded="skip"))
     assert j.evaluate("p").score == 0.9
     sentinel = j.evaluate("p")
@@ -63,23 +63,24 @@ def test_on_exceeded_skip_returns_sentinel():
     assert "budget" in sentinel.reasoning
 
 
-def test_skip_score_is_configurable():
+def test_skip_score_is_configurable() -> None:
     j = build_budgeted_judge(MockJudge(default_score=0.9), _budget(cap=1.0, on_exceeded="skip", skip_score=0.5))
     j.evaluate("p")  # consumes the only unit
     sentinel = j.evaluate("p")
     assert sentinel.score == 0.5
 
 
-def test_skip_score_out_of_range_rejected_at_config():
+def test_skip_score_out_of_range_rejected_at_config() -> None:
     with pytest.raises(ValueError):
         JudgeBudgetConfig(enabled=True, cap=1.0, skip_score=1.5)
 
 
-def test_parallel_safety_never_exceeds_cap():
+def test_parallel_safety_never_exceeds_cap() -> None:
     # C2 regression guard: under concurrency the cap must hold and no call that
     # was admitted should be retroactively rejected.
     cap = 50
     j = build_budgeted_judge(MockJudge(default_score=1.0), _budget(cap=float(cap), cost_per_call=1.0))
+    assert isinstance(j, BudgetedJudge)
     admitted = 0
     rejected = 0
 
@@ -101,34 +102,34 @@ def test_parallel_safety_never_exceeds_cap():
     assert j._ledger.spent <= cap + 1e-9
 
 
-def test_invalid_on_exceeded_rejected_at_config():
+def test_invalid_on_exceeded_rejected_at_config() -> None:
     with pytest.raises(ValueError, match="on_exceeded"):
         JudgeBudgetConfig(enabled=True, cap=1.0, on_exceeded="bogus")
 
 
-def test_cap_must_be_positive():
+def test_cap_must_be_positive() -> None:
     with pytest.raises(ValueError):
         JudgeBudgetConfig(enabled=True, cap=0)
 
 
-def test_cost_per_call_must_be_positive():
+def test_cost_per_call_must_be_positive() -> None:
     with pytest.raises(ValueError):
         JudgeBudgetConfig(enabled=True, cap=1.0, cost_per_call=0)
 
 
-def test_cap_required_when_enabled_at_config_level():
+def test_cap_required_when_enabled_at_config_level() -> None:
     # Pydantic model validator fails fast at parse time.
     with pytest.raises(ValueError, match="cap must be set"):
         JudgeBudgetConfig(enabled=True)
 
 
-def test_disabled_without_cap_is_valid():
+def test_disabled_without_cap_is_valid() -> None:
     # Disabled budgets don't require a cap.
     cfg = JudgeBudgetConfig(enabled=False)
     assert cfg.cap is None
 
 
-def test_build_guard_when_cap_missing():
+def test_build_guard_when_cap_missing() -> None:
     # Defense-in-depth: bypass validation via model_construct and confirm the
     # builder still refuses a capless enabled budget.
     bad = JudgeBudgetConfig.model_construct(enabled=True, cap=None, cost_per_call=1.0, on_exceeded="raise")
@@ -136,7 +137,7 @@ def test_build_guard_when_cap_missing():
         build_budgeted_judge(MockJudge(), bad)
 
 
-def test_invalid_on_exceeded_rejected_in_wrapper():
+def test_invalid_on_exceeded_rejected_in_wrapper() -> None:
     from agent_core import BudgetConfig, BudgetLedger, FrameworkConfig
 
     ledger = BudgetLedger(FrameworkConfig(budget=BudgetConfig(cap_units=1.0, reserve_fraction=0.0)))
@@ -156,17 +157,17 @@ def _engine_cfg(**update):
     return cfg.model_copy(update=update) if update else cfg
 
 
-def test_engine_unwrapped_when_disabled():
+def test_engine_unwrapped_when_disabled() -> None:
     engine = EvalEngine.from_config(_engine_cfg())
     assert not isinstance(engine.judge, BudgetedJudge)
 
 
-def test_engine_wrapped_when_enabled():
+def test_engine_wrapped_when_enabled() -> None:
     engine = EvalEngine.from_config(_engine_cfg(judge_budget=_budget(cap=5.0)))
     assert isinstance(engine.judge, BudgetedJudge)
 
 
-def test_attach_client_delegates_to_inner():
+def test_attach_client_delegates_to_inner() -> None:
     class _Recorder(MockJudge):
         attached = None
 
@@ -175,11 +176,12 @@ def test_attach_client_delegates_to_inner():
 
     inner = _Recorder()
     j = build_budgeted_judge(inner, _budget(cap=1.0))
+    assert isinstance(j, BudgetedJudge)
     j.attach_client("client-x")
     assert inner.attached == "client-x"
 
 
-def test_engine_attaches_the_client_through_the_wrapper_to_the_inner_judge(monkeypatch):
+def test_engine_attaches_the_client_through_the_wrapper_to_the_inner_judge(monkeypatch) -> None:
     """The wrapper's `attach_client` must be *reachable*, not merely correct in isolation.
 
     `test_attach_client_delegates_to_inner` calls the wrapper directly, so it passed while
@@ -218,7 +220,11 @@ def test_engine_attaches_the_client_through_the_wrapper_to_the_inner_judge(monke
 
     monkeypatch.setattr(BudgetedJudge, "attach_client", _spy)
 
-    sentinel = object()
+    from typing import cast
+
+    from eval_harness.langfuse_client import LangfuseClient
+
+    sentinel = cast(LangfuseClient, object())
     engine = EvalEngine.from_config(_engine_cfg(judge_budget=_budget(cap=5.0)), langfuse_client=sentinel)
 
     assert isinstance(engine.judge, BudgetedJudge), "precondition: the judge is wrapped"
@@ -227,9 +233,10 @@ def test_engine_attaches_the_client_through_the_wrapper_to_the_inner_judge(monke
     assert inner.attached is sentinel, "and the wrapper must delegate inward"
 
 
-def test_attach_client_noop_when_inner_lacks_it():
+def test_attach_client_noop_when_inner_lacks_it() -> None:
     # MockJudge has no attach_client; wrapper must silently no-op (no crash).
     j = build_budgeted_judge(MockJudge(), _budget(cap=1.0))
+    assert isinstance(j, BudgetedJudge)
     j.attach_client("ignored")  # should not raise
     assert j.evaluate("p").score == 1.0
 
@@ -262,24 +269,25 @@ def _rl_judge(clock, *, max_per_window=2, window_seconds=10.0, on_rate_limited="
     return build_budgeted_judge(MockJudge(default_score=1.0), budget, clock=clock, sleeper=clock.sleep)
 
 
-def test_window_fields_must_be_set_together():
+def test_window_fields_must_be_set_together() -> None:
     with pytest.raises(ValueError, match="set together"):
         JudgeBudgetConfig(enabled=True, cap=1.0, max_per_window=5)  # missing window_seconds
     with pytest.raises(ValueError, match="set together"):
         JudgeBudgetConfig(enabled=True, cap=1.0, window_seconds=1.0)  # missing max_per_window
 
 
-def test_invalid_on_rate_limited_rejected_at_config():
+def test_invalid_on_rate_limited_rejected_at_config() -> None:
     with pytest.raises(ValueError, match="on_rate_limited"):
         JudgeBudgetConfig(enabled=True, cap=1.0, max_per_window=2, window_seconds=1.0, on_rate_limited="bogus")
 
 
-def test_no_limiter_when_window_absent():
+def test_no_limiter_when_window_absent() -> None:
     j = build_budgeted_judge(MockJudge(), _budget(cap=5.0))
+    assert isinstance(j, BudgetedJudge)
     assert j._limiter is None
 
 
-def test_block_mode_throttles_then_admits_after_window():
+def test_block_mode_throttles_then_admits_after_window() -> None:
     clock = _FakeClock()
     j = _rl_judge(clock, max_per_window=2, window_seconds=10.0)
 
@@ -293,7 +301,7 @@ def test_block_mode_throttles_then_admits_after_window():
     assert clock.t == 10.0  # slept exactly once, for the full window
 
 
-def test_block_mode_recovers_without_sleep_once_window_passes():
+def test_block_mode_recovers_without_sleep_once_window_passes() -> None:
     clock = _FakeClock()
     j = _rl_judge(clock, max_per_window=1, window_seconds=5.0)
 
@@ -303,7 +311,7 @@ def test_block_mode_recovers_without_sleep_once_window_passes():
     assert clock.t == 5.0
 
 
-def test_skip_mode_returns_sentinel_when_rate_exceeded():
+def test_skip_mode_returns_sentinel_when_rate_exceeded() -> None:
     clock = _FakeClock()
     j = _rl_judge(clock, max_per_window=2, window_seconds=10.0, on_rate_limited="skip")
 
@@ -314,7 +322,7 @@ def test_skip_mode_returns_sentinel_when_rate_exceeded():
     assert clock.t == 0.0
 
 
-def test_rate_limit_and_cap_are_independent():
+def test_rate_limit_and_cap_are_independent() -> None:
     clock = _FakeClock()
     # Generous rate window but a hard cap of 2 calls.
     j = _rl_judge(clock, max_per_window=100, window_seconds=1.0, cap=2.0)
@@ -324,7 +332,7 @@ def test_rate_limit_and_cap_are_independent():
         j.evaluate("p")  # cap trips even though the rate window has room
 
 
-def test_invalid_on_rate_limited_rejected_in_wrapper():
+def test_invalid_on_rate_limited_rejected_in_wrapper() -> None:
     from agent_core import BudgetConfig, BudgetLedger, FrameworkConfig
 
     ledger = BudgetLedger(FrameworkConfig(budget=BudgetConfig(cap_units=1.0, reserve_fraction=0.0)))
@@ -332,7 +340,7 @@ def test_invalid_on_rate_limited_rejected_in_wrapper():
         BudgetedJudge(MockJudge(), ledger, cost_per_call=1.0, on_rate_limited="nope")
 
 
-def test_engine_wires_rate_limit_from_config():
+def test_engine_wires_rate_limit_from_config() -> None:
     cfg = _engine_cfg(judge_budget=_budget(cap=5.0, max_per_window=3, window_seconds=2.0, on_rate_limited="skip"))
     engine = EvalEngine.from_config(cfg)
     assert isinstance(engine.judge, BudgetedJudge)

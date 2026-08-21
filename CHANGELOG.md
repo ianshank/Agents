@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — Reusable Subprocess Hooks & CI Hygiene
+- **Registry Extraction CLI/Library (`scripts/extract_registries.py`)**: Built a reusable AST parsing tool that dynamically discovers `Registry` declarations in `plugins.py`, extracts `@<REGISTRY>.register(...)` component decorator calls, and checks for drift against markdown documentation tables.
+- **Workflow CI Integration**: Updated `.github/workflows/docs.yml` to call `scripts/extract_registries.py --check` instead of raw inline AST scripts.
+- **Validator-registration guard (F-058)**: Added a ~50-line structural guard (`F_058.py`) to enforce perfectly in-sync validator registration across `features.yaml`, the file system, test modules, and CI coverage configs.
+- **Subprocess Hook Consolidation**: Extracted the `_PROBE` logic from `tests/_matrix_coverage.py` and `tests/test_plugin_registry_surface.py` into a unified `tests/registry_probe_hook.py`. Modified `tests/_registry_probe.py`'s `run_probe` to execute script files instead of parsing inline strings.
+- **Strict Typing & Test Stability**: Ensured full test suite passes and `mypy --strict` compliance across the entire codebase following testing stabilization with 20 new tests in `tests/test_extract_registries.py`.
+
 ### Docs — pre-PR currency sweep for F-056/F-057 (SQE/SWE/Architect review)
 - **`docs/c4_architecture.md`** — the Level 2 container diagram had no mention of either
   feature landed on this branch. Added a `reliability` container (F-056's pure pass@k/pass^k

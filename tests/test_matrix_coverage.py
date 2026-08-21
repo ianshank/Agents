@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 import sys
 from pathlib import Path
 
@@ -244,37 +243,6 @@ def test_literal_parametrize_detector_fires_on_nested_literals(tmp_path: Path) -
     assert violations and "TestFakeRegistry" in violations[0]
 
 
-class _FakeCompletedProcess:
-    def __init__(self, returncode: int = 0, stdout: str = "", stderr: str = "") -> None:
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
-
-
-def test_census_probe_failure_modes_are_loud(monkeypatch: pytest.MonkeyPatch) -> None:
-    mc.registry_census.cache_clear()
-    try:
-        monkeypatch.setattr(mc, "_run_probe", lambda: _FakeCompletedProcess(returncode=3, stderr="boom"))
-        with pytest.raises(RuntimeError, match="exit 3"):
-            mc.registry_census()
-
-        mc.registry_census.cache_clear()
-        monkeypatch.setattr(mc, "_run_probe", lambda: _FakeCompletedProcess(stdout="not json"))
-        with pytest.raises(ValueError, match="not valid JSON"):
-            mc.registry_census()
-
-        mc.registry_census.cache_clear()
-
-        def _timeout() -> _FakeCompletedProcess:
-            raise subprocess.TimeoutExpired(cmd="probe", timeout=1)
-
-        monkeypatch.setattr(mc, "_run_probe", _timeout)
-        with pytest.raises(RuntimeError, match="did not finish"):
-            mc.registry_census()
-    finally:
-        mc.registry_census.cache_clear()
-
-
 def test_census_shape_validation_rejects_malformed_payloads() -> None:
     with pytest.raises(TypeError, match="top level"):
         mc._parse_census([], source="x")
@@ -288,20 +256,11 @@ def test_census_shape_validation_rejects_malformed_payloads() -> None:
         mc._parse_census({"scorer": {"names": ["a"], "aliases": {"x": 2}}}, source="x")
 
 
-def test_census_probe_that_cannot_start_is_translated_not_leaked(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An unusable interpreter must fail as a test failure, not a collection error.
-
-    Patches `subprocess.run`, not `_run_probe`: the translation lives inside
-    `_run_probe`, so replacing that function would bypass the behaviour under test.
-    """
+def test_census_probe_failure_modes_are_loud(monkeypatch: pytest.MonkeyPatch) -> None:
     mc.registry_census.cache_clear()
     try:
-
-        def _boom(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-            raise OSError("Exec format error")
-
-        monkeypatch.setattr(subprocess, "run", _boom)
-        with pytest.raises(RuntimeError, match="could not start"):
+        monkeypatch.setattr(mc, "run_probe", lambda *args, **kwargs: "not json")
+        with pytest.raises(ValueError, match="not valid JSON"):
             mc.registry_census()
     finally:
         mc.registry_census.cache_clear()

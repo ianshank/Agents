@@ -47,19 +47,27 @@ mypy agent_core             # strict
 ## Wiring a real run
 ```python
 from agent_core import (
-    FrameworkConfig, BudgetLedger, LoopController, CycleState,
+    FrameworkConfig,
+    BudgetLedger,
+    LoopController,
+    CycleState,
 )
 
-cfg = FrameworkConfig.from_dict({
-    "budget": {"cap_units": 600_000, "reserve_fraction": 0.15},
-    "loop":   {"max_cycles": 5, "convergence_epsilon": 0.05},
-})
+cfg = FrameworkConfig.from_dict(
+    {
+        "budget": {"cap_units": 600_000, "reserve_fraction": 0.15},
+        "loop": {"max_cycles": 5, "convergence_epsilon": 0.05},
+    }
+)
 
-class MyVerifier:          # implements CycleRunner
-    def run(self, state): ...     # -> CycleResult(cost, new_unresolved, max_conf_delta, new_evidence)
 
-class MyEstimator:         # implements CostEstimator
-    def project(self, state): ... # -> projected next-cycle cost
+class MyVerifier:  # implements CycleRunner
+    def run(self, state): ...  # -> CycleResult(cost, new_unresolved, max_conf_delta, new_evidence)
+
+
+class MyEstimator:  # implements CostEstimator
+    def project(self, state): ...  # -> projected next-cycle cost
+
 
 ctrl = LoopController(cfg, BudgetLedger(cfg), MyVerifier(), MyEstimator())
 result = ctrl.run(CycleState(unresolved=("claim1", "claim2", "claim3")))
@@ -71,17 +79,22 @@ print(result.reason, result.cycles_completed, result.spent)
 from agent_core import evaluate_calibration, IsotonicCalibrator
 
 report = evaluate_calibration(
-    probs, outcomes, n_bins=10,
-    ece_target=0.05, mce_target=0.12, auroc_target=0.80,
+    probs,
+    outcomes,
+    n_bins=10,
+    ece_target=0.05,
+    mce_target=0.12,
+    auroc_target=0.80,
     # Opt-in guards; these defaults (1 / False) reproduce the pre-guard behaviour.
-    min_samples=30, require_discrimination=True,
+    min_samples=30,
+    require_discrimination=True,
 )
 # A calibrated-but-undiscriminating model fails on the AUROC target — but only when AUROC
 # is *defined*. A slice with one outcome class or a constant predictor cannot evidence
 # discrimination at all, so it is always named on report.degenerate (and logged); pass
 # require_discrimination=True to make that fail the gate rather than pass it vacuously.
 
-cal = IsotonicCalibrator().fit(train_probs, train_outcomes)   # fit on a held-out split
+cal = IsotonicCalibrator().fit(train_probs, train_outcomes)  # fit on a held-out split
 recalibrated = [cal.predict(p) for p in test_probs]
 ```
 

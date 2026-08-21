@@ -29,17 +29,17 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from tests._registry_probe import run_probe
+
 logger = logging.getLogger(__name__)
 
 _BASELINE_PATH = Path(__file__).parent / "plugin_registry_baseline.json"
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_PROBE_TIMEOUT_SECONDS = 30
 _UPDATE_HINT = (
     "--update freezes intentional ADDITIONS only; it does not undo a drop. "
     "A dropped or renamed key must be restored (or kept resolvable via an alias) -- "
@@ -62,25 +62,7 @@ _UPDATE_HINT = (
 # SCORER_REGISTRY) even though the public config-selectable surface never changed.
 # ``_aliases`` is read directly because there is no public accessor for the backwards-compat
 # alias keys, which are part of the surface.
-_PROBE = """\
-import sys
-from pathlib import Path
-
-_root = Path.cwd()
-for _p in (str(_root), str(_root / "src")):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
-import json
-
-from eval_harness import plugins
-from eval_harness.core.registry import Registry
-
-plugins.load_builtin_plugins()
-registries = {obj.kind: obj for obj in vars(plugins).values() if isinstance(obj, Registry)}
-surface = {kind: sorted(set(reg.names()) | set(reg._aliases)) for kind, reg in registries.items()}
-print(json.dumps(surface))
-"""
+# The probe is extracted to tests/registry_probe_hook.py to allow mypy/ruff validation.
 
 
 def _parse_surface(raw: object, *, source: str) -> dict[str, list[str]]:
@@ -111,33 +93,14 @@ def _parse_surface(raw: object, *, source: str) -> dict[str, list[str]]:
 
 def _current_surface() -> dict[str, list[str]]:
     """Return ``{kind: sorted(names + aliases)}`` for the built-in registries only."""
+    probe_args = ["tests/registry_probe_hook.py", "--mode", "surface"]
+    stdout = run_probe(probe_args)
     try:
-        completed = subprocess.run(
-            [sys.executable, "-c", _PROBE],
-            capture_output=True,
-            text=True,
-            cwd=_REPO_ROOT,
-            timeout=_PROBE_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as exc:
-        # A hung probe must not hang the CI job: fail fast with a clear cause instead.
-        raise RuntimeError(f"registry-surface probe did not finish within {_PROBE_TIMEOUT_SECONDS}s") from exc
-    if completed.returncode != 0:
-        # Surface the child's traceback instead of an opaque CalledProcessError, so a probe
-        # failure in CI is debuggable (e.g. an import error in eval_harness).
-        raise RuntimeError(
-            f"registry-surface probe failed (exit {completed.returncode})\n"
-            f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
-        )
-    try:
-        data = json.loads(completed.stdout)
+        data = json.loads(stdout)
     except json.JSONDecodeError as exc:
         # Same debuggability bar as the returncode!=0 branch: a 0-exit-but-garbled-stdout
         # probe (e.g. a stray print from an imported module) must not lose its context.
-        raise ValueError(
-            f"registry-surface probe output: not valid JSON ({exc})\n"
-            f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
-        ) from exc
+        raise ValueError(f"registry-surface probe output: not valid JSON ({exc})\nstdout:\n{stdout}") from exc
     surface = _parse_surface(data, source="registry-surface probe output")
     logger.debug("registry surface: %s", {kind: len(keys) for kind, keys in surface.items()})
     return surface
@@ -222,40 +185,12 @@ def test_parse_surface_rejects_duplicate_keys_within_a_kind() -> None:
         _parse_surface({"datasets": ["csv", "jsonl", "csv"]}, source="test")
 
 
-class _FakeCompletedProcess:
-    """Minimal stand-in for :class:`subprocess.CompletedProcess` used by the tests below."""
-
-    def __init__(self, returncode: int, stdout: str, stderr: str = "") -> None:
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
-
-
-def test_current_surface_raises_on_probe_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The Gemini-review fix: a failing probe raises with both stdout and stderr, not silence."""
-    fake = _FakeCompletedProcess(returncode=1, stdout="partial stdout", stderr="traceback stderr")
-    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: fake)
-    with pytest.raises(RuntimeError, match="partial stdout") as exc_info:
-        _current_surface()
-    assert "traceback stderr" in str(exc_info.value)
-
-
 def test_current_surface_raises_on_non_json_output(monkeypatch: pytest.MonkeyPatch) -> None:
     """A 0-exit probe that prints non-JSON still fails with a source tag and both streams."""
-    fake = _FakeCompletedProcess(returncode=0, stdout="not json", stderr="")
-    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: fake)
+    import tests.test_plugin_registry_surface
+
+    monkeypatch.setattr(tests.test_plugin_registry_surface, "run_probe", lambda *args, **kwargs: "not json")
     with pytest.raises(ValueError, match="registry-surface probe output"):
-        _current_surface()
-
-
-def test_current_surface_raises_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A hung probe must fail fast, never hang the CI job."""
-
-    def _raise_timeout(*args: object, **kwargs: object) -> None:
-        raise subprocess.TimeoutExpired(cmd=[sys.executable], timeout=_PROBE_TIMEOUT_SECONDS)
-
-    monkeypatch.setattr(subprocess, "run", _raise_timeout)
-    with pytest.raises(RuntimeError, match=f"{_PROBE_TIMEOUT_SECONDS}s"):
         _current_surface()
 
 

@@ -11,7 +11,7 @@ omit =
 [report]
 fail_under = 85
 show_missing = True
-exclude_lines =
+exclude_also =
     pragma: no cover
     if __name__ ==
     if TYPE_CHECKING:

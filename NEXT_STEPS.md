@@ -9,6 +9,15 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Validator-registration guard (F-058)** — a ~50-line structural 5-point sweep guard
+  (`scripts/validations/F_058.py`) enforcing perfect synchronization between `features.yaml`
+  ledger entries, physical `F_*.py` files on disk, test suite imports/parameterizations in
+  `tests/test_validation_scripts.py`, and `--cov=` tokens in `.github/workflows/quality-gates.yml`.
+- [x] **AST Registry Extraction CLI & Library (`scripts/extract_registries.py`)** — dynamic,
+  AST-based extraction of `Registry` variables and `@<REGISTRY>.register(...)` component definitions,
+  with documentation drift verification and integration into `.github/workflows/docs.yml`. Verified
+  with 20 unit/integration tests in `tests/test_extract_registries.py`.
+
 - [x] **Agent trajectory evaluation + its hardening pass (F-051, ADR 0031)** — an external
   coverage analysis and its companion implementation plan were peer-reviewed against the tree
   (`docs/plans/agent-eval-coverage/REVIEW.md`) rather than accepted: the analysis audited one
@@ -199,11 +208,10 @@
      an independent mechanical fact-check (every falsifiable claim re-derived against a
      pinned SHA, verdicts CONFIRMED/CORRECTED/REFUTED) *plus* an adversarial design pass,
      attacks verified before kept and refuted attacks recorded.
-  2. **Validator-registration guard (F-054)** — the 5-point sweep (ledger entry, `F_0NN.py`,
-     the import/parametrize hook, the `--cov=` token) has now been half-done twice. This
-     pass added the drift test for two of those lists; a ~25-line guard over all of them
-     (plus `docs.yml`'s `REGISTRIES`) makes the whole class structurally impossible.
-     Prefer the guard over a scaffold skill: derived reality beats a generated manual list.
+  2. ~~**Validator-registration guard (F-058)**~~ — **shipped**: the 5-point sweep (ledger entry, `F_0NN.py`,
+     the import/parametrize hook, the `--cov=` token) has now been guarded. A ~50-line guard over all
+     of them makes the whole class structurally impossible. Prefer the guard over a scaffold skill:
+     derived reality beats a generated manual list.
   3. **`test-completeness-guard` generator skill** (root `skills/`, code tier at the 95%
      floor) — Phase 2 needs this machinery five more times, and the precedent for the same
      1→5 fan-out (`test_public_surface.py`) was solved by byte-copy + drift-pin. Emits the

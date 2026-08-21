@@ -17,11 +17,13 @@ A target that uses tools attaches an `AgentTrajectory` to its `TargetOutput`:
 ```python
 from eval_harness.core import AgentTrajectory, TargetOutput, ToolCallRecord, TrajectoryStep
 
-trajectory = AgentTrajectory(steps=(
-    TrajectoryStep(kind="tool_call", tool_call=ToolCallRecord("search", {"q": "widgets"})),
-    TrajectoryStep(kind="tool_observation", content="3 results"),
-    TrajectoryStep(kind="final", content="Found 3 widgets."),
-))
+trajectory = AgentTrajectory(
+    steps=(
+        TrajectoryStep(kind="tool_call", tool_call=ToolCallRecord("search", {"q": "widgets"})),
+        TrajectoryStep(kind="tool_observation", content="3 results"),
+        TrajectoryStep(kind="final", content="Found 3 widgets."),
+    )
+)
 return TargetOutput(output="Found 3 widgets.", trajectory=trajectory)
 ```
 

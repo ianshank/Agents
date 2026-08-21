@@ -21,6 +21,15 @@ import yaml
 from .migrations import ConfigError, migrate_to_current
 from .models import EvalConfig
 
+__all__ = [
+    "ConfigError",
+    "EvalConfig",
+    "apply_overrides",
+    "interpolate",
+    "load_config",
+    "load_config_dict",
+]
+
 # ${VAR} or ${VAR:-default}
 _ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 

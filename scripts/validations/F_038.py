@@ -101,3 +101,6 @@ def validate() -> int:
 if __name__ == "__main__":
     configure_logging()
     sys.exit(validate())
+
+
+main = validate
