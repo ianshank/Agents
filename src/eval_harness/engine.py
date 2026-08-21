@@ -18,6 +18,7 @@ from importlib import import_module
 from typing import Any, cast
 
 from .config.models import EvalConfig
+from .core._reliability_diagnostics import _reliability_diagnostics
 from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner, _uses_judge
 from .core.types import (
     EvalItem,
@@ -395,7 +396,7 @@ class EvalEngine:
             results = self._run_parallel(items, started, run_id)
 
         aggregate = self._aggregate(results)
-        diagnostics = self._reliability_diagnostics(results)
+        diagnostics = self._run_reliability_diagnostics(results)
 
         run = RunResult(
             run_id=run_id,
@@ -440,60 +441,18 @@ class EvalEngine:
                 results.append(self._run_one(item, ctx, attempt_index=attempt, item_run_id=item_run_id))
         return results
 
-    def _reliability_diagnostics(self, results: list[ItemResult]) -> list[dict[str, str]]:
-        """Detect the ADR 0029 vacuous-pass case: every attempt of some item
-        passed (``pass^k == 1.0``) only because sampling is deterministic, not
-        because the target is reliable.
-
-        Deliberately local and minimal, not a call into ``ReliabilityAggregator``
-        (``reliability.py``): this needs one boolean per item to decide whether a
-        single run-level caveat applies, and it ships in PR1 (this group), before
-        that module exists (PR2). ``ReliabilityAggregator`` computes the richer,
-        standalone per-item ``pass^k``/distributions later; some overlap between
-        the two is expected and acceptable — they serve different consumers.
-
-        Detection is (1) declared/derived, via ``self.target.is_deterministic``
-        when the target states one; (2) observed, when unknown, by checking
-        whether every attempt of that item returned an equal ``TargetOutput.output``.
-        Returns at most one diagnostic — the message carries no per-item detail,
-        so repeating it per affected item would add no information.
-        """
-        if self.config.run.repetitions <= 1:
+    def _run_reliability_diagnostics(self, results: list[ItemResult]) -> list[dict[str, str]]:
+        """Detect the ADR 0029 vacuous-pass case. See ``core/_reliability_diagnostics.py``
+        for the detection logic itself (split out to stay under the size budget)."""
+        repetitions = self.config.run.repetitions
+        if repetitions <= 1:
+            # Guard stays here, not just in the extracted function: skips the
+            # target.is_deterministic() call entirely at repetitions==1, matching
+            # the pre-extraction behavior exactly (a target stub need not implement
+            # is_deterministic() unless repetitions>1 is actually used).
             return []
-
-        # Past the guard above, every result in this run came from the
-        # repetitions>1 loops, so attempt_index is always set — no filter needed.
-        by_item: dict[str, list[ItemResult]] = {}
-        for ir in results:
-            by_item.setdefault(ir.item.id, []).append(ir)
-
-        declared = self.target.is_deterministic()
-
-        for attempts in by_item.values():
-            by_scorer: dict[str, list[ScoreResult]] = {}
-            for ir in attempts:
-                for s in ir.scores:
-                    if s.passed is not None:
-                        by_scorer.setdefault(s.name, []).append(s)
-
-            item_pass_power_k = any(
-                len(scores) == len(attempts) and all(s.passed for s in scores) for scores in by_scorer.values()
-            )
-            if not item_pass_power_k:
-                continue
-
-            is_deterministic = declared
-            if is_deterministic is None:
-                first_output = attempts[0].output.output
-                is_deterministic = all(ir.output.output == first_output for ir in attempts[1:])
-            if is_deterministic:
-                return [
-                    {
-                        "code": "deterministic_sampling",
-                        "message": (
-                            "pass^k is 1.0 because sampling is deterministic, not because the agent is reliable."
-                        ),
-                    }
-                ]
-
-        return []
+        return _reliability_diagnostics(
+            results,
+            repetitions=repetitions,
+            declared_deterministic=self.target.is_deterministic(),
+        )
