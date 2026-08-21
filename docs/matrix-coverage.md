@@ -62,7 +62,9 @@ Aliases (judge):
 | `exact_match` | 4 | 3 | 1 | 1 | 1 |
 | `json_keys` | 3 | 3 | 1 | 1 | 1 |
 | `llm_judge` | 3 | 1 | 1 | 1 | 1 |
+| `policy_violation` | 3 | 2 | 1 | 1 | 1 |
 | `regex_match` | 2 | 1 | 1 | 1 | 1 |
+| `state_transition` | 4 | 3 | 2 | 1 | 1 |
 | `trajectory_any_order` | 2 | 5 | 1 | 1 | 1 |
 | `trajectory_exact` | 2 | 5 | 1 | 1 | 1 |
 | `trajectory_in_order` | 2 | 5 | 1 | 1 | 1 |
