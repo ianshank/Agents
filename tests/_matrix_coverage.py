@@ -133,18 +133,6 @@ class FollowOn:
 
 FOLLOW_ON: tuple[FollowOn, ...] = (
     FollowOn(
-        "add-panel-judge",
-        "judge",
-        "panel",
-        "a `panel` judge aggregating N member judges: registering it owes the judge floor "
-        "M1/M2/M3/M6, plus M5 voluntarily — the floor excludes M5 because 'verdict "
-        "determinism is the provider's', which does not hold for a panel whose "
-        "aggregation, quorum and abstention logic are repo-owned. Its registered name must "
-        "also land in both READMEs for the registry-drift guard, and any alias in "
-        "FROZEN_ALIAS_MAP. Unlike the rows below this one names a component, so this guard "
-        "auto-catches it: the row fails as satisfied the moment `panel` enters the census.",
-    ),
-    FollowOn(
         "add-stateful-outcome-evaluation",
         "state_adapter",
         None,

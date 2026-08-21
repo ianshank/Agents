@@ -14,6 +14,7 @@
       "HarnessJudgeRunner",
       "ItemStore",
       "build_budgeted_judge",
+      "pairwise_member_kappa",
       "require_report_to_gate"
     ],
     "eval_harness.config": [

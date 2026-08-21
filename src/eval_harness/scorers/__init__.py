@@ -216,10 +216,14 @@ class LLMJudgeScorer(Scorer):
             raise RuntimeError(f"scorer '{self.name}' requires a judge but none was configured")
         prompt = self.prompt_template.format(input=item.inputs, expected=item.expected, output=output.output)
         verdict = ctx.judge.evaluate(prompt, context={"item_id": item.id})
+        # A judge that abstained (e.g. PanelJudge below quorum or over its disagreement
+        # threshold) flags this duck-typed in raw["abstained"] -- mirrors AutoevalsScorer's
+        # own on-skip passed=None, the house convention for "this evaluator declined to score."
+        abstained = verdict.raw.get("abstained") is True
         return ScoreResult(
             self.name,
             value=verdict.score,
-            passed=verdict.score >= self.threshold,
+            passed=None if abstained else verdict.score >= self.threshold,
             comment=verdict.reasoning or None,
         )
 

@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — PanelJudge: aggregate N member judges, abstain rather than guess (F-059)
+- **`PanelJudge`** (`src/eval_harness/judges/panel.py`, registered `panel`) aggregates N member
+  judges under an explicit strategy (`median` default, `mean`, `majority`), evaluated
+  sequentially in declaration order for determinism. Abstains — `raw["abstained"]=True`,
+  configurable `on_skip` score — rather than averaging when fewer than `quorum` members survive
+  a call, or when the surviving spread exceeds an optional `disagreement_threshold`, mirroring
+  the house `CANT_TELL`/`None`-verdict convention elsewhere. A failed member is excluded from
+  aggregation, never recorded as a fabricated `0.0` vote.
+- **`LLMJudgeScorer.score`** now reads `verdict.raw.get("abstained")` duck-typed and reports
+  `ScoreResult.passed=None` for an abstained verdict — the same skip contract `AutoevalsScorer`
+  already established, with no `PanelJudge`-specific code.
+- **Budget/rate-limit fix**: `BudgetedJudge` previously reserved cost and a rate-limit slot
+  exactly once per `evaluate()` call, silently under-charging an N-member panel by factor N.
+  `calls_per_evaluate` (public, duck-typed off the wrapped judge, recursive for nested panels)
+  now scales both. `_SlidingWindowLimiter` gained atomic `try_acquire_n`/`acquire_blocking_n`
+  (replacing the old single-slot methods); `build_budgeted_judge` fails fast at construction
+  when a panel's call count exceeds `max_per_window`.
+- **Calibration**: `agent_core.JudgeCalibrationReport` gains three trailing, defaulted,
+  panel-only fields (`pairwise_member_kappa`, `abstention_rate`, `member_families`) —
+  informational only, never affecting `may_gate`/`failing_checks` (`REPORT_SCHEMA_VERSION`
+  1.0.0 → 1.1.0, additive). `pairwise_member_kappa()`
+  (`src/eval_harness/agent_core_adapter/calibration.py`) computes Cohen's kappa between every
+  pair of members' binarized pass/fail decisions, reusing `agent_core.golden.cohen_kappa`.
+- New `docs/decisions/0035-panel-judge.md`; new matrix rows
+  (`tests/test_matrix_panel_judge.py`, judge floor M1/M2/M3/M6 plus M5 voluntarily); F-059
+  claimed with `scripts/validations/F_059.py`.
+
 ### Added — Reusable Subprocess Hooks & CI Hygiene
 - **Registry Extraction CLI/Library (`scripts/extract_registries.py`)**: Built a reusable AST parsing tool that dynamically discovers `Registry` declarations in `plugins.py`, extracts `@<REGISTRY>.register(...)` component decorator calls, and checks for drift against markdown documentation tables.
 - **Workflow CI Integration**: Updated `.github/workflows/docs.yml` to call `scripts/extract_registries.py --check` instead of raw inline AST scripts.

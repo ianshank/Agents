@@ -345,3 +345,116 @@ def test_engine_wires_rate_limit_from_config() -> None:
     engine = EvalEngine.from_config(cfg)
     assert isinstance(engine.judge, BudgetedJudge)
     assert engine.judge._limiter is not None
+
+
+# --------------------------------------------------------------------------
+# calls_per_evaluate — an inner judge (e.g. an N-member PanelJudge) that makes
+# more than one provider call per evaluate() must charge N units, not 1, against
+# both the cumulative cap and the rate window. Driven via _NCallMockJudge (a
+# MockJudge subclass declaring calls_per_evaluate as a real field), so this file
+# stays decoupled from eval_harness.judges.panel (PanelJudge's own tests own its
+# aggregation logic) while staying mypy/ruff-clean (no dynamic setattr).
+# --------------------------------------------------------------------------
+
+
+class _NCallMockJudge(MockJudge):
+    def __init__(self, calls_per_evaluate: int, default_score: float = 1.0):
+        super().__init__(default_score=default_score)
+        self.calls_per_evaluate = calls_per_evaluate
+
+
+def test_calls_per_evaluate_defaults_to_one_for_a_plain_judge() -> None:
+    j = build_budgeted_judge(MockJudge(), _budget(cap=1.0))
+    assert isinstance(j, BudgetedJudge)
+    assert j.calls_per_evaluate == 1
+
+
+def test_calls_per_evaluate_is_read_duck_typed_from_inner() -> None:
+    inner = _NCallMockJudge(calls_per_evaluate=3)
+    j = build_budgeted_judge(inner, _budget(cap=1.0))
+    assert isinstance(j, BudgetedJudge)
+    assert j.calls_per_evaluate == 3
+
+
+def test_cost_reservation_scales_by_calls_per_evaluate() -> None:
+    inner = _NCallMockJudge(calls_per_evaluate=3, default_score=1.0)
+    j = build_budgeted_judge(inner, _budget(cap=6.0, cost_per_call=1.0))
+    assert isinstance(j, BudgetedJudge)
+    j.evaluate("p")  # reserves 3
+    assert j._ledger.spent == pytest.approx(3.0)
+    j.evaluate("p")  # reserves 3 more -> exactly at the 6.0 cap
+    assert j._ledger.spent == pytest.approx(6.0)
+    with pytest.raises(BudgetExceededError):
+        j.evaluate("p")  # a 3rd batch of 3 would overshoot the cap
+
+
+def test_rate_limit_slots_scale_by_calls_per_evaluate() -> None:
+    clock = _FakeClock()
+    inner = _NCallMockJudge(calls_per_evaluate=3, default_score=1.0)
+    budget = _budget(cap=1000.0, max_per_window=3, window_seconds=10.0)
+    j = build_budgeted_judge(inner, budget, clock=clock, sleeper=clock.sleep)
+
+    j.evaluate("p")  # consumes all 3 slots in the window at once
+    assert clock.t == 0.0
+    j.evaluate("p")  # window is full; must wait a full 10s for the batch to age out
+    assert clock.t == 10.0
+
+
+def test_build_budgeted_judge_raises_when_calls_per_evaluate_exceeds_window() -> None:
+    inner = _NCallMockJudge(calls_per_evaluate=5)
+    budget = _budget(cap=100.0, max_per_window=3, window_seconds=10.0)
+    with pytest.raises(ValueError, match="exceeds max_per_window"):
+        build_budgeted_judge(inner, budget)
+
+
+def test_build_budgeted_judge_allows_calls_per_evaluate_equal_to_window() -> None:
+    inner = _NCallMockJudge(calls_per_evaluate=3, default_score=1.0)
+    budget = _budget(cap=100.0, max_per_window=3, window_seconds=10.0)
+    j = build_budgeted_judge(inner, budget)  # must not raise
+    assert isinstance(j, BudgetedJudge)
+    assert j.calls_per_evaluate == 3
+
+
+def test_no_window_configured_skips_the_calls_per_evaluate_guard() -> None:
+    # No max_per_window/window_seconds at all -> nothing to check against, and no limiter.
+    inner = _NCallMockJudge(calls_per_evaluate=1000)
+    j = build_budgeted_judge(inner, _budget(cap=100.0))
+    assert isinstance(j, BudgetedJudge)
+    assert j._limiter is None
+
+
+# ---- _SlidingWindowLimiter direct tests: the atomic N-slot acquisition itself ----
+
+
+def test_try_acquire_n_is_all_or_nothing() -> None:
+    from eval_harness.agent_core_adapter import _SlidingWindowLimiter
+
+    clock = _FakeClock()
+    limiter = _SlidingWindowLimiter(3, 10.0, clock=clock, sleeper=clock.sleep)
+    assert limiter.try_acquire_n(2) is True  # 2/3 used
+    assert limiter.try_acquire_n(2) is False  # would need 4/3 -- refused, nothing recorded
+    # Proof no partial reservation leaked from the refused call: exactly 1 more slot
+    # is free, matching 2 used (not 4).
+    assert limiter.try_acquire_n(1) is True  # 3/3 used
+    assert limiter.try_acquire_n(1) is False  # genuinely full now
+
+
+def test_acquire_blocking_n_waits_for_enough_slots_not_just_the_oldest_one() -> None:
+    from eval_harness.agent_core_adapter import _SlidingWindowLimiter
+
+    clock = _FakeClock()
+    limiter = _SlidingWindowLimiter(3, 10.0, clock=clock, sleeper=clock.sleep)
+    limiter.try_acquire_n(3)  # window full at t=0
+    # Freeing only the single oldest event would not be enough for n=2 -- must wait
+    # for the full window (all 3 recorded at t=0 age out together) before 2 fit.
+    limiter.acquire_blocking_n(2)
+    assert clock.t == 10.0
+
+
+def test_acquire_blocking_n_raises_when_n_exceeds_window_capacity() -> None:
+    from eval_harness.agent_core_adapter import _SlidingWindowLimiter
+
+    clock = _FakeClock()
+    limiter = _SlidingWindowLimiter(3, 10.0, clock=clock, sleeper=clock.sleep)
+    with pytest.raises(ValueError, match="window capacity is only 3"):
+        limiter.acquire_blocking_n(4)

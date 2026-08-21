@@ -368,6 +368,7 @@ class TestLoopControllerIntegration:
 
 def _calibration_report(**overrides: Any):
     from agent_core import (
+        REPORT_SCHEMA_VERSION,
         JudgeCalibrationReport,
         OrderProbeResult,
         VerbosityProbeResult,
@@ -392,7 +393,7 @@ def _calibration_report(**overrides: Any):
         ),
     )
     defaults: dict[str, Any] = dict(
-        schema_version="1.0.0",
+        schema_version=REPORT_SCHEMA_VERSION,
         judge_id="j1",
         artifact_id="run-123",
         n_total=100,
@@ -515,3 +516,110 @@ class TestRequireReportToGate:
         report = _calibration_report(artifact_id="run-123", order_flip=undersized_order)
         with pytest.raises(ValueError, match=r"order_flip \(insufficient pairs: n=1 < min_pairs=30\)"):
             require_report_to_gate(report, "run-123")
+
+
+# ---------------------------------------------------------------------------
+# pairwise_member_kappa (add-panel-judge, F-059)
+# ---------------------------------------------------------------------------
+
+
+class TestPairwiseMemberKappa:
+    def test_perfect_agreement_is_kappa_one(self) -> None:
+        from eval_harness.agent_core_adapter import pairwise_member_kappa
+
+        scores = {"a": [0.9, 0.9, 0.1, 0.1, 0.9], "b": [0.8, 0.8, 0.2, 0.2, 0.8]}
+        rows = pairwise_member_kappa(scores)
+        assert rows == (("a", "b", 1.0),)
+
+    def test_perfect_disagreement_is_kappa_negative_one(self) -> None:
+        from eval_harness.agent_core_adapter import pairwise_member_kappa
+
+        scores = {"a": [0.9, 0.9, 0.1, 0.1], "b": [0.1, 0.1, 0.9, 0.9]}
+        rows = pairwise_member_kappa(scores)
+        assert rows == (("a", "b", -1.0),)
+
+    def test_three_members_yield_three_pairs_sorted_by_name(self) -> None:
+        from eval_harness.agent_core_adapter import pairwise_member_kappa
+
+        scores = {"z": [0.9, 0.1], "a": [0.9, 0.1], "m": [0.1, 0.9]}
+        rows = pairwise_member_kappa(scores)
+        pairs = [(a, b) for a, b, _ in rows]
+        assert pairs == [("a", "m"), ("a", "z"), ("m", "z")]  # names sorted, not insertion order
+
+    def test_threshold_is_configurable(self) -> None:
+        from eval_harness.agent_core_adapter import pairwise_member_kappa
+
+        # At the default 0.5 threshold both members agree on every item (both >= or both <).
+        # At threshold=0.85 member "a"'s 0.6 flips to a fail while "b" stays a pass -> disagreement.
+        scores = {"a": [0.6, 0.6], "b": [0.9, 0.9]}
+        assert pairwise_member_kappa(scores, threshold=0.5) == (("a", "b", 1.0),)
+        rows = pairwise_member_kappa(scores, threshold=0.85)
+        assert rows[0][2] != 1.0
+
+    def test_single_member_rejected(self) -> None:
+        from eval_harness.agent_core_adapter import pairwise_member_kappa
+
+        with pytest.raises(ValueError, match="at least two members"):
+            pairwise_member_kappa({"a": [0.5, 0.5]})
+
+    def test_mismatched_item_counts_rejected(self) -> None:
+        from eval_harness.agent_core_adapter import pairwise_member_kappa
+
+        with pytest.raises(ValueError, match="same number of items"):
+            pairwise_member_kappa({"a": [0.5, 0.5], "b": [0.5]})
+
+    def test_empty_items_rejected(self) -> None:
+        from eval_harness.agent_core_adapter import pairwise_member_kappa
+
+        with pytest.raises(ValueError, match="at least one item"):
+            pairwise_member_kappa({"a": [], "b": []})
+
+
+# ---------------------------------------------------------------------------
+# Panel-vs-mock gating parity (add-panel-judge, F-059): require_report_to_gate
+# must not special-case a panel-produced report. The three new panel-only
+# fields are informational (mirrors canary_pass_rate) -- proven here by holding
+# every gating-relevant value identical between a "mock" and a "panel" report and
+# asserting require_report_to_gate treats them identically, both when gating is
+# authorised and when it is refused.
+# ---------------------------------------------------------------------------
+
+
+class TestPanelVsMockGatingParity:
+    def test_both_gate_identically_when_authorised(self) -> None:
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        mock_report = _calibration_report(artifact_id="run-1", judge_id="mock-judge")
+        panel_report = _calibration_report(
+            artifact_id="run-1",
+            judge_id="panel-judge",
+            pairwise_member_kappa=(("gpt#0", "claude#1", 0.6),),
+            abstention_rate=0.02,
+            member_families=("gpt", "claude"),
+        )
+        require_report_to_gate(mock_report, "run-1")  # must not raise
+        require_report_to_gate(panel_report, "run-1")  # must not raise, identically
+
+    def test_both_refuse_identically_when_biased(self) -> None:
+        from agent_core import OrderProbeResult
+
+        from eval_harness.agent_core_adapter import require_report_to_gate
+
+        failing_order = OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False)
+        mock_report = _calibration_report(artifact_id="run-1", judge_id="mock-judge", order_flip=failing_order)
+        panel_report = _calibration_report(
+            artifact_id="run-1",
+            judge_id="panel-judge",
+            order_flip=failing_order,
+            pairwise_member_kappa=(("gpt#0", "claude#1", 0.6),),
+            abstention_rate=0.02,
+            member_families=("gpt", "claude"),
+        )
+        with pytest.raises(ValueError, match="order_flip") as mock_exc:
+            require_report_to_gate(mock_report, "run-1")
+        with pytest.raises(ValueError, match="order_flip") as panel_exc:
+            require_report_to_gate(panel_report, "run-1")
+        # require_report_to_gate's message is built from expected_artifact_id and
+        # failing_checks only (never judge_id or the panel-only fields) -- byte-identical
+        # messages is the proof that a panel report leaks nothing extra into it.
+        assert str(mock_exc.value) == str(panel_exc.value)
