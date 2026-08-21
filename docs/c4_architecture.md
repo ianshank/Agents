@@ -62,6 +62,7 @@ C4Container
         Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust")
         Container(targets, "Targets", "Python", "echo, callable (dynamic import)")
         Container(sinks, "Sinks", "Python", "console, json_file, html_file, langfuse, phoenix, braintrust")
+        Container(state_adapters, "State Adapters", "Python", "in_memory, filesystem, sqlite, mock_http — local, deterministic; the engine brackets target.run with reset/snapshot/evaluate when configured, detecting an agent that reports success without changing anything (F-060)")
         Container(gating, "Quality Gate", "Python", "Config-driven pass/fail for CI, including pass_at_k/pass_power_k reliability metrics (F-056) and judge-calibration-artifact enforcement (F-057)")
         Container(reliability, "Reliability Metrics", "Python", "Pure pass@k/pass^k aggregation over repeated attempts (F-056, src/eval_harness/reliability.py) — no I/O, clock or RNG; gating consumes it lazily, on demand, only when a gate rule asks for it")
     }
@@ -94,6 +95,7 @@ C4Container
     Rel(engine, datasets, "load()")
     Rel(engine, targets, "run()")
     Rel(engine, sinks, "emit()")
+    Rel(engine, state_adapters, "reset()/snapshot()/evaluate(), under a lock spanning target.run() (F-060)")
     Rel(engine, gating, "evaluate_gate()")
     Rel(cli, gating, "require_calibration_for_judge_gating() — rejects a gate rule targeting a judge-backed scorer with no named calibration artifact")
     Rel(gating, reliability, "aggregate() on demand, at most once per gate call, for pass_at_k/pass_power_k rules")
@@ -127,7 +129,7 @@ C4Component
     Container_Boundary(engine_boundary, "EvalEngine") {
         Component(from_config, "from_config()", "classmethod", "Bootstrap registries, resolve components, inject client")
         Component(run_method, "run()", "method", "Orchestrate full evaluation: load → sample → score → aggregate → emit")
-        Component(run_one, "_run_one()", "method", "Execute single item: target.run() → scorer.score() → link trace")
+        Component(run_one, "_run_one()", "method", "Execute single item: [state_adapter: reset→snapshot→]target.run()[→snapshot→evaluate] → scorer.score() → link trace. The bracketed span, when a state_adapter is configured, holds a lock across target.run() itself (F-060) — serializing it under max_workers>1, the documented cost of a shared adapter instance")
         Component(sample, "_sample()", "method", "Deterministic sampling via seeded RNG")
         Component(aggregate, "_aggregate()", "staticmethod", "Compute mean, pass_rate per scorer across all items")
     }

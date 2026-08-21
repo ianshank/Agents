@@ -37,7 +37,9 @@ def _config(n_items=3, extra_run=None):
         "run": run,
         "dataset": {
             "type": "inline",
-            "params": {"items": [{"id": str(i), "inputs": {"q": f"q{i}"}, "expected": f"q{i}"} for i in range(n_items)]},
+            "params": {
+                "items": [{"id": str(i), "inputs": {"q": f"q{i}"}, "expected": f"q{i}"} for i in range(n_items)]
+            },
         },
         "target": {"type": "echo", "params": {"output_key": "q"}},
         "scorers": [{"type": "exact_match", "params": {"name": "acc"}}],

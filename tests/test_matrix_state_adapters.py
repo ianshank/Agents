@@ -388,9 +388,7 @@ class TestMockHttpStateAdapter:
         before = adapter.snapshot(_CTX)
         adapter.request("PUT", "/users/1", {"name": "alice"})
         after = adapter.snapshot(_CTX)
-        ev = adapter.evaluate(
-            item=_item(state_expectation={"/users/1": {"name": "alice"}}), before=before, after=after
-        )
+        ev = adapter.evaluate(item=_item(state_expectation={"/users/1": {"name": "alice"}}), before=before, after=after)
         assert ev.goal_reached is True
 
     def test_m1_correctness_goal_reached_on_call_count(self) -> None:

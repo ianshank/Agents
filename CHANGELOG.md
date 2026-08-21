@@ -33,6 +33,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`tests/test_matrix_panel_judge.py`, judge floor M1/M2/M3/M6 plus M5 voluntarily); F-059
   claimed with `scripts/validations/F_059.py`.
 
+### Added — Stateful outcome evaluation: StateAdapter seam, engine lifecycle, local adapters (F-060)
+- **`StateAdapter`** (`src/eval_harness/core/interfaces.py`, sixth structural seam):
+  `snapshot`/`evaluate`/`reset`, `runtime_checkable` `Protocol` typed against `RunContext`. New
+  `StateSnapshot` (opaque, frozen, adapter-owned data) and `StateEvaluation` value objects —
+  the latter reports `goal_reached` and `policy_violated` as two independent axes, not one
+  collapsed bool, so an attempt can reach its goal via a forbidden mutation without either
+  signal masking the other. New `STATE_ADAPTERS` registry (`src/eval_harness/plugins.py`);
+  `EvalConfig.state_adapter: ComponentSpec | None`, mirroring `judge`.
+- **Engine lifecycle**: `EvalEngine._run_one` brackets a configured attempt
+  `reset → snapshot(before) → target.run(item) → snapshot(after) → evaluate`
+  (`src/eval_harness/core/_state_lifecycle.py`) under a lock spanning the whole span,
+  `target.run()` included — a shared adapter instance is not safe under `max_workers>1`
+  without one; the accepted cost is that a configured `state_adapter` serializes `target.run()`
+  itself under parallelism. `StateResetError` propagates uncaught and aborts the run
+  unconditionally, never `fail_fast`-gated. A snapshot/evaluate failure is wrapped in
+  `StateSnapshotError`, logged, and reported as a synthetic failing `"state_lifecycle"` score —
+  the item always gets a normal, visibly-failed result, never silently dropped.
+- **Two new scorers** (`src/eval_harness/scorers/state.py`): `state_transition` reports the
+  adapter's `goal_reached` verdict; `policy_violation` fails independently of goal success,
+  both reading `ctx.extra["state_evaluation"]`.
+- **Four local, deterministic, offline adapters** (`src/eval_harness/state_adapters/`):
+  `in_memory` (mutable dict), `filesystem` (sandboxed temp directory, content-hashed
+  snapshots), `sqlite` (a genuine transaction rollback via `SAVEPOINT`/`ROLLBACK TO`, not a
+  re-run of seed SQL), `mock_http` (in-process request/resource simulation, no network — also
+  tracks per-endpoint call counts). All four share `evaluate_key_value_state`
+  (`state_adapters/_common.py`), reading `item.metadata["state_expectation"]`/
+  `["state_forbidden_keys"]`, mirroring `TrajectoryStepEfficiencyScorer`'s `step_budget`
+  convention.
+- `architecture.yaml` gains the `state_adapters` component (`plugins → state_adapters`,
+  `state_adapters → [core, plugins]`) — confirmed airgap-safe, no `flow_corpus`/`agent_core`
+  edge. New ADR 0031 obligation-6 correction (state adapters are config-level, not item-level)
+  and a new Decision-C concurrency-trade-off consequence; F-060 claimed with
+  `scripts/validations/F_060.py`.
+
 ### Added — Reusable Subprocess Hooks & CI Hygiene
 - **Registry Extraction CLI/Library (`scripts/extract_registries.py`)**: Built a reusable AST parsing tool that dynamically discovers `Registry` declarations in `plugins.py`, extracts `@<REGISTRY>.register(...)` component decorator calls, and checks for drift against markdown documentation tables.
 - **Workflow CI Integration**: Updated `.github/workflows/docs.yml` to call `scripts/extract_registries.py --check` instead of raw inline AST scripts.

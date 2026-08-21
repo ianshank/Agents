@@ -28,6 +28,15 @@ components:
   datasets: [eval_harness.datasets]
   targets: [eval_harness.targets]
   sinks: [eval_harness.sinks]
+  # Local, deterministic StateAdapter implementations (in_memory, filesystem, sqlite,
+  # mock_http; F-060) the engine snapshots around target.run when a state_adapter is
+  # configured. No production credentials, no domain adapters, no network I/O — the
+  # offline suite's zero-external-dependency property holds. Depends on core (the
+  # Protocol/value types) and plugins (the STATE_ADAPTERS registry object) only —
+  # never flow_corpus or agent_core, so the eval_harness <-> flow_corpus airgap and
+  # the airgap-safety review this component was flagged for (ADR 0031 errata) both
+  # hold: this edge list touches neither.
+  state_adapters: [eval_harness.state_adapters]
   gating: [eval_harness.gating]
   # Pure reliability-metrics aggregation (pass@k / pass^k over repeated attempts,
   # F-056). No I/O, clock or RNG; depends on core only. gating imports it on
@@ -73,10 +82,11 @@ dependencies:
   engine: [agent_core_adapter, config, core, langfuse_client, plugins]
   gating: [config, core, reliability]
   judges: [core, langfuse_client, plugins]
-  plugins: [core, datasets, judges, scorers, sinks, targets]
+  plugins: [core, datasets, judges, scorers, sinks, state_adapters, targets]
   reliability: [core]
   scorers: [core, plugins]
   sinks: [braintrust_client, core, langfuse_client, phoenix_client, plugins]
+  state_adapters: [core, plugins]
   targets: [core, plugins]
 
 output:

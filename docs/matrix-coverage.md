@@ -164,4 +164,3 @@ Self-guarded: a row whose component appears in the census fails the guard as
 
 | change | note |
 |---|---|
-| `add-stateful-outcome-evaluation` | STATE_ADAPTERS is a sixth registry: the census discovers it automatically and this guard fails until it has a REQUIRED_DIMS row plus rows for the four local adapters and the two state scorers (whose registered names must also land in both READMEs for the registry-drift guard). |

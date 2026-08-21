@@ -63,7 +63,11 @@ Every change made under this ADR carries these obligations:
 5. **Surface baselines are regenerated in the same change.** `tests/public_surface_baseline.json`
    and `tests/plugin_registry_baseline.json` diff only by the intended additions (F-039).
 6. **Default-off behaviour.** A target that emits no trajectory, a config that requests no
-   repetitions, and an item that declares no state adapter all behave exactly as before.
+   repetitions, and a run configured with no state adapter all behave exactly as before. (State
+   adapters landed as a config-level singleton, `EvalConfig.state_adapter` — mirroring `judge:
+   ComponentSpec | None` — not an item-level declaration; only the *expectation* an adapter
+   evaluates against, `item.metadata["state_expectation"]`/`["state_forbidden_keys"]`, is
+   item-scoped. F-060.)
 
 ### The airgap is not amended
 
@@ -91,6 +95,12 @@ tunables are frozen dataclass fields, not YAML knobs.
 - **Negative.** The engine's item loop becomes more complex once attempts exist. The mitigation is
   that attempt expansion stays inside the run loop and aggregation stays a pure function over
   persisted raw attempts, so the added complexity is testable in isolation.
+- **Negative.** A configured state adapter serializes `target.run()` itself under
+  `max_workers > 1`, not just the adapter's own snapshot/evaluate calls (F-060). A shared adapter
+  instance is not safe under concurrent attempts without a lock spanning the whole
+  reset→snapshot→run→snapshot→evaluate span — the target's mutation is exactly what is being
+  isolated — so this is an accepted, explicit cost of opting into state evaluation under
+  parallelism, not an oversight; it does not regress any config that leaves `state_adapter` unset.
 - **Neutral.** No behaviour changes for any existing configuration until a target opts in by
   emitting a trajectory or an operator opts in by configuring repetitions or a state adapter.
 

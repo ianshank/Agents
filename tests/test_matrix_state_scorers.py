@@ -95,7 +95,9 @@ class TestStateTransitionScorer:
         s = SCORERS.create("state_transition", {"name": "st"})
         ctx = _ctx_with(StateEvaluation(goal_reached=True, reasoning="ok"))
         results = [s.score(_ITEM, _OUTPUT, ctx) for _ in range(10)]
-        assert all((r.value, r.passed, r.comment) == (results[0].value, results[0].passed, results[0].comment) for r in results)
+        assert all(
+            (r.value, r.passed, r.comment) == (results[0].value, results[0].passed, results[0].comment) for r in results
+        )
 
     # -------------------------------------------------------------- M6: error handling
 
@@ -155,7 +157,9 @@ class TestPolicyViolationScorer:
         s = SCORERS.create("policy_violation", {"name": "pv"})
         ctx = _ctx_with(StateEvaluation(goal_reached=True, policy_violated=True, reasoning="wrote /etc/locked"))
         results = [s.score(_ITEM, _OUTPUT, ctx) for _ in range(10)]
-        assert all((r.value, r.passed, r.comment) == (results[0].value, results[0].passed, results[0].comment) for r in results)
+        assert all(
+            (r.value, r.passed, r.comment) == (results[0].value, results[0].passed, results[0].comment) for r in results
+        )
 
     # -------------------------------------------------------------- M6: error handling
 

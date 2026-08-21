@@ -20,6 +20,7 @@ C4Component
     Component(reliability, "reliability", "Component")
     Component(scorers, "scorers", "Component")
     Component(sinks, "sinks", "Component")
+    Component(state_adapters, "state_adapters", "Component")
     Component(targets, "targets", "Component")
 
     Rel(agent_core_adapter, agent_core, "")
@@ -55,6 +56,7 @@ C4Component
     Rel(plugins, judges, "")
     Rel(plugins, scorers, "")
     Rel(plugins, sinks, "")
+    Rel(plugins, state_adapters, "")
     Rel(plugins, targets, "")
     Rel(reliability, core, "")
     Rel(scorers, core, "")
@@ -64,5 +66,7 @@ C4Component
     Rel(sinks, langfuse_client, "")
     Rel(sinks, phoenix_client, "")
     Rel(sinks, plugins, "")
+    Rel(state_adapters, core, "")
+    Rel(state_adapters, plugins, "")
     Rel(targets, core, "")
     Rel(targets, plugins, "")

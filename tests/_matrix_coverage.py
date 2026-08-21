@@ -136,17 +136,7 @@ class FollowOn:
     note: str
 
 
-FOLLOW_ON: tuple[FollowOn, ...] = (
-    FollowOn(
-        "add-stateful-outcome-evaluation",
-        "state_adapter",
-        None,
-        "STATE_ADAPTERS is a sixth registry: the census discovers it automatically and "
-        "this guard fails until it has a REQUIRED_DIMS row plus rows for the four local "
-        "adapters and the two state scorers (whose registered names must also land in "
-        "both READMEs for the registry-drift guard).",
-    ),
-)
+FOLLOW_ON: tuple[FollowOn, ...] = ()
 
 #: Files the cell map is read from (glob, so a future split of the matrix suite into
 #: several files keeps working without touching the extractor).

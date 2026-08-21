@@ -65,9 +65,7 @@ def _reliability_diagnostics(
             return [
                 {
                     "code": "deterministic_sampling",
-                    "message": (
-                        "pass^k is 1.0 because sampling is deterministic, not because the agent is reliable."
-                    ),
+                    "message": ("pass^k is 1.0 because sampling is deterministic, not because the agent is reliable."),
                 }
             ]
 
