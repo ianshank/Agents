@@ -49,6 +49,8 @@ except ImportError as _exc:  # pragma: no cover
         "Install it from the monorepo: pip install -e './agent-core'"
     ) from _exc
 
+from .calibration import pairwise_member_kappa
+
 __all__ = [
     "AdapterConfig",
     "BudgetedJudge",
@@ -56,6 +58,7 @@ __all__ = [
     "HarnessJudgeRunner",
     "ItemStore",
     "build_budgeted_judge",
+    "pairwise_member_kappa",
     "require_report_to_gate",
 ]
 

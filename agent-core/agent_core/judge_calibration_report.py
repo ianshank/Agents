@@ -27,7 +27,11 @@ from .pairwise import PairwiseItem
 #: Independent of agent_core.version.SCHEMA_VERSION (the framework config schema) —
 #: this versions the report payload shape specifically, bumped only when that
 #: shape changes (mirrors eval_harness's TRAJECTORY_SCHEMA_VERSION precedent).
-REPORT_SCHEMA_VERSION = "1.0.0"
+#: 1.1.0 (add-panel-judge, F-059): additive-only — three new optional fields
+#: (pairwise_member_kappa, abstention_rate, member_families) for panel-member
+#: calibration; every pre-1.1.0 field is unchanged, so a 1.0.0-shaped construction
+#: still round-trips (the new fields just default empty/None).
+REPORT_SCHEMA_VERSION = "1.1.0"
 
 
 def _canary_pass_rate(canaries: Sequence[PairwiseItem], verdicts: Sequence[str]) -> float:
@@ -69,6 +73,18 @@ class JudgeCalibrationReport:
     verbosity: VerbosityProbeResult
     self_preference: SelfPreferenceResult | None
     canary_pass_rate: float
+    #: Panel-only (F-059): empty/None for a single-judge report. Cohen's kappa
+    #: between every pair of a PanelJudge's members' pass/fail calls across a
+    #: calibration corpus — see eval_harness.agent_core_adapter.pairwise_member_kappa,
+    #: which computes this; this dataclass only carries the already-computed result.
+    pairwise_member_kappa: tuple[tuple[str, str, float], ...] = ()
+    #: Panel-only (F-059): fraction of corpus items the panel abstained on
+    #: (below quorum or over its disagreement threshold). None for a single judge,
+    #: which has no abstention concept.
+    abstention_rate: float | None = None
+    #: Panel-only (F-059): each member's judge family (e.g. "gpt", "claude"),
+    #: for spotting a panel that is diverse in name only (all members one family).
+    member_families: tuple[str, ...] = ()
 
     @property
     def may_gate(self) -> bool:
@@ -104,6 +120,9 @@ def build_judge_calibration_report(
     self_preference: SelfPreferenceResult | None,
     canaries: Sequence[PairwiseItem],
     canary_verdicts: Sequence[str],
+    pairwise_member_kappa: tuple[tuple[str, str, float], ...] = (),
+    abstention_rate: float | None = None,
+    member_families: tuple[str, ...] = (),
 ) -> JudgeCalibrationReport:
     """Assemble a :class:`JudgeCalibrationReport` from already-computed sub-results.
 
@@ -111,7 +130,8 @@ def build_judge_calibration_report(
     (via :mod:`agent_core.judge_calibration` and, for agreement, the caller's own
     ``flow_corpus`` call) — this function's only real work is the canary check,
     since ``PairwiseItem.expected`` and the judge's actual verdict on each canary
-    aren't compared anywhere else.
+    aren't compared anywhere else. ``pairwise_member_kappa``/``abstention_rate``/
+    ``member_families`` are panel-only (F-059); omit them for a single-judge report.
     """
     canary_rate = _canary_pass_rate(canaries, canary_verdicts)
     return JudgeCalibrationReport(
@@ -128,4 +148,7 @@ def build_judge_calibration_report(
         verbosity=verbosity,
         self_preference=self_preference,
         canary_pass_rate=canary_rate,
+        pairwise_member_kappa=pairwise_member_kappa,
+        abstention_rate=abstention_rate,
+        member_families=member_families,
     )

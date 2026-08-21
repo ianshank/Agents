@@ -235,6 +235,77 @@ def test_build_rejects_empty_canaries():
         )
 
 
+# --- panel-only fields (F-059, add-panel-judge) --------------------------------
+
+
+def test_panel_fields_default_empty_for_a_single_judge_report():
+    report = _report()
+    assert report.pairwise_member_kappa == ()
+    assert report.abstention_rate is None
+    assert report.member_families == ()
+
+
+def test_panel_fields_do_not_affect_may_gate():
+    """Panel-only diagnostics are informational, like canary_pass_rate -- not a
+    gating condition (spec.md names agreement, power and the three bias
+    tolerances only)."""
+    report = _report(
+        pairwise_member_kappa=(("gpt#0", "claude#1", 0.1),),
+        abstention_rate=0.9,
+        member_families=("gpt", "claude"),
+    )
+    assert report.may_gate is True
+
+
+def test_build_threads_panel_fields_through():
+    canaries = [_canary("c1", "known_equal", "tie")]
+    report = build_judge_calibration_report(
+        "panel-1",
+        "art-1",
+        n_total=10,
+        n_codeterminate=10,
+        percent_agreement=1.0,
+        kappa=1.0,
+        directional_only=False,
+        agreement_may_gate=True,
+        order_flip=_passing_order(),
+        verbosity=_passing_verbosity(),
+        self_preference=None,
+        canaries=canaries,
+        canary_verdicts=["tie"],
+        pairwise_member_kappa=(("gpt#0", "claude#1", 0.42),),
+        abstention_rate=0.05,
+        member_families=("gpt", "claude"),
+    )
+    assert report.pairwise_member_kappa == (("gpt#0", "claude#1", 0.42),)
+    assert report.abstention_rate == 0.05
+    assert report.member_families == ("gpt", "claude")
+
+
+def test_build_defaults_panel_fields_when_omitted():
+    """A single-judge caller (every existing call site) doesn't need to know
+    panel fields exist."""
+    canaries = [_canary("c1", "known_equal", "tie")]
+    report = build_judge_calibration_report(
+        "j1",
+        "art-1",
+        n_total=10,
+        n_codeterminate=10,
+        percent_agreement=1.0,
+        kappa=1.0,
+        directional_only=False,
+        agreement_may_gate=True,
+        order_flip=_passing_order(),
+        verbosity=_passing_verbosity(),
+        self_preference=None,
+        canaries=canaries,
+        canary_verdicts=["tie"],
+    )
+    assert report.pairwise_member_kappa == ()
+    assert report.abstention_rate is None
+    assert report.member_families == ()
+
+
 def test_build_rejects_non_canary_item():
     plain = PairwiseItem(
         item_id="p", prompt="p", answer_a="a", answer_b="b", family_a="gpt", family_b="claude"
