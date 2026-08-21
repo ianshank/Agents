@@ -1,5 +1,5 @@
-"""Test Matrix: the ``in_memory``/``filesystem`` state adapters (F-060,
-``add-stateful-outcome-evaluation``).
+"""Test Matrix: the ``in_memory``/``filesystem``/``sqlite`` state adapters
+(F-060, ``add-stateful-outcome-evaluation``).
 
 Split into its own file rather than grown inside ``test_matrix_eval_tools.py`` —
 the cell-map extractor globs ``test_matrix_*.py``, so a per-feature file is a
@@ -30,7 +30,10 @@ import pytest
 
 from eval_harness.core.types import EvalItem, RunContext, StateEvaluation, StateSnapshot
 from eval_harness.plugins import bootstrap
-from eval_harness.state_adapters import FilesystemStateAdapter, InMemoryStateAdapter
+from eval_harness.state_adapters import FilesystemStateAdapter, InMemoryStateAdapter, SqliteStateAdapter
+
+_ACCOUNTS_SCHEMA = "CREATE TABLE accounts (id INTEGER PRIMARY KEY, name TEXT, balance INTEGER);"
+_ACCOUNTS_SEED = "INSERT INTO accounts VALUES (1, 'alice', 100), (2, 'bob', 50);"
 
 bootstrap()
 
@@ -251,6 +254,117 @@ class TestFilesystemStateAdapter:
 
     def test_m6_error_non_iterable_forbidden_keys_rejected(self, tmp_path) -> None:
         adapter = FilesystemStateAdapter(root=str(tmp_path / "sandbox"))
+        snap = adapter.snapshot(_CTX)
+        with pytest.raises(TypeError, match="state_forbidden_keys must be an iterable"):
+            adapter.evaluate(item=_item(state_forbidden_keys=42), before=snap, after=snap)
+
+
+class TestSqliteStateAdapter:
+    """``sqlite`` state adapter test matrix."""
+
+    MATRIX_KIND = "state_adapter"
+    MATRIX_COMPONENTS = ("sqlite",)
+
+    def _adapter(self) -> SqliteStateAdapter:
+        return SqliteStateAdapter(schema_sql=_ACCOUNTS_SCHEMA, seed_sql=_ACCOUNTS_SEED)
+
+    # -------------------------------------------------------------- M1: correctness
+
+    def test_m1_correctness_goal_reached_when_expected_rows_match(self) -> None:
+        adapter = self._adapter()
+        before = adapter.snapshot(_CTX)
+        adapter.conn.execute("UPDATE accounts SET balance = 999 WHERE id = 1")
+        after = adapter.snapshot(_CTX)
+        ev = adapter.evaluate(
+            item=_item(state_expectation={"accounts": [(1, "alice", 999), (2, "bob", 50)]}),
+            before=before,
+            after=after,
+        )
+        assert ev.goal_reached is True
+
+    def test_m1_correctness_goal_not_reached_on_mismatch(self) -> None:
+        adapter = self._adapter()
+        before = adapter.snapshot(_CTX)
+        after = adapter.snapshot(_CTX)  # nothing changed
+        ev = adapter.evaluate(
+            item=_item(state_expectation={"accounts": [(1, "alice", 999), (2, "bob", 50)]}),
+            before=before,
+            after=after,
+        )
+        assert ev.goal_reached is False
+
+    def test_m1_correctness_goal_reached_via_forbidden_table_mutation_still_flags_policy(self) -> None:
+        """The exact scenario tasks.md names: goal true, policy check failed, overall fail."""
+        adapter = SqliteStateAdapter(
+            schema_sql=_ACCOUNTS_SCHEMA + " CREATE TABLE audit_log (id INTEGER PRIMARY KEY, note TEXT);",
+            seed_sql=_ACCOUNTS_SEED + " INSERT INTO audit_log VALUES (1, 'clean');",
+        )
+        before = adapter.snapshot(_CTX)
+        adapter.conn.execute("UPDATE accounts SET balance = 999 WHERE id = 1")
+        adapter.conn.execute("UPDATE audit_log SET note = 'tampered' WHERE id = 1")
+        after = adapter.snapshot(_CTX)
+        ev = adapter.evaluate(
+            item=_item(
+                state_expectation={"accounts": [(1, "alice", 999), (2, "bob", 50)]},
+                state_forbidden_keys=["audit_log"],
+            ),
+            before=before,
+            after=after,
+        )
+        assert ev.goal_reached is True
+        assert ev.policy_violated is True
+
+    # -------------------------------------------------------------- M2: edge cases
+
+    def test_m2_edge_default_db_path_is_isolated_per_instance(self) -> None:
+        a1 = self._adapter()
+        a2 = self._adapter()
+        a1.conn.execute("UPDATE accounts SET balance = 1 WHERE id = 1")
+        assert a1.snapshot(_CTX).data != a2.snapshot(_CTX).data
+
+    def test_m2_edge_no_tables_snapshots_as_an_empty_mapping(self) -> None:
+        adapter = SqliteStateAdapter()
+        assert adapter.snapshot(_CTX).data == {}
+
+    def test_m2_edge_reset_rolls_back_across_multiple_attempts(self) -> None:
+        adapter = self._adapter()
+        seeded = adapter.snapshot(_CTX).data
+        adapter.conn.execute("UPDATE accounts SET balance = 1 WHERE id = 1")
+        adapter.reset(_CTX)
+        assert adapter.snapshot(_CTX).data == seeded
+        adapter.conn.execute("UPDATE accounts SET balance = 2 WHERE id = 2")  # a second attempt
+        adapter.reset(_CTX)
+        assert adapter.snapshot(_CTX).data == seeded
+
+    # -------------------------------------------------------------- M3: type safety
+
+    def test_m3_type_safety(self) -> None:
+        adapter = self._adapter()
+        snap = adapter.snapshot(_CTX)
+        assert isinstance(snap, StateSnapshot)
+        assert isinstance(snap.data, Mapping)
+        assert isinstance(snap.data["accounts"], tuple)
+        ev = adapter.evaluate(item=_item(), before=snap, after=snap)
+        assert isinstance(ev, StateEvaluation)
+        assert isinstance(ev.goal_reached, bool)
+
+    # -------------------------------------------------------------- M5: determinism
+
+    def test_m5_determinism(self) -> None:
+        adapter = self._adapter()
+        results = [adapter.snapshot(_CTX).data for _ in range(10)]
+        assert all(r == results[0] for r in results)
+
+    # -------------------------------------------------------------- M6: error handling
+
+    def test_m6_error_non_mapping_state_expectation_rejected(self) -> None:
+        adapter = self._adapter()
+        snap = adapter.snapshot(_CTX)
+        with pytest.raises(TypeError, match="state_expectation must be a mapping"):
+            adapter.evaluate(item=_item(state_expectation=["not", "a", "mapping"]), before=snap, after=snap)
+
+    def test_m6_error_non_iterable_forbidden_keys_rejected(self) -> None:
+        adapter = self._adapter()
         snap = adapter.snapshot(_CTX)
         with pytest.raises(TypeError, match="state_forbidden_keys must be an iterable"):
             adapter.evaluate(item=_item(state_forbidden_keys=42), before=snap, after=snap)

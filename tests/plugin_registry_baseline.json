@@ -64,7 +64,8 @@
   ],
   "state_adapter": [
     "filesystem",
-    "in_memory"
+    "in_memory",
+    "sqlite"
   ],
   "target": [
     "callable",

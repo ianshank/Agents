@@ -19,7 +19,7 @@ for Phoenix and BrainTrust.
 | `targets/` | echo, callable (dynamic import), model (alias llm) |
 | `sinks/` | console, json_file, html_file, langfuse, phoenix, braintrust |
 | `judges/` | mock, openai (Nemotron/GPT), anthropic, bedrock, phoenix_evals, panel (aggregates N member judges — see `judges/panel.py`) |
-| `state_adapters/` | in_memory, filesystem (F-060) — deterministic local adapters the engine snapshots around `target.run` when `state_adapter` is configured |
+| `state_adapters/` | in_memory, filesystem, sqlite (F-060) — deterministic local adapters the engine snapshots around `target.run` when `state_adapter` is configured |
 | `langfuse_client/`, `phoenix_client/`, `braintrust_client/` | SDK-optional tracing/export seams |
 | `agent_core_adapter/` | bridge to `agent-core` (budget ledger, calibration surface, BudgetedJudge cost-cap wrapper) |
 | `gating/` | the config-driven quality gate |

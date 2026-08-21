@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+import sqlite3
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
@@ -107,3 +108,62 @@ class FilesystemStateAdapter(StateAdapter):
     def reset(self, ctx: RunContext) -> None:
         shutil.rmtree(self.root, ignore_errors=True)
         self.root.mkdir(parents=True, exist_ok=True)
+
+
+_SAVEPOINT = "eval_harness_seed"
+
+
+@STATE_ADAPTERS.register("sqlite")
+class SqliteStateAdapter(StateAdapter):
+    """A SQLite database, reset to its seeded state per attempt via a real
+    transaction rollback -- not a re-run of the seed SQL.
+
+    ``schema_sql``/``seed_sql`` run once at construction; a
+    ``SAVEPOINT`` is taken immediately after. :meth:`reset` issues
+    ``ROLLBACK TO SAVEPOINT`` (undoing everything the previous attempt did,
+    schema-level constructs like autoincrement sequences included) and
+    re-establishes the savepoint for the next attempt. ``db_path`` defaults
+    to ``:memory:`` — a fresh, isolated database per adapter instance.
+    :attr:`conn` is the adapter's own mutation surface — whatever plays the
+    role of the target's world executes SQL against it directly, mirroring
+    :class:`InMemoryStateAdapter`'s ``set()``/``update()``.
+
+    :meth:`snapshot` reads every table ``sqlite_master`` reports, each as
+    ``SELECT * FROM <table> ORDER BY 1`` — ordering by the first column is a
+    documented simplification (assumes a stable, comparable leading column;
+    a reference adapter, not a general-purpose schema-aware differ) so two
+    snapshots of unchanged data compare equal regardless of physical row
+    order. ``evaluate`` reuses :func:`evaluate_key_value_state` at
+    whole-table granularity: ``state_expectation``/``state_forbidden_keys``
+    key by table name, values are the expected rows (lists/tuples of
+    columns), transformed into the same row-tuple shape :meth:`snapshot`
+    produces before comparing.
+    """
+
+    def __init__(self, schema_sql: str = "", seed_sql: str = "", db_path: str = ":memory:") -> None:
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.conn.executescript(schema_sql)
+        self.conn.executescript(seed_sql)
+        self.conn.commit()
+        self._tables = self._discover_tables()
+        self.conn.execute(f"SAVEPOINT {_SAVEPOINT}")
+
+    def _discover_tables(self) -> tuple[str, ...]:
+        cursor = self.conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        return tuple(row[0] for row in cursor.fetchall())
+
+    def _query_table(self, table: str) -> tuple[tuple[Any, ...], ...]:
+        cursor = self.conn.execute(f"SELECT * FROM {table} ORDER BY 1")
+        return tuple(tuple(row) for row in cursor.fetchall())
+
+    def snapshot(self, ctx: RunContext) -> StateSnapshot:
+        return StateSnapshot(data={table: self._query_table(table) for table in self._tables})
+
+    def evaluate(self, *, item: EvalItem, before: StateSnapshot, after: StateSnapshot) -> StateEvaluation:
+        return evaluate_key_value_state(
+            item, before, after, expected_transform=lambda rows: tuple(tuple(r) for r in rows)
+        )
+
+    def reset(self, ctx: RunContext) -> None:
+        self.conn.execute(f"ROLLBACK TO SAVEPOINT {_SAVEPOINT}")
+        self.conn.execute(f"SAVEPOINT {_SAVEPOINT}")
