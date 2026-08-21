@@ -60,6 +60,9 @@
     "langfuse",
     "phoenix"
   ],
+  "state_adapter": [
+    "in_memory"
+  ],
   "target": [
     "callable",
     "echo",

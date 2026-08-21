@@ -164,10 +164,14 @@ def test_guard_fails_a_component_with_no_rows() -> None:
 
 
 def test_guard_fails_an_unknown_census_kind_with_an_actionable_message() -> None:
+    # A placeholder kind name genuinely absent from REQUIRED_DIMS. `state_adapter` no
+    # longer qualifies as of add-stateful-outcome-evaluation (F-060) -- it now has a
+    # real policy row (ADR 0032 errata, 2026-08-21) -- so this uses a fictional kind
+    # instead, keeping the test's premise (an unknown kind) actually true.
     synthetic = dict(_census_with_extra("scorer", "zz"))
-    synthetic["state_adapter"] = {"names": ["in_memory"], "aliases": {}}
+    synthetic["widget_adapter"] = {"names": ["in_memory"], "aliases": {}}
     problems = mc.coverage_problems(synthetic, CLASSES)
-    assert any("state_adapter" in p and "REQUIRED_DIMS" in p and "ADR 0032" in p for p in problems)
+    assert any("widget_adapter" in p and "REQUIRED_DIMS" in p and "ADR 0032" in p for p in problems)
 
 
 def test_guard_fails_a_stale_component_declaration() -> None:

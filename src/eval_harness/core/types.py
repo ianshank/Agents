@@ -258,6 +258,44 @@ def trajectory_to_dict(trajectory: AgentTrajectory) -> dict[str, Any]:
     return {"schema_version": trajectory.schema_version, "steps": steps}
 
 
+@dataclass(frozen=True)
+class StateSnapshot:
+    """Opaque, adapter-owned capture of world state at one instant.
+
+    Only the ``StateAdapter`` that produced a snapshot interprets ``data``'s
+    shape — the engine and scorers treat it as an opaque comparison unit.
+    Frozen, with ``data`` wrapped read-only (mirrors ``ToolCallRecord.arguments``),
+    so a captured snapshot cannot be mutated after the fact — before/after
+    comparison would be meaningless otherwise.
+    """
+
+    data: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "data", _freeze(self.data))
+
+
+@dataclass(frozen=True)
+class StateEvaluation:
+    """A ``StateAdapter``'s verdict on one before/after state transition.
+
+    ``goal_reached`` and ``policy_violated`` are two independent axes, not
+    collapsed into one ``passed`` bool: an attempt can reach its goal via a
+    forbidden mutation (``goal_reached=True``, ``policy_violated=True``), and
+    the two consuming scorers each read a different axis — the deterministic
+    state-transition scorer reads ``goal_reached``, the policy-violation
+    scorer reads ``policy_violated`` — so neither outcome can mask the other.
+    """
+
+    goal_reached: bool
+    policy_violated: bool = False
+    reasoning: str = ""
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "metadata", _freeze(self.metadata))
+
+
 @dataclass
 class RunContext:
     """Per-run context threaded into every scorer call.

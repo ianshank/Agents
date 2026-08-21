@@ -111,6 +111,12 @@ Aliases (sink):
 | `html` | `html_file` |
 | `json` | `json_file` |
 
+## state_adapter (floor: M1, M2, M3, M5, M6)
+
+| component | M1 | M2 | M3 | M5 | M6 |
+|---|---|---|---|---|---|
+| `in_memory` | 3 | 3 | 1 | 1 | 3 |
+
 ## target (floor: M1, M2, M3, M6)
 
 | component | M1 | M2 | M3 | M5 | M6 |
@@ -143,6 +149,7 @@ Aliases (target):
 | judge | `mock` |
 | scorer | `contains`, `exact_match`, `llm_judge`, `trajectory_any_order`, `trajectory_exact`, `trajectory_in_order`, `trajectory_loop_detection`, `trajectory_precision_recall`, `trajectory_recovery`, `trajectory_step_efficiency`, `weighted` |
 | sink | `console`, `json_file` |
+| state_adapter | `in_memory` |
 | target | `callable`, `echo` |
 
 ## Follow-on obligations (queued OpenSpec changes)

@@ -57,7 +57,7 @@ _CI_WORKFLOW_REL = os.path.join(".github", "workflows", "eval-harness-ci.yml")
 #: detector and policy tables below. Derived from ``mc.REQUIRED_DIMS`` this check would
 #: read ``set(x) >= set(x)`` — a tautology, i.e. a dead check. As an independent anchor
 #: it fails if someone deletes a kind's floor row, which is the point.
-_CORE_KINDS = frozenset({"scorer", "judge", "dataset", "target", "sink"})
+_CORE_KINDS = frozenset({"scorer", "judge", "dataset", "target", "sink", "state_adapter"})
 
 #: Must exceed the guard library's own ``_PROBE_TIMEOUT_SECONDS``: the CLI this bounds
 #: spawns that census probe as a grandchild, so a tighter bound here would kill the

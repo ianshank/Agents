@@ -80,7 +80,7 @@ _EXPECTED_GATE_SCRIPTS = (
 # Scorer was historically in _ABC_INTERFACES because Protocol.__init__ did not
 # reliably propagate on Python 3.10. With the floor raised to >=3.11 (ADR 0034),
 # the fix is universally available and Scorer is now a Protocol like the rest.
-_PROTOCOL_INTERFACES = ("DatasetSource", "TargetRunner", "ResultSink", "Judge", "Scorer")
+_PROTOCOL_INTERFACES = ("DatasetSource", "TargetRunner", "ResultSink", "Judge", "Scorer", "StateAdapter")
 _ABC_INTERFACES: tuple[str, ...] = ()
 
 # Numeric literals excluded from the magic-number heuristic: pure identity/sentinel values

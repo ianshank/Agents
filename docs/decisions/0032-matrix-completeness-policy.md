@@ -10,6 +10,15 @@ the `WAIVED` snapshot below now shows all three waivers that were accepted with 
 (the original text showed one), and the Neutral consequence now records that the guard
 library *is* coverage-measured — the same PR wired `--cov=tests._matrix_coverage` into the
 tooling gate, contradicting the original "outside the coverage measurement source" wording.
+**Errata** (2026-08-21, post-acceptance — amendment per rule 3, "changes to `REQUIRED_DIMS`
+amend this ADR"): `add-stateful-outcome-evaluation` registered `STATE_ADAPTERS` as a sixth
+registry kind — the exact forward-looking example this ADR's own Consequences section named.
+`REQUIRED_DIMS` gained `"state_adapter": {1, 2, 3, 5, 6}` — M5 required (unlike `judge`'s
+exclusion): the change's `design.md` "Adapter scope" section commits every shipped adapter to
+being deterministic by design (an offline-suite invariant, not a provider-owned property like a
+judge's verdict), so M5 is meaningful for every member absent a waiver, same reasoning as
+`scorer`'s floor. M6 required: `design.md`'s "Failure semantics" section makes an adapter's
+error paths (raise during `snapshot`/`evaluate`/`reset`) explicitly load-bearing, not incidental.
 
 Related: [ADR 0024](0024-assertion-graders-registry.md) (registry dispatch over hand-rolled
 loops), [ADR 0030](0030-skill-ci-tiers.md) (the derived-list + EXEMPT-with-reason
@@ -44,7 +53,8 @@ REQUIRED_DIMS = {  # M4/M7 are global-dynamic; M8: ≥1 pipeline per kind
     "dataset": {1, 2, 3, 6},  #   property, not the wrapper's
     "target": {1, 2, 3, 6},  # M6 required: the model target is the kind's
     "sink": {1, 2, 6},  #   riskiest error surface
-}  # sink M2 = empty-run emit; M6 = degrade/error path;
+    "state_adapter": {1, 2, 3, 5, 6},  # M5: adapters are deterministic by design (unlike judge);
+}  # sink M2 = empty-run emit; M6 = degrade/error path;      M6: failure paths are load-bearing
 # sink M3/M5 are extra rows where an artifact exists
 EXTRA_SUITES = {"gating": {1, 2, 6}, "engine": {8}}  # non-registry rows, same enforcement
 WAIVED = {  # snapshot at acceptance; tests/_matrix_coverage.py is authoritative
