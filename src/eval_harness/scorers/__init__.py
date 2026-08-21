@@ -334,4 +334,4 @@ class AutoevalsScorer(Scorer):
 # Importing the module runs its ``@SCORERS.register`` decorators, mirroring how
 # ``targets/__init__.py`` pulls in ``targets/model.py``. Kept at the bottom so the
 # registry is fully populated first.
-from . import trajectory  # noqa: E402, F401
+from . import state, trajectory  # noqa: E402, F401

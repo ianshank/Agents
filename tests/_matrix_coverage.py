@@ -68,6 +68,10 @@ REQUIRED_DIMS: dict[str, frozenset[int]] = {
     "dataset": frozenset({1, 2, 3, 6}),
     "target": frozenset({1, 2, 3, 6}),  # M6 required: the model target is the riskiest surface
     "sink": frozenset({1, 2, 6}),  # M2 = empty-run emit; M6 = degrade/error path
+    "state_adapter": frozenset({1, 2, 3, 5, 6}),  # M5 required, unlike judge: shipped adapters
+    #   are deterministic by design (design.md "Adapter scope" — offline suite invariant), not a
+    #   provider-owned property; M6 required: design.md's "Failure semantics" makes error paths
+    #   (raise during snapshot/evaluate/reset) load-bearing, not incidental.
 }
 
 #: Non-registry matrix rows enforced with the same machinery: gating and the engine
@@ -111,6 +115,7 @@ FROZEN_ALIAS_MAP: dict[str, dict[str, str]] = {
         "trajectory-step-efficiency": "trajectory_step_efficiency",
     },
     "sink": {"html": "html_file", "json": "json_file"},
+    "state_adapter": {},
     "target": {"llm": "model", "python": "callable"},
 }
 
@@ -131,17 +136,7 @@ class FollowOn:
     note: str
 
 
-FOLLOW_ON: tuple[FollowOn, ...] = (
-    FollowOn(
-        "add-stateful-outcome-evaluation",
-        "state_adapter",
-        None,
-        "STATE_ADAPTERS is a sixth registry: the census discovers it automatically and "
-        "this guard fails until it has a REQUIRED_DIMS row plus rows for the four local "
-        "adapters and the two state scorers (whose registered names must also land in "
-        "both READMEs for the registry-drift guard).",
-    ),
-)
+FOLLOW_ON: tuple[FollowOn, ...] = ()
 
 #: Files the cell map is read from (glob, so a future split of the matrix suite into
 #: several files keeps working without touching the extractor).
@@ -771,6 +766,8 @@ def pipeline_kinds(pipelines: Mapping[str, Mapping[str, object]]) -> dict[str, s
             used["judge"].add(_canonical("judge", config.judge.type))
         for sink in config.sinks:
             used["sink"].add(_canonical("sink", sink.type))
+        if config.state_adapter is not None:
+            used["state_adapter"].add(_canonical("state_adapter", config.state_adapter.type))
     return used
 
 

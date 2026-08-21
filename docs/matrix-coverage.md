@@ -62,7 +62,9 @@ Aliases (judge):
 | `exact_match` | 4 | 3 | 1 | 1 | 1 |
 | `json_keys` | 3 | 3 | 1 | 1 | 1 |
 | `llm_judge` | 3 | 1 | 1 | 1 | 1 |
+| `policy_violation` | 3 | 2 | 1 | 1 | 1 |
 | `regex_match` | 2 | 1 | 1 | 1 | 1 |
+| `state_transition` | 4 | 3 | 2 | 1 | 1 |
 | `trajectory_any_order` | 2 | 5 | 1 | 1 | 1 |
 | `trajectory_exact` | 2 | 5 | 1 | 1 | 1 |
 | `trajectory_in_order` | 2 | 5 | 1 | 1 | 1 |
@@ -111,6 +113,15 @@ Aliases (sink):
 | `html` | `html_file` |
 | `json` | `json_file` |
 
+## state_adapter (floor: M1, M2, M3, M5, M6)
+
+| component | M1 | M2 | M3 | M5 | M6 |
+|---|---|---|---|---|---|
+| `filesystem` | 3 | 4 | 1 | 1 | 2 |
+| `in_memory` | 3 | 3 | 1 | 1 | 3 |
+| `mock_http` | 5 | 3 | 1 | 1 | 3 |
+| `sqlite` | 4 | 4 | 1 | 1 | 2 |
+
 ## target (floor: M1, M2, M3, M6)
 
 | component | M1 | M2 | M3 | M5 | M6 |
@@ -143,6 +154,7 @@ Aliases (target):
 | judge | `mock` |
 | scorer | `contains`, `exact_match`, `llm_judge`, `trajectory_any_order`, `trajectory_exact`, `trajectory_in_order`, `trajectory_loop_detection`, `trajectory_precision_recall`, `trajectory_recovery`, `trajectory_step_efficiency`, `weighted` |
 | sink | `console`, `json_file` |
+| state_adapter | `in_memory` |
 | target | `callable`, `echo` |
 
 ## Follow-on obligations (queued OpenSpec changes)
@@ -152,4 +164,3 @@ Self-guarded: a row whose component appears in the census fails the guard as
 
 | change | note |
 |---|---|
-| `add-stateful-outcome-evaluation` | STATE_ADAPTERS is a sixth registry: the census discovers it automatically and this guard fails until it has a REQUIRED_DIMS row plus rows for the four local adapters and the two state scorers (whose registered names must also land in both READMEs for the registry-drift guard). |

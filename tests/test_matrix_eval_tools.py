@@ -1457,6 +1457,17 @@ PIPELINES: dict[str, dict] = {
         "sinks": [{"type": "json_file", "params": {"path": "PLACEHOLDER.json"}}],
         "gate": {"rules": [{"score": "em", "metric": "mean", "min": 0.9}]},
     },
+    "state_adapter_in_memory": {
+        "schema_version": "1.0",
+        "run": {"name": "state-adapter-test", "seed": 7},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "s1", "inputs": {"q": "hello"}, "expected": "hello"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "state_adapter": {"type": "in_memory", "params": {}},
+    },
     "llm_judge": {
         "schema_version": "1.0",
         "run": {"name": "judge-test", "seed": 1},

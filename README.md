@@ -387,6 +387,9 @@ src/eval_harness/
                      reference; trajectory_step_efficiency, trajectory_loop_detection and
                      trajectory_recovery grade the path with no reference at all
                      (F-051, ADR 0031 — see docs/agent-trajectory-evaluation.md)
+    state.py         state_transition, policy_violation read the StateEvaluation the
+                     engine attaches when a state_adapter is configured — the latter
+                     fails independently of goal success (F-060)
   datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
   targets/           echo, callable (dynamic import), model (alias llm; calls an
                      OpenAI-compatible / LM Studio / Nemotron endpoint)
@@ -394,6 +397,12 @@ src/eval_harness/
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
                      phoenix_evals, panel (aggregates N member judges — median/mean/
                      majority, quorum + disagreement-threshold abstention; F-059)
+  state_adapters/    in_memory (deterministic key/value store), filesystem (sandboxed
+                     directory tree, content-hashed snapshots), sqlite (transactional
+                     SAVEPOINT/ROLLBACK TO reset), mock_http (in-process request/
+                     resource simulation, no network; F-060) — the engine brackets
+                     target.run with reset/snapshot/evaluate when configured,
+                     detecting an agent that reports success without changing anything
   langfuse_client/   Langfuse tracing + score export (SDK-optional seam)
   phoenix_client/    Phoenix tracing + score export (SDK-optional seam; mirrors
                      langfuse_client — see docs/phoenix-spike.md)

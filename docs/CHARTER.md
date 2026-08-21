@@ -118,8 +118,8 @@ The non-negotiable constraints, every one enforced by CI (authoritative list in
 [AGENTS.md](../AGENTS.md)). Values that could drift are **referenced at their source, not
 restated here.**
 
-1. **Open/closed extensibility.** New judges, scorers, sinks, datasets, and targets are
-   added through registries / the `eval_harness.plugins` entry-point group; the engine, core
+1. **Open/closed extensibility.** New judges, scorers, sinks, datasets, targets, and state
+   adapters are added through registries / the `eval_harness.plugins` entry-point group; the engine, core
    models, and registries themselves stay unmodified. One documented exception: agent-evaluation
    capabilities may extend the core models and the engine's item loop *additively*, under the
    compatibility obligations in
@@ -136,15 +136,18 @@ restated here.**
 
 3. **Dependency injection via Protocol.** Judge/Sink/DatasetSource/TargetRunner/Clock and
    the SDK-optional client seams are structural; unit tests use fakes needing no network,
-   SDKs, or live servers (see [AGENTS.md](../AGENTS.md)). All five core interfaces —
-   `Scorer`/`Judge`/`DatasetSource`/`TargetRunner`/`ResultSink` — are `typing.Protocol` as of
-   `d4dc07f`. `Scorer` was the last holdout: the historical blocker was that
+   SDKs, or live servers (see [AGENTS.md](../AGENTS.md)). All six core interfaces —
+   `Scorer`/`Judge`/`DatasetSource`/`TargetRunner`/`ResultSink`/`StateAdapter` — are
+   `typing.Protocol`. The first five converted as of `d4dc07f`; `Scorer` was the last of
+   those five to convert: the historical blocker was that
    `typing.Protocol.__init__` does not reliably propagate a Protocol base's own `__init__` to
    subclasses that don't redefine their own on Python 3.10 (it has a concrete, inherited
    `__init__` the other four don't — the shared `name`/`default_name` bookkeeping every
    built-in scorer relies on). This repo's CI matrix moving to 3.11+ (ADR 0034) cleared that
    blocker, and the conversion has since landed (see
    [src/eval_harness/core/interfaces.py](../src/eval_harness/core/interfaces.py)).
+   `StateAdapter` (F-060) joined later as a `Protocol` from the start, with no migration
+   story of its own.
 
 4. **Stateful I/O lives in the narrow seams, not the pure components.** SDK/network I/O is
    confined to the client seams; scorers and codecs stay pure per-item maps.

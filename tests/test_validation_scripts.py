@@ -61,6 +61,7 @@ import F_056  # noqa: E402
 import F_057  # noqa: E402
 import F_058  # noqa: E402
 import F_059  # noqa: E402
+import F_060  # noqa: E402
 
 #: Single source of truth for which validators this file exercises. The ids are derived
 #: from each module's own ``__name__`` rather than restated, so the list cannot drift
@@ -105,13 +106,17 @@ _VALIDATOR_MODULES = (
     F_057,
     F_058,
     F_059,
+    F_060,
 )
 
 
 @pytest.mark.parametrize("module", _VALIDATOR_MODULES, ids=lambda m: m.__name__)
 def test_validator_main_passes(module: object) -> None:
     # Each validator returns 0 on success (F_022 returns 0 even if agent_core is
-    # absent, per its lazy-import contract).
+    # absent, per its lazy-import contract; F_060 does the same for its
+    # architecture.yaml/grimp sub-check, since grimp is not installed in this
+    # environment -- the dedicated "architecture drift + freshness" CI job covers
+    # that check separately, with grimp installed).
     main_fn = getattr(module, "main", None) or getattr(module, "validate", None)
     assert main_fn is not None, f"No main/validate function in {module}"
     assert main_fn() == 0

@@ -2,7 +2,7 @@
 
 Implementations are free to evolve as long as these method signatures hold,
 which is the contract that lets new component versions stay drop-in compatible.
-All five interfaces are declared as ``typing.Protocol`` (not ``abc.ABC``) so
+All six interfaces are declared as ``typing.Protocol`` (not ``abc.ABC``) so
 every DI seam is structural: a fake used in tests satisfies the interface by
 shape alone and need not inherit from it, while existing implementations that
 do explicitly subclass these classes keep working unchanged (explicit
@@ -23,7 +23,16 @@ from abc import abstractmethod
 from collections.abc import Iterable
 from typing import Any, Protocol, runtime_checkable
 
-from .types import EvalItem, JudgeVerdict, RunContext, RunResult, ScoreResult, TargetOutput
+from .types import (
+    EvalItem,
+    JudgeVerdict,
+    RunContext,
+    RunResult,
+    ScoreResult,
+    StateEvaluation,
+    StateSnapshot,
+    TargetOutput,
+)
 
 
 @runtime_checkable
@@ -110,3 +119,50 @@ class Judge(Protocol):
 
     @abstractmethod
     def evaluate(self, prompt: str, context: dict[str, Any] | None = None) -> JudgeVerdict: ...
+
+
+class StateSnapshotError(RuntimeError):
+    """Wraps a ``StateAdapter.snapshot()``/``evaluate()`` failure.
+
+    Always fails just the item: caught inside ``EvalEngine._run_one`` and
+    reported as a synthetic failing score, never propagated, regardless of
+    ``fail_fast``. A state check that silently degrades to "no opinion" on
+    adapter failure is worse than no state check at all (``design.md``
+    "Failure semantics") — the item must visibly fail, not vanish the way an
+    uncaught target error can under parallel execution with ``fail_fast=False``.
+    """
+
+
+class StateResetError(RuntimeError):
+    """Wraps a ``StateAdapter.reset()`` failure.
+
+    Always aborts the run: continuing would score subsequent attempts against
+    contaminated state (``design.md`` "Failure semantics"). Never
+    ``fail_fast``-gated, unlike every other engine failure path — propagates
+    uncaught out of ``EvalEngine._run_one``, and ``_run_one_safe``/
+    ``_run_parallel`` are taught to re-raise rather than swallow it.
+    """
+
+
+@runtime_checkable
+class StateAdapter(Protocol):
+    """Captures and judges world-state transitions the target's own account can't be trusted for.
+
+    An agent that reports success without changing anything scores identically
+    to one that actually acted, under any scorer that only reads
+    ``output.output``. This is the seam that closes that gap.
+
+    The **engine** owns this Protocol's lifecycle, not the target:
+    ``TargetRunner.run`` takes no context parameter, so there is nowhere on
+    the target to hang before/after capture. Per attempt: ``reset ->
+    snapshot(before) -> target.run(item) -> snapshot(after) -> evaluate``.
+    """
+
+    @abstractmethod
+    def snapshot(self, ctx: RunContext) -> StateSnapshot: ...
+
+    @abstractmethod
+    def evaluate(self, *, item: EvalItem, before: StateSnapshot, after: StateSnapshot) -> StateEvaluation: ...
+
+    @abstractmethod
+    def reset(self, ctx: RunContext) -> None: ...

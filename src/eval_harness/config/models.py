@@ -317,6 +317,7 @@ class EvalConfig(BaseModel):
     scorers: list[ComponentSpec] = Field(default_factory=list)
     judge: ComponentSpec | None = None
     judge_budget: JudgeBudgetConfig | None = None
+    state_adapter: ComponentSpec | None = None
     judge_prompt: PromptSourceConfig | None = None
     judge_calibration: JudgeCalibrationGateConfig | None = None
     sinks: list[ComponentSpec] = Field(default_factory=list)

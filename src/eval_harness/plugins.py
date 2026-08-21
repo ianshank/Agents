@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, TargetRunner
+from .core.interfaces import DatasetSource, Judge, ResultSink, Scorer, StateAdapter, TargetRunner
 from .core.registry import Registry
 
 log = logging.getLogger(__name__)
@@ -20,6 +20,7 @@ DATASETS: Registry[DatasetSource] = Registry("dataset")
 TARGETS: Registry[TargetRunner] = Registry("target")
 SINKS: Registry[ResultSink] = Registry("sink")
 JUDGES: Registry[Judge] = Registry("judge")
+STATE_ADAPTERS: Registry[StateAdapter] = Registry("state_adapter")
 
 ENTRY_POINT_GROUP = "eval_harness.plugins"
 
@@ -32,6 +33,7 @@ def load_builtin_plugins() -> None:
     from . import judges as _judges  # noqa: F401
     from . import scorers as _scorers  # noqa: F401
     from . import sinks as _sinks  # noqa: F401
+    from . import state_adapters as _state_adapters  # noqa: F401
     from . import targets as _targets  # noqa: F401
 
 

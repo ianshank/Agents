@@ -49,10 +49,20 @@
   `deterministic_sampling` diagnostic fires when a deterministic configuration makes `pass^k`
   structurally uninformative; a new pure `ReliabilityAggregator`
   (`src/eval_harness/reliability.py`) computes `pass@k`/`pass^k` per item, never pooled across
-  items; `GateRule.metric` gates on `pass_at_k`/`pass_power_k`. Landed as PR #159 (merged;
-  Groups 1-3) and PR #160 (draft, `eval-change-approved` label requested; Groups 4-7).
-- [ ] **Stateful outcome evaluation (`openspec/changes/add-stateful-outcome-evaluation/`)** —
-  its attempt-isolation dependency now ships (above); no longer blocked.
+  items; `GateRule.metric` gates on `pass_at_k`/`pass_power_k`. Landed as PR #159 and PR #160
+  (both merged 2026-08-18).
+- [x] **Stateful outcome evaluation (`openspec/changes/add-stateful-outcome-evaluation/`)** —
+  **implemented, claiming F-060.** New `StateAdapter` protocol (`snapshot`/`evaluate`/`reset`,
+  sixth structural seam) plus `StateSnapshot`/`StateEvaluation` value objects — the latter
+  reports `goal_reached` and `policy_violated` as independent axes, so a forbidden mutation
+  can't hide behind a reached goal. `EvalEngine._run_one` brackets a configured attempt
+  `reset → snapshot(before) → target.run → snapshot(after) → evaluate` under a lock spanning
+  `target.run()` itself — the documented cost is a configured adapter serializes attempts
+  under `max_workers>1`. Two new scorers (`state_transition`, `policy_violation`) and four
+  local deterministic adapters (`in_memory`, `filesystem`, `sqlite` via a real
+  `SAVEPOINT`/`ROLLBACK TO`, `mock_http`). Its attempt-isolation dependency (F-056) shipped
+  first, as the landing order required. Landed as PR #163 (open, `eval-change-approved` label
+  applied, all CI green, review findings addressed; not yet merged).
 - [x] **Judge bias calibration (`openspec/changes/extend-judge-calibration/`)** —
   **implemented, claiming F-057.** Three probes in `agent_core/judge_calibration.py`
   (`order_flip_rate`, `verbosity_preference_delta`, `self_preference_breakdown`), a
@@ -63,25 +73,22 @@
   gating on a mismatched or non-authorising report, naming every failing check — including,
   after a post-landing four-lens review, each undersized probe's `degenerate` reason
   alongside the bare check name. `ProbeConfig.min_pairs` is enforced in all three probes (a
-  post-landing correction from an automated PR review). Landed as PR #160 (Groups 1-4 of 6;
-  draft, `eval-change-approved` label requested).
+  post-landing correction from an automated PR review). Landed as PR #160 (merged 2026-08-18).
 - [ ] **Production eval flywheel (`openspec/changes/add-production-eval-flywheel/`)** —
   **blocked** pending a CHARTER §3 Ratified Amendment: a production ingestion pipeline is a
   scope expansion, not merely a change.
 
-- [ ] **Panel/council judge (`openspec/changes/add-panel-judge/`, PR #142)** — a separate
-  proposal, not part of the four above: a `panel` judge that aggregates N member judges
-  under an explicit strategy (`median`/`mean`/`majority`), surfacing per-member verdicts and
+- [x] **Panel/council judge (`openspec/changes/add-panel-judge/`)** —
+  **implemented, claiming F-059.** A `panel` judge that aggregates N member judges under an
+  explicit strategy (`median`/`mean`/`majority`), surfacing per-member verdicts and
   disagreement spread in `JudgeVerdict.raw` and abstaining above a configured threshold
   rather than reporting a synthetic consensus — the same `cant_tell`/indeterminate→audit
-  posture used elsewhere in the tree. The self-review found a real budget-accounting gap:
-  `BudgetedJudge` reserves cost once per `evaluate()` call
-  (`src/eval_harness/agent_core_adapter/__init__.py:326`), so a naive N-member panel would
-  under-charge `judge_budget` and the F-030 rate window by factor N; the proposed fix is a
-  duck-typed `calls_per_evaluate` read, additive in `agent_core_adapter`. Also specifies
-  panel-level and pairwise member-redundancy κ (correlated members ⇒ effective panel size
-  ≈ 1), aligned with `extend-judge-calibration`'s advisory-unless-named-artifact gating
-  rule. Ships as a reviewed proposal only; no code, config, or protected paths touched.
+  posture used elsewhere in the tree. The design-review budget-accounting gap is fixed:
+  `PanelJudge.calls_per_evaluate` sums member costs (`src/eval_harness/judges/panel.py`), and
+  `BudgetedJudge` reads it duck-typed (`agent_core_adapter/__init__.py`), so an N-member panel
+  is now charged N calls per `evaluate()`, not 1. Also ships panel-level and pairwise
+  member-redundancy κ, aligned with `extend-judge-calibration`'s advisory-unless-named-artifact
+  gating rule. Landed as PR #162 (merged 2026-08-21; design/review predate it as PR #142).
 
 - [x] **Merge-gate calibrator-health integrity (F-049, ADR 0029)** — an independent
   re-verification of `docs/gap-analysis-merge-gate-2026-07-24.md`
@@ -585,11 +592,12 @@
 - [x] **Migrate `Scorer` to `Protocol` (`d4dc07f`)** — the blocker (`typing.Protocol.__init__`
   not reliably propagating to subclasses on Python 3.10) cleared once the floor moved past
   3.10 (`pyproject.toml`/`agent-core/pyproject.toml` and the other 3 sibling packages pin
-  `requires-python >= 3.11`, ADR 0034). All five core interfaces —
-  `Scorer`/`Judge`/`DatasetSource`/`TargetRunner`/`ResultSink` — are now `typing.Protocol`;
+  `requires-python >= 3.11`, ADR 0034). All five core interfaces then in existence —
+  `Scorer`/`Judge`/`DatasetSource`/`TargetRunner`/`ResultSink` — became `typing.Protocol`;
   `src/eval_harness/core/interfaces.py:30` and `scripts/check_charter_invariants.py`'s
   `_PROTOCOL_INTERFACES` (which now includes `"Scorer"`, `_ABC_INTERFACES = ()`) are the
-  enforcement mechanism going forward.
+  enforcement mechanism going forward. A sixth, `StateAdapter`, joined later (F-060) as a
+  `Protocol` from the start.
 - [x] **Seed merge-gate records (F-010 seam)** — `agent_core/merge_seed.py` writes the initial
   pending `OutcomeRecord` (`change_id` / `domain` / `raw_confidence` / `merged_at`) at merge
   time (idempotent, default-off integration in `merge_gate_ci`); closes the only seam ADR 0005

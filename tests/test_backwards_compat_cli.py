@@ -48,6 +48,9 @@ def test_cli_list_plugins(capsys):
     assert main(["list-plugins"]) == 0
     out = capsys.readouterr().out
     assert "scorers:" in out and "llm_judge" in out
+    # F-060: state_adapters was the sixth registry to land here -- a literal tuple in
+    # _cmd_list would silently omit a new registry kind, which this asserts against.
+    assert "state_adapters:" in out and "in_memory" in out
 
 
 def test_cli_run_offline_gate_pass(tmp_path, monkeypatch):

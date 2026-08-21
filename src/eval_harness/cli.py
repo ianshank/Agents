@@ -160,10 +160,10 @@ def _cmd_campaign(args: argparse.Namespace) -> int:
 
 
 def _cmd_list(_: argparse.Namespace) -> int:
-    from .plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS
+    from .plugins import DATASETS, JUDGES, SCORERS, SINKS, STATE_ADAPTERS, TARGETS
 
     bootstrap()
-    for reg in (SCORERS, DATASETS, TARGETS, SINKS, JUDGES):
+    for reg in (SCORERS, DATASETS, TARGETS, SINKS, JUDGES, STATE_ADAPTERS):
         print(f"{reg.kind}s: {', '.join(reg.names())}")
     return 0
 

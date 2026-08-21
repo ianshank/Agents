@@ -31,9 +31,11 @@
     "judge",
     "llm-judge",
     "llm_judge",
+    "policy_violation",
     "regex",
     "regex_match",
     "schema_keys",
+    "state_transition",
     "trajectory-any-order",
     "trajectory-exact",
     "trajectory-in-order",
@@ -59,6 +61,12 @@
     "json_file",
     "langfuse",
     "phoenix"
+  ],
+  "state_adapter": [
+    "filesystem",
+    "in_memory",
+    "mock_http",
+    "sqlite"
   ],
   "target": [
     "callable",
