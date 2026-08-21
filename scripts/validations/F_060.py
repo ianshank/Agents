@@ -21,11 +21,14 @@ Checks:
     4.  Each of the four local adapters round-trips construct -> mutate ->
         snapshot -> evaluate -> reset correctly, including the
         goal-reached-via-forbidden-mutation scenario for at least one.
-    5.  Governance: ``architecture.yaml``'s import graph matches (no
-        undocumented dependency, ``state_adapters`` present); ``cli.py``'s
-        ``list-plugins`` reports the ``state_adapters`` registry; the
-        ``add-stateful-outcome-evaluation`` ``FOLLOW_ON`` obligation has been
-        removed now that it is satisfied.
+    5.  Governance: ``cli.py``'s ``list-plugins`` reports the
+        ``state_adapters`` registry; the ``add-stateful-outcome-evaluation``
+        ``FOLLOW_ON`` obligation has been removed now that it is satisfied;
+        ``architecture.yaml``'s import graph matches (no undocumented
+        dependency) -- skipped gracefully if ``grimp`` is not installed
+        (lazy-import contract, mirrors F_022's ``agent_core`` handling); the
+        dedicated "architecture drift + freshness" CI job covers this with
+        ``grimp`` installed.
 
 Exit codes:
     0 - all checks passed
@@ -282,14 +285,23 @@ def _check_adapters(errors: list[str]) -> None:
 
 
 def _check_governance(errors: list[str]) -> None:
-    sys.path.insert(0, os.path.join(PROJECT_ROOT, "skills", "architecture-drift-guard", "scripts"))
-    import drift_check
+    try:
+        import grimp  # noqa: F401
+    except ImportError:
+        logger.warning(
+            "grimp not installed - the architecture.yaml drift check is skipped here (lazy-import "
+            "contract, mirrors F_022's agent_core handling); the dedicated 'architecture drift + "
+            "freshness' CI job covers this, with grimp installed."
+        )
+    else:
+        sys.path.insert(0, os.path.join(PROJECT_ROOT, "skills", "architecture-drift-guard", "scripts"))
+        import drift_check
 
-    manifest_path = os.path.join(PROJECT_ROOT, "architecture.yaml")
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        code = drift_check.main(["--manifest", manifest_path])
-    _check(code == 0, "architecture.yaml has no undocumented dependency after the state_adapters addition", errors)
+        manifest_path = os.path.join(PROJECT_ROOT, "architecture.yaml")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = drift_check.main(["--manifest", manifest_path])
+        _check(code == 0, "architecture.yaml has no undocumented dependency after the state_adapters addition", errors)
 
     from eval_harness.cli import main as cli_main
 
