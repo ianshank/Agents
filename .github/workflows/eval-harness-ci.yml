@@ -60,6 +60,10 @@ jobs:
       # scorer bridge keeps real coverage; `braintrust` is deliberately absent (its sink
       # degrades to a no-op when absent, mirroring phoenix).
       - uses: ./.github/actions/run-quality-gate
+        env:
+          # Wider property-test search on CI, no per-example deadline (noisy runners).
+          # Same convention as the four sibling package workflows.
+          HYPOTHESIS_PROFILE: ci
         with:
           python-version: ${{ matrix.python-version }}
           install: pip install -e "./agent-core" && pip install -e ".[dev,langfuse,openai,parquet,autoevals]"

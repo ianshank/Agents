@@ -6,6 +6,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — the merge-gate confidence proxy no longer penalises adding tests (F-061)
+
+- **`scripts/agent_confidence.py`**: `compute_confidence` gained an optional `added` keyword —
+  the change's newly-created files (`git diff --name-only -z --diff-filter=A`), supplied by
+  `merge-gate-seed.yml` via a new `--added`/`--added-from` pair. A **newly added** test file is
+  now withheld from the protected-path signal; a **modified** test still feeds it.
+- **Why.** Every `tests/**` root is in `PROTECTED_PATTERNS`, so a test file was counted twice —
+  once as `+w_tests * test_ratio`, again as `-w_protected` — a net `-1.0`. On the committed
+  weights a 100-line, 2-file change scored **0.711** with no test and **0.354** with one:
+  adding a test halved the merge-risk confidence, in a repo whose purpose is enforcing test
+  quality. It now scores **0.802**, above the no-test reference.
+- **Why not simply exclude all tests.** That would move "modify only an eval-defining test"
+  from 0.550 to **0.900** — the highest-confidence class in the system, and exactly the
+  Goodhart failure `scripts/fix_loop.py` exists to name. Modifying an existing test stays at
+  0.550, unchanged.
+- **Backwards compatible by construction.** `added` defaults to `None` ("unknown"), which
+  reproduces the pre-F-061 result bit-for-bit; a property test asserts that equivalence over
+  arbitrary inputs. Every stored record and every caller that cannot distinguish additions
+  from modifications is unaffected. No config key changed, so `require_exact_keys` and the
+  `schema_version` are untouched.
+- **The test that hid it is deleted.** `test_confidence_tests_raise_it` monkeypatched
+  `matched_protected` to `False` before comparing, proving a counterfactual rather than the
+  composed behaviour. It now asserts against the real classifier. The remaining doubles were
+  returning `bool` where the real `matched_protected` returns `list[str]`; they now return
+  realistic values.
+- **Observability.** `agent_confidence.py` gained the standard `-v/--verbose` flag and logs the
+  full score decomposition (`size_norm`, `files_norm`, `test_ratio`, `protected`, `z`, raw and
+  clamped output) at DEBUG, naming which protected paths drove the penalty, plus an INFO line
+  when a score saturates at a clamp rail. A surprising score was previously only explicable by
+  re-deriving it by hand.
+- **Hypothesis** is now declared in the root `dev` extra with `dev`/`ci` profiles registered in
+  `tests/conftest.py`, mirroring the four sibling packages; `eval-harness-ci.yml` sets
+  `HYPOTHESIS_PROFILE: ci`. Four property tests pin the invariants that must survive any future
+  retune: clamp-bound containment, `added=None` ≡ legacy, monotonicity in size, and
+  "declaring additions never lowers the score".
+- ADR 0023 carries a dated erratum recording the correction and explicitly scoping out the
+  separate, still-open floor-saturation defect (63.9% of agent-domain records sit at `clamp_lo`).
+
 ### Added — PanelJudge: aggregate N member judges, abstain rather than guess (F-059)
 - **`PanelJudge`** (`src/eval_harness/judges/panel.py`, registered `panel`) aggregates N member
   judges under an explicit strategy (`median` default, `mean`, `majority`), evaluated

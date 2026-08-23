@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 import pathlib
 import sys
 import types
 
 import pytest
+from hypothesis import HealthCheck, settings
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
@@ -29,6 +31,22 @@ if str(SCRIPTS) not in sys.path:
 from eval_harness.plugins import bootstrap  # noqa: E402
 
 bootstrap()
+
+# --------------------------------------------------------------------------- #
+# Hypothesis profiles. Mirrors agent-core/tests/conftest.py so the whole monorepo shares one
+# convention: example counts are config-driven, never hard-coded per test. CI runners are
+# noisy, so the ci profile drops the per-example deadline rather than flaking.
+# --------------------------------------------------------------------------- #
+_HYPOTHESIS_PROFILE_ENV = "HYPOTHESIS_PROFILE"
+
+settings.register_profile("dev", max_examples=50)
+settings.register_profile(
+    "ci",
+    max_examples=500,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+settings.load_profile(os.getenv(_HYPOTHESIS_PROFILE_ENV, "dev"))
 
 
 # --------------------------------------------------------------------------- #

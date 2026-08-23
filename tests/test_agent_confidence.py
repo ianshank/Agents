@@ -11,6 +11,8 @@ import agent_confidence as ac
 import pytest
 import yaml
 from check_protected_changes import ConfigError
+from hypothesis import given
+from hypothesis import strategies as st
 
 _ROOT = Path(ac.__file__).resolve().parent.parent
 
@@ -183,35 +185,140 @@ def test_confidence_monotonic_in_size(tmp_path):
     assert large < small
 
 
-def test_confidence_tests_raise_it(tmp_path, monkeypatch):
-    # Isolate the test-ratio signal: many test dirs (tests/**) are also protected
-    # paths in this repo, so hold touches_protected fixed to compare cleanly.
+def test_confidence_tests_raise_it(tmp_path):
+    """Adding a test must raise the score -- against the REAL protected-path classifier.
+
+    This test previously monkeypatched ``matched_protected`` to False, with the comment
+    "many test dirs (tests/**) are also protected paths in this repo, so hold
+    touches_protected fixed to compare cleanly". That patch is exactly what hid F-061: it
+    proved a counterfactual (what the score WOULD do if tests were not protected) while the
+    real composed behaviour was the opposite -- adding a test halved the score. The patch is
+    deleted on purpose; a test that passes only by switching off the condition that would
+    falsify it is not evidence.
+    """
     cfg = _proxy_cfg(tmp_path)
-    monkeypatch.setattr(ac, "matched_protected", lambda files: False)
-    with_tests = ac.compute_confidence(["pkg/a.py", "pkg/test_a.py"], 100, cfg)
+    files = ["pkg/a.py", "tests/test_a.py"]
+    with_tests = ac.compute_confidence(files, 100, cfg, added=["tests/test_a.py"])
     without = ac.compute_confidence(["pkg/a.py", "pkg/b.py"], 100, cfg)
     assert with_tests > without
 
 
+def test_modifying_an_existing_test_still_carries_the_protected_penalty(tmp_path):
+    """The Goodhart hole stays shut: weakening an eval-defining test is not rewarded.
+
+    Withholding *added* tests from the protected signal must not withhold *modified* ones --
+    otherwise "modify only an eval-defining test" becomes the highest-confidence class in
+    the system, which is precisely the failure scripts/fix_loop.py exists to name.
+    """
+    cfg = _proxy_cfg(tmp_path)
+    files = ["tests/test_gating.py"]
+    modified = ac.compute_confidence(files, 50, cfg, added=[])
+    legacy = ac.compute_confidence(files, 50, cfg)
+    assert modified == legacy, "a modified test must score exactly as it did before F-061"
+
+    added_instead = ac.compute_confidence(files, 50, cfg, added=["tests/test_gating.py"])
+    assert added_instead > modified, "adding that same file must score strictly higher"
+
+
+def test_added_set_unknown_is_bit_identical_to_legacy(tmp_path):
+    """``added=None`` is the backwards-compatibility contract, not merely a default.
+
+    Every stored record and every caller that cannot distinguish additions from
+    modifications must keep its exact pre-F-061 value.
+    """
+    cfg = _proxy_cfg(tmp_path)
+    for files, lines in (
+        (["src/a.py", "tests/test_a.py"], 100),
+        (["tests/test_gating.py"], 50),
+        (["src/a.py", "src/b.py"], 100),
+        (["config/x.yaml"], 5),
+        ([], 0),
+    ):
+        assert ac.compute_confidence(files, lines, cfg, added=None) == ac.compute_confidence(files, lines, cfg)
+
+
+def test_added_non_test_file_does_not_dodge_the_protected_penalty(tmp_path):
+    """Only added *tests* are withheld. A newly added protected non-test still counts."""
+    cfg = _proxy_cfg(tmp_path)
+    files = ["config/agent-confidence.yaml"]
+    assert ac.compute_confidence(files, 20, cfg, added=list(files)) == ac.compute_confidence(files, 20, cfg)
+
+
+# The committed config carries four test globs; the shared fixture carries only two, so a
+# fixture-only test never exercises `**/tests/**` or `**/*_test.py`. Withholding only moves the
+# score when the path is ALSO eval-protected: `src/pkg/test_a.py` matches a test glob but no
+# protected pattern, so its score is correctly unchanged.
+@pytest.mark.parametrize(
+    ("test_path", "protected"),
+    [
+        ("tests/test_a.py", True),
+        ("agent-core/tests/test_a.py", True),
+        ("flow-corpus/tests/thing_test.py", True),
+        ("src/pkg/test_a.py", False),
+        ("src/pkg/a_test.py", False),
+    ],
+)
+def test_added_test_withheld_for_every_committed_glob(tmp_path, test_path, protected):
+    """Every glob in the committed config -- not just the two the fixture carries."""
+    doc = copy.deepcopy(_PROXY)
+    doc["test_globs"] = ["tests/**", "**/tests/**", "**/test_*.py", "**/*_test.py"]
+    cfg = ac.ProxyConfig.load(_write(tmp_path, "proxy.yaml", doc))
+    files = ["src/pkg/a.py", test_path]
+    with_added = ac.compute_confidence(files, 100, cfg, added=[test_path])
+    legacy = ac.compute_confidence(files, 100, cfg)
+    if protected:
+        assert with_added > legacy, f"{test_path} is protected; withholding it must raise the score"
+    else:
+        assert with_added == legacy, f"{test_path} is not protected; withholding it is a no-op"
+
+
+def test_added_paths_are_normalised_before_comparison(tmp_path):
+    """``./tests/a.py`` and ``tests/a.py`` are the same file.
+
+    ``matched_protected`` normalises internally while the test globs match the raw path, so
+    comparing un-normalised would silently fail to withhold a differently-spelled addition.
+    """
+    cfg = _proxy_cfg(tmp_path)
+    files = ["pkg/a.py", "tests/test_a.py"]
+    assert ac.compute_confidence(files, 100, cfg, added=["./tests/test_a.py"]) == (
+        ac.compute_confidence(files, 100, cfg, added=["tests/test_a.py"])
+    )
+
+
+def test_committed_config_acceptance_numbers(tmp_path):
+    """Pins the three acceptance rows against the REAL committed weights.
+
+    A regression in either direction -- adding tests stops being rewarded, or modifying one
+    stops being penalised -- fails here with the actual numbers in the message.
+    """
+    cfg = ac.ProxyConfig.load(str(_ROOT / "config" / "agent-confidence.yaml"))
+    add_test = ac.compute_confidence(["src/a.py", "tests/test_a.py"], 100, cfg, added=["tests/test_a.py"])
+    no_test = ac.compute_confidence(["src/a.py", "src/b.py"], 100, cfg)
+    modify_test = ac.compute_confidence(["tests/test_gating.py"], 50, cfg, added=[])
+
+    assert add_test > no_test, f"adding a test must beat not adding one ({add_test} vs {no_test})"
+    assert modify_test < no_test, f"modifying an eval test must stay penalised ({modify_test})"
+
+
 def test_confidence_protected_lowers_it(tmp_path, monkeypatch):
     cfg = _proxy_cfg(tmp_path)
-    monkeypatch.setattr(ac, "matched_protected", lambda files: False)
+    monkeypatch.setattr(ac, "matched_protected", lambda files: [])
     clean = ac.compute_confidence(["x/a.py"], 100, cfg)
-    monkeypatch.setattr(ac, "matched_protected", lambda files: True)
+    monkeypatch.setattr(ac, "matched_protected", lambda files: list(files))
     protected = ac.compute_confidence(["x/a.py"], 100, cfg)
     assert protected < clean
 
 
 def test_confidence_large_change_clamps_to_floor(tmp_path, monkeypatch):
     cfg = _proxy_cfg(tmp_path)
-    monkeypatch.setattr(ac, "matched_protected", lambda files: True)
+    monkeypatch.setattr(ac, "matched_protected", lambda files: list(files))
     c = ac.compute_confidence([f"s/{i}.py" for i in range(50)], 9000, cfg)
     assert c == cfg.clamp_lo
 
 
 def test_confidence_clamps_to_ceiling(tmp_path, monkeypatch):
     cfg = _proxy_cfg(tmp_path, base=12.0)  # forces sigmoid ~ 1.0
-    monkeypatch.setattr(ac, "matched_protected", lambda files: False)
+    monkeypatch.setattr(ac, "matched_protected", lambda files: [])
     c = ac.compute_confidence(["tests/test_a.py"], 1, cfg)
     assert c == cfg.clamp_hi
 
@@ -316,3 +423,65 @@ def test_cli_agent_empty_files_is_config_error(tmp_path):
     pp = _write(tmp_path, "proxy.yaml", _PROXY)
     rc = ac.main(["--head-ref", "claude/x", "--identity-config", idp, "--proxy-config", pp])
     assert rc == 2
+
+
+# --- property-based invariants ------------------------------------------------
+# These must hold at ANY weights, so a future retune cannot quietly break them. Example
+# counts come from the dev/ci Hypothesis profiles registered in tests/conftest.py -- never
+# hard-coded here.
+
+_PATH = st.sampled_from(
+    [
+        "src/a.py",
+        "src/b.py",
+        "pkg/mod.py",
+        "tests/test_a.py",
+        "tests/test_b.py",
+        "agent-core/tests/test_c.py",
+        "config/x.yaml",
+        "features.yaml",
+        "docs/readme.md",
+    ]
+)
+_FILES = st.lists(_PATH, min_size=0, max_size=12, unique=True)
+
+
+@given(files=_FILES, lines=st.integers(min_value=0, max_value=100_000))
+def test_property_output_always_within_clamp_bounds(files, lines):
+    cfg = ac.ProxyConfig.load(str(_ROOT / "config" / "agent-confidence.yaml"))
+    for added in (None, [], list(files)):
+        c = ac.compute_confidence(files, lines, cfg, added=added)
+        assert cfg.clamp_lo <= c <= cfg.clamp_hi
+        assert 0.0 < c < 1.0
+
+
+@given(files=_FILES, lines=st.integers(min_value=0, max_value=100_000))
+def test_property_added_none_equals_legacy(files, lines):
+    """The backwards-compatibility contract, over arbitrary inputs."""
+    cfg = ac.ProxyConfig.load(str(_ROOT / "config" / "agent-confidence.yaml"))
+    assert ac.compute_confidence(files, lines, cfg, added=None) == ac.compute_confidence(files, lines, cfg)
+
+
+@given(
+    files=_FILES,
+    small=st.integers(min_value=0, max_value=500),
+    delta=st.integers(min_value=1, max_value=50_000),
+)
+def test_property_monotonic_decreasing_in_size(files, small, delta):
+    cfg = ac.ProxyConfig.load(str(_ROOT / "config" / "agent-confidence.yaml"))
+    a = ac.compute_confidence(files, small, cfg)
+    b = ac.compute_confidence(files, small + delta, cfg)
+    assert b <= a
+
+
+@given(files=_FILES)
+def test_property_declaring_additions_never_lowers_the_score(files):
+    """Withholding added tests can only remove a penalty, never add one.
+
+    This is the invariant that stops a future refactor from turning the F-061 fix into a
+    penalty by some other route: knowing MORE about a change must never score it worse.
+    """
+    cfg = ac.ProxyConfig.load(str(_ROOT / "config" / "agent-confidence.yaml"))
+    unknown = ac.compute_confidence(files, 100, cfg, added=None)
+    all_added = ac.compute_confidence(files, 100, cfg, added=list(files))
+    assert all_added >= unknown

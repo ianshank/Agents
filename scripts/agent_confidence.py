@@ -37,6 +37,7 @@ import json
 import logging
 import math
 import os
+import re
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -52,7 +53,7 @@ from _config import (
 
 # Reuse the repo's single source of glob semantics + protected-path classification,
 # exactly as scripts/merge_gate_context.py does — no second spelling of either.
-from eval_protected_paths import _glob_to_regex, matched_protected
+from eval_protected_paths import _glob_to_regex, _normalise, matched_protected
 
 logger = logging.getLogger(__name__)
 
@@ -183,25 +184,114 @@ class ProxyConfig:
         return ProxyConfig(test_globs=tuple(globs), **vals)
 
 
+def _test_regexes(test_globs: Sequence[str]) -> list[re.Pattern[str]]:
+    """Compile the configured test globs once per call site."""
+    return [_glob_to_regex(g) for g in test_globs]
+
+
+def _is_test(path: str, regexes: Sequence[re.Pattern[str]]) -> bool:
+    """True when *path* matches any configured test glob.
+
+    The single spelling of "is this a test file". ``_test_ratio`` and the added-test filter
+    in ``compute_confidence`` both route through here so the two signals can never disagree
+    about what a test is.
+    """
+    return any(r.match(path) for r in regexes)
+
+
 def _test_ratio(files: Sequence[str], test_globs: Sequence[str]) -> float:
     if not files:
         return 0.0
-    regexes = [_glob_to_regex(g) for g in test_globs]
-    n_tests = sum(1 for f in files if any(r.match(f) for r in regexes))
+    regexes = _test_regexes(test_globs)
+    n_tests = sum(1 for f in files if _is_test(f, regexes))
     return n_tests / len(files)
 
 
-def compute_confidence(files: Sequence[str], lines_changed: int, cfg: ProxyConfig) -> float:
+def _protected_inputs(files: Sequence[str], added: Sequence[str] | None, cfg: ProxyConfig) -> list[str]:
+    """The file subset the protected-path signal is computed over.
+
+    ``added is None`` -- the caller could not tell additions from modifications -- reproduces
+    the pre-F-061 behaviour exactly: every changed file feeds the signal.
+
+    When the added set IS known, a **newly added** test file is withheld. Every ``tests/**``
+    root is an eval-protected path, so without this a test file is counted twice: once as
+    ``+w_tests * test_ratio`` and again as ``-w_protected``, a net penalty for adding tests.
+    A *modified* test still feeds the signal, because weakening an existing eval-defining
+    test is exactly the eval-surface risk the protected term exists to price.
+
+    Both sides are normalised before comparison. ``matched_protected`` normalises internally
+    while the test globs match the raw path, so ``./tests/a.py`` would otherwise be protected
+    but not recognised as a test.
+    """
+    if added is None:
+        return list(files)
+    regexes = _test_regexes(cfg.test_globs)
+    added_tests = {_normalise(f) for f in added if _is_test(f, regexes)}
+    return [f for f in files if _normalise(f) not in added_tests]
+
+
+def _log_score(
+    cfg: ProxyConfig,
+    result: float,
+    *,
+    raw: float,
+    z: float,
+    n_files: int,
+    size_norm: float,
+    files_norm: float,
+    test_ratio: float,
+    protected: float,
+    protected_hits: Sequence[str],
+) -> None:
+    """Emit the score decomposition (DEBUG) and any clamp saturation (INFO).
+
+    Kept out of ``compute_confidence`` so that function stays inside the 50-line budget and
+    reads as pure arithmetic. A surprising score is otherwise only explicable by re-deriving
+    it by hand -- which is how a two-month floor saturation went unnoticed.
+    """
+    logger.debug(
+        "agent-confidence: n_files=%d size_norm=%.4f files_norm=%.4f test_ratio=%.4f "
+        "protected=%.1f z=%.4f raw=%.6f -> %.6f",
+        n_files,
+        size_norm,
+        files_norm,
+        test_ratio,
+        protected,
+        z,
+        raw,
+        result,
+    )
+    if protected_hits:
+        # matched_protected returns the matched paths, not a bool -- so naming them is free.
+        logger.debug("agent-confidence: protected paths driving the penalty: %s", ", ".join(protected_hits))
+    # Saturation is invisible in one score but fatal in aggregate: a corpus pinned to a rail
+    # carries no information for calibration. Surface it per-run rather than only at audit.
+    if result in (cfg.clamp_lo, cfg.clamp_hi):
+        rail = "clamp_lo" if result == cfg.clamp_lo else "clamp_hi"
+        logger.info("agent-confidence: score saturated at %s=%.6f (raw=%.6f)", rail, result, raw)
+
+
+def compute_confidence(
+    files: Sequence[str],
+    lines_changed: int,
+    cfg: ProxyConfig,
+    *,
+    added: Sequence[str] | None = None,
+) -> float:
     """Deterministic proxy confidence in (clamp_lo, clamp_hi) ⊂ (0, 1).
 
-    Pure: identical output for identical (files, lines_changed, cfg), whether run live
-    at merge time or retroactively over a historical diff (F-044).
+    Pure: identical output for identical inputs, whether run live at merge time or
+    retroactively over a historical diff (F-044). ``added`` is the subset of *files* the
+    change newly created; ``None`` means "unknown" and reproduces the pre-F-061 result
+    bit-for-bit. See ``_protected_inputs`` for what knowing it buys.
     """
     n_files = len(files)
     size_norm = min(max(lines_changed, 0) / cfg.size_scale, cfg.size_cap)
     files_norm = min(n_files / cfg.files_scale, cfg.files_cap)
     test_ratio = _test_ratio(files, cfg.test_globs)
-    protected = 1.0 if matched_protected(list(files)) else 0.0
+    protected_inputs = _protected_inputs(files, added, cfg)
+    protected_hits = matched_protected(protected_inputs)
+    protected = 1.0 if protected_hits else 0.0
     z = (
         cfg.base
         - cfg.w_size * size_norm
@@ -217,7 +307,20 @@ def compute_confidence(files: Sequence[str], lines_changed: int, cfg: ProxyConfi
     z = max(-700.0, min(700.0, z))
     raw = 1.0 / (1.0 + math.exp(-z))
     clamped = min(max(raw, cfg.clamp_lo), cfg.clamp_hi)
-    return round(clamped, 6)
+    result = round(clamped, 6)
+    _log_score(
+        cfg,
+        result,
+        raw=raw,
+        z=z,
+        n_files=n_files,
+        size_norm=size_norm,
+        files_norm=files_norm,
+        test_ratio=test_ratio,
+        protected=protected,
+        protected_hits=protected_hits,
+    )
+    return result
 
 
 # --- file resolution + CLI ---------------------------------------------------
@@ -227,23 +330,42 @@ def resolve_files(args: argparse.Namespace) -> list[str]:
     return explicit if explicit is not None else []
 
 
+def resolve_added(args: argparse.Namespace) -> list[str] | None:
+    """Newly-added files from --added / --added-from, or ``None`` when neither is given.
+
+    ``None`` is meaningful and is NOT the same as ``[]``: it means the caller could not tell
+    additions from modifications, so ``compute_confidence`` keeps its pre-F-061 behaviour.
+    An empty list means "known, and this change added nothing".
+    """
+    explicit: list[str] | None = resolve_explicit_files(args.added, args.added_from)
+    return explicit
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Resolve agent identity + confidence proxy for seeding.")
     source = ap.add_mutually_exclusive_group()
     source.add_argument("--files", nargs="+", help="explicit changed-file list")
     source.add_argument("--files-from", help="NUL-delimited changed-file list (git diff --name-only -z)")
+    added = ap.add_mutually_exclusive_group()
+    added.add_argument("--added", nargs="+", help="explicit newly-added-file list")
+    added.add_argument(
+        "--added-from",
+        help="NUL-delimited newly-added-file list (git diff --name-only -z --diff-filter=A); "
+        "omitting both leaves additions unknown and keeps the pre-F-061 protected-path result",
+    )
     ap.add_argument("--lines-changed", type=int, default=0, help="added+removed lines (git diff --numstat)")
     ap.add_argument("--head-ref", default="", help="PR head branch ref (e.g. claude/foo)")
     ap.add_argument("--author-login", default="", help="PR author login")
     ap.add_argument("--identity-config", default=DEFAULT_IDENTITY_PATH)
     ap.add_argument("--proxy-config", default=DEFAULT_PROXY_PATH)
     ap.add_argument("--output", help="write JSON here instead of stdout")
+    ap.add_argument("-v", "--verbose", action="store_true", help="Enable DEBUG logging")
     return ap
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    configure_logging()
+    configure_logging(args.verbose)
     try:
         identity = AgentIdentity.load(args.identity_config)
         agent_version = identity.resolve(args.head_ref, args.author_login)
@@ -261,7 +383,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "no changed files resolved for an agent change (undeterminable file set; "
                     f"head_ref={args.head_ref or '(none)'}, files-from={args.files_from or '(none)'})"
                 )
-            confidence = compute_confidence(files, args.lines_changed, proxy)
+            confidence = compute_confidence(files, args.lines_changed, proxy, added=resolve_added(args))
             result = {"agent": True, "agent_version": agent_version, "confidence": confidence}
     except ConfigError as exc:
         logger.error("agent-confidence: %s", exc)
