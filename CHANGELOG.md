@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — hygiene items from an independent branch sweep (F-061)
+
+A background sweep (dead/redundant code, hardcoded values, line-level coverage — not just
+aggregate %) found zero defects and four small hygiene items, all fixed:
+
+- **`property` Hypothesis marker registered but never applied.** `pyproject.toml` added it
+  "to match the four sibling packages," but the four new `@given` tests in
+  `tests/test_agent_confidence.py` carried no such marker, so `pytest -m property` selected 0
+  of them. All four now carry `@pytest.mark.property`.
+- **No end-to-end test drove `--added`/`--added-from` through the real CLI.** Every behavioural
+  assertion about the added-set called `compute_confidence` directly, bypassing `argparse` and
+  `resolve_added` — invisible to coverage even though that wiring is real production code
+  (manually verified working, just untested). `test_cli_added_from_end_to_end` now drives
+  `ac.main(...)` with and without `--added-from` against the real committed config and pins
+  the exact acceptance numbers (0.354344 / 0.802184), and participates in the fix's canary.
+- **A test hardcoded a duplicate of the committed `test_globs` list.**
+  `test_added_test_withheld_for_every_committed_glob`'s docstring claims to test "every glob in
+  the committed config," but re-typed them by hand; a future edit to the real YAML would
+  silently desync the test from that claim. It now reads `config/agent-confidence.yaml`
+  directly, matching the idiom `test_committed_config_acceptance_numbers` already uses.
+- **A stale comment** in `scripts/validations/F_061.py` named `tests/test_a.py`; the constant
+  two lines below it is `tests/test_x.py`. Corrected.
+
 ### Fixed — Copilot review nit on F-061 (readability)
 
 - `scripts/validations/F_061.py`: the dense `_check(ac.compute_confidence(...) == canonical, ...)`

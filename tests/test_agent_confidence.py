@@ -259,9 +259,15 @@ def test_added_non_test_file_does_not_dodge_the_protected_penalty(tmp_path):
     ],
 )
 def test_added_test_withheld_for_every_committed_glob(tmp_path, test_path, protected):
-    """Every glob in the committed config -- not just the two the fixture carries."""
+    """Every glob in the committed config -- not just the two the fixture carries.
+
+    Reads the real committed test_globs rather than a hand-typed duplicate, so a future edit
+    to config/agent-confidence.yaml cannot silently desync this test from what it claims to
+    cover.
+    """
+    real_globs = yaml.safe_load((_ROOT / "config" / "agent-confidence.yaml").read_text())["test_globs"]
     doc = copy.deepcopy(_PROXY)
-    doc["test_globs"] = ["tests/**", "**/tests/**", "**/test_*.py", "**/*_test.py"]
+    doc["test_globs"] = real_globs
     cfg = ac.ProxyConfig.load(_write(tmp_path, "proxy.yaml", doc))
     files = ["src/pkg/a.py", test_path]
     with_added = ac.compute_confidence(files, 100, cfg, added=[test_path])
@@ -470,6 +476,7 @@ _PATH = st.sampled_from(
 _FILES = st.lists(_PATH, min_size=0, max_size=12, unique=True)
 
 
+@pytest.mark.property
 @given(files=_FILES, lines=st.integers(min_value=0, max_value=100_000))
 def test_property_output_always_within_clamp_bounds(files, lines):
     cfg = ac.ProxyConfig.load(str(_ROOT / "config" / "agent-confidence.yaml"))
@@ -479,6 +486,7 @@ def test_property_output_always_within_clamp_bounds(files, lines):
         assert 0.0 < c < 1.0
 
 
+@pytest.mark.property
 @given(files=_FILES, lines=st.integers(min_value=0, max_value=100_000))
 def test_property_added_none_equals_legacy(files, lines):
     """The backwards-compatibility contract, over arbitrary inputs."""
@@ -486,6 +494,7 @@ def test_property_added_none_equals_legacy(files, lines):
     assert ac.compute_confidence(files, lines, cfg, added=None) == ac.compute_confidence(files, lines, cfg)
 
 
+@pytest.mark.property
 @given(
     files=_FILES,
     small=st.integers(min_value=0, max_value=500),
@@ -498,6 +507,7 @@ def test_property_monotonic_decreasing_in_size(files, small, delta):
     assert b <= a
 
 
+@pytest.mark.property
 @given(files=_FILES)
 def test_property_declaring_additions_never_lowers_the_score(files):
     """Withholding added tests can only remove a penalty, never add one.
@@ -509,6 +519,64 @@ def test_property_declaring_additions_never_lowers_the_score(files):
     unknown = ac.compute_confidence(files, 100, cfg, added=None)
     all_added = ac.compute_confidence(files, 100, cfg, added=list(files))
     assert all_added >= unknown
+
+
+def test_cli_added_from_end_to_end(tmp_path, capsys):
+    """The full argparse -> resolve_added -> compute_confidence path, against real config.
+
+    Every other assertion about the added-set behaviour calls compute_confidence directly,
+    bypassing argparse and resolve_added entirely -- invisible to coverage even though the
+    wiring is real production code. This drives the actual CLI both with and without
+    --added-from and pins the exact acceptance numbers from CHANGELOG.md / F_061.py, over the
+    REAL committed config, so a regression in the CLI layer itself (not just the pure
+    function) fails here.
+    """
+    idp = str(_ROOT / "config" / "agent-authors.yaml")
+    pp = str(_ROOT / "config" / "agent-confidence.yaml")
+    files_z = tmp_path / "files.z"
+    files_z.write_bytes(b"src/a.py\0tests/test_a.py\0")
+    added_z = tmp_path / "added.z"
+    added_z.write_bytes(b"tests/test_a.py\0")
+
+    rc = ac.main(
+        [
+            "--files-from",
+            str(files_z),
+            "--lines-changed",
+            "100",
+            "--head-ref",
+            "claude/x",
+            "--identity-config",
+            idp,
+            "--proxy-config",
+            pp,
+        ]
+    )
+    assert rc == 0
+    legacy = json.loads(capsys.readouterr().out)["confidence"]
+
+    rc = ac.main(
+        [
+            "--files-from",
+            str(files_z),
+            "--added-from",
+            str(added_z),
+            "--lines-changed",
+            "100",
+            "--head-ref",
+            "claude/x",
+            "--identity-config",
+            idp,
+            "--proxy-config",
+            pp,
+        ]
+    )
+    assert rc == 0
+    with_added = json.loads(capsys.readouterr().out)["confidence"]
+
+    assert legacy == pytest.approx(0.354344), "CLI without --added-from must match the pinned legacy value"
+    assert with_added == pytest.approx(0.802184), "CLI with --added-from must match the pinned F-061 value"
+    assert with_added > legacy
 
 
 def test_added_from_error_names_its_own_flag(tmp_path, caplog):

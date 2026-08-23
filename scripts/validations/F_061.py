@@ -44,7 +44,7 @@ _ROOT = os.path.dirname(_SCRIPTS)
 _PROXY = os.path.join(_ROOT, "config", "agent-confidence.yaml")
 _SEED_WORKFLOW = os.path.join(_ROOT, ".github", "workflows", "merge-gate-seed.yml")
 
-# Representative changes. Paths are chosen so `tests/test_a.py` is BOTH a configured test
+# Representative changes. Paths are chosen so `tests/test_x.py` is BOTH a configured test
 # glob and an eval-protected path -- the overlap that produced the defect.
 _SRC = "src/eval_harness/x.py"
 _TEST = "tests/test_x.py"
