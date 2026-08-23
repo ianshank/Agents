@@ -57,5 +57,22 @@ jobs:
           pytest flow-corpus/tests/ -v --tb=short
           pytest flow-protocol/tests/ -v --tb=short
 
-      - name: Verify e2e matrix artifact freshness
-        run: python tests/test_e2e_matrix.py --check
+      # The e2e-matrix freshness check is deliberately NOT run here.
+      #
+      # `tests/test_e2e_matrix.py --check` regenerates the committed artifact from a run
+      # report and diffs it. That report (artifacts/e2e-report/, gitignored) is produced
+      # only by scripts/run_all_e2e.ps1, which CI has never invoked -- so the step raised
+      # MatrixConfigError -> exit 2 on every scheduled run since this workflow landed,
+      # failing all three matrix legs after every other step had passed.
+      #
+      # A permanently-red scheduled job trains readers to ignore CI, so it is removed
+      # rather than left red or wrapped in an `if:` that could never be true (a step that
+      # looks like a gate but never executes is the same failure in a quieter form).
+      #
+      # What still covers this artifact on every PR: quality-gates.yml runs
+      # `pytest tests/test_e2e_matrix.py`, whose TestCoverageGrid reads the repo directly
+      # (no run report) and cross-checks every package's coverage floor against both its
+      # pyproject and its generated quality-gate.sh anchor. What is NOT covered is
+      # freshness of the rendered tables against a real run -- that stays a local-only
+      # check (`make e2e-matrix-check`) until a POSIX e2e driver exists. Tracked in
+      # NEXT_STEPS.md.
