@@ -31,6 +31,17 @@ highest-confidence class in the system — the Goodhart failure `scripts/fix_loo
 every stored record and every caller that cannot supply it is unaffected. The weights are
 unchanged; this is a correction to what the `protected` term *means*, not a retune.
 
+**§1's "same function, identical rows" promise is preserved.**
+`scripts/migrations/agent_domain_backfill.py::compute_confidence_for` resolves the added set
+too (`git diff --name-only --diff-filter=A`) and passes it through. Wiring only the live seed
+path would have quietly broken that invariant: migrated rows would keep paying the added-test
+penalty that live rows no longer pay, leaving one store with two scoring semantics. Pinned by
+`tests/test_agent_domain_backfill.py::test_compute_confidence_for_resolves_the_added_set`,
+which builds a real git repo whose commit adds a test.
+
+Note this does **not** rewrite the store: the backfill is dry-run by default and
+human-gated (§4). It means a future run computes what live seeding computes.
+
 **Not corrected here.** The saturation this ADR's §1 predicts ("AUROC ≈ 0.5–0.65") is a
 separate defect: 63.9% of agent-domain records sit at exactly `clamp_lo`, because
 `w_size * size_cap = 6.0` swamps `base = 1.5`. That needs a weight refit plus a full-store

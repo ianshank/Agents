@@ -86,6 +86,23 @@ def _validate_behaviour(errors: list[str]) -> None:
         "added=None reproduces the pre-F-061 result (backwards-compatibility contract)",
         errors,
     )
+    # Spelling must not decide the outcome. A mutation battery showed the suite caught these
+    # but this gate did not, so it now asserts them directly: `tests/conftest.py` is
+    # eval-protected yet matches no RAW test glob, so these only pass if _is_test normalises.
+    spelled = ["pkg/a.py", "tests/conftest.py"]
+    canonical = ac.compute_confidence(spelled, 100, cfg, added=["tests/conftest.py"])
+    for variant in ("./tests/conftest.py", "tests\\conftest.py", "/tests/conftest.py"):
+        _check(
+            ac.compute_confidence(spelled, 100, cfg, added=[variant]) == canonical,
+            f"a non-canonical added spelling is withheld identically ({variant!r})",
+            errors,
+        )
+    _check(
+        ac.compute_confidence(["pkg/a.py", "./tests/conftest.py"], 100, cfg, added=["tests/conftest.py"]) == canonical,
+        "a non-canonical spelling on the CHANGED side is normalised too",
+        errors,
+    )
+
     # An added *non-test* protected file must NOT dodge the penalty -- only tests are withheld.
     protected_non_test = ["config/agent-confidence.yaml"]
     _check(

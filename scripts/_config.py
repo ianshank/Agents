@@ -30,7 +30,7 @@ __all__ = [
 SUPPORTED_SCHEMA_MAJOR = "1"
 
 
-def read_nul_delimited(path: str) -> list[str]:
+def read_nul_delimited(path: str, *, flag: str = "--files-from") -> list[str]:
     """Read a NUL-delimited path list (``git diff --name-only -z`` output).
 
     Read as bytes and decode with ``surrogateescape`` — that output is a raw byte stream and
@@ -41,13 +41,18 @@ def read_nul_delimited(path: str) -> list[str]:
         with open(path, "rb") as fh:
             raw = fh.read()
     except OSError as exc:
-        raise ConfigError(f"cannot read --files-from '{path}': {exc}") from exc
+        raise ConfigError(f"cannot read {flag} '{path}': {exc}") from exc
     text = raw.decode("utf-8", "surrogateescape")
     return [f for f in text.split("\0") if f.strip()]
 
 
-def resolve_explicit_files(files: Sequence[str] | None, files_from: str | None) -> list[str] | None:
+def resolve_explicit_files(
+    files: Sequence[str] | None, files_from: str | None, *, flag: str = "--files-from"
+) -> list[str] | None:
     """The shared ``--files`` / ``--files-from`` resolution.
+
+    ``flag`` names the option in error messages, so a sibling pair such as
+    ``--added``/``--added-from`` reports itself rather than the default.
 
     Returns the changed-file list when either flag is given (possibly empty after stripping),
     or ``None`` when neither is given — the signal for the caller to fall back to its own source
@@ -56,7 +61,7 @@ def resolve_explicit_files(files: Sequence[str] | None, files_from: str | None) 
     if files:
         return [f for f in files if f.strip()]
     if files_from:
-        return read_nul_delimited(files_from)
+        return read_nul_delimited(files_from, flag=flag)
     return None
 
 

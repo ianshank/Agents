@@ -6,7 +6,7 @@ Statistical merge gate, isotonic calibration, domain routing, audit queues, and 
 ## Landed Features & Milestones
 - **[x] Calibrated Merge Gate Core (F-010, ADR 0005)**: Predictive gating subsystem with Wilson intervals, cold-start `ESCALATE` posture, and opt-in execution.
 - **[x] Real-Data Activation (F-032–F-035, ADR 0018)**: Outcome store on `merge-gate-data` branch, daily outcome labeller, weekly audit sampling queue, and seed-on-merge recording.
-- **[x] Agent-Record Calibration Routing (F-042–F-044, F-046, ADR 0023)**: Deterministic proxy confidence calculation (`scripts/agent_confidence.py`), `agent_version` attribution, and calibration reporting.
+- **[x] Agent-Record Calibration Routing (F-042–F-044, F-046, F-061, ADR 0023)**: Deterministic proxy confidence calculation (`scripts/agent_confidence.py`), `agent_version` attribution, and calibration reporting.
 - **[x] Calibrator Health & Wilson Floor Integrity (F-049, ADR 0029)**: `_operating_bin_ci_width` region evaluation, single-sourced binning, complexity optimization, and `GatePolicyConfig` parameter validation.
 - **[x] Soak Observability (F-040)**: `soak_progress` monitoring and reporting tools.
 

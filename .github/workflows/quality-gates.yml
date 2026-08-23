@@ -125,7 +125,7 @@ jobs:
       # but unresolvable* ref fails, and the checkout above uses fetch-depth: 0, which is what
       # the refs need. (On a shallow clone the script downgrades itself back to warnings; see
       # _check_git_refs. Squash-merging a PR would rot its own ref, so keep merge commits.)
-      - run: python scripts/validate.py --tier fast --strict
+      - run: python scripts/validate.py --tier fast --strict-git
       # Vendored skill-script copies must stay byte-identical to their canonical source.
       - name: Skill-script drift guard
         run: python scripts/check_skill_script_drift.py

@@ -1,6 +1,56 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 014 — 2026-08-23
+
+### Features
+- F-061 (added tests no longer carry the merge-gate protected-path penalty): status → done,
+  `implemented_in` 718eb0e, proof `scripts/validations/F_061.py`
+
+### Changes (F-061)
+- `scripts/agent_confidence.py`: `_is_test` / `_test_regexes` extracted from `_test_ratio` so
+  test detection has one spelling; new `_protected_inputs` withholds NEWLY ADDED test files
+  from the protected-path signal; `compute_confidence` gains a keyword-only `added` argument
+  defaulting to `None` (= "unknown", bit-identical to pre-F-061); new `--added`/`--added-from`
+  CLI pair resolved via the existing `resolve_explicit_files` seam; new `-v/--verbose`; new
+  `_log_score` helper emitting the score decomposition at DEBUG and clamp saturation at INFO.
+- `.github/workflows/merge-gate-seed.yml`: derives the added set with
+  `git diff --name-only -z --diff-filter=A` into `added_files.z` and passes `--added-from`.
+- `scripts/migrations/agent_domain_backfill.py`: resolves and passes the added set too, so
+  ADR 0023 §1's "forward and migrated rows computed identically" survives the change.
+- `tests/conftest.py`: Hypothesis `dev`/`ci` profiles registered, mirroring the four sibling
+  packages; `hypothesis>=6.100` added to the root `dev` extra; `property` marker registered;
+  `eval-harness-ci.yml` sets `HYPOTHESIS_PROFILE: ci`.
+
+### Structural changes
+- None. No component or import edge changed: `scripts/` is not a root package in
+  `architecture.yaml`, so `architecture.mmd` needs no regeneration.
+
+### ADRs
+- ADR 0023 gained a dated erratum (2026-08-23) recording the double-counting defect, why
+  excluding *all* tests was rejected, and the backfill wiring that preserves §1.
+
+### Validation evidence
+- `make check-all` PASS across all six packages: root 98.42% (floor 96), scripts 95.13%
+  (85), agent-core 98.72% (95), behavioral-regression 100% (95), claude-foundation 96.03%
+  (85), flow-corpus 100% (95), flow-protocol 100% (95).
+- `scripts/validate.py --tier fast --strict-git`: 59/59.
+- CI on PR #165: 11 of 12 checks green; the only red is `protected-path guard`, which is the
+  F-007 label gate awaiting a human `eval-change-approved` label — correct behaviour, not a
+  defect.
+- Canaries recorded: reverting `_protected_inputs` fails 6 tests; reverting the backfill
+  wiring fails `test_compute_confidence_for_resolves_the_added_set`. Both restore green.
+- Property tests re-run at `HYPOTHESIS_PROFILE=ci` (500 examples): all pass.
+
+### Next
+- Deferred, and deliberately out of this change's scope: the floor-saturation defect
+  (63.9% of agent-domain records sit at `clamp_lo` because `w_size*size_cap = 6.0` swamps
+  `base = 1.5`). Needs a weight refit fitted against a committed shape fixture plus a new
+  full-store recompute migration with a `proxy_version` field — and ADR 0023 §4 currently
+  states the F-044 backfill is "the only operation that rewrites store history", so a second
+  one needs an ADR amendment.
+
+---
 ## Session 013 — 2026-07-30 (rebased from the original 2026-07-07 F-040 branch)
 
 ### Features

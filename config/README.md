@@ -13,7 +13,7 @@ these files can alter what the evaluation measures.
 | `model_target.yaml` | Real model-backed target configuration (ADR 0013). | the model-backed target |
 | `merge-gate-domains.yaml` | Domain definitions for the calibrated merge gate. | `agent_core` merge-gate / `scripts/merge_gate_context.py` |
 | `agent-authors.yaml` | Agent identification for merge-gate seed routing (ADR 0023, F-042) — head-ref prefixes → `agent_version`. | `scripts/merge_gate_context.py`, `scripts/agent_confidence.py` |
-| `agent-confidence.yaml` | Parameters for the deterministic agent-confidence proxy (F-042). | `scripts/agent_confidence.py` |
+| `agent-confidence.yaml` | Parameters for the deterministic agent-confidence proxy (F-042, F-061). | `scripts/agent_confidence.py` |
 | `legacy.v0_9.yaml` | A legacy (v0.9) config kept to exercise the migration chain. | config migration tests |
 
 Credentials are **never** stored here — they come from environment variables

@@ -39,7 +39,7 @@ human-audit bottleneck it names is real and is now the critical path.
    passes `--seed-store`. Production seeding runs out-of-band in
    `.github/workflows/merge-gate-seed.yml:116-127` via `agent_core.merge_seed`, which since
    F-042 already routes agent PRs by head-branch prefix (`config/agent-authors.yaml`) with
-   a deterministic proxy confidence (`scripts/agent_confidence.py:194-220`,
+   a deterministic proxy confidence (`scripts/agent_confidence.py::compute_confidence`,
    `config/agent-confidence.yaml`). "Run agent PRs through `merge_gate_ci.py`" would build
    a second, redundant lane.
 

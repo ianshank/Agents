@@ -9,7 +9,8 @@ Two responsibilities, both pure and offline:
     login, which is uniform for agent and human PRs in this repo (ADR 0023 Context).
   * **Confidence proxy** — a varying ``raw_confidence`` in the open interval (0, 1)
     computed deterministically from merge-time signals (diff size, files touched,
-    test-file ratio, protected-path touch) with weights in ``config/agent-confidence.yaml``.
+    test-file ratio, and a protected-path touch that EXCLUDES newly added test files --
+    F-061) with weights in ``config/agent-confidence.yaml``.
     It is a transparent heuristic, NOT an agent's real confidence (ADR 0023 §1); its only
     job is to make the calibration corpus non-degenerate.
 
@@ -19,8 +20,15 @@ migrated rows are computed identically.
 
 CLI (consumed by the seed workflow)::
 
-    python scripts/agent_confidence.py --files-from changed.z --lines-changed 137 \
-        --head-ref claude/foo --author-login ianshank [--output out.json]
+    python scripts/agent_confidence.py --files-from changed.z --added-from added.z \
+        --lines-changed 137 --head-ref claude/foo --author-login ianshank \
+        [--output out.json] [-v]
+
+``--files``/``--files-from`` give the changed set; ``--added``/``--added-from`` give the
+subset the change newly created (``git diff --name-only -z --diff-filter=A``). Omitting BOTH
+added flags means "additions unknown" and reproduces the pre-F-061 protected-path result --
+an empty ``--added-from`` file means "known, and nothing was added", which is different.
+``-v`` raises logging to DEBUG and prints the full score decomposition.
 
 emits ``{"agent": true, "agent_version": "claude-code", "confidence": 0.83}`` for an
 agent change, or ``{"agent": false, "agent_version": null, "confidence": null}`` otherwise.
@@ -195,8 +203,14 @@ def _is_test(path: str, regexes: Sequence[re.Pattern[str]]) -> bool:
     The single spelling of "is this a test file". ``_test_ratio`` and the added-test filter
     in ``compute_confidence`` both route through here so the two signals can never disagree
     about what a test is.
+
+    The path is normalised first, matching what ``matched_protected`` does internally. Without
+    it the two halves of the same function disagree on spelling: ``./tests/conftest.py`` counts
+    as an eval-protected path but not as a test, so it takes the protected penalty *and*
+    contributes nothing to ``test_ratio``.
     """
-    return any(r.match(path) for r in regexes)
+    norm = _normalise(path)
+    return any(r.match(norm) for r in regexes)
 
 
 def _test_ratio(files: Sequence[str], test_globs: Sequence[str]) -> float:
@@ -210,23 +224,25 @@ def _test_ratio(files: Sequence[str], test_globs: Sequence[str]) -> float:
 def _protected_inputs(files: Sequence[str], added: Sequence[str] | None, cfg: ProxyConfig) -> list[str]:
     """The file subset the protected-path signal is computed over.
 
-    ``added is None`` -- the caller could not tell additions from modifications -- reproduces
-    the pre-F-061 behaviour exactly: every changed file feeds the signal.
+    A **newly added** test file is withheld. Every ``tests/**`` root is an eval-protected
+    path, so without this a test file is counted twice: once as ``+w_tests * test_ratio`` and
+    again as ``-w_protected``, a net penalty for adding tests. A *modified* test still feeds
+    the signal, because weakening an existing eval-defining test is exactly the eval-surface
+    risk the protected term exists to price.
 
-    When the added set IS known, a **newly added** test file is withheld. Every ``tests/**``
-    root is an eval-protected path, so without this a test file is counted twice: once as
-    ``+w_tests * test_ratio`` and again as ``-w_protected``, a net penalty for adding tests.
-    A *modified* test still feeds the signal, because weakening an existing eval-defining
-    test is exactly the eval-surface risk the protected term exists to price.
+    ``added is None`` means the caller could not distinguish additions from modifications.
+    It is treated as the empty set, which is the same arithmetic -- withholding nothing is a
+    no-op -- so the pre-F-061 result is reproduced either way. The two are kept distinct in
+    the *type* because they are different facts about the caller, not because they currently
+    score differently; do not write a test asserting a behavioural difference between them.
 
-    Both sides are normalised before comparison. ``matched_protected`` normalises internally
-    while the test globs match the raw path, so ``./tests/a.py`` would otherwise be protected
-    but not recognised as a test.
+    Spelling is not significant on either side: ``_is_test`` normalises internally and the
+    comparison keys are normalised, matching what ``matched_protected`` already does. Without
+    that, ``./tests/conftest.py`` or a backslash spelling would be protected but unrecognised
+    as a test -- silently disabling the withholding for that file.
     """
-    if added is None:
-        return list(files)
     regexes = _test_regexes(cfg.test_globs)
-    added_tests = {_normalise(f) for f in added if _is_test(f, regexes)}
+    added_tests = {_normalise(f) for f in (added or ()) if _is_test(f, regexes)}
     return [f for f in files if _normalise(f) not in added_tests]
 
 
@@ -234,6 +250,7 @@ def _log_score(
     cfg: ProxyConfig,
     result: float,
     *,
+    clamped: float,
     raw: float,
     z: float,
     n_files: int,
@@ -266,9 +283,11 @@ def _log_score(
         logger.debug("agent-confidence: protected paths driving the penalty: %s", ", ".join(protected_hits))
     # Saturation is invisible in one score but fatal in aggregate: a corpus pinned to a rail
     # carries no information for calibration. Surface it per-run rather than only at audit.
-    if result in (cfg.clamp_lo, cfg.clamp_hi):
-        rail = "clamp_lo" if result == cfg.clamp_lo else "clamp_hi"
-        logger.info("agent-confidence: score saturated at %s=%.6f (raw=%.6f)", rail, result, raw)
+    # Compare the CLAMPED value, not the rounded one: round(clamped, 6) != clamp_lo whenever a
+    # bound carries more than six decimals, which would silently switch this detector off.
+    if clamped in (cfg.clamp_lo, cfg.clamp_hi):
+        rail = "clamp_lo" if clamped == cfg.clamp_lo else "clamp_hi"
+        logger.info("agent-confidence: score saturated at %s=%.6g (raw=%.6f)", rail, clamped, raw)
 
 
 def compute_confidence(
@@ -280,10 +299,9 @@ def compute_confidence(
 ) -> float:
     """Deterministic proxy confidence in (clamp_lo, clamp_hi) ⊂ (0, 1).
 
-    Pure: identical output for identical inputs, whether run live at merge time or
-    retroactively over a historical diff (F-044). ``added`` is the subset of *files* the
-    change newly created; ``None`` means "unknown" and reproduces the pre-F-061 result
-    bit-for-bit. See ``_protected_inputs`` for what knowing it buys.
+    Pure: identical output for identical inputs, live at merge time or retroactively over a
+    historical diff (F-044). ``added`` is the subset of *files* the change newly created --
+    see ``_protected_inputs``.
     """
     n_files = len(files)
     size_norm = min(max(lines_changed, 0) / cfg.size_scale, cfg.size_cap)
@@ -311,6 +329,7 @@ def compute_confidence(
     _log_score(
         cfg,
         result,
+        clamped=clamped,
         raw=raw,
         z=z,
         n_files=n_files,
@@ -337,7 +356,7 @@ def resolve_added(args: argparse.Namespace) -> list[str] | None:
     additions from modifications, so ``compute_confidence`` keeps its pre-F-061 behaviour.
     An empty list means "known, and this change added nothing".
     """
-    explicit: list[str] | None = resolve_explicit_files(args.added, args.added_from)
+    explicit: list[str] | None = resolve_explicit_files(args.added, args.added_from, flag="--added-from")
     return explicit
 
 

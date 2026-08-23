@@ -6,6 +6,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — defects found by adversarial review of the F-061 branch
+
+Mutation testing against the branch showed three mutants surviving the suite. All are fixed
+and all four now die:
+
+- **`_is_test` classified the RAW path while the comparison keys were normalised.** A
+  non-canonical spelling (`./tests/conftest.py`, backslashes, a leading slash) was
+  eval-protected but unrecognised as a test, so the withholding silently did nothing for that
+  file — and the same blind spot existed *pre-F-061* in `_test_ratio`, where such a file took
+  the protected penalty while contributing nothing to the test ratio. `_is_test` now
+  normalises internally, so both halves of the function agree on spelling. The test that was
+  supposed to cover this used `tests/test_a.py`, which matches `**/test_*.py` **raw** — it
+  passed via the glob and never exercised normalisation. It now uses `tests/conftest.py`,
+  which matches no raw glob, and is parametrized over three spellings plus the changed-file
+  side.
+- **The `added is None` branch was dead code.** `added=[]` reached the same result, because
+  withholding an empty set is a no-op — so the carefully-preserved `None` ≠ `[]` distinction
+  had no observable consequence and the tests asserting it could not fail. The branch is
+  removed (`added or ()`); the two remain distinct in the *type* because they are different
+  facts about the caller, and the docstrings, ADR erratum and `features.yaml` now say that
+  rather than claiming a behavioural difference.
+- **`features.yaml`'s F-061 verification bullet asserted something the code did not do** and
+  named a test that could not fail on the claim. In a repo where `features.yaml` is the
+  governance record and an eval-protected path, that is worse than no bullet. Corrected.
+- **The saturation detector compared a rounded value to an unrounded bound.**
+  `round(clamped, 6) != clamp_lo` for any bound with more than six decimals, silently
+  switching off the very logging added to catch saturation. It now compares the clamped value.
+- **`read_nul_delimited` hardcoded `--files-from` in its error message**, so a bad
+  `--added-from` sent an operator to the wrong flag. The flag name is now a parameter,
+  threaded through `resolve_explicit_files`, and pinned by a test.
+- **`scripts/validations/F_061.py` now asserts the normalisation properties directly.** Two of
+  the surviving mutants were caught by the suite but *not* by the gate; the gate is the
+  governance artifact, so it should not be the weaker of the two.
+
+One reviewer finding was **refuted on inspection** and no action taken:
+`tests/test_agent_confidence.py` exceeding 500 lines does not trip the size budget —
+`scripts/check_size_budget.py` excludes `tests/`, verified by running it against that file
+(exit 0, "no file exceeds 500 lines").
+
+### Fixed — follow-ups found by a post-implementation hygiene sweep (F-061)
+
+- **`scripts/migrations/agent_domain_backfill.py` now resolves the added set too.** Wiring only
+  the live seed path silently broke ADR 0023 §1's promise that "the **same function** runs live
+  at merge time and retroactively during backfill, so forward and migrated rows are computed
+  identically" — migrated rows would have kept paying the added-test penalty live rows no longer
+  pay, leaving one store with two scoring semantics. Pinned by a regression test that builds a
+  real git repo whose commit adds a test, and canaried (reverting the wiring fails it).
+- **`added_files.z` is now ignored** in `.gitignore` and `.dockerignore`. The seed workflow
+  writes it beside `changed_files.z`, which was already listed under a block whose comment
+  promises these "must never land on code branches"; the new sibling escaped that promise.
+- **`quality-gates.yml` now invokes `validate.py --strict-git`, not `--strict`.** The flag is
+  declared `--strict-git`; `--strict` resolved only through argparse prefix abbreviation, so
+  adding any second `--strict*` option would have turned a documented CI command into an exit-2
+  usage error. `AGENTS.md` updated to match.
+- **`property` marker registered** in the root `pyproject.toml`, matching the four sibling
+  packages — the dev/ci Hypothesis profile convention was otherwise only half carried over.
+- **Documentation corrected where this change made it false**: `.claude/hooks/session-start.sh`
+  (its stated rationale said `.[dev]` installs no `hypothesis` — it now does), `README.md`'s dev
+  extra enumeration, `AGENTS.md` markers and Hypothesis notes (five workflows set the profile,
+  not one), `docs/c4_architecture.md`, `scripts/README.md`, `config/README.md`,
+  `docs/roadmap/epic-2-calibrated-merge-gate.md`, and a stale
+  `agent_confidence.py:194-220` line citation in
+  `docs/plans/agent-record-decontamination/REVIEW.md`.
+- **`scripts/agent_confidence.py`'s module docstring** now documents `--added`/`--added-from`
+  and `-v`, and states the `None`-vs-empty distinction. It is the only prose description of
+  this CLI anywhere in the repo — no markdown file documents its flags.
+- **`progress.md`** gained the Session 014 block `HARNESS_SPEC.md` §"Progress log" mandates;
+  the log had been 20 features stale.
+
 ### Fixed — the merge-gate confidence proxy no longer penalises adding tests (F-061)
 
 - **`scripts/agent_confidence.py`**: `compute_confidence` gained an optional `added` keyword —

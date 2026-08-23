@@ -108,6 +108,9 @@ testpaths = ["tests"]
 markers = [
     "integration: live API tests",
     "slow: tests taking >5s",
+    # Registered to match the four sibling packages, so the dev/ci Hypothesis profile
+    # convention adopted in tests/conftest.py is whole rather than half-carried-over.
+    "property: Hypothesis property-based tests",
 ]
 
 [tool.ruff]

@@ -272,17 +272,41 @@ def test_added_test_withheld_for_every_committed_glob(tmp_path, test_path, prote
         assert with_added == legacy, f"{test_path} is not protected; withholding it is a no-op"
 
 
-def test_added_paths_are_normalised_before_comparison(tmp_path):
-    """``./tests/a.py`` and ``tests/a.py`` are the same file.
-
-    ``matched_protected`` normalises internally while the test globs match the raw path, so
-    comparing un-normalised would silently fail to withhold a differently-spelled addition.
-    """
+# `tests/conftest.py` is deliberate: it is eval-protected but matches NO raw test glob in the
+# fixture, so these cases can only pass if the path is normalised BEFORE classification. An
+# earlier version of this test used `tests/test_a.py`, which matches `**/test_*.py` raw --
+# so it passed via the glob and never exercised normalisation at all.
+@pytest.mark.parametrize("spelling", ["./tests/conftest.py", "tests\\conftest.py", "/tests/conftest.py"])
+def test_added_paths_are_normalised_before_classification(tmp_path, spelling):
+    """A non-canonical spelling of an added test must still be withheld."""
     cfg = _proxy_cfg(tmp_path)
-    files = ["pkg/a.py", "tests/test_a.py"]
-    assert ac.compute_confidence(files, 100, cfg, added=["./tests/test_a.py"]) == (
-        ac.compute_confidence(files, 100, cfg, added=["tests/test_a.py"])
+    files = ["pkg/a.py", "tests/conftest.py"]
+    canonical = ac.compute_confidence(files, 100, cfg, added=["tests/conftest.py"])
+    assert ac.compute_confidence(files, 100, cfg, added=[spelling]) == canonical
+
+
+@pytest.mark.parametrize("spelling", ["./tests/conftest.py", "tests\\conftest.py"])
+def test_non_canonical_spellings_in_files_are_normalised_too(tmp_path, spelling):
+    """The *files* side is normalised as well -- otherwise the set lookup misses."""
+    cfg = _proxy_cfg(tmp_path)
+    canonical = ac.compute_confidence(["pkg/a.py", "tests/conftest.py"], 100, cfg, added=["tests/conftest.py"])
+    assert ac.compute_confidence(["pkg/a.py", spelling], 100, cfg, added=["tests/conftest.py"]) == canonical
+
+
+def test_added_paths_absent_from_files_are_a_no_op(tmp_path):
+    """`added` entries not present in `files` must not change the outcome."""
+    cfg = _proxy_cfg(tmp_path)
+    files = ["pkg/a.py", "src/eval_harness/gating/x.py"]
+    assert ac.compute_confidence(files, 50, cfg, added=["tests/unrelated_test.py"]) == (
+        ac.compute_confidence(files, 50, cfg)
     )
+
+
+def test_empty_files_with_non_empty_added(tmp_path):
+    """Degenerate but reachable: no changed files, a non-empty added list."""
+    cfg = _proxy_cfg(tmp_path)
+    c = ac.compute_confidence([], 0, cfg, added=["tests/test_a.py"])
+    assert cfg.clamp_lo <= c <= cfg.clamp_hi
 
 
 def test_committed_config_acceptance_numbers(tmp_path):
@@ -485,3 +509,32 @@ def test_property_declaring_additions_never_lowers_the_score(files):
     unknown = ac.compute_confidence(files, 100, cfg, added=None)
     all_added = ac.compute_confidence(files, 100, cfg, added=list(files))
     assert all_added >= unknown
+
+
+def test_added_from_error_names_its_own_flag(tmp_path, caplog):
+    """A bad --added-from must not send an operator to --files-from.
+
+    `read_nul_delimited` hardcoded the flag name in its message; both options share it, so a
+    diagnostic-only input failed with the wrong option named. The flag is now a parameter.
+    """
+    files_z = tmp_path / "f.z"
+    files_z.write_bytes(b"src/a.py\0")
+    rc = ac.main(
+        [
+            "--files-from",
+            str(files_z),
+            "--added-from",
+            str(tmp_path / "missing.z"),
+            "--lines-changed",
+            "10",
+            "--head-ref",
+            "claude/x",
+            "--identity-config",
+            str(_ROOT / "config" / "agent-authors.yaml"),
+            "--proxy-config",
+            str(_ROOT / "config" / "agent-confidence.yaml"),
+        ]
+    )
+    assert rc == ac.EXIT_CONFIG
+    assert any("--added-from" in r.message for r in caplog.records), caplog.text
+    assert not any("--files-from" in r.message for r in caplog.records), caplog.text
