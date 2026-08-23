@@ -1137,3 +1137,33 @@ features:
     implemented_in: "b709ae1903befd6e6f6f8c6ae59a960b155bf235"
     depends_on: ["F-056"]
     notes: "OpenSpec package: openspec/changes/add-stateful-outcome-evaluation/ (proposal.md, design.md, tasks.md; authorised by ADR 0031). Depends on F-056 (add-repeat-reliability-metrics) for its per-attempt isolation, so state does not leak across repetitions>1 -- no new dependency beyond what F-056 already established. Landed as 8 independently-committed, independently-verified groups on the same branch (engine.py size-budget extraction; contracts + registry + in_memory, pulled forward from the originally-planned adapters group because four independent pre-existing matrix-coverage guards all assumed a registered kind has >=1 real, M8-pipeline-exercised component -- ADR 0032's own Consequences section named this exact scenario; engine lifecycle wiring; the two scorers; filesystem + a shared evaluate() helper; sqlite; mock_http; this governance entry), each pushed before starting the next. architecture.yaml edge flagged for explicit human review per the delivery plan (Phase 0 Sec5), not just CI green -- confirmed airgap-safe: state_adapters depends on core and plugins only, never flow_corpus or agent_core."
+  - id: "F-061"
+    epic: "Quality Gate"
+    name: "Added tests no longer carry the merge-gate protected-path penalty"
+    description: >-
+      compute_confidence takes an optional `added` set (the change's newly created files) and
+      withholds a newly ADDED test from the protected-path signal, while a MODIFIED test still
+      feeds it. Every tests/** root is eval-protected, so a test file was previously priced
+      twice -- +w_tests*test_ratio and -w_protected -- and adding tests lowered merge-risk
+      confidence in a repo whose purpose is enforcing test quality.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "an ADDED test raises the score against the REAL matched_protected classifier: on the committed weights a 100-line 2-file change goes 0.354 -> 0.802, above the 0.711 no-test reference (scripts/validations/F_061.py, tests/test_agent_confidence.py::test_confidence_tests_raise_it)"
+      - "a MODIFIED test still carries the protected penalty and scores exactly as before (0.550 unchanged): withholding all tests would make 'modify only an eval-defining test' the highest-confidence class in the system at 0.900, the Goodhart failure scripts/fix_loop.py names (scripts/validations/F_061.py, tests/test_agent_confidence.py::test_modifying_an_existing_test_still_carries_the_protected_penalty)"
+      - "added=None reproduces the pre-F-061 result bit-for-bit, so stored records and callers that cannot distinguish additions from modifications are unaffected; asserted over arbitrary inputs by a Hypothesis property (tests/test_agent_confidence.py::test_property_added_none_equals_legacy)"
+      - "an added non-test protected path does NOT dodge the penalty -- only tests are withheld (scripts/validations/F_061.py, tests/test_agent_confidence.py::test_added_non_test_file_does_not_dodge_the_protected_penalty)"
+      - "the fix is not inert in production: merge-gate-seed.yml derives the added set with git diff --diff-filter=A into added_files.z and passes --added-from (scripts/validations/F_061.py wiring checks)"
+      - "test detection has one spelling: _is_test is extracted from _test_ratio and reused by the added-test filter, and both sides are normalised so ./tests/a.py cannot be protected-but-not-a-test (tests/test_agent_confidence.py::test_added_paths_are_normalised_before_comparison)"
+      - "the monkeypatch that hid the defect is deleted: test_confidence_tests_raise_it patched matched_protected to False and so proved a counterfactual; the remaining doubles returned bool where the real function returns list[str] and now return realistic values"
+    validation_command: "python scripts/validations/F_061.py"
+    implemented_in: "718eb0e591e0ec47cd0e0843ac8a250b9828a0ed"
+    depends_on: ["F-042"]
+    notes: >-
+      ADR 0023 carries a dated erratum for this correction. Deliberately NOT in scope: the
+      separate floor-saturation defect (63.9% of agent-domain records sit at clamp_lo because
+      w_size*size_cap=6.0 swamps base=1.5), which needs a weight refit plus a full-store
+      recompute migration. The weights are unchanged here; this corrects what the `protected`
+      term MEANS, not its magnitude.
