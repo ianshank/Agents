@@ -86,7 +86,7 @@ pip install -e '.[openai]'   # add OpenAI + tenacity for judge
 pip install -e '.[bedrock]'  # add boto3 for the Bedrock judge
 pip install -e '.[braintrust]' # add the BrainTrust SDK for the braintrust sink
 pip install -e '.[autoevals]'  # add the autoevals scorer library
-pip install -e '.[dev]'      # pytest, coverage, ruff, mypy
+pip install -e '.[dev]'      # pytest, coverage, ruff, mypy, hypothesis, jsonschema
 ```
 
 ## Environment Variables

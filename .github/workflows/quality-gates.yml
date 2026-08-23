@@ -125,7 +125,7 @@ jobs:
       # but unresolvable* ref fails, and the checkout above uses fetch-depth: 0, which is what
       # the refs need. (On a shallow clone the script downgrades itself back to warnings; see
       # _check_git_refs. Squash-merging a PR would rot its own ref, so keep merge commits.)
-      - run: python scripts/validate.py --tier fast --strict
+      - run: python scripts/validate.py --tier fast --strict-git
       # Vendored skill-script copies must stay byte-identical to their canonical source.
       - name: Skill-script drift guard
         run: python scripts/check_skill_script_drift.py
@@ -171,7 +171,7 @@ jobs:
           --cov=check_charter_drift --cov=check_charter_invariants
           --cov=check_guard_reachability --cov=agent_confidence
           --cov=skill_marketplace --cov=_common --cov=extract_registries
-          --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023 --cov=F_024 --cov=F_025 --cov=F_026 --cov=F_027 --cov=F_028 --cov=F_029 --cov=F_030 --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037 --cov=F_038 --cov=F_039 --cov=F_040 --cov=F_041 --cov=F_042 --cov=F_043 --cov=F_044 --cov=F_045 --cov=F_046 --cov=F_047 --cov=F_048 --cov=F_049 --cov=F_050 --cov=F_051 --cov=F_052 --cov=F_053 --cov=F_054 --cov=F_055 --cov=F_056 --cov=F_057 --cov=F_058 --cov=F_059 --cov=F_060
+          --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023 --cov=F_024 --cov=F_025 --cov=F_026 --cov=F_027 --cov=F_028 --cov=F_029 --cov=F_030 --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037 --cov=F_038 --cov=F_039 --cov=F_040 --cov=F_041 --cov=F_042 --cov=F_043 --cov=F_044 --cov=F_045 --cov=F_046 --cov=F_047 --cov=F_048 --cov=F_049 --cov=F_050 --cov=F_051 --cov=F_052 --cov=F_053 --cov=F_054 --cov=F_055 --cov=F_056 --cov=F_057 --cov=F_058 --cov=F_059 --cov=F_060 --cov=F_061
           --cov=tests._matrix_coverage
           --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
       # Dedicated floor for the e2e-matrix generator. Deliberately its own step: folded into

@@ -229,3 +229,47 @@ def test_main_bad_proxy_config_is_clean_exit(tmp_path):
         ]
     )
     assert rc == adb.EXIT_CONFIG
+
+
+def test_compute_confidence_for_resolves_the_added_set(tmp_path):
+    """ADR 0023 SS1: the SAME function runs live and retroactively, so forward and migrated
+    rows must be computed identically. After F-061 that means the backfill has to resolve the
+    added-file set too -- passing `files` alone would silently charge migrated rows the
+    added-test penalty that live rows no longer pay.
+
+    Built as a real git repo whose commit ADDS a test file: with the added set resolved the
+    protected penalty is withheld, so the score must exceed what the pre-F-061 call produces.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    ident = ["-c", "user.email=t@e", "-c", "user.name=t", "-c", "commit.gpgsign=false"]
+
+    def run(*args: str) -> None:
+        subprocess.run(["git", "-C", str(repo), *ident, *args], check=True, capture_output=True)
+
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True, capture_output=True)
+    (repo / "pkg").mkdir()
+    (repo / "pkg" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    run("add", "-A")
+    run("commit", "-q", "-m", "base")
+    # The change edits source AND adds a test under a protected root.
+    (repo / "pkg" / "a.py").write_text("x = 2\n", encoding="utf-8")
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_a.py").write_text("def test_a():\n    assert True\n", encoding="utf-8")
+    run("add", "-A")
+    run("commit", "-q", "-m", "edit source, add a test")
+    sha = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    proxy = ac.ProxyConfig.load(_PROXY)
+    with_added = adb.compute_confidence_for(sha, str(repo), proxy)
+
+    # What the pre-F-061 call would have produced for the same diff.
+    files = ["pkg/a.py", "tests/test_a.py"]
+    legacy = ac.compute_confidence(files, 2, proxy)
+
+    assert with_added > legacy, (
+        "the backfill must resolve the added set; migrated rows would otherwise keep paying "
+        f"the added-test penalty live rows no longer pay ({with_added} vs {legacy})"
+    )

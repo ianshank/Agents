@@ -25,7 +25,7 @@ run in CI and locally. They carry their own quality gate: `ruff` + `mypy scripts
 | `check_skill_script_drift.py` | CI guard: vendored skill scripts == canonical copy |
 | `check_charter_drift.py` | CI guard: `docs/CHARTER.md` scope/invariants haven't silently drifted |
 | `check_size_budget.py` | structural size-budget gate — file length ≤ 500 lines, etc. (ADR 0019; `.py` only) |
-| `merge_gate_context.py`, `agent_confidence.py`, `_config.py` | calibrated merge-gate seeding (`F-042`) |
+| `merge_gate_context.py`, `agent_confidence.py`, `_config.py` | calibrated merge-gate seeding (`F-042, F-061`) |
 | `record_audit_verdict.py`, `audit_issue_sync.py` | merge-gate human-audit surface |
 | `fix_loop.py` | auto-fix loop scaffolding — **design-only, disabled** (ADR 0004) |
 | `run_all_e2e.ps1` | one-command e2e / user-journey harness → `artifacts/e2e-report/` |

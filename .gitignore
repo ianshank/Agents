@@ -20,7 +20,7 @@ htmlcov/
 dist/
 build/
 
-# Hypothesis property-test database (agent-core)
+# Hypothesis property-test database (root suite + the four sibling packages)
 .hypothesis/
 
 # Skill validation artifacts
@@ -97,6 +97,7 @@ context_human.json
 seed_context.json
 agent.json
 changed_files.z
+added_files.z
 
 # Reasoning agent runtime artifacts
 *.openspec.md

@@ -2,7 +2,9 @@
 # SessionStart hook — make a fresh checkout's toolchain match CI before any work starts.
 #
 # WHY THIS EXISTS. `pip install -e '.[dev]'` (CONTRIBUTING.md) installs neither the four
-# sibling packages, nor `hypothesis`, nor the optional extras. Without them the gates report
+# sibling packages nor the optional extras. (It DOES install `hypothesis` since F-061 added it
+# to the root dev extra; the explicit install below is kept only so a checkout pinned to an
+# older pyproject still gets it, and is a no-op otherwise.) Without them the gates report
 # failures that are artifacts of the environment, not of the code. Four real examples, each
 # of which cost investigation time before being traced to a missing package:
 #
@@ -12,7 +14,7 @@
 #     READMEs                                           (markdown formatting changed in 0.16)
 #   config/__init__.py "Returning Any" mypy error     pydantic not installed
 #   5 `untyped-decorator` errors in agent-core        hypothesis not installed, so @given is
-#                                                       untyped
+#     (and now the root suite too, per F-061)             untyped
 #   `make check-all` dies in claude-foundation with   claude-foundation was the one package
 #     "No module named 'foundation_tools'", and         this hook did not install, and its
 #     'Library stubs not installed for "yaml"'          declared types-PyYAML came with it

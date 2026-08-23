@@ -253,7 +253,8 @@ carries the F-042 `--confidence` seam that stamps the seed's `raw_confidence`; i
 the YAML `human_namespace` against the canonical `agent_core.domains.HUMAN_NAMESPACE` at load,
 so a drifted reserved namespace fails loud instead of silently poisoning the agent pool;
 `agent_confidence.py` (F-042) is the deterministic proxy scorer — a pure function of diff
-size / file count / test-ratio / protected-path touches through a clamped sigmoid (no network,
+size / file count / test-ratio / protected-path touches -- excluding newly added test
+files, F-061 -- through a clamped sigmoid (no network,
 no model) that classifies the agent lane and emits its `agent_version` + confidence;
 `scripts/_config.py` is the shared changed-file / strict-YAML-loader helper both reuse;
 `scripts/migrations/agent_domain_backfill.py` (F-044) is the one-off reversible re-attribution;

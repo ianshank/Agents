@@ -69,6 +69,7 @@ merge_decisions.jsonl
 agent.json
 seed_context.json
 changed_files.z
+added_files.z
 *.pre-backfill.bak
 phoenix-server.log
 

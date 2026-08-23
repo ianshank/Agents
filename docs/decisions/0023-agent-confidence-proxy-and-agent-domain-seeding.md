@@ -8,6 +8,45 @@
   (F-032…F-035, invariants I-1…I-6), F-042 (agent seed routing + proxy), F-043 (agent-records
   calibration report), F-044 (backfill migration).
 
+### Erratum 2026-08-23 — the `protected` term double-counted added tests (F-061)
+
+§1's formula prices `protected = 1.0 if the change touches an eval-protected path`. Because
+every `tests/**` root is in `PROTECTED_PATTERNS`, a test file was counted **twice** — once as
+`+w_tests * test_ratio` and again as `-w_protected` — for a net `-1.0`. On the committed
+weights a 100-line, 2-file change scored **0.711** with no test and **0.354** with one:
+adding a test halved the score, in a repo whose purpose is enforcing test quality.
+
+The suite did not catch it because `test_confidence_tests_raise_it` monkeypatched
+`matched_protected` to `False` before comparing — it proved a counterfactual, not the
+composed behaviour. That patch is now deleted; the test asserts against the real classifier.
+
+**Correction.** `compute_confidence` takes an optional `added` set (the change's newly-created
+files, `git diff --diff-filter=A`). A *newly added* test is withheld from the protected-path
+signal; a *modified* test still feeds it, because weakening an existing eval-defining test is
+precisely the risk that term exists to price. Naively excluding all tests was rejected: it
+would have moved "modify only an eval-defining test" from 0.550 to **0.900**, making it the
+highest-confidence class in the system — the Goodhart failure `scripts/fix_loop.py` names.
+
+`added` defaults to `None` ("unknown"), which reproduces the pre-F-061 result bit-for-bit, so
+every stored record and every caller that cannot supply it is unaffected. The weights are
+unchanged; this is a correction to what the `protected` term *means*, not a retune.
+
+**§1's "same function, identical rows" promise is preserved.**
+`scripts/migrations/agent_domain_backfill.py::compute_confidence_for` resolves the added set
+too (`git diff --name-only --diff-filter=A`) and passes it through. Wiring only the live seed
+path would have quietly broken that invariant: migrated rows would keep paying the added-test
+penalty that live rows no longer pay, leaving one store with two scoring semantics. Pinned by
+`tests/test_agent_domain_backfill.py::test_compute_confidence_for_resolves_the_added_set`,
+which builds a real git repo whose commit adds a test.
+
+Note this does **not** rewrite the store: the backfill is dry-run by default and
+human-gated (§4). It means a future run computes what live seeding computes.
+
+**Not corrected here.** The saturation this ADR's §1 predicts ("AUROC ≈ 0.5–0.65") is a
+separate defect: 63.9% of agent-domain records sit at exactly `clamp_lo`, because
+`w_size * size_cap = 6.0` swamps `base = 1.5`. That needs a weight refit plus a full-store
+recompute, and is deliberately out of this change's scope.
+
 ## Context
 
 The calibrated merge gate exists to calibrate **agent-authored** changes, but after F-032…F-035

@@ -24,6 +24,148 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`NEXT_STEPS.md`** records the residual gap and its precondition — a POSIX e2e driver —
   so the missing coverage is tracked rather than silently dropped.
 
+### Fixed — hygiene items from an independent branch sweep (F-061)
+
+A background sweep (dead/redundant code, hardcoded values, line-level coverage — not just
+aggregate %) found zero defects and four small hygiene items, all fixed:
+
+- **`property` Hypothesis marker registered but never applied.** `pyproject.toml` added it
+  "to match the four sibling packages," but the four new `@given` tests in
+  `tests/test_agent_confidence.py` carried no such marker, so `pytest -m property` selected 0
+  of them. All four now carry `@pytest.mark.property`.
+- **No end-to-end test drove `--added`/`--added-from` through the real CLI.** Every behavioural
+  assertion about the added-set called `compute_confidence` directly, bypassing `argparse` and
+  `resolve_added` — invisible to coverage even though that wiring is real production code
+  (manually verified working, just untested). `test_cli_added_from_end_to_end` now drives
+  `ac.main(...)` with and without `--added-from` against the real committed config and pins
+  the exact acceptance numbers (0.354344 / 0.802184), and participates in the fix's canary.
+- **A test hardcoded a duplicate of the committed `test_globs` list.**
+  `test_added_test_withheld_for_every_committed_glob`'s docstring claims to test "every glob in
+  the committed config," but re-typed them by hand; a future edit to the real YAML would
+  silently desync the test from that claim. It now reads `config/agent-confidence.yaml`
+  directly, matching the idiom `test_committed_config_acceptance_numbers` already uses.
+- **A stale comment** in `scripts/validations/F_061.py` named `tests/test_a.py`; the constant
+  two lines below it is `tests/test_x.py`. Corrected.
+
+### Fixed — Copilot review nit on F-061 (readability)
+
+- `scripts/validations/F_061.py`: the dense `_check(ac.compute_confidence(...) == canonical, ...)`
+  call Copilot flagged as hard to scan is now a named local. While in the file, split
+  `_validate_behaviour` (which had grown two responsibilities across the review-fix pass) into
+  itself plus a new `_validate_normalisation`, both routed through a shared `_load_proxy`
+  helper so the config-load guard has one spelling instead of two. Soft function-length
+  warning (51 lines) cleared; `F_061.py`'s own coverage (84%) is consistent with its siblings
+  `F_042.py` (84%) and `F_046.py` (89%) — the uncovered lines are the same class of defensive
+  guard (config-load failure, `sys.path` already set, `if __name__ == "__main__"`) every
+  validator carries, never individually floor-gated.
+
+### Fixed — defects found by adversarial review of the F-061 branch
+
+Mutation testing against the branch showed three mutants surviving the suite. All are fixed
+and all four now die:
+
+- **`_is_test` classified the RAW path while the comparison keys were normalised.** A
+  non-canonical spelling (`./tests/conftest.py`, backslashes, a leading slash) was
+  eval-protected but unrecognised as a test, so the withholding silently did nothing for that
+  file — and the same blind spot existed *pre-F-061* in `_test_ratio`, where such a file took
+  the protected penalty while contributing nothing to the test ratio. `_is_test` now
+  normalises internally, so both halves of the function agree on spelling. The test that was
+  supposed to cover this used `tests/test_a.py`, which matches `**/test_*.py` **raw** — it
+  passed via the glob and never exercised normalisation. It now uses `tests/conftest.py`,
+  which matches no raw glob, and is parametrized over three spellings plus the changed-file
+  side.
+- **The `added is None` branch was dead code.** `added=[]` reached the same result, because
+  withholding an empty set is a no-op — so the carefully-preserved `None` ≠ `[]` distinction
+  had no observable consequence and the tests asserting it could not fail. The branch is
+  removed (`added or ()`); the two remain distinct in the *type* because they are different
+  facts about the caller, and the docstrings, ADR erratum and `features.yaml` now say that
+  rather than claiming a behavioural difference.
+- **`features.yaml`'s F-061 verification bullet asserted something the code did not do** and
+  named a test that could not fail on the claim. In a repo where `features.yaml` is the
+  governance record and an eval-protected path, that is worse than no bullet. Corrected.
+- **The saturation detector compared a rounded value to an unrounded bound.**
+  `round(clamped, 6) != clamp_lo` for any bound with more than six decimals, silently
+  switching off the very logging added to catch saturation. It now compares the clamped value.
+- **`read_nul_delimited` hardcoded `--files-from` in its error message**, so a bad
+  `--added-from` sent an operator to the wrong flag. The flag name is now a parameter,
+  threaded through `resolve_explicit_files`, and pinned by a test.
+- **`scripts/validations/F_061.py` now asserts the normalisation properties directly.** Two of
+  the surviving mutants were caught by the suite but *not* by the gate; the gate is the
+  governance artifact, so it should not be the weaker of the two.
+
+One reviewer finding was **refuted on inspection** and no action taken:
+`tests/test_agent_confidence.py` exceeding 500 lines does not trip the size budget —
+`scripts/check_size_budget.py` excludes `tests/`, verified by running it against that file
+(exit 0, "no file exceeds 500 lines").
+
+### Fixed — follow-ups found by a post-implementation hygiene sweep (F-061)
+
+- **`scripts/migrations/agent_domain_backfill.py` now resolves the added set too.** Wiring only
+  the live seed path silently broke ADR 0023 §1's promise that "the **same function** runs live
+  at merge time and retroactively during backfill, so forward and migrated rows are computed
+  identically" — migrated rows would have kept paying the added-test penalty live rows no longer
+  pay, leaving one store with two scoring semantics. Pinned by a regression test that builds a
+  real git repo whose commit adds a test, and canaried (reverting the wiring fails it).
+- **`added_files.z` is now ignored** in `.gitignore` and `.dockerignore`. The seed workflow
+  writes it beside `changed_files.z`, which was already listed under a block whose comment
+  promises these "must never land on code branches"; the new sibling escaped that promise.
+- **`quality-gates.yml` now invokes `validate.py --strict-git`, not `--strict`.** The flag is
+  declared `--strict-git`; `--strict` resolved only through argparse prefix abbreviation, so
+  adding any second `--strict*` option would have turned a documented CI command into an exit-2
+  usage error. `AGENTS.md` updated to match.
+- **`property` marker registered** in the root `pyproject.toml`, matching the four sibling
+  packages — the dev/ci Hypothesis profile convention was otherwise only half carried over.
+- **Documentation corrected where this change made it false**: `.claude/hooks/session-start.sh`
+  (its stated rationale said `.[dev]` installs no `hypothesis` — it now does), `README.md`'s dev
+  extra enumeration, `AGENTS.md` markers and Hypothesis notes (five workflows set the profile,
+  not one), `docs/c4_architecture.md`, `scripts/README.md`, `config/README.md`,
+  `docs/roadmap/epic-2-calibrated-merge-gate.md`, and a stale
+  `agent_confidence.py:194-220` line citation in
+  `docs/plans/agent-record-decontamination/REVIEW.md`.
+- **`scripts/agent_confidence.py`'s module docstring** now documents `--added`/`--added-from`
+  and `-v`, and states the `None`-vs-empty distinction. It is the only prose description of
+  this CLI anywhere in the repo — no markdown file documents its flags.
+- **`progress.md`** gained the Session 014 block `HARNESS_SPEC.md` §"Progress log" mandates;
+  the log had been 20 features stale.
+
+### Fixed — the merge-gate confidence proxy no longer penalises adding tests (F-061)
+
+- **`scripts/agent_confidence.py`**: `compute_confidence` gained an optional `added` keyword —
+  the change's newly-created files (`git diff --name-only -z --diff-filter=A`), supplied by
+  `merge-gate-seed.yml` via a new `--added`/`--added-from` pair. A **newly added** test file is
+  now withheld from the protected-path signal; a **modified** test still feeds it.
+- **Why.** Every `tests/**` root is in `PROTECTED_PATTERNS`, so a test file was counted twice —
+  once as `+w_tests * test_ratio`, again as `-w_protected` — a net `-1.0`. On the committed
+  weights a 100-line, 2-file change scored **0.711** with no test and **0.354** with one:
+  adding a test halved the merge-risk confidence, in a repo whose purpose is enforcing test
+  quality. It now scores **0.802**, above the no-test reference.
+- **Why not simply exclude all tests.** That would move "modify only an eval-defining test"
+  from 0.550 to **0.900** — the highest-confidence class in the system, and exactly the
+  Goodhart failure `scripts/fix_loop.py` exists to name. Modifying an existing test stays at
+  0.550, unchanged.
+- **Backwards compatible by construction.** `added` defaults to `None` ("unknown"), which
+  reproduces the pre-F-061 result bit-for-bit; a property test asserts that equivalence over
+  arbitrary inputs. Every stored record and every caller that cannot distinguish additions
+  from modifications is unaffected. No config key changed, so `require_exact_keys` and the
+  `schema_version` are untouched.
+- **The test that hid it is deleted.** `test_confidence_tests_raise_it` monkeypatched
+  `matched_protected` to `False` before comparing, proving a counterfactual rather than the
+  composed behaviour. It now asserts against the real classifier. The remaining doubles were
+  returning `bool` where the real `matched_protected` returns `list[str]`; they now return
+  realistic values.
+- **Observability.** `agent_confidence.py` gained the standard `-v/--verbose` flag and logs the
+  full score decomposition (`size_norm`, `files_norm`, `test_ratio`, `protected`, `z`, raw and
+  clamped output) at DEBUG, naming which protected paths drove the penalty, plus an INFO line
+  when a score saturates at a clamp rail. A surprising score was previously only explicable by
+  re-deriving it by hand.
+- **Hypothesis** is now declared in the root `dev` extra with `dev`/`ci` profiles registered in
+  `tests/conftest.py`, mirroring the four sibling packages; `eval-harness-ci.yml` sets
+  `HYPOTHESIS_PROFILE: ci`. Four property tests pin the invariants that must survive any future
+  retune: clamp-bound containment, `added=None` ≡ legacy, monotonicity in size, and
+  "declaring additions never lowers the score".
+- ADR 0023 carries a dated erratum recording the correction and explicitly scoping out the
+  separate, still-open floor-saturation defect (63.9% of agent-domain records sit at `clamp_lo`).
+
 ### Added — PanelJudge: aggregate N member judges, abstain rather than guess (F-059)
 - **`PanelJudge`** (`src/eval_harness/judges/panel.py`, registered `panel`) aggregates N member
   judges under an explicit strategy (`median` default, `mean`, `majority`), evaluated

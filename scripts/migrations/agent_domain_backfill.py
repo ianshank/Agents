@@ -137,15 +137,26 @@ def _git(args: list[str], repo_dir: str) -> str:
 
 
 def compute_confidence_for(change_id: str, repo_dir: str, proxy: ac.ProxyConfig) -> float:
-    """Recompute the proxy confidence over the change's diff vs its first parent."""
+    """Recompute the proxy confidence over the change's diff vs its first parent.
+
+    The added-file set is resolved here too (F-061). ADR 0023 SS1 promises the SAME function
+    runs live at merge time and retroactively during backfill, "so forward and migrated rows
+    are computed identically" -- passing `files` without `added` would quietly break that:
+    migrated rows would carry the pre-F-061 added-test penalty while live rows do not.
+    """
     files = [f for f in _git(["diff", "--name-only", f"{change_id}^", change_id], repo_dir).splitlines() if f.strip()]
+    added = [
+        f
+        for f in _git(["diff", "--name-only", "--diff-filter=A", f"{change_id}^", change_id], repo_dir).splitlines()
+        if f.strip()
+    ]
     lines = 0
     for row in _git(["diff", "--numstat", f"{change_id}^", change_id], repo_dir).splitlines():
         cols = row.split("\t")
         for n in cols[:2]:
             if n.isdigit():
                 lines += int(n)
-    return float(ac.compute_confidence(files, lines, proxy))
+    return float(ac.compute_confidence(files, lines, proxy, added=added))
 
 
 def build_targets(shas: dict[str, str], repo_dir: str, proxy: ac.ProxyConfig) -> dict[str, BackfillTarget]:

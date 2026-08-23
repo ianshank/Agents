@@ -8,7 +8,13 @@
 #   size_norm  = min(lines_changed / size_scale,  size_cap)
 #   files_norm = min(files_touched / files_scale, files_cap)
 #   test_ratio = test_files / max(files_touched, 1)   # test_globs below
-#   protected  = 1.0 if the change touches an eval-protected path else 0.0
+#   protected  = 1.0 if the change touches an eval-protected path else 0.0, where a
+#                NEWLY ADDED test file is excluded from that set (F-061). Every
+#                tests/** root is eval-protected, so counting an added test here as
+#                well as in test_ratio priced adding tests as a net penalty. A
+#                *modified* test still counts: weakening an existing eval-defining
+#                test is exactly the risk this term is for. Callers that cannot tell
+#                additions from modifications get the pre-F-061 behaviour unchanged.
 #   z          = base - w_size*size_norm - w_files*files_norm
 #                     + w_tests*test_ratio - w_protected*protected
 #   confidence = clamp(1 / (1 + exp(-z)), clamp_lo, clamp_hi)   # strictly in (0,1)

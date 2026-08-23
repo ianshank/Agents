@@ -71,6 +71,11 @@ jobs:
             BEFORE="$(git hash-object -t tree /dev/null)"
           fi
           git diff --name-only -z "$BEFORE" "$GITHUB_SHA" > changed_files.z
+          # Additions, separately (F-061). Every tests/** root is an eval-protected path, so
+          # without this split a NEWLY ADDED test is priced as eval-surface risk and adding
+          # tests lowers the score. A MODIFIED test still counts as protected -- weakening an
+          # existing eval-defining test is exactly what that term should price.
+          git diff --name-only -z --diff-filter=A "$BEFORE" "$GITHUB_SHA" > added_files.z
           LINES=$(git diff --numstat "$BEFORE" "$GITHUB_SHA" \
             | awk '{ if ($1 ~ /^[0-9]+$/) a+=$1; if ($2 ~ /^[0-9]+$/) d+=$2 } END { print a+d+0 }')
 
@@ -92,6 +97,7 @@ jobs:
           # whole seed job. Write a fallback agent.json so the downstream jq never reads a
           # missing file, and log the fallback so silent under-counting stays visible.
           if ! python scripts/agent_confidence.py --files-from changed_files.z \
+            --added-from added_files.z \
             --lines-changed "$LINES" --head-ref "$HEAD_REF" --author-login "$AUTHOR" \
             --output agent.json; then
             echo '{"agent": false, "agent_version": null, "confidence": null}' > agent.json
