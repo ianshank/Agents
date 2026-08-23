@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — Copilot review nit on F-061 (readability)
+
+- `scripts/validations/F_061.py`: the dense `_check(ac.compute_confidence(...) == canonical, ...)`
+  call Copilot flagged as hard to scan is now a named local. While in the file, split
+  `_validate_behaviour` (which had grown two responsibilities across the review-fix pass) into
+  itself plus a new `_validate_normalisation`, both routed through a shared `_load_proxy`
+  helper so the config-load guard has one spelling instead of two. Soft function-length
+  warning (51 lines) cleared; `F_061.py`'s own coverage (84%) is consistent with its siblings
+  `F_042.py` (84%) and `F_046.py` (89%) — the uncovered lines are the same class of defensive
+  guard (config-load failure, `sys.path` already set, `if __name__ == "__main__"`) every
+  validator carries, never individually floor-gated.
+
 ### Fixed — defects found by adversarial review of the F-061 branch
 
 Mutation testing against the branch showed three mutants surviving the suite. All are fixed

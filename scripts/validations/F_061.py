@@ -51,11 +51,22 @@ _TEST = "tests/test_x.py"
 _LINES = 100
 
 
-def _validate_behaviour(errors: list[str]) -> None:
+def _load_proxy(errors: list[str]) -> ac.ProxyConfig | None:
+    """Load the committed proxy config, or record why and return None.
+
+    Shared by every check function below so a config-load failure is reported once, in one
+    place, rather than duplicating the try/except per function.
+    """
     try:
-        cfg = ac.ProxyConfig.load(_PROXY)
+        return ac.ProxyConfig.load(_PROXY)
     except ConfigError as exc:
         _check(False, f"committed proxy config loads ({exc})", errors)
+        return None
+
+
+def _validate_behaviour(errors: list[str]) -> None:
+    cfg = _load_proxy(errors)
+    if cfg is None:
         return
 
     with_test = [_SRC, _TEST]
@@ -66,16 +77,8 @@ def _validate_behaviour(errors: list[str]) -> None:
     baseline = ac.compute_confidence(no_test, _LINES, cfg)
     modified = ac.compute_confidence(with_test, _LINES, cfg, added=[])
 
-    _check(
-        added > legacy,
-        f"an ADDED test raises the score ({added} > {legacy})",
-        errors,
-    )
-    _check(
-        added > baseline,
-        f"adding a test beats not adding one ({added} > {baseline})",
-        errors,
-    )
+    _check(added > legacy, f"an ADDED test raises the score ({added} > {legacy})", errors)
+    _check(added > baseline, f"adding a test beats not adding one ({added} > {baseline})", errors)
     _check(
         modified == legacy,
         f"a MODIFIED test still carries the protected penalty ({modified} == {legacy})",
@@ -86,9 +89,29 @@ def _validate_behaviour(errors: list[str]) -> None:
         "added=None reproduces the pre-F-061 result (backwards-compatibility contract)",
         errors,
     )
-    # Spelling must not decide the outcome. A mutation battery showed the suite caught these
-    # but this gate did not, so it now asserts them directly: `tests/conftest.py` is
-    # eval-protected yet matches no RAW test glob, so these only pass if _is_test normalises.
+    # An added *non-test* protected file must NOT dodge the penalty -- only tests are withheld.
+    protected_non_test = ["config/agent-confidence.yaml"]
+    _check(
+        ac.compute_confidence(protected_non_test, 20, cfg, added=protected_non_test)
+        == ac.compute_confidence(protected_non_test, 20, cfg),
+        "an added non-test protected file still carries the penalty",
+        errors,
+    )
+
+
+def _validate_normalisation(errors: list[str]) -> None:
+    """Spelling must not decide the outcome.
+
+    Split from ``_validate_behaviour`` (its own defect class, its own review finding): a
+    mutation battery showed the test suite caught a missing normalisation but this gate did
+    not, so it now asserts the property directly. ``tests/conftest.py`` is eval-protected yet
+    matches no RAW test glob, so these checks only pass if ``_is_test`` normalises the path
+    before classifying it.
+    """
+    cfg = _load_proxy(errors)
+    if cfg is None:
+        return
+
     spelled = ["pkg/a.py", "tests/conftest.py"]
     canonical = ac.compute_confidence(spelled, 100, cfg, added=["tests/conftest.py"])
     for variant in ("./tests/conftest.py", "tests\\conftest.py", "/tests/conftest.py"):
@@ -97,18 +120,10 @@ def _validate_behaviour(errors: list[str]) -> None:
             f"a non-canonical added spelling is withheld identically ({variant!r})",
             errors,
         )
+    changed_side_variant = ["pkg/a.py", "./tests/conftest.py"]
     _check(
-        ac.compute_confidence(["pkg/a.py", "./tests/conftest.py"], 100, cfg, added=["tests/conftest.py"]) == canonical,
+        ac.compute_confidence(changed_side_variant, 100, cfg, added=["tests/conftest.py"]) == canonical,
         "a non-canonical spelling on the CHANGED side is normalised too",
-        errors,
-    )
-
-    # An added *non-test* protected file must NOT dodge the penalty -- only tests are withheld.
-    protected_non_test = ["config/agent-confidence.yaml"]
-    _check(
-        ac.compute_confidence(protected_non_test, 20, cfg, added=protected_non_test)
-        == ac.compute_confidence(protected_non_test, 20, cfg),
-        "an added non-test protected file still carries the penalty",
         errors,
     )
 
@@ -133,6 +148,7 @@ def validate_f061() -> int:
     configure_logging()
     errors: list[str] = []
     _validate_behaviour(errors)
+    _validate_normalisation(errors)
     _validate_wiring(errors)
     return report(logger, "F-061", errors)
 
