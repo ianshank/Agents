@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — nightly e2e-matrix freshness check that could never pass
+- **`.github/workflows/nightly-e2e.yml`** no longer runs `tests/test_e2e_matrix.py --check`
+  as its final step. That check defaults `--report` to `artifacts/e2e-report/`, which is
+  gitignored and produced only by `scripts/run_all_e2e.ps1` — a driver CI has never invoked —
+  so `load_run_steps` raised `MatrixConfigError` and the CLI exited 2 before any comparison
+  ran. Every scheduled run failed on all three matrix legs with steps 1-7 green and this step
+  the sole failure. Removed rather than guarded with an `if:`: a step gated on a condition
+  that can never hold is a gate that never executes, which is the same defect in a quieter
+  form.
+- **Coverage of the artifact is unchanged on every PR.** `quality-gates.yml` runs
+  `pytest tests/test_e2e_matrix.py`, whose `TestCoverageGrid` derives each package's coverage
+  floor from the repo itself (no run report needed) and asserts the `pyproject` and generated
+  `quality-gate.sh` anchors state one number. What is no longer checked anywhere in CI is
+  freshness of the rendered tables against a real run; that is now local-only via
+  `make e2e-matrix-check`.
+- **`NEXT_STEPS.md`** records the residual gap and its precondition — a POSIX e2e driver —
+  so the missing coverage is tracked rather than silently dropped.
+
 ### Added — PanelJudge: aggregate N member judges, abstain rather than guess (F-059)
 - **`PanelJudge`** (`src/eval_harness/judges/panel.py`, registered `panel`) aggregates N member
   judges under an explicit strategy (`median` default, `mean`, `majority`), evaluated
