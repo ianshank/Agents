@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Refactored — decompose `engine.py` and `agent_core_adapter` into focused modules
+
+Behavior-preserving structural split of the two files sitting closest to the
+500-line size budget (`scripts/check_size_budget.py`, ADR-0019), each bundling
+several unrelated responsibilities. Follows the `store_sync/` package-split
+precedent (ADR-0019) rather than inventing a new pattern. No functional change:
+every previously-importable name stays re-exported from its original public
+path, `tests/test_public_surface.py` pins that, and the architecture-drift gate
+(`skills/architecture-drift-guard`) confirms no new cross-component dependency
+edges were introduced.
+
+- **`src/eval_harness/engine.py`** (500 → 425 lines): the two item-execution
+  strategies (`_run_parallel`, `_run_sequential_repeated`) and `_make_item_rng`
+  moved to new `src/eval_harness/core/_execution_strategies.py`, matching the
+  existing `core/_reliability_diagnostics.py` / `core/_state_lifecycle.py`
+  naming precedent. The extracted functions take explicit leaf parameters only
+  (never `self`, `EvalConfig`, or `EvalEngine`) — `core` has no declared
+  dependencies in `architecture.yaml`, so passing the config or engine in, even
+  only under `TYPE_CHECKING`, would create an undeclared edge and fail the
+  drift gate. `EvalEngine` keeps `_run_parallel`/`_run_sequential_repeated` as
+  thin wrapper methods that build each `RunContext` via a `make_ctx` closure
+  and delegate. `_run_one`/`_run_one_safe` deliberately stay on `EvalEngine`
+  (tests monkeypatch `_run_one` on a live instance).
+- **`src/eval_harness/agent_core_adapter/__init__.py`** (469 → 48 lines): split
+  by concern into `config.py` (`AdapterConfig`), `bridge.py` (the
+  harness↔agent-core bridge: `ItemStore`, `HarnessJudgeRunner`,
+  `FixedCostEstimator`), `budget.py` (judge cost/rate-limiting:
+  `BudgetedJudge`, `_SlidingWindowLimiter`, `build_budgeted_judge` — keeps its
+  existing lazy/`TYPE_CHECKING` agent-core imports so the offline path still
+  never pulls in agent-core unless budgeting is enabled), and
+  `gate_authorization.py` (judge-calibration gate authorization). `__init__.py`
+  is now a thin re-export shim preserving the exact `__all__` surface and the
+  fail-fast "agent-core is required" `ImportError`.
+
 ### Fixed — nightly e2e-matrix freshness check that could never pass
 - **`.github/workflows/nightly-e2e.yml`** no longer runs `tests/test_e2e_matrix.py --check`
   as its final step. That check defaults `--report` to `artifacts/e2e-report/`, which is

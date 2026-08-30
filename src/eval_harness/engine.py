@@ -13,12 +13,18 @@ import statistics
 import threading
 import uuid
 from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any, cast
 
 from .config.models import EvalConfig
+from .core._execution_strategies import (
+    _execute_parallel,
+    _execute_sequential_repeated,
+)
+from .core._execution_strategies import (
+    _make_item_rng as _make_item_rng,
+)
 from .core._reliability_diagnostics import _reliability_diagnostics
 from .core._state_lifecycle import log_state_adapter_configured, run_state_bracketed_attempt
 from .core.interfaces import (
@@ -48,15 +54,6 @@ logger = logging.getLogger(__name__)
 def _utcnow() -> datetime:
     """Return the current time in UTC."""
     return datetime.now(UTC)
-
-
-def _make_item_rng(base_seed: int, item_index: int) -> random.Random:
-    """Create a deterministic per-item RNG.
-
-    Each item receives ``Random(base_seed + item_index)`` so the random stream
-    is identical regardless of thread scheduling.
-    """
-    return random.Random(base_seed + item_index)
 
 
 class EvalEngine:
@@ -320,79 +317,22 @@ class EvalEngine:
         return aggregate
 
     def _run_parallel(self, items: list[EvalItem], started: datetime, run_id: str) -> list[ItemResult]:
-        """Execute items — and, when ``repetitions > 1``, each item's attempts —
-        in parallel via ``ThreadPoolExecutor``.
+        """See ``core/_execution_strategies.py`` for the strategy itself (split
+        out to stay under the size budget)."""
 
-        Every ``(item, attempt)`` pair gets its own submission and its own
-        ``RunContext``, RNG freshly seeded from ``base_seed + item_index`` —
-        never advanced across attempts of the same item, only ever re-derived
-        from this loop's own ``enumerate()`` index (not ``ctx.item_index``, which
-        nothing reads back). At ``repetitions == 1`` this submits exactly one
-        future per item with ``attempt_index=None``, identical to the pre-
-        reliability-metrics engine. Results are collected in submission order —
-        item-major, attempts ascending within an item. On ``fail_fast``, the
-        executor is shut down immediately.
-        """
-        max_workers = self.config.run.max_workers
-        base_seed = self.config.run.seed
-        repetitions = self.config.run.repetitions
-        logger.info(
-            "Parallel execution: %d items x %d repetitions with max_workers=%d",
-            len(items),
-            repetitions,
-            max_workers,
+        def make_ctx(item_index: int, rng: random.Random) -> RunContext:
+            return RunContext(config=self.config, judge=self.judge, rng=rng, now=started, item_index=item_index)
+
+        return _execute_parallel(
+            items,
+            run_id,
+            max_workers=self.config.run.max_workers,
+            base_seed=self.config.run.seed,
+            repetitions=self.config.run.repetitions,
+            fail_fast=self.config.run.fail_fast,
+            make_ctx=make_ctx,
+            run_one_safe=self._run_one_safe,
         )
-
-        collected: list[tuple[int, ItemResult]] = []
-        first_error: Exception | None = None
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures: list[Future[tuple[int, ItemResult | Exception]]] = []
-            for idx, item in enumerate(items):
-                item_run_id = f"{run_id}:{item.id}" if repetitions > 1 else None
-                for attempt in range(repetitions):
-                    attempt_index = attempt if repetitions > 1 else None
-                    item_rng = _make_item_rng(base_seed, idx)
-                    ctx = RunContext(
-                        config=self.config,
-                        judge=self.judge,
-                        rng=item_rng,
-                        now=started,
-                        item_index=idx,
-                    )
-                    futures.append(
-                        executor.submit(
-                            self._run_one_safe,
-                            idx,
-                            item,
-                            ctx,
-                            attempt_index=attempt_index,
-                            item_run_id=item_run_id,
-                        )
-                    )
-
-            for future in futures:
-                try:
-                    index, result_or_exc = future.result()
-                except StateResetError:
-                    # Never fail_fast-gated -- continuing risks scoring against dirty state.
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    raise
-                if isinstance(result_or_exc, Exception):
-                    if first_error is None:
-                        first_error = result_or_exc
-                    if self.config.run.fail_fast:
-                        executor.shutdown(wait=False, cancel_futures=True)
-                        break
-                else:
-                    collected.append((index, result_or_exc))
-
-        if first_error is not None and self.config.run.fail_fast:
-            raise first_error
-
-        # Sort by submission index to guarantee deterministic ordering
-        collected.sort(key=lambda pair: pair[0])
-        return [result for _, result in collected]
 
     @observe()
     def run(self) -> RunResult:
@@ -454,34 +394,20 @@ class EvalEngine:
         return run
 
     def _run_sequential_repeated(self, items: list[EvalItem], started: datetime, run_id: str) -> list[ItemResult]:
-        """Execute items sequentially with ``repetitions > 1``.
+        """See ``core/_execution_strategies.py`` for the strategy itself (split
+        out to stay under the size budget)."""
 
-        The single-attempt sequential path (``run()``, above) threads one shared,
-        continuously-advancing ``self.rng`` across every item — the original
-        engine behaviour, preserved unchanged for ``repetitions == 1``. Here, each
-        attempt instead gets its own RNG freshly constructed from ``base_seed +
-        item_index`` — the same per-item seed every attempt, never advanced
-        between attempts of that item — so a scorer that draws from ``ctx.rng``
-        cannot manufacture cross-attempt flakiness from RNG drift alone (see
-        design.md "Seeding — and why it is not the lever"). Seeds are derived
-        from this loop's own ``enumerate()`` index, never ``ctx.item_index``
-        (which the single-attempt sequential path never sets, and nothing reads).
-        """
-        base_seed = self.config.run.seed
-        repetitions = self.config.run.repetitions
-        results: list[ItemResult] = []
-        for idx, item in enumerate(items):
-            item_run_id = f"{run_id}:{item.id}"
-            for attempt in range(repetitions):
-                ctx = RunContext(
-                    config=self.config,
-                    judge=self.judge,
-                    rng=_make_item_rng(base_seed, idx),
-                    now=started,
-                    item_index=idx,
-                )
-                results.append(self._run_one(item, ctx, attempt_index=attempt, item_run_id=item_run_id))
-        return results
+        def make_ctx(item_index: int, rng: random.Random) -> RunContext:
+            return RunContext(config=self.config, judge=self.judge, rng=rng, now=started, item_index=item_index)
+
+        return _execute_sequential_repeated(
+            items,
+            run_id,
+            base_seed=self.config.run.seed,
+            repetitions=self.config.run.repetitions,
+            make_ctx=make_ctx,
+            run_one=self._run_one,
+        )
 
     def _run_reliability_diagnostics(self, results: list[ItemResult]) -> list[dict[str, str]]:
         """Detect the ADR 0029 vacuous-pass case. See ``core/_reliability_diagnostics.py``
