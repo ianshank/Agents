@@ -76,3 +76,8 @@ skills:
     path: skills/openspec-implementation-review
     description: Reviews a shipped OpenSpec change's implementation against its own proposal/design/tasks/spec, producing a dated, two-pass review.md (dispatches spec-guardian/peer-reviewer when the claude-foundation plugin is loaded, degrades to a general-purpose subagent with the method inlined otherwise).
     compatibility: python>=3.10
+  - name: pre-pr-gate
+    version: 1.0.0
+    path: skills/pre-pr-gate
+    description: Chains every quality/regression/architecture gate this repo's CI enforces into one local command (make pre-pr), accumulating failures instead of stopping at the first, so a branch can be validated end to end before opening or updating a PR.
+    compatibility: python>=3.10, GNU make

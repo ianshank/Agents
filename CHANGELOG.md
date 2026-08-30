@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — `make pre-pr` and the `pre-pr-gate` skill
+
+An automation-opportunity scan of the god-file-decomposition session above found that
+its own ~15-command validation checklist (`make check-all`, `make invariants`,
+`check_size_budget.py`, `check_guard_reachability.py`, `check_skill_script_drift.py`,
+`check_protected_changes.py`, `regression_gate.py`, `validate.py --tier fast`,
+`architecture-drift-guard`'s two checks, `skill_marketplace.py validate`,
+`make determinism`, `repo-invariant-review`) existed nowhere as one command — `AGENTS.md`
+and `CONTRIBUTING.md` each documented an incomplete, mutually inconsistent subset of it.
+
+- **`make pre-pr`** (root `Makefile`, hand-added target alongside `determinism`/
+  `invariants`) chains the full checklist, accumulating every failure instead of
+  stopping at the first (a branch gets re-validated multiple times per session, so
+  seeing every failure in one pass beats a fix-one/rerun/find-next loop). Runs
+  `repo-invariant-review` as an explicitly advisory, non-blocking last step — several
+  of its checks already duplicate gates earlier in the same chain, and it is not
+  itself wired into required CI. `PRE_PR_BASE_REF` (default `origin/main`) is
+  overridable rather than hardcoded.
+- **`agent-core/Makefile` gained a `determinism` target** (root already had one; this
+  package's own determinism-tagged tests had no committed command to run them).
+- **`skills/pre-pr-gate`** wraps `make pre-pr` as a discoverable, invocable skill
+  (guard/review category) with its own tests (100% branch coverage) and behavioral
+  evals against fixture Makefiles — its own code is a thin subprocess wrapper; the
+  check list itself lives only in the Makefile, not duplicated.
+
+Deliberately not done in this pass (would touch `.github/**`, a protected path needing
+the `eval-change-approved` label + CODEOWNER review): wiring `repo-invariant-review`
+into CI non-blocking, and a stale-local-`main` warning in the SessionStart hook. Both
+recorded in `NEXT_STEPS.md` as scoped follow-ups.
+
 ### Refactored — decompose `engine.py` and `agent_core_adapter` into focused modules
 
 Behavior-preserving structural split of the two files sitting closest to the

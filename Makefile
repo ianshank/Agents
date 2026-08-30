@@ -97,6 +97,32 @@ check-flow-protocol: ## Run flow-protocol's quality checks
 
 check-all: check check-agent-core check-behavioral-regression check-claude-foundation check-flow-corpus check-flow-protocol ## Run root and every member's quality checks
 
+.PHONY: pre-pr
+
+# Overridable: the ref regression_gate.py / repo-invariant-review compare this branch
+# against, e.g. `make pre-pr PRE_PR_BASE_REF=origin/develop`. A stale local ref (as
+# opposed to its remote-tracking counterpart) produces misleading findings unrelated
+# to the branch under review -- `git fetch origin main:main` first if in doubt.
+PRE_PR_BASE_REF ?= origin/main
+
+pre-pr: ## Full pre-PR validation: every gate CI enforces, chained locally; accumulates failures
+	@rc=0; \
+	echo "[pre-pr] make check-all"; $(MAKE) check-all || { echo "[pre-pr]   FAILED: make check-all"; rc=1; }; \
+	echo "[pre-pr] make invariants"; $(MAKE) invariants || { echo "[pre-pr]   FAILED: make invariants"; rc=1; }; \
+	echo "[pre-pr] check_size_budget.py"; $(PYTHON) scripts/check_size_budget.py || { echo "[pre-pr]   FAILED: check_size_budget.py"; rc=1; }; \
+	echo "[pre-pr] check_guard_reachability.py"; $(PYTHON) scripts/check_guard_reachability.py || { echo "[pre-pr]   FAILED: check_guard_reachability.py"; rc=1; }; \
+	echo "[pre-pr] check_skill_script_drift.py"; $(PYTHON) scripts/check_skill_script_drift.py || { echo "[pre-pr]   FAILED: check_skill_script_drift.py"; rc=1; }; \
+	echo "[pre-pr] check_protected_changes.py"; $(PYTHON) scripts/check_protected_changes.py || { echo "[pre-pr]   FAILED: check_protected_changes.py"; rc=1; }; \
+	echo "[pre-pr] regression_gate.py --base-ref $(PRE_PR_BASE_REF)"; $(PYTHON) scripts/regression_gate.py --base-ref "$(PRE_PR_BASE_REF)" || { echo "[pre-pr]   FAILED: regression_gate.py"; rc=1; }; \
+	echo "[pre-pr] validate.py --tier fast --strict-git"; $(PYTHON) scripts/validate.py --tier fast --strict-git || { echo "[pre-pr]   FAILED: validate.py"; rc=1; }; \
+	echo "[pre-pr] architecture-drift-guard: drift_check.py"; $(PYTHON) skills/architecture-drift-guard/scripts/drift_check.py --manifest architecture.yaml || { echo "[pre-pr]   FAILED: drift_check.py"; rc=1; }; \
+	echo "[pre-pr] architecture-drift-guard: mermaid_gen.py --check"; $(PYTHON) skills/architecture-drift-guard/scripts/mermaid_gen.py --manifest architecture.yaml --check -o architecture.mmd || { echo "[pre-pr]   FAILED: mermaid_gen.py --check"; rc=1; }; \
+	echo "[pre-pr] skill_marketplace.py validate"; $(PYTHON) scripts/skill_marketplace.py validate || { echo "[pre-pr]   FAILED: skill_marketplace.py validate"; rc=1; }; \
+	echo "[pre-pr] make determinism"; $(MAKE) determinism || { echo "[pre-pr]   FAILED: make determinism"; rc=1; }; \
+	echo "[pre-pr] repo-invariant-review (advisory, non-blocking)"; $(PYTHON) skills/repo-invariant-review/scripts/check_invariants.py --repo . --base "$(PRE_PR_BASE_REF)" || echo "[pre-pr]   advisory findings above -- not blocking, review before pushing"; \
+	if [ $$rc -ne 0 ]; then echo "[pre-pr] one or more checks FAILED -- see above"; exit 1; fi; \
+	echo "[pre-pr] all checks passed"
+
 install-all: install ## Install the root and every member (each via its own detected install command)
 	$(MAKE) -C agent-core install
 	$(MAKE) -C behavioral-regression install
