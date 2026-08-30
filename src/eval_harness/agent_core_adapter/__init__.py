@@ -26,19 +26,35 @@ unchanged.
 
 from __future__ import annotations
 
+
+def _is_agent_core_import_error(exc: ImportError) -> bool:
+    """True iff *exc*'s failing module is ``agent_core`` (or one of its submodules).
+
+    ``.bridge``/``.gate_authorization`` also import plain eval_harness modules (core
+    interfaces/types, ``.config``) that have nothing to do with agent-core. Only an
+    import failure actually rooted in ``agent_core`` should be reworded as "agent-core
+    is required" below -- anything else must re-raise unchanged, so a real bug inside
+    this package's own submodules surfaces as itself, not a misleading message that
+    sends a reader chasing the wrong cause.
+    """
+    return exc.name == "agent_core" or (exc.name is not None and exc.name.startswith("agent_core."))
+
+
 try:
     from .bridge import FixedCostEstimator, HarnessJudgeRunner, ItemStore
     from .gate_authorization import require_report_to_gate
-except ImportError as _exc:  # pragma: no cover
-    raise ImportError(
-        "agent-core is required for eval_harness.agent_core_adapter. "
-        "Install it from the monorepo: pip install -e './agent-core'"
-    ) from _exc
+except ImportError as _exc:  # pragma: no cover -- see test_is_agent_core_import_error for the branch logic
+    if _is_agent_core_import_error(_exc):
+        raise ImportError(
+            "agent-core is required for eval_harness.agent_core_adapter. "
+            "Install it from the monorepo: pip install -e './agent-core'"
+        ) from _exc
+    raise
 
-from .budget import BudgetedJudge, build_budgeted_judge
-from .budget import _SlidingWindowLimiter as _SlidingWindowLimiter
-from .calibration import pairwise_member_kappa
-from .config import AdapterConfig
+from .budget import BudgetedJudge, build_budgeted_judge  # noqa: E402
+from .budget import _SlidingWindowLimiter as _SlidingWindowLimiter  # noqa: E402
+from .calibration import pairwise_member_kappa  # noqa: E402
+from .config import AdapterConfig  # noqa: E402
 
 __all__ = [
     "AdapterConfig",

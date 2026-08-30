@@ -23,6 +23,7 @@ from eval_harness.agent_core_adapter import (  # noqa: E402
     FixedCostEstimator,
     HarnessJudgeRunner,
     ItemStore,
+    _is_agent_core_import_error,
 )
 from eval_harness.core.interfaces import Judge  # noqa: E402
 from eval_harness.core.types import EvalItem, JudgeVerdict  # noqa: E402
@@ -65,6 +66,32 @@ class _PerClaimJudge(Judge):
     def evaluate(self, prompt: str, context: dict | None = None) -> JudgeVerdict:
         cid = (context or {}).get("claim_id", "")
         return JudgeVerdict(score=self._scores.get(cid, 0.0))
+
+
+# ---------------------------------------------------------------------------
+# _is_agent_core_import_error
+# ---------------------------------------------------------------------------
+
+
+class TestIsAgentCoreImportError:
+    def test_true_for_the_agent_core_package_itself(self) -> None:
+        assert _is_agent_core_import_error(ImportError("no module named agent_core", name="agent_core")) is True
+
+    def test_true_for_an_agent_core_submodule(self) -> None:
+        assert _is_agent_core_import_error(ImportError("boom", name="agent_core.protocols")) is True
+
+    def test_false_for_an_unrelated_module(self) -> None:
+        assert _is_agent_core_import_error(ImportError("boom", name="eval_harness.core.types")) is False
+
+    def test_false_for_a_module_that_merely_starts_with_agent_core_as_a_substring(self) -> None:
+        # "agent_core_extra" is not "agent_core" and not "agent_core.<something>" --
+        # a prefix-only startswith("agent_core") check would wrongly match this.
+        assert _is_agent_core_import_error(ImportError("boom", name="agent_core_extra")) is False
+
+    def test_false_when_name_is_unset(self) -> None:
+        # A from-import of a name that doesn't exist in an otherwise-importable module
+        # raises ImportError with name=None (unlike a missing module, whose name is set).
+        assert _is_agent_core_import_error(ImportError("cannot import name 'X'")) is False
 
 
 # ---------------------------------------------------------------------------
