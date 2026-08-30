@@ -276,7 +276,11 @@ def check_airgap(repo: Path, files: list[str]) -> list[Finding]:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for owner, forbidden in AIRGAP_PAIRS:
-            if f"/{owner}/" not in f"/{name}" and not name.startswith(("src/eval_harness", owner)):
+            # Only scan files that actually belong to `owner`. A stray "src/eval_harness"
+            # fallback here previously matched every eval_harness file against BOTH pairs,
+            # so an eval_harness file's own ordinary `from eval_harness.x import y` (absolute
+            # self-import) was misread as flow_corpus->eval_harness airgap crossing.
+            if f"/{owner}/" not in f"/{name}":
                 continue
             if re.search(rf"^\s*(from|import)\s+{forbidden}\b", text, re.M):
                 findings.append(
