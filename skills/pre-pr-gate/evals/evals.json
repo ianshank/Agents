@@ -1,0 +1,45 @@
+{
+  "skill": "pre-pr-gate",
+  "evals": [
+    {
+      "id": "passing-gate-reports-ok",
+      "prompt": "Run the pre-PR gate against a fixture repo whose `make pre-pr` target succeeds.",
+      "run": "python scripts/run_pre_pr_gate.py --root evals/fixtures/passing --out .skill-validation/passing-report.json",
+      "assertions": [
+        { "type": "exit_zero", "text": "wrapper exits 0 when make pre-pr passes" },
+        { "type": "output_contains", "contains": "pre-pr-gate: OK", "text": "prints an OK summary line" },
+        { "type": "file_contains", "path": ".skill-validation/passing-report.json", "contains": "\"passed\": true", "text": "report records passed: true" },
+        { "type": "file_contains", "path": ".skill-validation/passing-report.json", "contains": "\"exit_code\": 0", "text": "report records exit_code: 0" }
+      ]
+    },
+    {
+      "id": "failing-gate-reports-failure",
+      "prompt": "Run the pre-PR gate against a fixture repo whose `make pre-pr` target fails.",
+      "run": "python scripts/run_pre_pr_gate.py --root evals/fixtures/failing --out .skill-validation/failing-report.json",
+      "assertions": [
+        { "type": "exit_nonzero", "text": "wrapper propagates make's non-zero exit" },
+        { "type": "output_contains", "contains": "pre-pr-gate: FAILED", "text": "prints a FAILED summary line" },
+        { "type": "output_contains", "contains": "fixture: a check failed", "text": "relays the underlying check's own output, not just a bare failure" },
+        { "type": "file_contains", "path": ".skill-validation/failing-report.json", "contains": "\"passed\": false", "text": "report records passed: false" }
+      ]
+    },
+    {
+      "id": "no-makefile-fails-closed",
+      "prompt": "Run the pre-PR gate against a directory with no Makefile at all.",
+      "run": "python scripts/run_pre_pr_gate.py --root evals/fixtures/no-makefile --out .skill-validation/no-makefile-report.json",
+      "assertions": [
+        { "type": "exit_nonzero", "text": "fails closed rather than silently reporting success" },
+        { "type": "file_contains", "path": ".skill-validation/no-makefile-report.json", "contains": "\"passed\": false", "text": "report records passed: false even when make itself errors" }
+      ]
+    },
+    {
+      "id": "base-ref-override-reaches-the-makefile",
+      "prompt": "An overridden --base-ref is passed through to the Makefile as PRE_PR_BASE_REF, not silently dropped.",
+      "run": "python scripts/run_pre_pr_gate.py --root evals/fixtures/passing --base-ref some/custom-ref --out .skill-validation/base-ref-report.json",
+      "assertions": [
+        { "type": "exit_zero", "text": "override does not break a passing fixture" },
+        { "type": "output_contains", "contains": "some/custom-ref", "text": "the fixture Makefile echoes PRE_PR_BASE_REF, proving it was received" }
+      ]
+    }
+  ]
+}

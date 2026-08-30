@@ -9,6 +9,52 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **`make pre-pr` + the `pre-pr-gate` skill** — an automation-opportunity scan of
+  the god-file-decomposition session below found its own ~15-command validation
+  checklist existed nowhere as one command (`AGENTS.md`/`CONTRIBUTING.md` each
+  documented an incomplete, inconsistent subset). `make pre-pr` (root `Makefile`)
+  chains the full checklist — `make check-all`, `make invariants`,
+  `check_size_budget.py`, `check_guard_reachability.py`,
+  `check_skill_script_drift.py`, `check_protected_changes.py`, `regression_gate.py`,
+  `validate.py --tier fast`, `architecture-drift-guard`'s two checks,
+  `skill_marketplace.py validate`, `make determinism`, and `repo-invariant-review`
+  (advisory, last) — accumulating every failure instead of stopping at the first.
+  `agent-core/Makefile` gained the `determinism` target it was missing.
+  `skills/pre-pr-gate` wraps it as a discoverable skill (100% branch coverage, its
+  own behavioral evals against fixture Makefiles).
+  - [ ] **Deferred from the same scan, each would touch `.github/**` (a protected
+    path needing the `eval-change-approved` label + CODEOWNER review) or shared
+    hook behavior for every future session in this repo, so left for a follow-up
+    with that review rather than folded in here**: wiring `repo-invariant-review`
+    non-blocking into `quality-gates.yml` (its own scoping is already CI-safe —
+    `{base}...HEAD` is immune to a stale `base`; verified several of its checks
+    already duplicate gates that block elsewhere, which is why non-blocking is the
+    right shape, not a new hard gate); a stale-local-`main` warning in
+    `.claude/hooks/session-start.sh` (the exact failure mode that produced
+    misleading `regression_gate.py` output mid-session — a local `main` 9 commits
+    behind `origin/main` — `git fetch origin main:main` fixed it, but nothing
+    detects it proactively); extending `nightly-e2e.yml`'s existing invariant-check
+    step to also run `check_size_budget.py`, `check_guard_reachability.py`, the
+    architecture-drift checks, and `skill_marketplace.py validate` (today only the
+    two charter checks run on a schedule; lint/mypy/coverage don't run nightly at
+    all).
+- [x] **God-file decomposition: `engine.py` + `agent_core_adapter` (ADR 0036)** — split
+  along existing seams, following the `store_sync/` package-split precedent (ADR 0019):
+  `engine.py` (500 → 425 lines) delegates its two execution strategies to a new
+  `core/_execution_strategies.py`; `agent_core_adapter/__init__.py` (469 → 48 lines)
+  becomes a re-export shim over new `config.py`/`bridge.py`/`budget.py`/
+  `gate_authorization.py` submodules. Pure, behavior-preserving move — no public-API
+  change (`tests/test_public_surface.py` pins the unchanged `__all__`), and
+  `skills/architecture-drift-guard` confirms zero new cross-component import edges.
+  - [ ] **Deferred from the same audit, each a legitimate follow-up candidate**:
+    `src/eval_harness/judges/__init__.py` and `src/eval_harness/scorers/__init__.py`
+    (both protected paths — need the `eval-change-approved` label; `judges/panel.py`
+    already proves the per-implementation-file split this repo's convention expects,
+    and AGENTS.md already documents the judges seam as a `judges/*.py` glob the code
+    hasn't caught up to yet), and `skills/common/skill_validator.py` (the widest
+    blast radius in the repo — synced byte-for-byte into every skill directory;
+    splitting it needs `check_skill_script_drift.py` updated to sync a small package
+    instead of one file, as a prerequisite, not just a code change).
 - [x] **Validator-registration guard (F-058)** — a ~50-line structural 5-point sweep guard
   (`scripts/validations/F_058.py`) enforcing perfect synchronization between `features.yaml`
   ledger entries, physical `F_*.py` files on disk, test suite imports/parameterizations in

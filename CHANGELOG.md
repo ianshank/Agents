@@ -6,6 +6,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — `make pre-pr` and the `pre-pr-gate` skill
+
+An automation-opportunity scan of the god-file-decomposition session above found that
+its own ~15-command validation checklist (`make check-all`, `make invariants`,
+`check_size_budget.py`, `check_guard_reachability.py`, `check_skill_script_drift.py`,
+`check_protected_changes.py`, `regression_gate.py`, `validate.py --tier fast`,
+`architecture-drift-guard`'s two checks, `skill_marketplace.py validate`,
+`make determinism`, `repo-invariant-review`) existed nowhere as one command — `AGENTS.md`
+and `CONTRIBUTING.md` each documented an incomplete, mutually inconsistent subset of it.
+
+- **`make pre-pr`** (root `Makefile`, hand-added target alongside `determinism`/
+  `invariants`) chains the full checklist, accumulating every failure instead of
+  stopping at the first (a branch gets re-validated multiple times per session, so
+  seeing every failure in one pass beats a fix-one/rerun/find-next loop). Runs
+  `repo-invariant-review` as an explicitly advisory, non-blocking last step — several
+  of its checks already duplicate gates earlier in the same chain, and it is not
+  itself wired into required CI. `PRE_PR_BASE_REF` (default `origin/main`) is
+  overridable rather than hardcoded.
+- **`agent-core/Makefile` gained a `determinism` target** (root already had one; this
+  package's own determinism-tagged tests had no committed command to run them).
+- **`skills/pre-pr-gate`** wraps `make pre-pr` as a discoverable, invocable skill
+  (guard/review category) with its own tests (100% branch coverage) and behavioral
+  evals against fixture Makefiles — its own code is a thin subprocess wrapper; the
+  check list itself lives only in the Makefile, not duplicated.
+
+Deliberately not done in this pass (would touch `.github/**`, a protected path needing
+the `eval-change-approved` label + CODEOWNER review): wiring `repo-invariant-review`
+into CI non-blocking, and a stale-local-`main` warning in the SessionStart hook. Both
+recorded in `NEXT_STEPS.md` as scoped follow-ups.
+
+### Refactored — decompose `engine.py` and `agent_core_adapter` into focused modules
+
+Behavior-preserving structural split of the two files sitting closest to the
+500-line size budget (`scripts/check_size_budget.py`, ADR-0019), each bundling
+several unrelated responsibilities. Follows the `store_sync/` package-split
+precedent (ADR-0019) rather than inventing a new pattern. No functional change:
+every previously-importable name stays re-exported from its original public
+path, `tests/test_public_surface.py` pins that, and the architecture-drift gate
+(`skills/architecture-drift-guard`) confirms no new cross-component dependency
+edges were introduced.
+
+- **`src/eval_harness/engine.py`** (500 → 425 lines): the two item-execution
+  strategies (`_run_parallel`, `_run_sequential_repeated`) and `_make_item_rng`
+  moved to new `src/eval_harness/core/_execution_strategies.py`, matching the
+  existing `core/_reliability_diagnostics.py` / `core/_state_lifecycle.py`
+  naming precedent. The extracted functions take explicit leaf parameters only
+  (never `self`, `EvalConfig`, or `EvalEngine`) — `core` has no declared
+  dependencies in `architecture.yaml`, so passing the config or engine in, even
+  only under `TYPE_CHECKING`, would create an undeclared edge and fail the
+  drift gate. `EvalEngine` keeps `_run_parallel`/`_run_sequential_repeated` as
+  thin wrapper methods that build each `RunContext` via a `make_ctx` closure
+  and delegate. `_run_one`/`_run_one_safe` deliberately stay on `EvalEngine`
+  (tests monkeypatch `_run_one` on a live instance).
+- **`src/eval_harness/agent_core_adapter/__init__.py`** (469 → 48 lines): split
+  by concern into `config.py` (`AdapterConfig`), `bridge.py` (the
+  harness↔agent-core bridge: `ItemStore`, `HarnessJudgeRunner`,
+  `FixedCostEstimator`), `budget.py` (judge cost/rate-limiting:
+  `BudgetedJudge`, `_SlidingWindowLimiter`, `build_budgeted_judge` — keeps its
+  existing lazy/`TYPE_CHECKING` agent-core imports so the offline path still
+  never pulls in agent-core unless budgeting is enabled), and
+  `gate_authorization.py` (judge-calibration gate authorization). `__init__.py`
+  is now a thin re-export shim preserving the exact `__all__` surface and the
+  fail-fast "agent-core is required" `ImportError`.
+
 ### Fixed — nightly e2e-matrix freshness check that could never pass
 - **`.github/workflows/nightly-e2e.yml`** no longer runs `tests/test_e2e_matrix.py --check`
   as its final step. That check defaults `--report` to `artifacts/e2e-report/`, which is

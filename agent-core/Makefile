@@ -35,6 +35,17 @@ coverage: ## Run tests with coverage (via the quality-gate script)
 check: ## Run the full quality gate
 	./scripts/quality-gate.sh all
 
+# Hand-added convenience target (not emitted by the generator). Declared in its own
+# .PHONY statement so the generated .PHONY line above stays byte-stable for the
+# generator's --check (mirrors the root Makefile's own hand-added-target convention).
+.PHONY: determinism
+
+determinism: ## Prove determinism-tagged tests pass (calibration bucketing, split, persistence)
+	@# No dedicated pytest marker exists for this; matches every test named *deterministic*
+	@# across the suite (test_golden.py, test_outcome_store.py, test_pairwise.py,
+	@# test_persistence.py) so a newly added one is picked up automatically.
+	$(PYTHON) -m pytest tests -k determinis -v
+
 build: ## Build distributables
 	$(PYTHON) -m build
 

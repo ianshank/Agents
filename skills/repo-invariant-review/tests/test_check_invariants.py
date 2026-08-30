@@ -324,6 +324,23 @@ def test_airgap_ignores_files_outside_the_guarded_packages(violating_repo: Path)
     assert check_airgap(violating_repo, ["unrelated.py"]) == []
 
 
+def test_airgap_ignores_an_eval_harness_files_own_absolute_self_import(violating_repo: Path):
+    """Regression: an eval_harness file importing another eval_harness module by its
+    absolute name (``from eval_harness.x import y``, as opposed to a relative
+    ``from .x import y``) is not a flow_corpus->eval_harness airgap crossing -- it is
+    the same package importing itself. A prior version of the owner-membership check
+    special-cased the "src/eval_harness" prefix in a way that applied it to BOTH
+    airgap pairs, so this ordinary, common pattern was misdetected as a violation on
+    the ``("flow_corpus", "eval_harness")`` pair even though the file has nothing to
+    do with flow_corpus."""
+    from check_invariants import check_airgap
+
+    target = violating_repo / "src" / "eval_harness" / "agent_core_adapter" / "bridge.py"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("from eval_harness.core.interfaces import Judge\n", encoding="utf-8")
+    assert check_airgap(violating_repo, ["src/eval_harness/agent_core_adapter/bridge.py"]) == []
+
+
 def test_readme_drift_fires_when_a_registered_name_is_undocumented(violating_repo: Path):
     from check_invariants import check_readme_registry_drift
 
