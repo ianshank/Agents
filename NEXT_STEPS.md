@@ -9,6 +9,23 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **God-file decomposition: `engine.py` + `agent_core_adapter` (ADR 0036)** — split
+  along existing seams, following the `store_sync/` package-split precedent (ADR 0019):
+  `engine.py` (500 → 425 lines) delegates its two execution strategies to a new
+  `core/_execution_strategies.py`; `agent_core_adapter/__init__.py` (469 → 48 lines)
+  becomes a re-export shim over new `config.py`/`bridge.py`/`budget.py`/
+  `gate_authorization.py` submodules. Pure, behavior-preserving move — no public-API
+  change (`tests/test_public_surface.py` pins the unchanged `__all__`), and
+  `skills/architecture-drift-guard` confirms zero new cross-component import edges.
+  - [ ] **Deferred from the same audit, each a legitimate follow-up candidate**:
+    `src/eval_harness/judges/__init__.py` and `src/eval_harness/scorers/__init__.py`
+    (both protected paths — need the `eval-change-approved` label; `judges/panel.py`
+    already proves the per-implementation-file split this repo's convention expects,
+    and AGENTS.md already documents the judges seam as a `judges/*.py` glob the code
+    hasn't caught up to yet), and `skills/common/skill_validator.py` (the widest
+    blast radius in the repo — synced byte-for-byte into every skill directory;
+    splitting it needs `check_skill_script_drift.py` updated to sync a small package
+    instead of one file, as a prerequisite, not just a code change).
 - [x] **Validator-registration guard (F-058)** — a ~50-line structural 5-point sweep guard
   (`scripts/validations/F_058.py`) enforcing perfect synchronization between `features.yaml`
   ledger entries, physical `F_*.py` files on disk, test suite imports/parameterizations in

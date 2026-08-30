@@ -54,6 +54,7 @@ C4Container
         Container(config, "Config Loader", "Python / Pydantic", "YAML → migrate → interpolate → validate → EvalConfig")
         Container(core, "Core (core)", "Python", "Structural Protocol contracts (Scorer, Judge, DatasetSource, TargetRunner, ResultSink) + generic Registry[T] with structured logging and alias support (src/eval_harness/core/)")
         Container(plugins, "Plugin Loader (plugins)", "Python", "Central registries (SCORERS, JUDGES, ...) — built-in self-registration + entry-point discovery via the eval_harness.plugins group (src/eval_harness/plugins.py)")
+        Container(agent_core_adapter, "agent_core_adapter", "Python", "Bridge to agent_core (config.py, bridge.py, budget.py, gate_authorization.py submodules, ADR 0036) — BudgetLedger cost caps (F-022), sliding-window rate limits (F-030), judge-calibration gate authorization (F-057), CycleRunner/CostEstimator protocol bridge for LoopController")
     }
 
     Container_Boundary(components, "Pluggable Components (Tested completely offline via deterministic mocks)") {
@@ -97,6 +98,7 @@ C4Container
     Rel(engine, sinks, "emit()")
     Rel(engine, state_adapters, "reset()/snapshot()/evaluate(), under a lock spanning target.run() (F-060)")
     Rel(engine, gating, "evaluate_gate()")
+    Rel(engine, agent_core_adapter, "build_budgeted_judge() — lazy import, only when judge_budget.enabled (F-022)")
     Rel(cli, gating, "require_calibration_for_judge_gating() — rejects a gate rule targeting a judge-backed scorer with no named calibration artifact")
     Rel(gating, reliability, "aggregate() on demand, at most once per gate call, for pass_at_k/pass_power_k rules")
     Rel(engine, lf_client, "log_score(), link_dataset_item()")
@@ -134,6 +136,10 @@ C4Component
         Component(aggregate, "_aggregate()", "staticmethod", "Compute mean, pass_rate per scorer across all items")
     }
 
+    Container_Boundary(exec_boundary, "core/_execution_strategies.py (ADR 0036)") {
+        Component(exec_strategies, "_execute_parallel(), _execute_sequential_repeated()", "functions", "Pure, parameterized item-execution strategies -- explicit leaf params only, never self/EvalConfig/EvalEngine (core has zero declared architecture.yaml dependencies)")
+    }
+
     Container_Boundary(deps, "Dependencies") {
         Component(config_model, "EvalConfig", "Pydantic", "Validated configuration with schema versioning")
         Component(run_context, "RunContext", "dataclass", "Per-run context — config, judge, RNG, clock")
@@ -143,6 +149,7 @@ C4Component
     Rel(from_config, run_method, "creates engine, then caller invokes run()")
     Rel(run_method, sample, "filter items by sample_rate")
     Rel(run_method, run_one, "for each sampled item")
+    Rel(run_method, exec_strategies, "delegates when max_workers>1 or run.repetitions>1, via a make_ctx(item_index, rng) closure")
     Rel(run_method, aggregate, "after all items scored")
     Rel(run_one, run_context, "threaded through scorers")
     Rel(run_method, run_result, "produces")
