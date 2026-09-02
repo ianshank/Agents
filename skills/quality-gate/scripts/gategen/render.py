@@ -113,6 +113,25 @@ def _pytest_addopts_guard() -> list[str]:
     ]
 
 
+def _coverage_rcfile_guard() -> list[str]:
+    """Warn-then-clear guard so a live ``COVERAGE_RCFILE`` cannot widen the coverage config.
+
+    Same shape as :func:`_pytest_addopts_guard`, for the same reason: coverage.py reads
+    ``COVERAGE_RCFILE`` directly from its own environment, so a warning alone would not stop
+    a pointed-at rc file (a broad ``exclude_lines``/``omit``, or a ``fail_under=0``) from
+    silently taking effect. ``_coverage_command`` already passes an explicit
+    ``--cov-config=`` literal, which coverage.py prioritises over ``COVERAGE_RCFILE`` when
+    both are present — this guard is the defense-in-depth layer that makes an active
+    override visible and inert even if a future invocation path drops the explicit flag.
+    Emitted ahead of the coverage gate's pytest invocation only (``PYTEST_ADDOPTS`` is
+    unset by every pytest step; this one only ever mattered for ``do_coverage``).
+    """
+    return [
+        'if [ -n "${COVERAGE_RCFILE:-}" ]; then echo "quality-gate: COVERAGE_RCFILE is ignored; the coverage config is fixed at generation time" >&2; fi',
+        "unset COVERAGE_RCFILE",
+    ]
+
+
 def _lint_commands(facts: GateFacts) -> list[str]:
     target = _quoted(facts.lint_paths)
     return [f'"$PYTHON" -m ruff check {target}', f'"$PYTHON" -m ruff format --check {target}']
@@ -134,13 +153,24 @@ def _typecheck_commands(facts: GateFacts) -> list[str]:
 
 
 def _coverage_command(facts: GateFacts) -> list[str]:
-    """The coverage step's shell lines: an env-override guard, then the pytest-cov call.
+    """The coverage step's shell lines: env-override guards, then the pytest-cov call.
 
     ``--cov=`` and ``--cov-fail-under=`` are ALWAYS generation-time literals now — a live
     ``COVERAGE_SOURCE``/``COV_FAIL_UNDER`` cannot widen the measured source or lower the
     threshold at runtime, single-source or multi-source alike. That closes the gap where
     ``COV_FAIL_UNDER=0`` (or a narrow ``COVERAGE_SOURCE``) made the gate trivially pass; see
     the ``harden-quality-gate-integrity`` change.
+
+    ``--cov-config=pyproject.toml`` is ALSO a generation-time literal, for the sibling gap in
+    the same change class: every project this generator serves already declares its real
+    ``[tool.coverage.report]`` (``fail_under``, ``exclude_lines``) in its own ``pyproject.toml``
+    at the directory the gate script runs from (every ``Makefile``/CI caller invokes this
+    script with that directory as ``cwd`` — never a relative ``cd`` first), so pointing the
+    flag there costs nothing new to detect and closes the ``COVERAGE_RCFILE`` evasion: an
+    explicit ``--cov-config`` takes priority over that env var in coverage.py's own config
+    resolution, so a rogue export pointed at a permissive rc file (``fail_under=0``, a broad
+    ``exclude_lines``) can no longer widen what this gate measures. See
+    ``docs/plans/eval-evidence-integrity/PLAN.md`` Phase 1.
 
     One ``--cov=`` flag per source, unconditionally. There used to be a dedicated
     single-source form that built the flag from ``_quoted(facts.coverage_source)`` directly;
@@ -153,7 +183,8 @@ def _coverage_command(facts: GateFacts) -> list[str]:
         _ignored_override_notice("COVERAGE_SOURCE"),
         _ignored_override_notice("COV_FAIL_UNDER"),
         *_pytest_addopts_guard(),
-        f'"$PYTHON" -m pytest {cov} --cov-branch --cov-report=term-missing --cov-fail-under={facts.cov_fail_under}',
+        *_coverage_rcfile_guard(),
+        f'"$PYTHON" -m pytest {cov} --cov-config=pyproject.toml --cov-branch --cov-report=term-missing --cov-fail-under={facts.cov_fail_under}',
     ]
 
 

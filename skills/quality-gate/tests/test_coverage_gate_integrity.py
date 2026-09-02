@@ -14,7 +14,10 @@ a genuinely low or genuinely high measured coverage percentage and a meaningful 
 - the low-coverage fixture STILL fails with ``COV_FAIL_UNDER=0`` injected into the subprocess
   environment (the finding-1 evasion, tried for real);
 - the low-coverage fixture STILL fails with a coverage-weakening ``PYTEST_ADDOPTS`` injected
-  into the subprocess environment (the finding-3 evasion, tried for real).
+  into the subprocess environment (the finding-3 evasion, tried for real);
+- the low-coverage fixture STILL fails with ``COVERAGE_RCFILE`` pointed at a permissive
+  external rc file (``fail_under=0``, a broad ``exclude_lines``) injected into the subprocess
+  environment (the ``docs/plans/eval-evidence-integrity/`` review finding, tried for real).
 """
 
 from __future__ import annotations
@@ -140,7 +143,7 @@ def _coverage_fixture(root: Path, *, test_body: str) -> None:
     )
 
 
-_GUARDED_VARS = ("COVERAGE_SOURCE", "COV_FAIL_UNDER", "PYTEST_ADDOPTS")
+_GUARDED_VARS = ("COVERAGE_SOURCE", "COV_FAIL_UNDER", "PYTEST_ADDOPTS", "COVERAGE_RCFILE")
 
 
 def _run_coverage(root: Path, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -185,6 +188,7 @@ def test_low_coverage_fixture_fails_the_real_gate(tmp_path: Path) -> None:
     assert "COVERAGE_SOURCE is ignored" not in combined
     assert "COV_FAIL_UNDER is ignored" not in combined
     assert "PYTEST_ADDOPTS is ignored" not in combined
+    assert "COVERAGE_RCFILE is ignored" not in combined
 
 
 def test_high_coverage_fixture_passes_the_real_gate(tmp_path: Path) -> None:
@@ -202,6 +206,7 @@ def test_high_coverage_fixture_passes_the_real_gate(tmp_path: Path) -> None:
     assert "COVERAGE_SOURCE is ignored" not in combined
     assert "COV_FAIL_UNDER is ignored" not in combined
     assert "PYTEST_ADDOPTS is ignored" not in combined
+    assert "COVERAGE_RCFILE is ignored" not in combined
 
 
 def test_cov_fail_under_zero_does_not_evade_the_low_coverage_gate(tmp_path: Path) -> None:
@@ -252,3 +257,28 @@ def test_coverage_source_override_does_not_change_what_is_measured(tmp_path: Pat
     # The reported source in the table is still "demo", never the overridden value.
     assert "src/demo/__init__.py" in overridden.stdout
     assert "nonexistent_pkg" not in overridden.stdout
+
+
+def test_coverage_rcfile_override_does_not_evade_the_low_coverage_gate(tmp_path: Path) -> None:
+    """The ``COVERAGE_RCFILE`` evasion, tried for real and confirmed closed.
+
+    A rogue rc file pointed at by ``COVERAGE_RCFILE`` -- the kind an accidental environment
+    leak (or an attacker controlling the CI environment) could supply -- sets a permissive
+    ``fail_under = 0`` and an ``exclude_lines`` broad enough to exclude every line in the demo
+    package. Without the fix this would silently drive measured coverage to 100% and pass the
+    low-coverage fixture; with the explicit ``--cov-config=pyproject.toml`` literal (which
+    coverage.py prioritises over the env var) plus the warn-then-unset guard, the rogue file is
+    never consulted at all -- the gate still fails against the real, generation-time threshold.
+    """
+    _coverage_fixture(tmp_path, test_body=_LOW_COVERAGE_TESTS)
+    assert gen_gate.main(["--root", str(tmp_path)]) == 0
+    rogue_rc = tmp_path.parent / "rogue.coveragerc"
+    rogue_rc.write_text(
+        "[report]\nfail_under = 0\nexclude_lines =\n    .*\n",
+        encoding="utf-8",
+    )
+    result = _run_coverage(tmp_path, extra_env={"COVERAGE_RCFILE": str(rogue_rc)})
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, combined
+    assert f"Required test coverage of {_FAIL_UNDER}%" in combined
+    assert "COVERAGE_RCFILE is ignored" in result.stderr

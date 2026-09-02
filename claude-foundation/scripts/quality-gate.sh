@@ -38,7 +38,9 @@ do_coverage() {
   if [ -n "${COV_FAIL_UNDER:-}" ]; then echo "quality-gate: COV_FAIL_UNDER is ignored; targets are fixed at generation time" >&2; fi
   if [ -n "${PYTEST_ADDOPTS:-}" ]; then echo "quality-gate: PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" >&2; fi
   unset PYTEST_ADDOPTS
-  "$PYTHON" -m pytest --cov="foundation_tools" --cov="hooks" --cov-branch --cov-report=term-missing --cov-fail-under=85
+  if [ -n "${COVERAGE_RCFILE:-}" ]; then echo "quality-gate: COVERAGE_RCFILE is ignored; the coverage config is fixed at generation time" >&2; fi
+  unset COVERAGE_RCFILE
+  "$PYTHON" -m pytest --cov="foundation_tools" --cov="hooks" --cov-config=pyproject.toml --cov-branch --cov-report=term-missing --cov-fail-under=85
 }
 
 do_all() {
