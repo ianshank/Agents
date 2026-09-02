@@ -771,6 +771,51 @@ def pipeline_kinds(pipelines: Mapping[str, Mapping[str, object]]) -> dict[str, s
     return used
 
 
+def pipeline_declared(name: str, config_dict: Mapping[str, object]) -> dict[str, set[str]]:
+    """The kinds/components ONE pipeline declares — ``pipeline_kinds`` over a singleton."""
+    return pipeline_kinds({name: config_dict})
+
+
+def pipeline_vacuous(
+    pipelines: Mapping[str, Mapping[str, object]],
+    executed_by_pipeline: Mapping[str, Mapping[str, set[str]]],
+) -> dict[str, dict[str, set[str]]]:
+    """``{pipeline: {kind: {component}}}`` for every declared-but-never-invoked component.
+
+    **Per pipeline, deliberately — a repo-wide union would not catch the defect this
+    exists for.** ``judge/mock`` IS invoked, by the ``llm_judge`` pipeline. A union asking
+    "was ``judge/mock`` executed anywhere?" answers yes and stays silent about
+    ``echo_exact_match`` declaring a judge it never calls, which is precisely the vacuous
+    credit that motivated the execution ledger. The diff has to be taken inside each
+    pipeline's own boundary to mean anything.
+    """
+    vacuous: dict[str, dict[str, set[str]]] = {}
+    for name, config_dict in pipelines.items():
+        declared = pipeline_declared(name, config_dict)
+        executed = executed_by_pipeline.get(name, {})
+        gaps = {
+            kind: names - set(executed.get(kind, set()))
+            for kind, names in declared.items()
+            if names - set(executed.get(kind, set()))
+        }
+        if gaps:
+            vacuous[name] = gaps
+    return vacuous
+
+
+def format_vacuous(vacuous: Mapping[str, Mapping[str, set[str]]]) -> str:
+    """Render :func:`pipeline_vacuous` output as an actionable failure message."""
+    lines: list[str] = []
+    for pipeline in sorted(vacuous):
+        for kind in sorted(vacuous[pipeline]):
+            for component in sorted(vacuous[pipeline][kind]):
+                lines.append(
+                    f"  {pipeline}: declares {kind}/{component} but never invokes it — "
+                    f"either exercise it (add a scorer that uses it) or drop the declaration"
+                )
+    return "\n".join(lines)
+
+
 # --------------------------------------------------------------------------- artifact
 
 

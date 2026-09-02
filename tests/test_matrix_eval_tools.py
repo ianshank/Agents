@@ -43,6 +43,8 @@ from eval_harness.engine import EvalEngine
 from eval_harness.gating import evaluate_gate
 from eval_harness.plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS, bootstrap
 from tests import _trajectory_helpers as traj
+from tests._m8_probe import ExecutionLedger, probe
+from tests._matrix_coverage import format_vacuous, pipeline_vacuous
 
 bootstrap()
 
@@ -1594,12 +1596,54 @@ PIPELINES: dict[str, dict] = {
 }
 
 
+#: The engine converts a scorer exception into a failing ScoreResult carrying this
+#: prefix (engine.py, `comment=f"scorer error: {exc}"`) rather than raising. That is
+#: correct for a genuinely broken scorer, and it is exactly the mechanism that lets a
+#: judge which tried and failed to reach the network report a tidy 0.0 instead of a
+#: red test. Asserting on the engine's own marker needs no new engine hook.
+_SWALLOW_MARKER = "scorer error: "
+
+
+def _assert_declared_components_ran(name: str, config_dict: dict, ledger: ExecutionLedger) -> None:
+    """Fail if this pipeline declared a component whose protocol method never ran.
+
+    Scoped to the single pipeline under test rather than the whole PIPELINES index:
+    a component can be legitimately exercised by a sibling pipeline while this one
+    only names it, which is exactly the vacuous credit the ledger exists to expose.
+    """
+    vacuous = pipeline_vacuous({name: config_dict}, {name: ledger.invoked_components()})
+    assert not vacuous, f"pipeline {name!r} declares components it never invoked:\n{format_vacuous(vacuous)}"
+
+
+def _assert_no_swallowed_errors(result: RunResult) -> None:
+    """Fail if any score in *result* is a swallowed scorer exception.
+
+    A probed M8 pipeline that "passes" while quietly recording `scorer error: ...`
+    has not demonstrated composability -- it has demonstrated the error path.
+    """
+    for item_result in result.items:
+        for score in item_result.scores:
+            comment = score.comment or ""
+            assert not comment.startswith(_SWALLOW_MARKER), (
+                f"item {item_result.item.id!r} scorer {score.name!r} swallowed an exception "
+                f"during a probed M8 run: {comment!r}"
+            )
+
+
 class TestM8Composability:
-    """M8 - End-to-end engine pipelines over the PIPELINES index."""
+    """M8 - End-to-end engine pipelines over the PIPELINES index.
+
+    Every pipeline runs inside `tests._m8_probe.probe()`, so a component is credited
+    for composability only when its protocol method is observed to execute. Before
+    that, M8 credited a component for appearing in a validated config dict -- and
+    four pipelines were declaring a judge they never invoked.
+    """
 
     MATRIX_KIND = "engine"
 
-    def _run(self, name: str, tmp_path: Path | None = None) -> tuple[EvalConfig, RunResult, Path | None]:
+    def _run(
+        self, name: str, tmp_path: Path | None = None
+    ) -> tuple[EvalConfig, RunResult, Path | None, ExecutionLedger]:
         config_dict = copy.deepcopy(PIPELINES[name])
         out_path: Path | None = None
         for sink in config_dict.get("sinks", []):
@@ -1608,11 +1652,15 @@ class TestM8Composability:
                 out_path = tmp_path / f"{name}.json"
                 sink.setdefault("params", {})["path"] = str(out_path)
         config = EvalConfig.model_validate(config_dict)
-        return config, EvalEngine.from_config(config).run(), out_path
+        with probe() as ledger:
+            result = EvalEngine.from_config(config).run()
+        _assert_no_swallowed_errors(result)
+        _assert_declared_components_ran(name, config_dict, ledger)
+        return config, result, out_path, ledger
 
     def test_m8_full_pipeline_echo_exact_match(self, tmp_path: Path) -> None:
         """Echo target + exact_match scorer + mock judge + json_file sink."""
-        _, result, out_json = self._run("echo_exact_match", tmp_path)
+        _, result, out_json, _ledger = self._run("echo_exact_match", tmp_path)
 
         # Verify the pipeline produced correct results
         assert result.config_name == "matrix-test"
@@ -1629,18 +1677,18 @@ class TestM8Composability:
 
     def test_m8_pipeline_with_llm_judge_scorer(self) -> None:
         """LLM judge scorer uses injected mock judge through ctx."""
-        _, result, _ = self._run("llm_judge")
+        _, result, _, _ledger = self._run("llm_judge")
         assert result.aggregate["quality"].mean == 0.7
 
     def test_m8_pipeline_with_composite_scorer(self) -> None:
         """Composite scorer composes children inside the engine pipeline."""
-        _, result, _ = self._run("weighted")
+        _, result, _, _ledger = self._run("weighted")
         assert result.aggregate["combo"].mean == 1.0
 
     def test_m8_trajectory_pipeline(self, tmp_path: Path) -> None:
         """All 7 trajectory scorers over the shipped trajectory-emitting callable,
         through config validation, the engine, a file sink and the gate."""
-        config, result, out_json = self._run("trajectory", tmp_path)
+        config, result, out_json, _ledger = self._run("trajectory", tmp_path)
 
         # The callable target swallows SUT exceptions into TargetOutput.error, so a
         # broken SUT would surface here as error text, not as a raised exception.
@@ -1659,7 +1707,7 @@ class TestM8Composability:
 
     def test_m8_trajectory_and_outcome_scorers_compose(self) -> None:
         """A trajectory scorer and a text scorer grade the same run side by side."""
-        _, result, _ = self._run("trajectory_mixed")
+        _, result, _, _ledger = self._run("trajectory_mixed")
         assert result.aggregate["trajectory_in_order"].pass_rate == 1.0
         assert result.aggregate["mentions_widget"].pass_rate == 1.0
 
@@ -1673,7 +1721,7 @@ class TestM8Composability:
         from tests._sut import reset_reliability_demo
 
         reset_reliability_demo()
-        config, result, _ = self._run("repeated_attempts")
+        config, result, _, _ledger = self._run("repeated_attempts")
 
         assert len(result.items) == 10  # 2 items x 5 attempts, every raw attempt persisted
 
