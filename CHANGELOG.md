@@ -68,6 +68,54 @@ pre-refactor output by direct comparison before regenerating. Audited every othe
 `experiments/backend-validation`) — neither invokes pytest+coverage directly, so neither
 needed the guard.
 
+### Changed — M8 (Composability) now credits execution, not configuration
+
+Implements Phase 2 of `docs/plans/eval-evidence-integrity/PLAN.md` and the merged
+`prove-m8-execution` OpenSpec change. M8 previously credited a component for appearing in a
+validated `EvalConfig` dict; it now credits a component only when its protocol method is
+observed to run inside a real `EvalEngine` pipeline.
+
+- **`tests/_m8_probe.py`** (new) — an execution ledger patching `Registry.create`, the single
+  construction choke point all six registries pass through, and wrapping each constructed
+  instance's protocol method with a counter. Because it hooks construction rather than a call
+  site, components built *inside* other components are credited without their own
+  instrumentation: `PanelJudge`'s member judges and `CompositeScorer`'s child scorers both
+  route through the same seam real usage does. The `kind -> protocol method` map is a checked
+  declaration cross-validated against the live Protocols at import, so renaming e.g.
+  `Judge.evaluate` fails loudly instead of silently under-counting forever.
+- **Four vacuous pipelines fixed, not one.** `echo_exact_match`, `weighted`, `trajectory` and
+  `trajectory_mixed` all declared `judge: mock` while running no judge-backed scorer. The
+  fixes are deliberately not uniform: `echo_exact_match` and `weighted` gained a real
+  `llm_judge` scorer (for `weighted`, a composite mixing a judge-backed and a programmatic
+  child — the exact case `CompositeScorer.uses_judge()`'s `any(...)` exists for, previously
+  untested), while the two trajectory pipelines had the declaration dropped, since no
+  trajectory scorer reads `ctx.judge` by design and fabricating one to satisfy a guard would
+  repeat the anti-pattern this change closes. Assertions were tightened to values only
+  reachable if the judge really ran (`combo` mean 0.875, not 1.0).
+- **The vacuity diff is per-pipeline, not a repo-wide union** (`pipeline_vacuous`,
+  `format_vacuous`). `judge/mock` *is* invoked — by the `llm_judge` pipeline — so a union
+  check answers "yes, executed" and stays silent about the sibling that only declares it,
+  which is the entire defect. `pipeline_kinds()` is kept rather than replaced, so the
+  declared-minus-executed delta remains publishable.
+- **`matrix_offline` egress guard** (`tests/conftest.py`, autouse, marker-scoped) fails any
+  marked test that opens a non-loopback socket, plus `_assert_no_swallowed_errors`, which
+  refuses a `ScoreResult` carrying the engine's `"scorer error: "` swallow marker — the
+  mechanism by which a failed network call becomes a `0.0` score and a green run.
+- **Fixed a `monkeypatch` residue that silently defeated the ledger.**
+  `monkeypatch.setattr(JUDGES, "create", ...)` on an *inherited* attribute writes the bound
+  method back as an **instance** attribute on undo. An instance attribute wins over a class
+  attribute, so the ledger's class-level patch routed around every judge from that point on:
+  judge-backed pipelines scored correctly while the ledger recorded zero judge calls and the
+  guard reported three pipelines as vacuous that were not — a false finding, visible only
+  when that module ran first, which is why the matrix file passed in isolation and failed
+  under the full suite. Switched to `unittest.mock.patch.object` (which `delattr`s a
+  non-local attribute on exit), and `probe()` now refuses to enter while any registry carries
+  such a shadow, with a regression test proving both that `monkeypatch` leaves it and that
+  the guard fires.
+- `tests/test_matrix_coverage.py` split at its existing `guard self-tests` seam into
+  `tests/test_matrix_coverage_guards.py`; the policy module had crossed the 500-line ceiling
+  on this branch. `docs/matrix-coverage.md` regenerated with the execution guarantee stated.
+
 ### Added — `make pre-pr` and the `pre-pr-gate` skill
 
 An automation-opportunity scan of the god-file-decomposition session above found that
