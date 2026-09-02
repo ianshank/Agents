@@ -96,40 +96,49 @@ def _ignored_override_notice(var: str) -> str:
     return f'if [ -n "${{{var}:-}}" ]; then echo "quality-gate: {var} is ignored; targets are fixed at generation time" >&2; fi'
 
 
+def _warn_then_unset_guard(var: str, reason: str) -> list[str]:
+    """Shared shell-line builder for a "live env var read directly by the invoked tool"
+    guard: warn to stderr if it is set, then unset it before the tool runs.
+
+    Both ``_pytest_addopts_guard`` and ``_coverage_rcfile_guard`` need this exact shape for
+    the same underlying reason: unlike ``COVERAGE_SOURCE``/``COV_FAIL_UNDER`` (values THIS
+    generator itself interpolates into the command line, so simply never referencing the env
+    var is enough to neutralize an override), pytest and coverage.py each read their
+    respective var directly from the process environment — a warning alone would not stop it
+    from taking effect, so the guard also unsets it. Factored here once the two call sites
+    were byte-identical except for the var name and the reason clause, so the shape can no
+    longer drift between them the way the two would-be independent copies once could have.
+    """
+    return [
+        f'if [ -n "${{{var}:-}}" ]; then echo "quality-gate: {var} is ignored; {reason}" >&2; fi',
+        f"unset {var}",
+    ]
+
+
 def _pytest_addopts_guard() -> list[str]:
     """Warn-then-clear guard so a live ``PYTEST_ADDOPTS`` cannot weaken a pytest gate step.
 
-    Unlike ``COVERAGE_SOURCE``/``COV_FAIL_UNDER`` (values THIS generator itself interpolates,
-    so simply never referencing the env var is enough to neutralize an override), pytest
-    reads ``PYTEST_ADDOPTS`` directly from its own environment. A warning alone would not
-    stop a coverage-weakening flag (``--no-cov``, ``-k``, ``--override-ini``, ...) from
-    taking effect, so this guard also unsets it immediately before pytest runs. Emitted
-    ahead of every pytest invocation the gate makes (``do_test`` and ``do_coverage``) — a
-    gate stage has no opt-out.
+    Pytest reads ``PYTEST_ADDOPTS`` directly from its own environment, so a coverage-weakening
+    flag (``--no-cov``, ``-k``, ``--override-ini``, ...) would otherwise take effect silently.
+    Emitted ahead of every pytest invocation the gate makes (``do_test`` and ``do_coverage``)
+    — a gate stage has no opt-out.
     """
-    return [
-        'if [ -n "${PYTEST_ADDOPTS:-}" ]; then echo "quality-gate: PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" >&2; fi',
-        "unset PYTEST_ADDOPTS",
-    ]
+    return _warn_then_unset_guard("PYTEST_ADDOPTS", "this stage is a gate and has no opt-out")
 
 
 def _coverage_rcfile_guard() -> list[str]:
     """Warn-then-clear guard so a live ``COVERAGE_RCFILE`` cannot widen the coverage config.
 
-    Same shape as :func:`_pytest_addopts_guard`, for the same reason: coverage.py reads
-    ``COVERAGE_RCFILE`` directly from its own environment, so a warning alone would not stop
-    a pointed-at rc file (a broad ``exclude_lines``/``omit``, or a ``fail_under=0``) from
-    silently taking effect. ``_coverage_command`` already passes an explicit
-    ``--cov-config=`` literal, which coverage.py prioritises over ``COVERAGE_RCFILE`` when
-    both are present — this guard is the defense-in-depth layer that makes an active
-    override visible and inert even if a future invocation path drops the explicit flag.
-    Emitted ahead of the coverage gate's pytest invocation only (``PYTEST_ADDOPTS`` is
-    unset by every pytest step; this one only ever mattered for ``do_coverage``).
+    coverage.py reads ``COVERAGE_RCFILE`` directly from its own environment, so a pointed-at
+    rc file (a broad ``exclude_lines``/``omit``, or a ``fail_under=0``) would otherwise take
+    effect silently. ``_coverage_command`` already passes an explicit ``--cov-config=``
+    literal, which coverage.py prioritises over ``COVERAGE_RCFILE`` when both are present —
+    this guard is the defense-in-depth layer that makes an active override visible and inert
+    even if a future invocation path drops the explicit flag. Emitted ahead of the coverage
+    gate's pytest invocation only (``PYTEST_ADDOPTS`` is unset by every pytest step; this one
+    only ever mattered for ``do_coverage``).
     """
-    return [
-        'if [ -n "${COVERAGE_RCFILE:-}" ]; then echo "quality-gate: COVERAGE_RCFILE is ignored; the coverage config is fixed at generation time" >&2; fi',
-        "unset COVERAGE_RCFILE",
-    ]
+    return _warn_then_unset_guard("COVERAGE_RCFILE", "the coverage config is fixed at generation time")
 
 
 def _lint_commands(facts: GateFacts) -> list[str]:
