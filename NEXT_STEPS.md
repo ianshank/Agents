@@ -295,7 +295,13 @@
      "declined" verdict assumed — worth a small deterministic script (git mv + Status flip +
      `openspec/README.md` index update + repo-wide path-reference rewrite + the relative-link
      check, run automatically as its last step) next time three or more proposals queue up
-     for archiving at once.
+     for archiving at once. **Second data point (2026-09-02):** archiving two proposals
+     (`add-panel-judge`, `add-stateful-outcome-evaluation`, `docs/plans/eval-evidence-integrity/`)
+     reproduced exactly the first failure mode — a `git mv`-broken relative link (one `../`
+     short after the added `archive/` level) — caught this time by the CI relative-link check
+     rather than a second manual review, and fixed in a follow-up commit
+     (`fix(openspec): correct relative link depth after archiving`). Two proposals was already
+     enough to trip it once; the "three or more" threshold above may be pessimistic.
   7. **`openspec-implementation-review`'s "plugin path" has never actually run.** Its
      `detect.py` branches on whether `claude-foundation` is plugin-loaded, but every real
      precedent (`test-skill-validator-library`, `harden-quality-gate-integrity`,

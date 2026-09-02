@@ -54,6 +54,20 @@ times, proven by instrumentation.
   that introduced the mismatched stamp; added the previously-unlisted `orbital-drift-alignment`
   plan to `docs/README.md`'s Plans index.
 
+Follow-on, from an objective peer review of the fix itself (`/code-review high`):
+`scripts/quality-gate.sh`'s hand-maintained `do_extra()` scripts-coverage stage — invoking
+pytest directly, below the generator's marker — had the `PYTEST_ADDOPTS` guard but not the
+new `COVERAGE_RCFILE` one, even though its own comment says it must be kept in sync by hand.
+Not exploitable (its explicit `--cov-config=scripts/.coveragerc` already wins over the env
+var), but an observability inconsistency: every other coverage stage now warns on a leaked
+`COVERAGE_RCFILE`; this one silently didn't. Fixed, and the two now-duplicated warn-then-unset
+guard bodies (`_pytest_addopts_guard`/`_coverage_rcfile_guard`) were factored into one shared
+`_warn_then_unset_guard(var, reason)` helper in `render.py`, proven byte-identical to the
+pre-refactor output by direct comparison before regenerating. Audited every other generated
+`quality-gate.sh`'s hand-maintained `do_extra()` for the same gap (`claude-foundation`,
+`experiments/backend-validation`) — neither invokes pytest+coverage directly, so neither
+needed the guard.
+
 ### Added — `make pre-pr` and the `pre-pr-gate` skill
 
 An automation-opportunity scan of the god-file-decomposition session above found that
