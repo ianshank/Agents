@@ -1643,6 +1643,7 @@ def _assert_no_swallowed_errors(result: RunResult) -> None:
             )
 
 
+@pytest.mark.matrix_offline
 class TestM8Composability:
     """M8 - End-to-end engine pipelines over the PIPELINES index.
 
@@ -1650,6 +1651,12 @@ class TestM8Composability:
     for composability only when its protocol method is observed to execute. Before
     that, M8 credited a component for appearing in a validated config dict -- and
     four pipelines were declaring a judge they never invoked.
+
+    `matrix_offline` arms the conftest egress guard for every test below, failing any
+    non-loopback `socket.connect`. It is class-level and load-bearing: the guard is
+    marker-scoped, so dropping this decorator disarms it silently rather than erroring.
+    `tests/test_matrix_coverage_guards.py` asserts the marker is still here, and carries
+    the positive control proving the guard fires.
     """
 
     MATRIX_KIND = "engine"

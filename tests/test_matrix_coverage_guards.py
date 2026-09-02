@@ -16,6 +16,7 @@ test moved between concerns.
 from __future__ import annotations
 
 import logging
+import socket
 from pathlib import Path
 
 import pytest
@@ -367,3 +368,51 @@ def test_nothing_is_logged_at_the_default_level(caplog: pytest.LogCaptureFixture
         mc.coverage_problems(CENSUS, CLASSES)
         mc.extract_matrix_classes(mc.matrix_files())
     assert [r for r in caplog.records if r.name == "tests._matrix_coverage"] == []
+
+
+# --- the matrix_offline egress guard (conftest) -------------------------------------
+
+
+def test_the_m8_suite_actually_carries_the_matrix_offline_marker() -> None:
+    """The guard is marker-scoped, so an unmarked M8 suite silently disarms it.
+
+    That is exactly what shipped in the commit that introduced the fixture: the marker
+    was registered in `pyproject.toml` and the autouse fixture was written, but no test
+    was ever marked, so `matrix_offline_egress_guard` took its early `yield` on every
+    run and no socket was ever guarded. A guard that cannot fire is the vacuity defect
+    the matrix policy exists to refuse, so its application is asserted rather than
+    assumed — a rename or a refactor that drops the decorator fails here.
+    """
+    from tests.test_matrix_eval_tools import TestM8Composability
+
+    marks = {mark.name for mark in getattr(TestM8Composability, "pytestmark", ())}
+    assert "matrix_offline" in marks, (
+        "TestM8Composability must carry @pytest.mark.matrix_offline; without it the "
+        "conftest egress guard never patches socket.connect for the M8 pipelines"
+    )
+
+
+@pytest.mark.matrix_offline
+def test_egress_guard_refuses_a_non_loopback_connect() -> None:
+    """Positive control: the guard raises on real egress, not merely in principle."""
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock,
+        pytest.raises(AssertionError, match="attempted network egress"),
+    ):
+        sock.connect(("10.255.255.1", 80))
+
+
+@pytest.mark.matrix_offline
+def test_egress_guard_still_permits_loopback() -> None:
+    """Negative control: the guard must not blanket-ban sockets.
+
+    Loopback is how the repo's own HTTP fixtures work (`mock_http` state adapter,
+    `http.server`-backed tests), so a guard that blocked it would force those pipelines
+    out of the M8 suite. A refused connection to a closed local port proves the call
+    reached the real `connect` — `ConnectionRefusedError`, never `AssertionError`.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1.0)
+        with pytest.raises((ConnectionRefusedError, OSError)) as excinfo:
+            sock.connect(("127.0.0.1", 1))
+    assert not isinstance(excinfo.value, AssertionError), "loopback must reach the real connect"
