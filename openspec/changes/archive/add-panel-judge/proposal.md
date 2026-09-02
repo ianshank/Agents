@@ -1,6 +1,6 @@
 # Change: add-panel-judge
 
-**Status:** proposed · **Date:** 2026-08-13 · **Author track:** `claude/` agent lane
+**Status:** implemented (archived; landed `955bc9c`) · **Date:** 2026-08-13 · **Author track:** `claude/` agent lane
 **Motivated by:** a council-of-agents review of how the harness's own eval tools are
 validated — and the grep-verified fact that no panel/consensus/quorum concept exists in the
 implementation (`grep -riE 'panel|consensus|quorum|committee|council|arbiter'` over `src/`

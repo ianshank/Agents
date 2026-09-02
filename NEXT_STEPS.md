@@ -226,21 +226,20 @@
 
 - [ ] **Matrix follow-ons deferred from the F-053 hardening pass** — each verified, none
   blocking:
-  - **Extract the shared registry probe** to `tests/_registry_probe.py`. ~60-70 lines are
-    duplicated between `tests/_matrix_coverage.py` and `tests/test_plugin_registry_surface.py`
-    (identical `_PROBE` bootstrap, `subprocess.run` args, all three failure-mode messages,
-    `_PROBE_TIMEOUT_SECONDS`), and they have **already diverged**: the newer copy added a
-    `_run_probe` monkeypatch seam, `OSError` translation and partial-stream capture on
-    timeout that the older one lacks. This is the `agent_core/subprocess_util.py` situation
-    verbatim ("extracted so the two copies cannot drift — they had, and one had dropped the
-    warning logs"). Prerequisite for the Phase-2 generator, which should emit code that
-    imports the seam rather than a seventh copy. `tests/` is not coverage-gated and is
-    already protected, so extraction there costs nothing extra.
-  - **`docs.yml`'s registry-drift guard hardcodes a 5-entry `REGISTRIES` map** — the third
-    independent enumeration of the registry set (after the census, which derives it, and
-    F_053's deliberate independent anchor). When `STATE_ADAPTERS` lands, the census
-    auto-catches it and F_053 fails loudly, but that guard **silently skips it**. Fold into
-    F-054 or derive it.
+  - ~~**Extract the shared registry probe** to `tests/_registry_probe.py`~~ — **shipped**:
+    `tests/_registry_probe.py` exists and both `tests/_matrix_coverage.py` and
+    `tests/test_plugin_registry_surface.py` import `run_probe` from it (corrected during the
+    `docs/plans/eval-evidence-integrity/` peer review, 2026-09-02 — this bullet had gone
+    stale).
+  - ~~**`docs.yml`'s registry-drift guard hardcodes a 5-entry `REGISTRIES` map**~~ —
+    **REFUTED, corrected during the `docs/plans/eval-evidence-integrity/` peer review
+    (2026-09-02)**: `docs.yml`'s "READMEs still match the component registries" step invokes
+    `scripts/extract_registries.py --check`, which discovers all six registries via AST
+    (`discover_registries()`), including `STATE_ADAPTERS` — both `README.md` and
+    `src/eval_harness/README.md` already document its four adapters. This bullet's premise
+    was stale by the time it was written. The one real, narrower residual: `check_docs_drift`
+    silently `continue`s when a registry's doc section heading is absent or renamed, and the
+    job itself is `continue-on-error: true` — worth folding into a future pass, not F-054.
   - **`--cov-config=/dev/null`** in the tooling-coverage step discards
     `pyproject.toml`'s `exclude_lines`, so every validator is charged for its
     `raise SystemExit(main())` and `sys.path` bootstrap — a systematic tax absorbed by the
@@ -506,13 +505,17 @@
   harden-quality-gate-integrity/review.md`)** — a real `spec-guardian`→`peer-reviewer`
   dispatch (via `claude --plugin-dir claude-foundation`, the functional proof
   `add-foundation-reviewer-charters`'s task 4 needed) found one live gate-integrity hole
-  F-054 didn't close: 6 of 7 generated `do_coverage()` bodies pass no `--cov-config`, so
-  `COVERAGE_RCFILE` reaches coverage.py unguarded — a pointed-at rc file with a broad
-  `exclude_lines`/`omit` can drive measured coverage to ~100% with no notice and no `unset`,
-  the same evasion class this change exists to close. Root's hand-maintained `do_extra()` is
-  incidentally immune (`--cov-config=scripts/.coveragerc` is explicit there); the 6 generated
-  scripts are not. Fix is one line in `_coverage_command` (add `--cov-config=`) or fold into
-  a generalized env-scrub alongside the existing `PYTEST_ADDOPTS` guard. The same pass found
+  F-054 didn't close: **7 of 7** (corrected from "6 of 7" during the
+  `docs/plans/eval-evidence-integrity/` peer review, 2026-09-02 — root's own generated
+  `do_coverage()` at `scripts/quality-gate.sh:41` also lacks `--cov-config`; the
+  `--cov-config=scripts/.coveragerc` that does exist at `:78` is inside the hand-maintained
+  `do_extra()`, a different stage, F-031's scripts gate, not `do_coverage`) generated
+  `do_coverage()` bodies pass no `--cov-config`, so `COVERAGE_RCFILE` reaches coverage.py
+  unguarded — a pointed-at rc file with a broad `exclude_lines`/`omit` can drive measured
+  coverage to ~100% with no notice and no `unset`, the same evasion class this change exists
+  to close. Fix is one line in `_coverage_command` (add `--cov-config=`) plus a
+  `COVERAGE_RCFILE` scrub alongside the existing `PYTEST_ADDOPTS` guard, tracked as Phase 1
+  of `docs/plans/eval-evidence-integrity/PLAN.md`. The same pass found
   four now-stale documentation claims in the archived proposal's own `proposal.md`/`design.md`/
   `spec.md`/`SKILL.md` and one prior review attack-refutation that over-claimed — full detail
   in the review.md's dated follow-up section; none change the coverage gate's actual

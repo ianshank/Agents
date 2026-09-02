@@ -50,7 +50,9 @@ Active engineering epics and architectural roadmap live in [roadmap/](roadmap/RE
 - [e2e-runbook.md](e2e-runbook.md) — running and reading the one-command
   end-to-end / user-journey harness.
 - [e2e-matrix/](e2e-matrix/README.md) — the generated test matrix for a full end-to-end
-  run (markdown, CSV and workbook renderings of one run report).
+  run (markdown, CSV and workbook renderings of one run report). See
+  [e2e-matrix/ERRATA.md](e2e-matrix/ERRATA.md) for a known provenance defect in the
+  committed artifact.
 
 ## Change proposals
 
@@ -102,6 +104,8 @@ before this index existed:
 | agents-critical-path | [PLAN](plans/agents-critical-path/PLAN.md) · [REVIEW](plans/agents-critical-path/REVIEW.md) |
 | claude-foundation | [PLAN](plans/claude-foundation/PLAN.md) · [REVIEW](plans/claude-foundation/REVIEW.md) · [sources](plans/claude-foundation/sources.md) |
 | enterprise-docs-overhaul | [PLAN](plans/enterprise-docs-overhaul/PLAN.md) · [GAP_ANALYSIS](plans/enterprise-docs-overhaul/GAP_ANALYSIS.md) |
+| eval-evidence-integrity | [PLAN](plans/eval-evidence-integrity/PLAN.md) · [REVIEW](plans/eval-evidence-integrity/REVIEW.md) |
+| orbital-drift-alignment | [PLAN](plans/orbital-drift-alignment/PLAN.md) |
 | real-data-activation | [PLAN](plans/real-data-activation/PLAN.md) · [REVIEW](plans/real-data-activation/REVIEW.md) |
 
 ## Per-package docs

@@ -6,6 +6,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — eval evidence integrity: branch protection ADR, gate-integrity fix, M8 execution proposal
+
+A peer review of an eval-tool test-matrix readiness brief (`docs/plans/eval-evidence-integrity/REVIEW.md`)
+found two findings that outweighed everything the reviewed brief led with: `main` carries no
+branch protection at all (verified live against the GitHub API), so every gate this
+repository runs is advisory at the merge boundary; and the M8 (Composability) matrix
+dimension credits a component for appearing in a validated pipeline config, not for
+executing — one credited cell (`echo_exact_match`'s declared `judge: mock`) is invoked zero
+times, proven by instrumentation.
+
+- **[ADR 0037](docs/decisions/0037-branch-protection-under-a-single-maintainer.md)** records
+  the decision to enable required status checks on `main` without a Code-Owner review
+  requirement — the repository's sole collaborator is also its sole CODEOWNER, and GitHub
+  forbids self-approval, so enabling Code-Owner review would make every PR permanently
+  unmergeable. ADR 0005's enablement checklist item is updated to reference it. The actual
+  GitHub settings change is a human, out-of-band action, not part of this change.
+- **Fixed a real gate-integrity gap**: all seven generated `quality-gate.sh` coverage stages
+  passed no `--cov-config`, so a `COVERAGE_RCFILE` environment variable could point coverage.py
+  at a permissive external rc file (`fail_under = 0`, a broad `exclude_lines`) and silently
+  inflate measured coverage — the same evasion class `harden-quality-gate-integrity` (F-054)
+  exists to close, one instance wider than that change's own audit found ("6 of 7", corrected
+  to 7 of 7 here: root's own `do_coverage()` was never exempt — the exemption belonged to a
+  different stage, `do_extra()`'s F-031 scripts gate). Fixed with an explicit,
+  generation-time-literal `--cov-config=pyproject.toml` (coverage.py prioritises an explicit
+  config over the env var) plus a warn-then-unset `COVERAGE_RCFILE` guard mirroring the
+  existing `PYTEST_ADDOPTS` guard. Proven with a new positive-control test injecting a real
+  rogue rc file into a real subprocess and confirming the low-coverage fixture still fails.
+  All seven `quality-gate.sh` files regenerated.
+- **New OpenSpec change `prove-m8-execution`** (`openspec/changes/prove-m8-execution/`)
+  proposes an execution ledger (patching the registry's single construction choke point)
+  that credits M8 only when a component's protocol method is observed to run, plus `client=`
+  dependency-injection seams on `OpenAIJudge`/`AnthropicJudge` mirroring `ModelTarget`'s
+  existing seam — without which a matrix pipeline naming a network judge alongside an
+  `llm_judge` scorer attempts real egress from CI and still reports green, because the engine
+  converts a connection error into a `0.0`-valued score rather than raising (verified by
+  execution). Not yet implemented; landing tracked in
+  `docs/plans/eval-evidence-integrity/PLAN.md`.
+- **Housekeeping**: archived two long-landed OpenSpec changes that were still marked
+  `proposed` (`add-panel-judge`/F-059, `add-stateful-outcome-evaluation`/F-060 — both merged
+  2026-08-21); corrected a stale "PR #163 open" claim, a stale integration-marker-coverage
+  claim in `AGENTS.md`, and two stale `NEXT_STEPS.md` items (a registry-drift claim already
+  refuted by the F-058 AST extractor, and the "6 of 7" count above); filed
+  `docs/e2e-matrix/ERRATA.md` recording that the committed e2e-matrix artifact's provenance
+  stamp does not match the commit it claims (`git show` at that SHA renders a different
+  provenance block entirely) and that its test counts regressed (1627→995) in the same commit
+  that introduced the mismatched stamp; added the previously-unlisted `orbital-drift-alignment`
+  plan to `docs/README.md`'s Plans index.
+
 ### Added — `make pre-pr` and the `pre-pr-gate` skill
 
 An automation-opportunity scan of the god-file-decomposition session above found that

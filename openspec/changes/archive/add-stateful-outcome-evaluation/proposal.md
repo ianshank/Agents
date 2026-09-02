@@ -1,6 +1,6 @@
 # Change: add-stateful-outcome-evaluation
 
-**Status:** proposed · **Date:** 2026-08-05 · **Author track:** `claude/` agent lane
+**Status:** implemented (archived; landed `b709ae1`) · **Date:** 2026-08-05 · **Author track:** `claude/` agent lane
 **Motivated by:** `docs/plans/agent-eval-coverage/REVIEW.md`
 **Authorised by:** [ADR 0031](../../../docs/decisions/0031-additive-core-model-extension-for-agent-evaluation.md)
 **Depends on:** `add-repeat-reliability-metrics` (reset/isolation is defined per attempt)

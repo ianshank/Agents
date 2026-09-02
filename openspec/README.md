@@ -29,6 +29,12 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
+- [`changes/prove-m8-execution/`](changes/prove-m8-execution/) — *proposed.* The M8
+  (Composability) matrix dimension credits a component for appearing in a validated pipeline
+  config, not for executing — one credited cell is provably invoked zero times. Replaces
+  config-presence credit with an execution ledger, adds the two network judges' missing
+  `client=` seams, and widens M8 honestly across the 41 registered components once the
+  mechanism means something. Motivated by `docs/plans/eval-evidence-integrity/REVIEW.md`.
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
   *proposed.* The system has strong internal validation and no external evidence. Replaces the
   rejected "add-business-readiness-wedge" (which would have pulled a public
@@ -38,19 +44,9 @@ before that guard existed.
   pending archive.* Answers the external analysis's "judge calibration: Not Covered" grade,
   which is refuted — Cohen's κ with a statistical-power floor already ships — and scopes what
   is genuinely missing on top of it. Claims F-057.
-- [`changes/add-panel-judge/`](changes/add-panel-judge/) — *proposed.* A `panel` judge: one
-  registered component fanning an evaluation out to N member judges and aggregating under an
-  explicit strategy, surfacing disagreement instead of averaging it away and abstaining
-  rather than guessing. Specifies per-member budget accounting (a naive panel under-charges
-  `judge_budget` by factor N) and the calibration obligations — panel κ, pairwise member
-  redundancy κ, named-artifact gating — that keep a council advisory until it earns trust.
-  Aligned with `extend-judge-calibration`.
 - [`changes/add-repeat-reliability-metrics/`](changes/add-repeat-reliability-metrics/) —
   *implemented, pending archive.* `pass^k` over k independent attempts per item. Depends on
   `add-agent-trajectory-evaluation` (landed); authorised by ADR 0031. Claims F-056.
-- [`changes/add-stateful-outcome-evaluation/`](changes/add-stateful-outcome-evaluation/) —
-  *proposed.* Evaluating end-state rather than final text. Depends on
-  `add-repeat-reliability-metrics`, which defines per-attempt reset/isolation.
 - [`changes/add-production-eval-flywheel/`](changes/add-production-eval-flywheel/) —
   **blocked.** Ingesting production traces back into the golden dataset. Blocked on a
   CHARTER §3 ratified amendment plus its own ADR — §3 lists "a general observability
@@ -72,6 +68,8 @@ Landed; kept for provenance. Each carries its F-ID and the commit it landed in.
 | [`changes/archive/test-skill-validator-library/`](changes/archive/test-skill-validator-library/) | — | `8a8e25c` |
 | [`changes/archive/add-openspec-implementation-review/`](changes/archive/add-openspec-implementation-review/) | — | `3f6bd6c` |
 | [`changes/archive/add-foundation-reviewer-charters/`](changes/archive/add-foundation-reviewer-charters/) | — | `537d1f2` |
+| [`changes/archive/add-panel-judge/`](changes/archive/add-panel-judge/) | F-059 | `955bc9c919` |
+| [`changes/archive/add-stateful-outcome-evaluation/`](changes/archive/add-stateful-outcome-evaluation/) | F-060 | `b709ae1903` |
 
 ## Removing this spike
 
