@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 import pathlib
+import socket
 import sys
 import types
+from unittest import mock
 
 import pytest
 from hypothesis import HealthCheck, settings
@@ -114,3 +116,44 @@ def fake_braintrust(monkeypatch):
         return mod
 
     return install
+
+
+# --------------------------------------------------------------------------- #
+# Non-loopback egress guard for the M8 pipeline suite.
+# --------------------------------------------------------------------------- #
+@pytest.fixture(autouse=True)
+def matrix_offline_egress_guard(request: pytest.FixtureRequest):
+    """Fail a `matrix_offline`-marked test that opens a non-loopback socket.
+
+    Scoped by marker rather than applied suite-wide deliberately: patching
+    `socket.connect` for every test would very likely surface other tests that quietly
+    dial out. That is a real finding, but it is a different change -- widening this guard
+    belongs with the work that fixes whatever it catches, not here.
+
+    Active for the WHOLE marked test, which is what makes it useful for judges. Neither
+    `openai.OpenAI(...)` nor `anthropic.Anthropic(...)` opens a socket at construction --
+    both build a local HTTP-client wrapper, resolve an API key, and raise a client-side
+    auth error if none is found. The network attempt, when there is one, happens at the
+    first real request inside `evaluate()` -- during `.run()`, inside the engine's
+    scorer-exception handler, which would otherwise convert it into a `0.0`-valued
+    "scorer error: ..." ScoreResult and report green. Guarding the whole test catches it
+    at the socket instead of letting the engine swallow it.
+    """
+    if "matrix_offline" not in request.keywords:
+        yield
+        return
+
+    original_connect = socket.socket.connect
+    loopback = {"127.0.0.1", "::1", "localhost"}
+
+    def guarded_connect(self, address):
+        host = address[0] if isinstance(address, tuple) else address
+        if host not in loopback:
+            raise AssertionError(
+                f"matrix_offline test attempted network egress to {address!r}; an M8 "
+                "pipeline must run entirely offline (inject a client instead)"
+            )
+        return original_connect(self, address)
+
+    with mock.patch.object(socket.socket, "connect", guarded_connect):
+        yield
