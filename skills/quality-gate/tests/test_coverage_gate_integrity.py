@@ -272,7 +272,12 @@ def test_coverage_rcfile_override_does_not_evade_the_low_coverage_gate(tmp_path:
     """
     _coverage_fixture(tmp_path, test_body=_LOW_COVERAGE_TESTS)
     assert gen_gate.main(["--root", str(tmp_path)]) == 0
-    rogue_rc = tmp_path.parent / "rogue.coveragerc"
+    # Written under tmp_path itself, not tmp_path.parent (the shared base temp directory
+    # every test under this session gets a subdirectory of) -- COVERAGE_RCFILE takes an
+    # absolute path regardless, so this stays "external to the fixture project" (outside
+    # its src/tests/pyproject.toml layout) while keeping the file inside this test's own
+    # isolated tmp_path, immune to cross-test collisions under parallel execution.
+    rogue_rc = tmp_path / "rogue.coveragerc"
     rogue_rc.write_text(
         "[report]\nfail_under = 0\nexclude_lines =\n    .*\n",
         encoding="utf-8",
