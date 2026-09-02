@@ -29,6 +29,7 @@ from contextlib import contextmanager
 from typing import Any
 from unittest.mock import patch
 
+from eval_harness import plugins as _plugins_module
 from eval_harness.core.interfaces import (
     DatasetSource,
     Judge,
@@ -92,6 +93,30 @@ def _validate_protocol_methods() -> None:
 
 
 _validate_protocol_methods()
+
+
+def _shadowed_registries() -> list[str]:
+    """Registry kinds carrying an INSTANCE-level ``create`` that shadows the class method.
+
+    ``probe()`` patches ``Registry.create`` on the class. An instance attribute wins over a
+    class attribute, so a registry object with ``create`` in its own ``__dict__`` routes
+    around the patch entirely -- its components execute normally and the ledger records
+    nothing. That is a silent under-count, the single failure mode this module exists to
+    prevent, so it is raised rather than tolerated.
+
+    Not hypothetical: ``monkeypatch.setattr(JUDGES, "create", ...)`` reads the *inherited*
+    bound method as the old value and, on undo, writes it back as an instance attribute --
+    leaving exactly this shadow behind. ``unittest.mock.patch.object`` records that the
+    attribute was not local and ``delattr``s instead, which is why it is the right tool for
+    patching a registry instance (``tests/test_budgeted_judge.py`` carries the worked case).
+
+    Registries are discovered dynamically from ``plugins``' namespace by ``isinstance``, the
+    same idiom ``tests/test_matrix_eval_tools.py`` uses, so a seventh registry is covered
+    without editing this function.
+    """
+    return sorted(
+        obj.kind for obj in vars(_plugins_module).values() if isinstance(obj, Registry) and "create" in vars(obj)
+    )
 
 
 class ExecutionLedger:
@@ -164,7 +189,20 @@ def probe() -> Iterator[ExecutionLedger]:
     An unknown registry kind raises rather than being silently ignored: a seventh registry
     added to ``plugins.py`` must extend ``_PROTOCOL_METHODS`` deliberately, exactly as
     ``STATE_ADAPTERS`` had to extend the matrix policy when it landed.
+
+    Entry is refused outright while any registry carries an instance-level ``create``
+    shadow (see :func:`_shadowed_registries`), because such a shadow makes the probe report
+    *fewer* executions than really happened -- a false vacuity finding, which is worse than
+    no finding at all.
     """
+    shadowed = _shadowed_registries()
+    if shadowed:
+        raise AssertionError(
+            f"probe(): registries {shadowed} carry an instance-level 'create' that shadows "
+            "Registry.create, so this probe would route around them and under-count. Some "
+            "earlier test patched a registry instance and left a residue -- use "
+            "unittest.mock.patch.object, not monkeypatch.setattr, on a registry object."
+        )
     ledger = ExecutionLedger()
     original_create = Registry.create
 

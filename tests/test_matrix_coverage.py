@@ -276,6 +276,104 @@ def test_an_empty_census_never_satisfies_the_floors_vacuously() -> None:
     assert problems and "census is empty" in problems[0]
 
 
+def test_pipeline_vacuous_catches_a_declared_but_uninvoked_component() -> None:
+    """The execution-ledger guard must fail a pipeline that names a component it never runs.
+
+    This is the `echo_exact_match` defect in miniature: a pipeline declaring
+    `judge: mock` while running no judge-backed scorer. Asserting it here means the
+    guard is itself tested, not merely relied upon.
+    """
+    config = {
+        "schema_version": "1.0",
+        "run": {"name": "vacuity-probe", "seed": 1},
+        "dataset": {"type": "inline", "params": {"items": [{"id": "v1", "inputs": {"q": "x"}}]}},
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "judge": {"type": "mock"},
+    }
+    # Everything ran EXCEPT the judge — the exact shape the ledger reports for a
+    # pipeline whose declared judge is never reached by any scorer.
+    executed = {
+        "vac": {
+            "dataset": {"inline"},
+            "target": {"echo"},
+            "scorer": {"exact_match"},
+        }
+    }
+    vacuous = mc.pipeline_vacuous({"vac": config}, executed)
+    assert vacuous == {"vac": {"judge": {"mock"}}}
+    assert "declares judge/mock but never invokes it" in mc.format_vacuous(vacuous)
+
+
+def test_pipeline_vacuous_is_per_pipeline_not_a_repo_wide_union() -> None:
+    """A union check would not catch the defect this guard exists for.
+
+    `judge/mock` IS invoked — by the `llm_judge` pipeline. A guard asking "was
+    judge/mock executed anywhere in PIPELINES?" answers yes and stays silent about a
+    sibling pipeline that only declares it. Pinning the per-pipeline scoping here stops
+    a future refactor from quietly widening the diff back into a union.
+    """
+    declaring_only = {
+        "schema_version": "1.0",
+        "run": {"name": "declares-only", "seed": 1},
+        "dataset": {"type": "inline", "params": {"items": [{"id": "d1", "inputs": {"q": "x"}}]}},
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "judge": {"type": "mock"},
+    }
+    invoking = {
+        "schema_version": "1.0",
+        "run": {"name": "invokes", "seed": 1},
+        "dataset": {"type": "inline", "params": {"items": [{"id": "i1", "inputs": {"q": "x"}}]}},
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "llm_judge", "params": {"name": "q"}}],
+        "judge": {"type": "mock"},
+    }
+    executed = {
+        "declares_only": {"dataset": {"inline"}, "target": {"echo"}, "scorer": {"exact_match"}},
+        "invokes": {
+            "dataset": {"inline"},
+            "target": {"echo"},
+            "scorer": {"llm_judge"},
+            "judge": {"mock"},
+        },
+    }
+    vacuous = mc.pipeline_vacuous({"declares_only": declaring_only, "invokes": invoking}, executed)
+    # The pipeline that invoked the judge is clean; the one that only declared it is not.
+    assert vacuous == {"declares_only": {"judge": {"mock"}}}
+
+
+def test_probe_refuses_to_run_under_an_instance_level_create_shadow() -> None:
+    """A registry shadow makes the ledger under-count silently; probe() must refuse.
+
+    This reproduces the exact residue that defeated the ledger for three commits:
+    `monkeypatch.setattr(JUDGES, "create", ...)` reads the *inherited* bound method as the
+    old value and, undoing, writes it back as an INSTANCE attribute. `probe()` patches
+    `Registry.create` on the class, and an instance attribute wins — so every judge routed
+    around the ledger, judge-backed pipelines scored correctly, and the vacuity guard
+    reported a judge that had in fact run. A false vacuity finding is worse than none.
+
+    Two assertions, because both halves are load-bearing: that monkeypatch really leaves
+    the shadow (so the guard is not defending against an imaginary defect), and that
+    `probe()` raises rather than proceeding. `tests/test_budgeted_judge.py` uses
+    `mock.patch.object` for this reason and asserts it leaves no shadow.
+    """
+    from eval_harness.plugins import JUDGES
+    from tests._m8_probe import probe
+
+    assert "create" not in vars(JUDGES), "precondition: no pre-existing shadow"
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        monkeypatch.setattr(JUDGES, "create", lambda *a, **k: None)
+        monkeypatch.undo()
+        assert "create" in vars(JUDGES), "monkeypatch.setattr on an inherited attr leaves a shadow"
+        with pytest.raises(AssertionError, match=r"instance-level 'create' that shadows"), probe():
+            pass
+    finally:
+        vars(JUDGES).pop("create", None)
+    assert "create" not in vars(JUDGES), "this test must leave no shadow of its own"
+
+
 def _synthetic_class(**overrides: object) -> mc.MatrixClass:
     defaults: dict[str, object] = {
         "module": "test_matrix_x.py",

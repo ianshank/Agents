@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 
 import pytest
 
@@ -190,9 +191,20 @@ def test_engine_attaches_the_client_through_the_wrapper_to_the_inner_judge(monke
     asserts the real path — engine → wrapper → inner — so the ordering cannot silently
     regress.
 
-    The recorder is injected by monkeypatching `JUDGES.create` rather than registering a
+    The recorder is injected by patching `JUDGES.create` rather than registering a
     double, because a third test-double registration would perturb the public-surface and
     plugin-registry baselines and the matrix census.
+
+    `mock.patch.object` rather than `monkeypatch.setattr`, and the difference is not
+    stylistic. `create` lives on the *class*, so `monkeypatch` reads the inherited bound
+    method as the "old value" and, on undo, writes it back as an INSTANCE attribute that
+    outlives this test. Nothing here notices; but `JUDGES.create` then permanently shadows
+    `Registry.create`, so any later class-level patch of `Registry.create` silently misses
+    every judge. That is exactly how this residue defeated the M8 execution ledger
+    (`tests/_m8_probe.py`) -- judge-backed pipelines scored correctly while the ledger
+    recorded zero judge calls, and only when this module ran first. `mock.patch.object`
+    records that the attribute was not local and `delattr`s on exit, leaving no shadow.
+    `tests/_m8_probe.py::probe` now refuses to run if any registry carries one.
     """
     from eval_harness.plugins import JUDGES
 
@@ -205,7 +217,6 @@ def test_engine_attaches_the_client_through_the_wrapper_to_the_inner_judge(monke
             self.attached = client
 
     inner = _Recorder()
-    monkeypatch.setattr(JUDGES, "create", lambda *a, **k: inner)
 
     # Spy on the WRAPPER. Asserting only that `inner` received the client cannot
     # distinguish the orderings — under the old one the engine attached to the raw judge
@@ -218,6 +229,8 @@ def test_engine_attaches_the_client_through_the_wrapper_to_the_inner_judge(monke
         through_wrapper.append(client)
         return original(self, client)
 
+    # `attach_client` IS local to BudgetedJudge, so monkeypatch restores it correctly;
+    # only the inherited `JUDGES.create` needs `mock.patch.object` (see the docstring).
     monkeypatch.setattr(BudgetedJudge, "attach_client", _spy)
 
     from typing import cast
@@ -225,8 +238,13 @@ def test_engine_attaches_the_client_through_the_wrapper_to_the_inner_judge(monke
     from eval_harness.langfuse_client import LangfuseClient
 
     sentinel = cast(LangfuseClient, object())
-    engine = EvalEngine.from_config(_engine_cfg(judge_budget=_budget(cap=5.0)), langfuse_client=sentinel)
+    with patch.object(JUDGES, "create", lambda *a, **k: inner):
+        engine = EvalEngine.from_config(_engine_cfg(judge_budget=_budget(cap=5.0)), langfuse_client=sentinel)
 
+    assert "create" not in JUDGES.__dict__, (
+        "patching JUDGES.create must leave no instance-level shadow of Registry.create; "
+        "a shadow silently defeats every class-level patch, including tests/_m8_probe.py"
+    )
     assert isinstance(engine.judge, BudgetedJudge), "precondition: the judge is wrapped"
     assert engine.judge._inner is inner
     assert through_wrapper == [sentinel], "the engine must attach through the wrapper, not around it"

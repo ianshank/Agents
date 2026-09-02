@@ -1454,6 +1454,10 @@ PIPELINES: dict[str, dict] = {
         "scorers": [
             {"type": "exact_match", "params": {"name": "em"}},
             {"type": "contains", "params": {"name": "c", "substring": "hello"}},
+            # Exercises the declared judge. Without a judge-backed scorer the judge
+            # below is inert config, which is exactly the vacuous credit the execution
+            # ledger now refuses.
+            {"type": "llm_judge", "params": {"name": "judged"}},
         ],
         "judge": {"type": "mock", "params": {"default_score": 0.95}},
         "sinks": [{"type": "json_file", "params": {"path": "PLACEHOLDER.json"}}],
@@ -1498,11 +1502,18 @@ PIPELINES: dict[str, dict] = {
                     "components": [
                         {"type": "exact_match", "weight": 2.0},
                         {"type": "contains", "weight": 1.0, "params": {"substring": "hello"}},
+                        # A judge-backed child alongside programmatic ones: this is the
+                        # case CompositeScorer.uses_judge()'s any(...) exists to handle,
+                        # and no M8 pipeline exercised it before.
+                        {"type": "llm_judge", "weight": 1.0},
                     ],
                 },
             }
         ],
-        "judge": {"type": "mock"},
+        # A distinctive score, not the 1.0 default: with every child at 1.0 the composite
+        # mean stays 1.0 whether or not the judge child contributes, so the value
+        # assertion could not tell a working judge child from a missing one.
+        "judge": {"type": "mock", "params": {"default_score": 0.5}},
         "sinks": [{"type": "console"}],
     },
     "trajectory": {
@@ -1539,7 +1550,8 @@ PIPELINES: dict[str, dict] = {
             {"type": "trajectory_loop_detection", "params": {}},
             {"type": "trajectory_recovery", "params": {}},
         ],
-        "judge": {"type": "mock"},
+        # No judge: every trajectory scorer grades tool-call structure deterministically
+        # and none reads ctx.judge. Declaring one here credited a judge that never ran.
         "sinks": [{"type": "json_file", "params": {"path": "PLACEHOLDER.json"}}],
         "gate": {
             "rules": [
@@ -1573,7 +1585,8 @@ PIPELINES: dict[str, dict] = {
             {"type": "trajectory_in_order", "params": {}},
             {"type": "contains", "params": {"name": "mentions_widget", "substring": "widget 42"}},
         ],
-        "judge": {"type": "mock"},
+        # No judge, same reasoning as the `trajectory` pipeline above: neither a
+        # trajectory scorer nor `contains` is judge-backed.
         "sinks": [{"type": "console"}],
     },
     "repeated_attempts": {
@@ -1669,6 +1682,9 @@ class TestM8Composability:
         assert result.aggregate["em"].pass_rate == 1.0
         # contains("hello") matches item m1 but not m2
         assert result.aggregate["c"].mean == 0.5
+        # The judge-backed scorer carries the mock judge's configured score, proving the
+        # declared judge is genuinely wired through ctx and not merely constructed.
+        assert result.aggregate["judged"].mean == 0.95
 
         # Verify the sink wrote the file
         assert out_json is not None and out_json.exists()
@@ -1683,7 +1699,10 @@ class TestM8Composability:
     def test_m8_pipeline_with_composite_scorer(self) -> None:
         """Composite scorer composes children inside the engine pipeline."""
         _, result, _, _ledger = self._run("weighted")
-        assert result.aggregate["combo"].mean == 1.0
+        # (exact_match 1.0 x2 + contains 1.0 x1 + llm_judge 0.5 x1) / 4 == 0.875.
+        # Only reachable if the judge-backed child actually ran and was weighted right;
+        # with the judge's default 1.0 score this would be 1.0 either way.
+        assert result.aggregate["combo"].mean == 0.875
 
     def test_m8_trajectory_pipeline(self, tmp_path: Path) -> None:
         """All 7 trajectory scorers over the shipped trajectory-emitting callable,

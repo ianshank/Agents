@@ -922,6 +922,13 @@ def _render_tail_sections(
             "",
             "## M8 pipelines — kinds exercised",
             "",
+            "Every component below is **execution-verified**, not merely declared: each M8",
+            "pipeline runs inside `tests/_m8_probe.py`'s ledger, and",
+            "`_assert_declared_components_ran` fails the pipeline if it names a component",
+            "whose protocol method never ran. The check is per pipeline, not a repo-wide",
+            "union — a union would credit a component here because some *other* pipeline",
+            "invoked it, which is the vacuous credit the ledger exists to refuse.",
+            "",
             "| kind | canonical components exercised in ≥1 pipeline |",
             "|---|---|",
         ]
