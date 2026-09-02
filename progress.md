@@ -1,6 +1,114 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 015 — 2026-09-02
+
+### Peer review
+
+- Reviewed an eval-tool test-matrix readiness brief prepared earlier in the same session
+  against the tree, using the `skills/openspec-peer-review` two-pass protocol. Two findings
+  displaced the brief's own headline recommendation: `main` carries no branch protection
+  (verified live against the GitHub API), and the M8 (Composability) matrix dimension
+  credits a component for appearing in a validated pipeline config, not for executing — one
+  credited cell (`echo_exact_match`'s declared `judge: mock`) is invoked zero times, proven
+  by instrumentation. Full findings and the rewritten plan: `docs/plans/eval-evidence-integrity/{REVIEW,PLAN}.md`.
+
+### Changes
+
+- `docs/decisions/0037-branch-protection-under-a-single-maintainer.md`: new ADR recording the
+  required-status-checks decision and why Code-Owner review must stay deferred (sole
+  collaborator is also sole CODEOWNER; GitHub forbids self-approval). ADR 0005's enablement
+  checklist updated to reference it.
+- `skills/quality-gate/scripts/gategen/render.py`: `_coverage_command` now emits an explicit
+  `--cov-config=pyproject.toml` literal and a warn-then-unset `COVERAGE_RCFILE` guard,
+  closing a real gate-integrity gap present in all seven generated `quality-gate.sh` files
+  (corrected from `NEXT_STEPS.md`'s "6 of 7" to 7 of 7 — root's own `do_coverage()` was never
+  exempt). `skills/quality-gate/tests/test_coverage_gate_integrity.py` gained a real
+  positive-control test injecting a rogue rc file into a real subprocess. All seven
+  `quality-gate.sh` files regenerated.
+- `openspec/changes/prove-m8-execution/`: new, not-yet-implemented OpenSpec change proposing
+  an execution ledger for M8 plus `client=` DI seams on `OpenAIJudge`/`AnthropicJudge`.
+- Archived `openspec/changes/{add-panel-judge,add-stateful-outcome-evaluation}/` (both merged
+  2026-08-21, F-059/F-060) — both had been left marked `proposed`.
+- Doc corrections: `docs/roadmap/epic-1-eval-matrix-and-reliability.md` (stale "PR #163
+  open"), `AGENTS.md` (stale integration-marker-coverage claim), `NEXT_STEPS.md` (two stale
+  items), `docs/e2e-matrix/ERRATA.md` (new — the committed e2e-matrix artifact's provenance
+  stamp does not match the commit it claims, and its test counts regressed 1627→995 in the
+  same commit), `docs/README.md` (added the previously-unlisted `orbital-drift-alignment`
+  plan).
+
+### Validation evidence
+
+- `python scripts/validate.py --tier fast --strict-git`: 59/59.
+- `python tests/test_matrix_coverage.py --check`: fresh (untouched by this session).
+- `python scripts/check_protected_changes.py --files <full changed set>`: OK — no
+  eval-defining paths changed (every file this session touched is outside
+  `PROTECTED_PATTERNS`).
+- `python scripts/check_charter_drift.py` / `check_charter_invariants.py`: OK.
+- `python scripts/check_guard_reachability.py --json`: `passed: true`.
+- `python scripts/check_skill_script_drift.py`: OK, 19/19 copies match.
+- `python scripts/check_size_budget.py`: OK (pre-existing warnings only).
+- The OpenSpec change-index guard (`docs.yml`'s exact script, run locally): OK, 5 in flight,
+  12 archived.
+- `bash scripts/quality-gate.sh coverage` (real, unmodified project): 98.43% (floor 96%),
+  1960 passed / 33 skipped.
+- `python -m pytest skills/quality-gate/tests/ -q`: 82 passed, including the new
+  `COVERAGE_RCFILE` positive control proving the fix against a real rogue rc file.
+
+### Follow-up: objective peer review of the PR itself (`/code-review high`)
+
+Requested by the user as a second pass, before merge. Findings and fixes:
+
+- **PR #175's `relative-link check (advisory)` CI job caught a real defect**: archiving
+  `add-stateful-outcome-evaluation` via `git mv` added a directory level, breaking its
+  `../../../docs/decisions/0031-...` link (needed a fourth `../`). Fixed and pushed
+  (`ae9b54e`); re-verified with CI's exact checker script — 0 broken relative links
+  repo-wide. `add-panel-judge`'s archived files carry no relative links and were unaffected.
+- **Code review found one real consistency gap**: `scripts/quality-gate.sh`'s hand-maintained
+  `do_extra()` scripts-coverage stage had the `PYTEST_ADDOPTS` guard but not the new
+  `COVERAGE_RCFILE` one, despite its own comment requiring hand-sync. Not exploitable (its
+  explicit `--cov-config=scripts/.coveragerc` already wins), but an observability gap. Fixed,
+  and verified by directly exercising the guard logic in isolation (my first attempt at this
+  had a test-harness mistake — an accidental `2>/dev/null` on the wrong command masked the
+  guard firing; caught and corrected before drawing any conclusion from it).
+- **DRY follow-up**: the two now near-identical guard functions
+  (`_pytest_addopts_guard`/`_coverage_rcfile_guard`) were factored into one shared
+  `_warn_then_unset_guard(var, reason)` helper. Proven behavior-preserving by direct
+  byte-for-byte comparison of both functions' emitted shell lines before and after, then by
+  regenerating all seven `quality-gate.sh` files (six regenerated byte-identical to what was
+  already committed; only the file with the `do_extra` fix changed, as expected).
+- **Audited every other hand-maintained `do_extra()` for the same gap**: `claude-foundation`
+  (`foundation_tools.validate`/`.scan`) and `experiments/backend-validation`
+  (`backend_validation.cli preflight`) — neither invokes pytest+coverage directly, so neither
+  needed the guard. Negative result, recorded rather than assumed.
+- Re-ran `make check-all` (exit 0, 6/6 `[quality-gate] PASS`) and `make pre-pr` (exit 0,
+  "all checks passed", including `architecture-drift-guard`, `skill_marketplace.py validate`,
+  `make determinism`, and the advisory `repo-invariant-review`) after every change in this
+  follow-up.
+- Checked `.gitignore`, `.dockerignore`, `HARNESS_SPEC.md`, root `README.md`, and
+  `docs/decisions/README.md` for staleness given this session's diff: none needed changes —
+  no new generated-artifact patterns, no architecture edge, no ADR-count claim anywhere to go
+  stale. `.gitleaks.toml` needs no update (no new fixture paths); manual secret-pattern scan
+  of the full branch diff found nothing (`gitleaks` binary unavailable in this environment).
+  `python scripts/validate_skill.py --skill skills/quality-gate --tier structural,behavioral`:
+  OK, both tiers.
+- Skill/hook opportunity surfaced by this session's own work, not built here: the mechanical
+  archive-and-relink defect I just reproduced by hand is the exact failure mode
+  `NEXT_STEPS.md`'s "openspec-archive mechanical helper — reconsidered, not rejected" item
+  already names (git mv + relative-link fixup + index update, run automatically). This
+  session is itself a second data point for building it.
+
+### Next
+
+- Land `prove-m8-execution` (protected paths; needs `eval-change-approved`): the execution
+  ledger, the `echo_exact_match` fix, breadth to 19 more components, and the two judge DI
+  seams — see its `tasks.md` for the PR split.
+- Enable branch protection per ADR 0037 (human, out-of-band).
+- Phases 5-10 of `docs/plans/eval-evidence-integrity/PLAN.md`: live-provider smokes, the
+  judge-gating authorisation fix, the golden/pairwise corpus, e2e-matrix provenance repair,
+  and the fleet extension.
+
+---
 ## Session 014 — 2026-08-23
 
 ### Features

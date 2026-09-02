@@ -38,7 +38,9 @@ do_coverage() {
   if [ -n "${COV_FAIL_UNDER:-}" ]; then echo "quality-gate: COV_FAIL_UNDER is ignored; targets are fixed at generation time" >&2; fi
   if [ -n "${PYTEST_ADDOPTS:-}" ]; then echo "quality-gate: PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" >&2; fi
   unset PYTEST_ADDOPTS
-  "$PYTHON" -m pytest --cov="eval_harness" --cov-branch --cov-report=term-missing --cov-fail-under=96
+  if [ -n "${COVERAGE_RCFILE:-}" ]; then echo "quality-gate: COVERAGE_RCFILE is ignored; the coverage config is fixed at generation time" >&2; fi
+  unset COVERAGE_RCFILE
+  "$PYTHON" -m pytest --cov="eval_harness" --cov-config=pyproject.toml --cov-branch --cov-report=term-missing --cov-fail-under=96
 }
 
 do_all() {
@@ -70,11 +72,19 @@ main() {
 do_extra() {
   log "scripts-coverage"
   # Operational-scripts gate (F-031): floor comes from scripts/.coveragerc, not a literal here.
-  # PYTEST_ADDOPTS guard (harden-quality-gate-integrity): this stage invokes pytest directly,
-  # below the marker, so the generator cannot inject the guard -- kept in sync by hand with
-  # the same shell idiom gategen.render._pytest_addopts_guard() emits above the marker.
+  # PYTEST_ADDOPTS/COVERAGE_RCFILE guards (harden-quality-gate-integrity;
+  # docs/plans/eval-evidence-integrity/ for the RCFILE guard): this stage invokes pytest
+  # directly, below the marker, so the generator cannot inject the guards -- kept in sync by
+  # hand with the same shell idiom gategen.render._pytest_addopts_guard()/
+  # _coverage_rcfile_guard() emit above the marker. The explicit --cov-config= below already
+  # wins over a live COVERAGE_RCFILE per coverage.py's own config resolution, so this guard is
+  # observability, not the fix -- its value is printing the same warning every other coverage
+  # stage in this repo now prints, so a leaked COVERAGE_RCFILE isn't silently unremarked upon
+  # at exactly this one stage.
   if [ -n "${PYTEST_ADDOPTS:-}" ]; then echo "quality-gate: PYTEST_ADDOPTS is ignored; this stage is a gate and has no opt-out" >&2; fi
   unset PYTEST_ADDOPTS
+  if [ -n "${COVERAGE_RCFILE:-}" ]; then echo "quality-gate: COVERAGE_RCFILE is ignored; the coverage config is fixed at generation time" >&2; fi
+  unset COVERAGE_RCFILE
   "$PYTHON" -m pytest tests --cov=scripts --cov-config=scripts/.coveragerc --cov-report=term-missing
 }
 

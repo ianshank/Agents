@@ -17,4 +17,4 @@ Core evaluation capabilities, trajectory evaluation, matrix coverage completenes
      bracketing each attempt `reset → snapshot(before) → target.run → snapshot(after) →
      evaluate` under a lock; `state_transition`/`policy_violation` scorers; four local
      deterministic adapters (`in_memory`, `filesystem`, `sqlite`, `mock_http`).
-   - Landed as PR #163 — open, all CI green, review findings addressed, not yet merged.
+   - Landed as PR #163 (merged 2026-08-21).

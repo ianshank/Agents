@@ -54,3 +54,4 @@ changes course is a *new* ADR that supersedes the old one, not an edit.
 | [0034](0034-tool-version-lockstep.md) | Ruff/mypy pins stay hand-duplicated, and are drift-tested rather than templated |
 | [0035](0035-panel-judge.md) | PanelJudge: aggregate N member judges, abstain rather than guess |
 | [0036](0036-decompose-engine-and-agent-core-adapter.md) | Decompose `engine.py` and `agent_core_adapter` into focused modules |
+| [0037](0037-branch-protection-under-a-single-maintainer.md) | Branch protection under a single maintainer: required status checks, deferred Code-Owner review |

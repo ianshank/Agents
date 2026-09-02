@@ -123,7 +123,13 @@ start, per domain:
 
 - [ ] Independent review of the decision layers and the protected-path classification feed.
 - [ ] Confirm the regression gate and protected-path guard are *required* branch-protection
-      checks (mechanical ground truth must hold before the gate is consulted).
+      checks (mechanical ground truth must hold before the gate is consulted). Still
+      unchecked as of 2026-09-02: `main` carries no branch protection at all, verified live
+      against the GitHub API during the `docs/plans/eval-evidence-integrity/` review. The
+      path to closing this box is now recorded in
+      [ADR 0037](0037-branch-protection-under-a-single-maintainer.md), which also names why
+      the companion Code-Owner-review layer must stay deferred until a second maintainer
+      exists — that box is not part of what ADR 0037 unblocks.
 - [x] Implement the merge-time record seeding (`agent_core/merge_seed.py`, Session 006) and
       define the audit-sampling cadence (see "Audit-label accumulation strategy" above).
 - [ ] Accumulate enough HUMAN_AUDIT labels per domain to leave cold start.
