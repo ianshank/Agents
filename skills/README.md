@@ -19,7 +19,7 @@ the marketplace itself doesn't provide.
 | [`eval-corpus-forge`](eval-corpus-forge/) | 1.0.0 | Build, validate, and package reusable evaluation datasets |
 | [`model-bench`](model-bench/) | 1.0.0 | Benchmark and A/B-test multiple LLMs on one dataset |
 | [`project-setup`](project-setup/) | 1.1.0 | Generate a deterministic Makefile from a project's detected toolchain |
-| [`quality-gate`](quality-gate/) | 1.1.0 | Generate a deterministic lint + type + test + coverage gate script |
+| [`quality-gate`](quality-gate/) | 1.2.0 | Generate a deterministic lint + type + test + coverage gate script |
 | [`deploy`](deploy/) | 1.0.0 | Generate a safety-railed deployment script (dry-run / confirm / rollback) |
 | [`dataset-lint`](dataset-lint/) | 1.0.0 | Validate eval datasets for structure, duplicate IDs, and encoding |
 | [`hierarchical-recursive-brainstorm`](hierarchical-recursive-brainstorm/) | 1.0.0 | Decompose a topic into a pruned, recursively-expanded hierarchy and synthesize upward |

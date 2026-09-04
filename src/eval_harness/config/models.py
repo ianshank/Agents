@@ -7,7 +7,7 @@ the engine itself — defaults are declared on these models and overridable.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -44,6 +44,30 @@ class RunSettings(BaseModel):
             "Number of independent target.run(item) attempts per item. "
             "1 = legacy behaviour, byte-identical output (default). "
             ">1 computes pass@k/pass^k reliability metrics over k independent attempts."
+        ),
+    )
+    item_error_policy: Literal["raise", "record"] = Field(
+        default="raise",
+        description=(
+            "How the run treats an item whose target raises. 'raise' (the default) aborts the run "
+            "on the first such error — the historical sequential behaviour, now applied to the "
+            "parallel path too, which used to drop the item silently. 'record' instead keeps the "
+            "item as a visibly-failed ItemResult carrying the exception in TargetOutput.error plus "
+            "a failing item-execution score. This setting — never max_workers — decides failure "
+            "semantics: both execution paths honour it identically. fail_fast=True implies 'raise'. "
+            "Note that under 'record' the item's own scorers never ran, so each scorer's aggregate "
+            "covers fewer items than the run holds; GateConfig.allow_item_errors governs whether a "
+            "gate may still be evaluated over that reduced sample."
+        ),
+    )
+    item_error_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Score recorded for an item whose target raised, under item_error_policy='record'. "
+            "0.0 (default) counts the item as a failure in both mean and pass_rate. Raise it only "
+            "if a gate must treat an infrastructure failure differently from a wrong answer."
         ),
     )
 
@@ -214,6 +238,16 @@ class GateRule(BaseModel):
 
 class GateConfig(BaseModel):
     rules: list[GateRule] = Field(default_factory=list)
+    allow_item_errors: bool = Field(
+        default=False,
+        description=(
+            "Whether the gate may pass when items failed before scoring (item_error_policy="
+            "'record'). Default False: such an item produced no verdict for any scorer, so every "
+            "rule is evaluated over a smaller sample than the run holds, and a rule naming one of "
+            "those scorers would otherwise read a healthy rate over the survivors. Set True only "
+            "when a partial run is a result you are willing to gate on."
+        ),
+    )
 
 
 class ModelSpec(BaseModel):
@@ -236,6 +270,28 @@ class ComparisonConfig(BaseModel):
     baseline: str | None = None
     rank_by: str | None = None
     rank_metric: str = "mean"
+    # Confidence-aware ranking (ADR 0041). Both mirror ABCampaignConfig's fields so
+    # the two features share one honesty convention: a difference is never claimed
+    # below the power floor. Optional with declared defaults, so SCHEMA_VERSION is
+    # unchanged and a config predating them behaves exactly as it did.
+    min_sample: int = Field(
+        default=30,
+        ge=1,
+        description=(
+            "Minimum scored items a model needs before the ranking will claim anything about "
+            "it. Below this the verdict is 'cant_tell' rather than a winner, so a noise-level "
+            "difference on a small dataset is not reported as a result."
+        ),
+    )
+    wilson_z: float = Field(
+        default=1.96,
+        gt=0,
+        description=(
+            "Standard-normal multiplier for the per-model Wilson interval. 1.96 (default) is "
+            "roughly 95%. Applies to pass_rate only; a mean is not a proportion, so it is "
+            "reported with no interval rather than an invalid one."
+        ),
+    )
 
     @field_validator("rank_metric")
     @classmethod

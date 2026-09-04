@@ -41,6 +41,25 @@ any public disclosure. We aim to acknowledge reports within a few business days.
 - Findings that require a non-default, explicitly opt-in configuration that the
   documentation warns against.
 
+## The config trust boundary
+
+**An eval config is executable input, not data.** The `callable` target resolves
+`params.path` ("module:attribute") by importing that module and calling that
+attribute, so a config file can run code with the privileges of whoever runs the
+harness. Treat a config the way you would treat a shell script: read it before you
+run it, and do not run one you did not write.
+
+Three environment variables draw the boundary, and they live in the environment
+rather than in the config precisely because the config is the untrusted side:
+
+- `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST` — module prefixes a `callable` target may
+  import. **Unset means deny.** See
+  [ADR 0039](docs/decisions/0039-callable-target-allowlist.md).
+- `DATA_ROOT` — confines dataset reads to a root.
+- `OUTPUT_ROOT` — confines sink writes to a root, separately from reads.
+
+A configuration that escapes any of these is in scope for a report.
+
 ## Existing security posture
 
 Security is enforced continuously, not just on report:

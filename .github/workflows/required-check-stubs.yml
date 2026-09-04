@@ -1,0 +1,244 @@
+# Companion "skip" jobs for every check ADR 0037 nominates as a required status check.
+#
+# THE PROBLEM THIS SOLVES
+# A workflow that a `paths:` filter skips creates **no check run at all**. A required
+# status check with no run sits in "Expected -- waiting for status to be reported"
+# forever, and ADR 0037 deliberately does NOT enable Code-Owner review, so there is no
+# override path. Without the jobs below, a docs-only, `skills/`-only, `Makefile`-only or
+# `AGENTS.md`-only pull request becomes permanently unmergeable the moment branch
+# protection is switched on. Each job here reports the SAME check context as the real job
+# it stands in for and exits 0, so the context is always reported exactly once.
+#
+# WHY THIS IS ONE WORKFLOW WITH A GATE JOB, NOT A `paths-ignore:` MIRROR PER WORKFLOW
+# The textbook stub pattern is a companion workflow whose `paths-ignore:` repeats the real
+# workflow's `paths:`. It is wrong here, twice over:
+#
+#   1. `paths:` and `paths-ignore:` are not complements. GitHub runs a `paths:` workflow
+#      when *at least one* changed file matches, and a `paths-ignore:` workflow when *at
+#      least one* changed file does NOT match. A pull request touching `src/` **and**
+#      `docs/` therefore triggers both -- which is most pull requests in this repo. The
+#      stub would post a green `eval-harness py3.12` next to the real one, and duplicate
+#      check contexts are exactly the false-green hazard the namespacing in ADR 0040
+#      exists to remove. Re-introducing it here would be self-defeating.
+#   2. A mirrored list is a second copy that can drift, and a drift re-opens the hole.
+#
+# So the gate job below reads each real workflow's own `on.pull_request.paths:` block out
+# of the workflow file and evaluates it against this pull request's changed files. There
+# is exactly ONE list per workflow -- the real one -- and no mirror to keep in sync. A
+# stub runs if and only if the real workflow did not, so the real job and its stub can
+# never both run for the same pull request.
+#
+# MAINTENANCE
+# * Adding a workflow to the required-check set: add it to WORKFLOWS in the gate job, add
+#   a job below whose `name:` is byte-identical to the real job's rendered name, and gate
+#   it on the matching `needs.gate.outputs.*`.
+# * Renaming a real job's `name:` without renaming its stub silently breaks the pairing:
+#   the required context goes unreported on docs-only PRs (deadlock) while the stub posts
+#   a context nothing requires. The names below are the contract.
+# * If the gate job fails (an unparseable `paths:` block, a renamed workflow file), every
+#   stub is skipped and required checks stay unreported. That is deliberate fail-closed
+#   behaviour: a loud red gate is recoverable, a silent green stub is not.
+name: required-check stubs
+
+on:
+  # Every pull request, unfiltered -- the gate job is what decides, and it cannot decide
+  # for a workflow run that never starts. `labeled`/`unlabeled` mirror quality-gates.yml,
+  # whose protected-path guard re-runs when the `eval-change-approved` label changes.
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  # Read-only listing of this pull request's changed files. Nothing here writes.
+  pull-requests: read
+
+concurrency:
+  group: required-check-stubs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # Not a required check itself: it is the machinery, not a gate. Deliberately named so
+    # it cannot collide with any real job's context.
+    name: required-check stub gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      quality_gates: ${{ steps.decide.outputs.quality_gates }}
+      eval_harness: ${{ steps.decide.outputs.eval_harness }}
+      agent_core: ${{ steps.decide.outputs.agent_core }}
+      behavioral_regression: ${{ steps.decide.outputs.behavioral_regression }}
+      flow_corpus: ${{ steps.decide.outputs.flow_corpus }}
+      claude_foundation: ${{ steps.decide.outputs.claude_foundation }}
+      architecture_drift: ${{ steps.decide.outputs.architecture_drift }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      # The changed-file list, straight from the API -- no fetch-depth: 0 clone needed.
+      # `previous_filename` is included so a rename counts as touching both paths: an
+      # over-broad "the real workflow ran" answer costs one unnecessary skipped stub,
+      # while an under-broad one would post a duplicate green context.
+      - name: List changed files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate \
+            --jq '.[] | .filename, (.previous_filename // empty)' > changed-files.txt
+          echo "changed paths: $(wc -l < changed-files.txt)"
+      # Pure stdlib: `scripts/` has no pyyaml floor and this runner should not need one
+      # either. The parser is intentionally strict -- a `paths:` block it cannot read is an
+      # error, never an empty list (an empty list would silently mean "the real workflow
+      # never runs", i.e. "always stub", i.e. a green check for a suite nothing ran).
+      # The trigger decision lives in scripts/workflow_paths.py, not inline here.
+      # An inline reader is invisible to pytest and to every coverage gate in this
+      # repo, and its hand-rolled YAML parsing silently truncated a `paths:` list on
+      # a trailing comment or a glob containing a space -- which reads as "the real
+      # workflow did not run" and posts a stub BESIDE the real job, the duplicate
+      # green this whole workflow exists to prevent. The extracted module uses
+      # yaml.safe_load (the parser GitHub itself uses) and is unit-tested.
+      - name: Install the workflow-paths reader's one dependency
+        run: python -m pip install --quiet "pyyaml>=6"
+      - name: Decide which real workflows this PR triggers
+        id: decide
+        run: |
+          python scripts/workflow_paths.py \
+            --changed-files changed-files.txt \
+            --output "$GITHUB_OUTPUT" \
+            --verbose \
+            --workflow quality_gates=.github/workflows/quality-gates.yml \
+            --workflow eval_harness=.github/workflows/eval-harness-ci.yml \
+            --workflow agent_core=.github/workflows/agent-core-ci.yml \
+            --workflow behavioral_regression=.github/workflows/behavioral-regression-ci.yml \
+            --workflow flow_corpus=.github/workflows/flow-corpus-ci.yml \
+            --workflow claude_foundation=.github/workflows/claude-foundation-ci.yml \
+            --workflow architecture_drift=.github/workflows/architecture-drift.yml
+
+  # --- quality-gates.yml ----------------------------------------------------------------
+  quality-gates-gates:
+    name: feature-validate + regression-gate
+    needs: gate
+    if: needs.gate.outputs.quality_gates == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "quality-gates skipped -- no changed file matches its paths filter"
+
+  quality-gates-eval-integrity:
+    name: protected-path guard
+    needs: gate
+    if: needs.gate.outputs.quality_gates == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "quality-gates skipped -- no protected path changed"
+
+  # Not in ADR 0037's candidate list, but it lives in quality-gates.yml and is skipped by
+  # the same filter, so it would deadlock identically the day someone requires it.
+  quality-gates-secret-scan:
+    name: secret scan (gitleaks)
+    needs: gate
+    if: needs.gate.outputs.quality_gates == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "quality-gates skipped -- no changed file matches its paths filter"
+
+  # --- eval-harness-ci.yml --------------------------------------------------------------
+  eval-harness:
+    name: eval-harness py${{ matrix.python-version }}
+    needs: gate
+    if: needs.gate.outputs.eval_harness == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - run: echo "eval-harness CI skipped -- no changed file matches its paths filter"
+
+  # --- agent-core-ci.yml ----------------------------------------------------------------
+  agent-core:
+    name: agent-core py${{ matrix.python-version }}
+    needs: gate
+    if: needs.gate.outputs.agent_core == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - run: echo "agent-core CI skipped -- no changed file matches its paths filter"
+
+  # --- behavioral-regression-ci.yml -----------------------------------------------------
+  behavioral-regression:
+    name: behavioral-regression py${{ matrix.python-version }}
+    needs: gate
+    if: needs.gate.outputs.behavioral_regression == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - run: echo "behavioral-regression CI skipped -- no changed file matches its filter"
+
+  behavioral-regression-feature-validation:
+    name: F-016 offline validation
+    needs: gate
+    if: needs.gate.outputs.behavioral_regression == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "behavioral-regression CI skipped -- no changed file matches its filter"
+
+  # --- flow-corpus-ci.yml ---------------------------------------------------------------
+  flow-protocol:
+    name: flow-protocol py${{ matrix.python-version }}
+    needs: gate
+    if: needs.gate.outputs.flow_corpus == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - run: echo "flow-corpus CI skipped -- no changed file matches its paths filter"
+
+  flow-corpus:
+    name: flow-corpus py${{ matrix.python-version }}
+    needs: gate
+    if: needs.gate.outputs.flow_corpus == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - run: echo "flow-corpus CI skipped -- no changed file matches its paths filter"
+
+  # --- claude-foundation-ci.yml ---------------------------------------------------------
+  claude-foundation:
+    name: claude-foundation py${{ matrix.python-version }}
+    needs: gate
+    if: needs.gate.outputs.claude_foundation == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - run: echo "claude-foundation CI skipped -- no changed file matches its filter"
+
+  # --- architecture-drift.yml -----------------------------------------------------------
+  architecture-drift:
+    name: architecture drift + freshness
+    needs: gate
+    if: needs.gate.outputs.architecture_drift == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "architecture-drift skipped -- no changed file matches its paths filter"

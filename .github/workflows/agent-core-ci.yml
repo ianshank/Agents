@@ -23,7 +23,9 @@ concurrency:
 
 jobs:
   test:
-    name: py${{ matrix.python-version }}
+    # Namespaced -- see ADR 0040. The bare `py<version>` name collided with
+    # eval-harness-ci.yml and claude-foundation-ci.yml on the same check contexts.
+    name: agent-core py${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

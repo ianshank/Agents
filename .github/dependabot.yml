@@ -1,0 +1,138 @@
+# Automated dependency updates. Before this file there were none: no Dependabot config and
+# no Renovate config, so every pinned action SHA and every dependency floor aged silently.
+#
+# POSTURE
+# * Monthly, grouped. One grouped pull request per ecosystem per directory instead of one
+#   per dependency -- with seven update entries, ungrouped weekly updates would open dozens
+#   of pull requests a month against a single-maintainer repository (ADR 0037).
+# * `ruff` and `mypy` are deliberately NOT updated here. They are pinned in lockstep across
+#   the root package and all five siblings, single-sourced in `scripts/tool_versions.py`
+#   and asserted by `scripts/validations/F_055.py`; a bump in one directory alone fails
+#   that validator by construction, and AGENTS.md records that bumping them is a
+#   deliberate, whole-fleet act. They are ignored in every pip entry below.
+# * Actions stay SHA-pinned. Dependabot rewrites the SHA *and* its trailing `# vN` comment,
+#   which is the convention every workflow in this repository already follows -- so the
+#   pinning survives the update rather than being replaced by a floating tag.
+# * Least privilege: nothing here grants a token, a permission, or an auto-merge. A
+#   github-actions pull request edits `.github/workflows/**`, which is a protected path
+#   (`scripts/eval_protected_paths.py`), so it needs the `eval-change-approved` label and a
+#   CODEOWNER's attention like any other change to the eval surface. That is intentional
+#   and this config deliberately does not label its own pull requests to bypass it.
+version: 2
+
+updates:
+  # --- GitHub Actions -------------------------------------------------------------------
+  # `directory: "/"` is what the github-actions ecosystem supports: it scans
+  # `.github/workflows/`. The inert staging copy at `claude-foundation/.github/workflows/`
+  # (ADR 0028 -- GitHub only runs workflows from the repository root) is therefore NOT
+  # covered; it is updated by hand at extraction time, and `claude-foundation-ci.yml` is
+  # what actually gates that tree today.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(ci)
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # --- pip: root harness ----------------------------------------------------------------
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    ignore:
+      # Lockstep-pinned across the fleet -- see the posture note at the top of this file.
+      - dependency-name: ruff
+      - dependency-name: mypy
+    groups:
+      python:
+        patterns: ["*"]
+
+  # --- pip: agent-core ------------------------------------------------------------------
+  - package-ecosystem: pip
+    directory: "/agent-core"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    ignore:
+      - dependency-name: ruff
+      - dependency-name: mypy
+    groups:
+      python:
+        patterns: ["*"]
+
+  # --- pip: behavioral-regression -------------------------------------------------------
+  - package-ecosystem: pip
+    directory: "/behavioral-regression"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    ignore:
+      - dependency-name: ruff
+      - dependency-name: mypy
+    groups:
+      python:
+        patterns: ["*"]
+
+  # --- pip: flow-corpus -----------------------------------------------------------------
+  - package-ecosystem: pip
+    directory: "/flow-corpus"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    ignore:
+      - dependency-name: ruff
+      - dependency-name: mypy
+    groups:
+      python:
+        patterns: ["*"]
+
+  # --- pip: flow-protocol ---------------------------------------------------------------
+  - package-ecosystem: pip
+    directory: "/flow-protocol"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    ignore:
+      - dependency-name: ruff
+      - dependency-name: mypy
+    groups:
+      python:
+        patterns: ["*"]
+
+  # --- pip: claude-foundation (staging tree, ADR 0028) ----------------------------------
+  # Staged for extraction but gated by `claude-foundation-ci.yml` today, so its
+  # dependencies are as load-bearing as any other package's until that tree leaves.
+  - package-ecosystem: pip
+    directory: "/claude-foundation"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    ignore:
+      - dependency-name: ruff
+      - dependency-name: mypy
+    groups:
+      python:
+        patterns: ["*"]

@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from ..config.models import EvalConfig, GateConfig
+from ..core._execution_strategies import ITEM_ERROR_SCORE_NAME
 from ..core.interfaces import Scorer, _uses_judge
 from ..core.types import RunResult
 from ..reliability import ReliabilityAggregator, ReliabilityReport
@@ -62,15 +63,44 @@ def _reliability_rate(report: ReliabilityReport, score: str, metric: str) -> flo
     return sum(1 for e in entries if getattr(e, attr)) / len(entries)
 
 
+def _item_error_failures(gate: GateConfig, run: RunResult) -> list[str]:
+    """Refuse to gate over a run whose sample was reduced by item failures.
+
+    Under ``item_error_policy='record'`` an item whose target raised is kept as a
+    visibly-failed result, but its scorers never ran — so it contributes to no
+    scorer's aggregate. Every rule is then evaluated over the survivors, and a
+    rule naming one of those scorers reads a healthy rate over a quietly smaller
+    sample. That is the exact shape of the defect the record policy exists to
+    surface, so the gate must not silently inherit it.
+
+    Fabricating a per-scorer score for an item that produced none would be
+    inventing data (``judges/panel.py`` excludes a failed member rather than
+    counting it as a zero vote), so the gate reports the reduced sample instead
+    and lets ``GateConfig.allow_item_errors`` decide.
+    """
+    if gate.allow_item_errors:
+        return []
+    failed = sum(1 for ir in run.items if any(s.name == ITEM_ERROR_SCORE_NAME for s in ir.scores))
+    if not failed:
+        return []
+    return [
+        f"{failed} of {len(run.items)} attempt(s) failed before scoring, so every rule below is "
+        f"evaluated over a reduced sample (set gate.allow_item_errors=true to gate anyway)"
+    ]
+
+
 def evaluate_gate(gate: GateConfig | None, run: RunResult) -> GateResult:
     if gate is None or not gate.rules:
         return GateResult(passed=True)
+
+    # Checked before any rule: a rule that reads a healthy rate over a reduced
+    # sample is worse than no rule, because it looks like evidence.
+    failures: list[str] = _item_error_failures(gate, run)
 
     # Computed at most once, lazily — only when a rule actually needs it, and
     # reused across every such rule in this gate rather than re-aggregated per rule.
     reliability_report: ReliabilityReport | None = None
 
-    failures: list[str] = []
     for rule in gate.rules:
         if rule.metric in _RELIABILITY_METRICS:
             if reliability_report is None:

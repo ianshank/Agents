@@ -1,0 +1,104 @@
+# Pinned minimum coverage floors — a floor on the floor.
+#
+# WHY THIS FILE EXISTS
+# ---------------------
+# The eval-integrity system (`scripts/eval_protected_paths.py` +
+# `scripts/check_protected_changes.py`) protects the files that *define* a gate. Nothing
+# protected the files where the gate *thresholds* live. A pull request that changed
+# `fail_under = 96` to `fail_under = 50` in `pyproject.toml` and the matching
+# `--cov-fail-under=` in `scripts/quality-gate.sh` passed every gate in this repository,
+# needed no `eval-change-approved` label and no CODEOWNER review:
+# `check_charter_invariants.check_coverage_floors_declared` asserts only that a floor
+# *exists*, and `tests/test_e2e_matrix.py::test_floor_anchors_agree_with_each_other`
+# asserts only that two anchors state the *same* number, not *which* number. The intended
+# values were recorded solely as prose in `docs/CHARTER_ALIGNMENT_AUDIT.md`, which no gate
+# reads.
+#
+# HOW IT IS ENFORCED
+# ------------------
+# `scripts/check_coverage_floors.py` reads this file, extracts the floor actually declared
+# in each `sources` entry below, and fails CI when a declared floor has dropped beneath its
+# `pinned_minimum`. The guard hard-codes no threshold of its own: every number it compares
+# comes from this file or from the source file it names.
+#
+# RAISING a declared floor above its pin is always allowed and needs no change here.
+# LOWERING one is a deliberate, reviewed act: it requires editing this file, which is a
+# protected path (`scripts/eval_protected_paths.py`, `.github/CODEOWNERS`), so it cannot
+# land without a CODEOWNER review and the `eval-change-approved` label.
+
+version: 1
+
+policy: >-
+  Lowering a pinned_minimum, or deleting a unit or a source from this file, weakens what CI
+  proves about this repository. It is a deliberate, reviewed act requiring a CODEOWNER
+  review and the eval-change-approved label. Raising a declared coverage floor above its
+  pinned minimum is always permitted and requires no change here.
+
+# Extraction kinds understood by scripts/check_coverage_floors.py:
+#   pyproject   — `fail_under` under `[tool.coverage.report]`
+#   gate_script — `--cov-fail-under=N` in a generated `quality-gate.sh`
+#   coveragerc  — `fail_under` under `[report]` in an INI coverage config
+#
+# Each unit lists every file that independently states its floor, so lowering the number in
+# only one of them is caught too.
+units:
+  - name: root
+    description: the eval_harness library itself
+    pinned_minimum: 96
+    sources:
+      - kind: pyproject
+        path: pyproject.toml
+      - kind: gate_script
+        path: scripts/quality-gate.sh
+
+  - name: agent-core
+    description: zero-dependency agent primitives
+    pinned_minimum: 95
+    sources:
+      - kind: pyproject
+        path: agent-core/pyproject.toml
+      - kind: gate_script
+        path: agent-core/scripts/quality-gate.sh
+
+  - name: behavioral-regression
+    description: behavioral regression detection
+    pinned_minimum: 95
+    sources:
+      - kind: pyproject
+        path: behavioral-regression/pyproject.toml
+      - kind: gate_script
+        path: behavioral-regression/scripts/quality-gate.sh
+
+  - name: flow-corpus
+    description: airgapped flow corpus
+    pinned_minimum: 95
+    sources:
+      - kind: pyproject
+        path: flow-corpus/pyproject.toml
+      - kind: gate_script
+        path: flow-corpus/scripts/quality-gate.sh
+
+  - name: flow-protocol
+    description: flow protocol definitions
+    pinned_minimum: 95
+    sources:
+      - kind: pyproject
+        path: flow-protocol/pyproject.toml
+      - kind: gate_script
+        path: flow-protocol/scripts/quality-gate.sh
+
+  - name: claude-foundation
+    description: foundation tooling and hooks staging tree
+    pinned_minimum: 85
+    sources:
+      - kind: pyproject
+        path: claude-foundation/pyproject.toml
+      - kind: gate_script
+        path: claude-foundation/scripts/quality-gate.sh
+
+  - name: scripts
+    description: the operational tooling and CI guards (F-031)
+    pinned_minimum: 85
+    sources:
+      - kind: coveragerc
+        path: scripts/.coveragerc

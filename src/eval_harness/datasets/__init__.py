@@ -5,12 +5,12 @@ from __future__ import annotations
 import csv
 import json
 import logging
-import os
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from ..braintrust_client import fetch_dataset_items
+from ..core._paths import DATA_ROOT_ENV, resolve_confined_path
 from ..core.interfaces import DatasetSource
 from ..core.types import EvalItem
 from ..langfuse_client import LangfuseClient
@@ -44,32 +44,26 @@ def _to_item(record: dict, fallback_id: int) -> EvalItem:
 def _validate_dataset_path(path: str | Path, *, allow_absolute: bool = False) -> Path:
     """Validate and resolve a dataset file path.
 
-    Rejects path traversal attempts and optionally restricts to relative paths.
-    Respects ``DATA_ROOT`` env var for constraining file access.
+    Delegates to :func:`resolve_confined_path`, so the read path and the sink write
+    path share one containment rule. Two behaviours changed when this moved to the
+    shared helper, both strictly stronger:
+
+    * containment is decided by ``Path.is_relative_to``, not a string prefix — with
+      ``DATA_ROOT=/srv/data``, ``/srv/data-secrets/leak.jsonl`` was accepted before;
+    * the ``..`` guard no longer switches itself off when ``DATA_ROOT`` is set, so
+      opting into confinement can only tighten validation, never loosen it.
+
+    ``must_exist=False`` is deliberate and unchanged: a dataset path is validated at
+    construction time, which may precede the step that produces the file, and the
+    existing configs and tests rely on that.
     """
-    resolved = Path(path).resolve()
-    data_root_env = os.environ.get("DATA_ROOT")
-
-    if data_root_env:
-        data_root = Path(data_root_env).resolve()
-        if not str(resolved).startswith(str(data_root)):
-            raise ValueError(f"Dataset path {resolved} is outside DATA_ROOT {data_root}")
-
-    # Reject obvious traversal in the raw string
-    raw = str(path)
-    if (".." in raw.split(os.sep) or ".." in raw.split("/")) and not data_root_env:
-        raise ValueError(
-            f"Path traversal ('..') detected in dataset path: {raw}. "
-            "Set DATA_ROOT env var to explicitly allow controlled access."
-        )
-
-    if not allow_absolute and Path(path).is_absolute() and not data_root_env:
-        logger.warning(
-            "Absolute dataset path %s used without DATA_ROOT. Consider setting DATA_ROOT for path confinement.",
-            path,
-        )
-
-    return resolved
+    return resolve_confined_path(
+        path,
+        root_env_var=DATA_ROOT_ENV,
+        description="dataset path",
+        must_exist=False,
+        warn_unconfined_absolute=not allow_absolute,
+    )
 
 
 # ---------------------------------------------------------------------------

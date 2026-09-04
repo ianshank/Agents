@@ -189,6 +189,17 @@ target:
   params: { path: "my_pkg.agent:my_agent" }
 ```
 
+A `callable` target imports and calls a module the config names, so a config file
+is executable input. The operator declares which modules are trusted, and an unset
+allowlist denies (ADR 0039):
+
+```bash
+export EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=my_pkg
+```
+
+Matching is on module boundaries, so `my_pkg` admits `my_pkg.agent` and never
+`my_pkg_evil`.
+
 A callable that returns a plain value still behaves exactly as before. See
 `config/trajectory_eval.yaml` for a complete runnable example.
 

@@ -6,6 +6,329 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Security — an eval config could execute arbitrary commands and report the run as clean
+
+**Breaking, deliberately.** `CallableTarget` resolved `params.path` ("module:attribute") with
+a bare `importlib.import_module` plus `getattr`, with no allowlist anywhere — `plugins.py`
+gates the component `type` name, never the callable path — and then called the result with
+the dataset item's `inputs`. A config naming `subprocess:call` with a dict of `inputs` reaches
+`Popen`, which builds argv by iterating its argument, so the dict's keys become a command
+line. Verified end to end through the real registry: the command ran and the harness reported
+`error: None`. A second variant needs no attribute at all, since `import_module` runs a
+module's import-time side effects before `getattr` is reached.
+
+Live rather than theoretical: `demo/configs/` already ships `type: callable` configs and
+`demo/` is **not** a protected path, so a PR could add a weaponised demo config with no
+`eval-change-approved` label; and nothing in `README.md`, `SECURITY.md` or the charter states
+that configs are trusted input.
+
+- **[ADR 0039](docs/decisions/0039-callable-target-allowlist.md)** records the decision.
+- **`EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST`** (new, documented in `.env.example`) names the
+  module prefixes a config may import. It lives in the environment, not the config, because
+  the config is the untrusted side of the boundary. **Unset means deny** — the previous
+  default, "import anything this interpreter can reach", is not one a tool that loads YAML
+  from disk can keep. The refusal names the variable and the module, so recovery is one
+  `export`.
+- **The check precedes the import**, so a denied module's import-time side effects never run.
+  Asserted by a test that stubs `import_module` and proves it is never reached.
+- **Matching is on dotted-component boundaries**, never a raw string prefix: `tests` admits
+  `tests._sut` and refuses `tests_evil`. A naive `startswith` here would have reproduced the
+  `DATA_ROOT` sibling-prefix bypass fixed in this same release, one subsystem over.
+- **`DisallowedImportError` subclasses `ImportError`**, so `except ImportError` keeps working,
+  and it joins `FATAL_RUN_ERRORS` (ADR 0038) so a refusal aborts the run rather than becoming
+  N identical recorded item failures. A trust decision is not a measurement.
+- **`*` disables the gate** for an operator who authored every config, and logs at WARNING
+  *every time it is honoured*, so it cannot be set in CI and quietly forgotten.
+- **Migration**: any config using `type: callable` needs the variable set. `tests/conftest.py`
+  declares `tests,json,nonexistent` once for the suite rather than editing the eleven modules
+  that resolve a callable — enumerated rather than `*` so the gate stays live during the run.
+- **Not addressed here**: `scorers/__init__.py` does `getattr(autoevals, scorer)(**kwargs)`
+  with a config-supplied name. Materially weaker (one module's namespace, not every importable
+  module) but the same shape; tracked as follow-up.
+
+### Fixed — corrections found by adversarial review of this branch's own changes
+
+An adversarial review of the commits above, run against reproductions rather than
+inspection, found that two of them did not do what their commit messages claimed. Both are
+corrected here; the ADRs are amended rather than quietly rewritten, so the record shows what
+was wrong and why.
+
+- **`item_error_policy` now defaults to `raise`, not `record`.** Recording by default turned
+  the sequential path's hard abort into a completed run whose gate **passed** — the safe path
+  made to match the broken one. `fail_fast=False` governs *scorer* failures; a target
+  exception was always fatal on the path that behaved correctly. The parallel path now aborts
+  too, instead of dropping the item silently, so both paths are strictly safer than before.
+- **The gate no longer reads a sample it does not know shrank.** Recording a failed item left
+  its scorers unrun, so `acc.count` was 3 of 4 while `acc.pass_rate` read 1.0 and the gate
+  passed. `evaluate_gate` now fails on a run carrying item-execution failures;
+  `GateConfig.allow_item_errors` (default `False`) is the explicit opt-in. Fabricating a
+  per-scorer score for an item that produced none was rejected: `judges/panel.py` already
+  settles that precedent by excluding a failed member rather than counting it as a zero vote.
+- **The callable allowlist now bounds the attribute, not just the module.** A one-line
+  re-export (`from subprocess import call` in an allowlisted package's `__init__.py`) reached
+  `subprocess.call` and the harness reported `error: None` again. `resolve_allowed_attribute`
+  requires the object's *defining* module to clear the allowlist too. ADR 0039 now states
+  plainly that this narrows the surface rather than making an untrusted config safe.
+- **Any unresolvable target aborts the run.** `FATAL_RUN_ERRORS` keyed on
+  `DisallowedImportError` but not on a plain missing module, which produces the identical
+  useless run. It now keys on `ImportError` — on *what* failed, not *why*.
+- **`_execute_parallel` lost its redundant `fail_fast` parameter.** The pair
+  (`fail_fast=True`, `policy="record"`) broke early and returned a **truncated** list without
+  raising, reintroducing the silent item loss inside the very function that exists to prevent
+  it. It was unreachable only because the engine happened to collapse the two.
+- **`pass^k` was computed over a shrunk denominator.** `reliability.py` measured "passed all
+  k attempts" against the attempts that produced a score for that scorer, not the item's own
+  attempt count, so an item completing two of three could report `pass_power_k = True`. It is
+  the strictest gate the harness offers, so it is the one that must not overstate.
+
+### Fixed — CI enforcement gaps found in the same review
+
+- **The Makefiles that invoke the gates are now protected paths.** Pinning a coverage floor
+  guards the number; every package's CI reaches that number through `make check`, so
+  replacing a `check:` recipe body with `@echo` disabled the gate while every pinned value
+  stayed untouched — greener and cheaper than editing the number. Six `Makefile` entries added
+  to `PROTECTED_PATTERNS`, the `quality-gates.yml` filter and `CODEOWNERS`, with
+  `check_guard_reachability.py` confirming all 35 patterns reachable via 33 filters.
+- **The stub gate's YAML reader is gone, replaced by `scripts/workflow_paths.py`.** The inline
+  reader returned a *truncated* glob list — not an error — on a trailing comment, a glob
+  containing a space, or a `!` negation. A short list reads as "the real workflow did not
+  run", so the stub posted a green check **beside** the real job: the duplicate-context false
+  green the stub mechanism exists to prevent. The extracted module uses `yaml.safe_load`, is
+  unit-tested at 100% branch coverage, and fails closed on anything it cannot model. Inline
+  workflow code can never be reached by pytest or by any coverage gate here, which is why the
+  bug survived.
+- **`tests/test_required_check_stubs.py` and `tests/test_workflow_paths.py` now run when they
+  matter.** Both were only reachable through the root suite, whose workflow does not fire for
+  a workflow-only PR — so renaming a CI job name never ran the test that checks job names.
+  Both are now in the `quality-gates.yml` tooling step, which triggers on `.github/**`.
+
+### Testing — gaps the review named
+
+- **`tests/test_item_error_policy.py` now calls `evaluate_gate`.** Every test asserted on
+  `items`, `aggregate` and `diagnostics`; none exercised the gate, which is precisely why the
+  gate defect shipped.
+- **Symlink confinement is pinned.** `test_path_confinement.py` had no symlink test at all —
+  a directory inside the root symlinked out is the textbook escape. The behaviour was already
+  correct; nothing was holding it there.
+- **The re-export bypass is a regression test**, along with the missing-module abort.
+- **Three tautological tests were replaced with behavioural ones.** `assert
+  DisallowedImportError in FATAL_RUN_ERRORS` restated a source literal and would have passed
+  with every handler deleted; `assert issubclass(...)` restated a class declaration. Each now
+  exercises the behaviour its docstring claimed.
+
+### Added — multi-model comparison now states its confidence (ADR 0041)
+
+The repo held two features to two different standards of evidence. `campaign.py` decides A/B
+significance from Wilson intervals, enforces a `min_sample` power floor, and returns an
+explicit `cant_tell` rather than claiming a difference it cannot support. `comparison.py`,
+in the same package, ranked models on raw point estimates with no interval, no sample-size
+consideration and no abstention — so on a small dataset a noise-level difference was reported
+as a winner. That mattered more given the `pass_rate` inflation fixed above: the model with
+the most infrastructure failures could win the comparison.
+
+- **`RankVerdict`** names the *shape* of the claim — `ranked`, `no_difference`, `cant_tell`,
+  `no_interval` — reusing `campaign.Decision`'s vocabulary where it carries over.
+  `Decision` names a winning arm, which does not generalise past two models.
+- **`confident_ranking`** is a list of tiers. A tier boundary opens only where the whole upper
+  group's lowest `ci_low` exceeds the whole lower group's highest `ci_high`, so "each model
+  here beats each model below" holds pairwise, not just between neighbours. Overlapping
+  intervals stay in one unordered tier, and any model below the power floor makes the whole
+  metric `cant_tell`.
+- **`mean` gets no interval, and says so.** A Wilson interval is valid for a proportion;
+  `mean` is an arbitrary-range average, so applying one would invent a result. It reports
+  `interval="none"` and verdict `no_interval` instead. Note the consequence:
+  `rank_metric` defaults to `mean`, so the default path now honestly claims nothing and
+  `pass_rate` is the opt-in that carries a defensible ordering.
+- **`ComparisonConfig.min_sample` / `wilson_z`** make the power floor and interval width
+  configuration rather than literals, mirroring `ABCampaignConfig`. Optional with declared
+  defaults, so `SCHEMA_VERSION` is unchanged.
+- **`n` is `pass_counts`, not `ScoreAggregate.count`**, which counts scores whose `passed` is
+  `None` and would have silently widened the denominator away from `pass_rate` semantics.
+- **Backwards compatible**: `values`, `deltas`, `ranking`, `overall_ranking` and every existing
+  `to_dict()` key keep their meaning, and all 13 pre-existing comparison tests pass unmodified.
+- **Fixed a double-escape in the HTML report**: `esc(" &gt; ".join(...))` turned the already-escaped
+  entity into `&amp;gt;`, so the browser rendered a literal `&gt;`. Only the model names are escaped now.
+
+### CI — prerequisites for turning on required status checks (ADR 0037)
+
+Enabling required status checks today would have made things worse, in two independent ways.
+Both are fixed here so ADR 0037's settings change becomes safe to make.
+
+- **Three workflows emitted the same check contexts.** `eval-harness-ci.yml`,
+  `agent-core-ci.yml` and `claude-foundation-ci.yml` all declared `name: py${{ matrix.python-version }}`,
+  so all three posted `py3.11`/`py3.12`/`py3.13`. Branch protection matches required checks by
+  context string, so a green `py3.12` from one package would have satisfied a requirement meant
+  for another — a **false green**, not merely a nuisance. Now namespaced
+  (`eval-harness py3.12`, `agent-core py3.12`, `claude-foundation py3.12`), matching the
+  convention `behavioral-regression-ci.yml` and `flow-corpus-ci.yml` already used. No CI
+  reference to the old names existed anywhere.
+- **A path-filtered workflow reports no check at all**, and a required check with no run waits
+  forever. ADR 0037 deliberately does not enable Code-Owner review, so there is no override:
+  a docs-only, `skills/`-only or `Makefile`-only PR would have been permanently unmergeable.
+  `.github/workflows/required-check-stubs.yml` posts each context exactly once.
+
+  It deliberately does **not** use the textbook `paths-ignore:` mirror. `paths:` and
+  `paths-ignore:` are not complements — GitHub runs the first when *at least one* changed file
+  matches and the second when *at least one* does not, so a PR touching both `src/` and `docs/`
+  triggers both, which is most PRs here. That would post a duplicate green context beside the
+  real one, re-introducing the exact hazard the namespacing above removes. Instead one gate job
+  reads each real workflow's own `on.pull_request.paths:` block and evaluates it against the
+  PR's changed files, so there is one list per workflow and no mirror to drift. Fail-closed:
+  an unparseable `paths:` block reds the gate and leaves contexts unreported, because a loud
+  red is recoverable and a silent green is not.
+- **`tests/test_required_check_stubs.py`** makes the stub/real name pairing mechanical. The
+  workflow's own header calls those names "the contract", but a note is not a gate, and a
+  rename on either side silently reintroduces the deadlock. The test derives both sides from
+  the workflow files and compares them in both directions. Verified by mutation: renaming a
+  real job with its stub untouched fails with both the missing and the orphan contexts named.
+- **`agent-core` source changes now re-run the suites that depend on them.** `eval_harness`
+  has 58 import sites into `agent_core` and `eval-harness-ci.yml` already *installed* it, but
+  `agent-core/**` was absent from its paths filter, so a signature change to `wilson_interval`
+  could merge green and break `main`. Added to `eval-harness-ci.yml`; `quality-gates.yml` gets
+  the narrower `agent-core/agent_core/**` instead, because a broad `agent-core/**` shadows the
+  `agent-core/tests/**` entry that `scripts/validations/F_052.py` mutation-tests and would have
+  silently disarmed that validator.
+- **`.github/dependabot.yml`** (new) covers `pip` for the root and all five siblings plus
+  `github-actions`, monthly and grouped so each entry opens at most one PR. `ruff` and `mypy`
+  are ignored in every pip entry: they are lockstep-pinned fleet-wide (ADR 0034, `F_055.py`),
+  so a per-directory bump would fail CI by construction. Nothing grants a token, permission or
+  auto-merge.
+
+### Fixed — two of the four demo configs were broken and nothing noticed
+
+`demo/configs/eval.pass.yaml` and `eval.fail.yaml` both crashed with
+`ValueError: judge_calibration.calibration_artifact_id is required to gate on ['helpfulness']`.
+The F-057 calibration gate landed 2026-08-18; the demo configs were last touched 2026-07-22.
+They had been broken for over two weeks because **no workflow and no Makefile target runs
+`demo/`** — and the demo is the first thing a new user tries.
+
+- Both configs now declare a `judge_calibration` block. The ID is an opaque provenance
+  string the harness records rather than resolves, so the demo names an obviously-fictional
+  one and says so in a comment.
+- `demo/run_demo.sh`, all three offline configs, and `config/trajectory_eval.yaml` now
+  document `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST`, which their `callable` targets need
+  after the change above. The demo exports `demo` rather than `*`, so the guard stays
+  meaningful even there.
+- All three offline demo configs verified end to end: `eval.pass.yaml` reports
+  `QUALITY GATE: PASS`, `eval.fail.yaml` reports `FAIL`, `compare.yaml` completes.
+- `README.md` and `SECURITY.md` gain a "config files are executable input" section stating
+  the trust boundary and the three variables that draw it. Nothing previously said this;
+  the README listed `callable (dynamic import)` as a plain feature.
+
+**Not fixed here**: `demo/` and `experiments/` still run in no CI job, so this class of rot
+can recur. `AGENTS.md` documents `experiments/backend-validation` as deliberately isolated
+and out of `make check-all`, so wiring it in is a call for the maintainer rather than a
+silent change.
+
+### Security — dataset path confinement was bypassable, and sinks had none at all
+
+`_validate_dataset_path` decided containment with `str(resolved).startswith(str(data_root))`.
+A string prefix is not a path prefix: with `DATA_ROOT=/srv/data`, a path resolving to
+`/srv/data-secrets/leak.jsonl` was accepted. Worse, setting `DATA_ROOT` also switched off the
+`..` traversal check (`and not data_root_env`), so the variable that exists to confine reads
+made validation strictly weaker. Both bypasses were reproduced before the fix and are now
+regression tests.
+
+Separately, the write path had no validation whatsoever. `JsonFileSink` and `HtmlFileSink`
+took a path straight from config and called `mkdir(parents=True)` then `write_text`, so a
+config could create and overwrite a file anywhere the process could write, including
+directories that did not yet exist. The read path had been hardened; the write path never was.
+
+- **`src/eval_harness/core/_paths.py`** (new) single-sources the rule for both directions.
+  Containment uses `Path.is_relative_to` on resolved paths, matching how
+  `experiments/backend-validation`'s deploy module already checks bind-mount containment.
+  The `..` check is now unconditional, so `DATA_ROOT` can only ever make validation stronger.
+- **`OUTPUT_ROOT`** (new) confines sink writes. Deliberately a separate variable from
+  `DATA_ROOT`: a deployment that mounts its corpus read-only and names it as the read root
+  must not thereby declare that corpus a legal write target.
+- **Backwards compatible where it counts.** Both roots unset means unconfined, as before,
+  with one warning per sink rather than per `emit`. The `ValueError` type and each message's
+  leading sentence are unchanged, so existing tests and `F_019` still match. The traversal
+  message's *remediation advice* deliberately changed: it used to read "Set DATA_ROOT env var
+  to explicitly allow controlled access", which is now false — setting `DATA_ROOT` no longer
+  disables the `..` check, and telling an operator otherwise would document the bug.
+- The read/write difference is one documented parameter, not a duplicated function: a read
+  requires the target to exist (`resolve(strict=True)`), a write accepts a not-yet-existing
+  file whose parent the caller creates.
+
+### Hardening — coverage floors are pinned, and lowering one now fails CI
+
+The eval-integrity system protected the files that *define* a gate, never the files where
+the gate *thresholds* live. `pyproject.toml`, `scripts/quality-gate.sh`, `scripts/.coveragerc`
+and every sibling package's copies were all unprotected, and no gate asserted the values:
+`check_charter_invariants.check_coverage_floors_declared` is existence-only, and
+`tests/test_e2e_matrix.py::test_floor_anchors_agree_with_each_other` asserts only that two
+anchors state the *same* number, not which. A pull request changing `fail_under = 96` to `50`
+in both places passed every gate with no `eval-change-approved` label and no code owner. The
+intended values existed only as prose in `docs/CHARTER_ALIGNMENT_AUDIT.md`, which no gate reads.
+
+- **New `coverage-floors.yaml`** — the declarative pin for every gated unit's minimum coverage
+  floor (root 96, agent-core/behavioral-regression/flow-corpus/flow-protocol 95,
+  claude-foundation 85, scripts 85), listing each file that independently declares it.
+- **New `scripts/check_coverage_floors.py`** — reads that manifest, extracts the floor actually
+  declared in each source (`[tool.coverage.report] fail_under`, `--cov-fail-under=`,
+  `[report] fail_under`) and fails with the file, the pin and the actual value when a floor has
+  dropped beneath its pin. It hard-codes no threshold; raising a floor needs no change, lowering
+  one means editing the manifest. Wired into `quality-gates.yml`, `make invariants` and
+  `make pre-pr` alongside the sibling guards, with `tests/test_check_coverage_floors.py`.
+- **`PROTECTED_PATTERNS` extended** to the threshold files and the manifest, with the matching
+  `pull_request: paths:` entries in `quality-gates.yml` (asserted by
+  `check_guard_reachability.py`, which fails when the two lists drift) and the mirrored
+  `.github/CODEOWNERS` rules.
+
+### Fixed — a parallel run silently deleted failed items and inflated `pass_rate`
+
+`RunSettings.max_workers` decided failure semantics. When a `TargetRunner` raised, the
+sequential path propagated the exception and aborted the run; the parallel path caught it
+and — because `fail_fast` defaults to `False` — dropped the item from `RunResult.items`
+entirely. A four-item run whose third item failed returned three items, `pass_rate = 1.0`,
+empty `diagnostics`, and no record of the failure anywhere in `to_dict()`, so nothing
+reached the sinks or Langfuse. `evaluate_gate` reads that `pass_rate`, so a release gate
+could be cleared by a run in which a quarter of the items never executed.
+
+The repository had already written the invariant down, for the state-adapter lifecycle:
+*"the item always gets a normal, visibly-failed result, never silently dropped."* The
+parallel target path was the one place it had not been applied.
+
+- **[ADR 0038](docs/decisions/0038-item-error-policy.md)** records the decision.
+- **`RunSettings.item_error_policy`** (`"record"` default, or `"raise"`) now owns the
+  decision and `max_workers` owns none of it. `record` keeps the item as a visibly-failed
+  `ItemResult` carrying the exception in `TargetOutput.error` plus a failing
+  `item_execution` score, so it holds its position and its weight in every aggregate.
+  `raise` aborts the run — the legacy sequential behaviour, now an explicit choice rather
+  than a side effect of leaving `max_workers` at 1. `fail_fast=True` still aborts
+  immediately and is folded into the effective policy once, in
+  `EvalEngine._item_error_policy`, so no execution path re-derives it.
+- **`RunSettings.item_error_score`** (default `0.0`, bounded `0.0..1.0`) makes the recorded
+  score a declared field rather than a literal at a call site, mirroring
+  `JudgeBudgetConfig.skip_score`.
+- **A degraded denominator is now reported.** A recorded failure means that item's scorers
+  never ran, so every *other* score's aggregate covers fewer attempts than the run holds.
+  `item_error_diagnostics` emits one `item_execution_failures` diagnostic saying how many.
+  Scorers that never ran are **not** given a fabricated `0.0` — the same reasoning that
+  makes `judges/panel.py` exclude a failed member rather than count it as a zero vote.
+- **`StateResetError` stays outside the policy** and propagates under every setting.
+- **Backwards compatible for a clean run**: no failure means no `item_execution` score, no
+  diagnostic, and no `reliability` key, so ADR 0031 obligation 4 holds. `SCHEMA_VERSION` is
+  unchanged — both new fields are optional with declared defaults.
+- **Behaviour change to be aware of**: runs that previously reported an inflated `pass_rate`
+  over a silently reduced denominator will now report a lower one, and gates calibrated
+  against those numbers may go red. That is the defect surfacing, not a regression.
+
+### Testing
+
+- **`tests/test_item_error_policy.py`** (31 tests) covers the defect directly and, more
+  importantly, adds the missing *oracle*: sequential and parallel must agree on items,
+  aggregates and serialised payload **when an item fails**. This was never a coverage gap —
+  both sides of the `fail_fast` branch were already exercised at 98% branch coverage, and
+  `test_parallel_sequential_same_aggregate` already asserted the violated property. It ran
+  on an all-passing dataset, so it could not observe the divergence.
+- **`test_reset_runs_again_for_the_next_attempt_even_after_a_target_failure`** now asserts
+  `reset_calls == 2` instead of `1`. Its name, docstring and `_CountingTargetThatFailsOnce`
+  helper all describe a two-attempt scenario the old abort made unreachable; the previous
+  assertion could only ever see the first reset, and its inline comment said as much. The
+  legacy abort is retained as a separate test under `item_error_policy: raise`.
+
 ### Added — eval evidence integrity: branch protection ADR, gate-integrity fix, M8 execution proposal
 
 A peer review of an eval-tool test-matrix readiness brief (`docs/plans/eval-evidence-integrity/REVIEW.md`)

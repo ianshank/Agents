@@ -291,14 +291,30 @@ class TestResetFailureAbortsTheRun:
         """A target failure (unrelated to the adapter) must not skip the next
         attempt's reset -- reset is per-attempt, not gated on prior success."""
         adapter = _RecordingAdapter()
-        engine = _engine(_config(n_items=2))
+        engine = _engine(_config(n_items=2, extra_run={"item_error_policy": "record"}))
+        engine.target = _CountingTargetThatFailsOnce()
+        engine.state_adapter = adapter
+        # Under item_error_policy='record' the run continues past the
+        # failed item, so the *next* attempt's reset is directly observable. That
+        # is what this test's name and _CountingTargetThatFailsOnce's own docstring
+        # both promise; the previous abort-on-first-target-error behaviour made it
+        # unreachable, so the assertion could only ever see the first reset.
+        result = engine.run()
+        assert adapter.calls.count("reset") == 2
+        assert [ir.item.id for ir in result.items] == ["0", "1"]
+        assert result.items[0].output.error is not None  # recorded, not dropped
+        assert result.items[1].output.error is None
+
+    def test_target_failure_still_aborts_under_the_raise_policy(self):
+        """The legacy abort is still available, now as an explicit choice rather
+        than an accident of which execution path happened to be selected."""
+        adapter = _RecordingAdapter()
+        engine = _engine(_config(n_items=2, extra_run={"item_error_policy": "raise"}))
         engine.target = _CountingTargetThatFailsOnce()
         engine.state_adapter = adapter
         with pytest.raises(RuntimeError, match="target outage"):
-            # Sequential path: an uncaught target error aborts run() immediately,
-            # same as it always has -- this only proves reset ran once before that.
             engine.run()
-        assert adapter.calls.count("reset") == 1
+        assert adapter.calls.count("reset") == 1  # aborted on the very first attempt
 
 
 class TestSnapshotOrEvaluateFailureFailsJustTheItem:

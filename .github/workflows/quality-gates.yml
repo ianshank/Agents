@@ -10,6 +10,12 @@ on:
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
+      # The gates job installs `./agent-core` and the suites it runs import `agent_core`
+      # directly, so an agent-core source change can break these gates. Only
+      # `agent-core/tests/**` was listed (and only on pull_request), which covered the
+      # protected-path guard but not the dependency. Scoped to the package source rather
+      # than all of `agent-core/**` for the reason spelled out on the pull_request list.
+      - "agent-core/agent_core/**"
       # `.github/**` is a PROTECTED_PATTERN (scripts/eval_protected_paths.py), but this
       # filter used to match only this file — so a workflow- or action-only PR skipped the
       # protected-path guard AND the feature validators entirely. PR #64 merged through that
@@ -41,6 +47,19 @@ on:
       - "flow-corpus/tests/**"
       - "flow-protocol/tests/**"
       - "claude-foundation/tests/**"
+      # Beyond the protected tests/ root above: the gates job installs `./agent-core` and
+      # the validators/suites it runs import `agent_core`, so an agent-core *source* change
+      # can break these gates. Deliberately kept alongside `agent-core/tests/**` rather
+      # than replacing it -- that entry documents the protected-path obligation, this one
+      # documents the build dependency, and the two have different reasons to exist.
+      #
+      # Scoped to the package source, NOT `agent-core/**`: a filter that broad would also
+      # cover `agent-core/tests/**`, and `scripts/validations/F_052.py` mutation-tests this
+      # very list by deleting the `agent-core/tests/**` line and requiring the pattern to
+      # become unreachable. A shadowing filter silently disarms that mutation test. The
+      # remaining agent-core inputs these gates read are already listed below
+      # (`agent-core/pyproject.toml`, `agent-core/scripts/quality-gate.sh`).
+      - "agent-core/agent_core/**"
       - "pyproject.toml"
       # Broadened from workflows/ + actions/ to all of .github/**: CODEOWNERS is what makes
       # the label gate meaningful, and it sat outside both narrower prefixes.
@@ -48,6 +67,31 @@ on:
       # The architecture manifest is the airgap's enforcement surface — editing its declared
       # component edges could quietly let the corpus and harness import each other.
       - "architecture.yaml"
+      # Gate thresholds. The pins live in coverage-floors.yaml; the rest are the files it
+      # reads, where a floor could otherwise be lowered with no label and no code owner.
+      # (`scripts/quality-gate.sh` and `scripts/.coveragerc` are already inside
+      # `scripts/**` above; the sibling packages' copies are not, so each is named here.)
+      - "coverage-floors.yaml"
+      - "agent-core/pyproject.toml"
+      - "agent-core/scripts/quality-gate.sh"
+      - "behavioral-regression/pyproject.toml"
+      - "behavioral-regression/scripts/quality-gate.sh"
+      - "flow-corpus/pyproject.toml"
+      - "flow-corpus/scripts/quality-gate.sh"
+      - "flow-protocol/pyproject.toml"
+      - "flow-protocol/scripts/quality-gate.sh"
+      - "claude-foundation/pyproject.toml"
+      - "claude-foundation/scripts/quality-gate.sh"
+      # The Makefiles that INVOKE those gates. A pinned floor guards the number,
+      # not the recipe that runs it: every package CI delegates through
+      # `make check`, so gutting a `check:` body disables the gate without
+      # touching any number `coverage-floors.yaml` can see.
+      - "Makefile"
+      - "agent-core/Makefile"
+      - "behavioral-regression/Makefile"
+      - "flow-corpus/Makefile"
+      - "flow-protocol/Makefile"
+      - "claude-foundation/Makefile"
   workflow_dispatch:
 
 permissions:
@@ -139,6 +183,13 @@ jobs:
       # including architecture.yaml, the airgap's own enforcement surface (F-052).
       - name: Protected-path guard reachability
         run: python scripts/check_guard_reachability.py
+      # Coverage-floor pin gate: the protected-path guard covers files that *define* a
+      # gate, but nothing asserted the gate THRESHOLDS. check_charter_invariants only
+      # checks a floor exists and test_e2e_matrix only checks two anchors agree, so
+      # 96 -> 50 in both places passed everything. coverage-floors.yaml pins the minimum
+      # for each unit and this asserts no declared floor has dropped beneath its pin.
+      - name: Coverage-floor pins
+        run: python scripts/check_coverage_floors.py
       # Charter-drift guard: every markdown reference in docs/CHARTER.md resolves to a
       # real repo file/ADR (also enforced via the full test suite; this is the first-class
       # gate signal, mirroring the sibling guards above).
@@ -164,13 +215,16 @@ jobs:
           tests/test_check_charter_drift.py tests/test_check_charter_invariants.py
           tests/test_check_guard_reachability.py tests/test_matrix_coverage.py
           tests/test_agent_confidence.py tests/test_extract_registries.py
+          tests/test_required_check_stubs.py tests/test_workflow_paths.py
+          tests/test_check_coverage_floors.py
           --override-ini addopts=""
           --cov=regression_gate --cov=eval_protected_paths
           --cov=check_protected_changes --cov=fix_loop
           --cov=check_skill_script_drift --cov=_cli --cov=check_size_budget
           --cov=check_charter_drift --cov=check_charter_invariants
-          --cov=check_guard_reachability --cov=agent_confidence
+          --cov=check_guard_reachability --cov=check_coverage_floors --cov=agent_confidence
           --cov=skill_marketplace --cov=_common --cov=extract_registries
+          --cov=workflow_paths
           --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023 --cov=F_024 --cov=F_025 --cov=F_026 --cov=F_027 --cov=F_028 --cov=F_029 --cov=F_030 --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037 --cov=F_038 --cov=F_039 --cov=F_040 --cov=F_041 --cov=F_042 --cov=F_043 --cov=F_044 --cov=F_045 --cov=F_046 --cov=F_047 --cov=F_048 --cov=F_049 --cov=F_050 --cov=F_051 --cov=F_052 --cov=F_053 --cov=F_054 --cov=F_055 --cov=F_056 --cov=F_057 --cov=F_058 --cov=F_059 --cov=F_060 --cov=F_061
           --cov=tests._matrix_coverage
           --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
