@@ -12,6 +12,11 @@
 set -euo pipefail               # fail fast; Beat 3 (the intentional gate failure) is quarantined below
 cd "$(dirname "$0")/.."          # repo root
 export PYTHONPATH=.              # so `demo.support_bot_target:answer` imports
+# The demo's `callable` target imports and calls a module its config names, which
+# makes the config executable input. The operator declares which modules are
+# trusted, and this demo trusts exactly one: its own (ADR 0039). Scoped to `demo`
+# rather than `*` so the guard stays meaningful even here.
+export EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo
 
 OUT=out/demo
 mkdir -p "$OUT"

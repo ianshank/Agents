@@ -2,7 +2,15 @@ schema_version: "1.0"
 
 # Demo eval: a realistic (offline, deterministic) support bot graded by several
 # scorers, then gated. This config PASSES its quality gate → exit code 0.
-# Run: PYTHONPATH=. eval-harness run --config demo/configs/eval.pass.yaml --offline
+#
+# Run:
+#   PYTHONPATH=. EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo \
+#     eval-harness run --config demo/configs/eval.pass.yaml --offline
+#
+# The allowlist is required because `target` below is a `callable`, which imports
+# and calls a module this file names. That makes a config executable input, so the
+# operator — not the config — declares which modules are trusted (ADR 0039).
+# `demo/run_demo.sh` exports it for you.
 
 run:
   name: "support-bot-demo"
@@ -50,6 +58,14 @@ judge:
     default_score: 0.9
     rules:
       - { contains: "cancel", score: 0.4 }
+
+# The gate below scores on `helpfulness`, which is judge-backed, so F-057 requires
+# the calibration run that authorised this judge to gate. The ID is an opaque
+# provenance string — the harness records it rather than resolving it — so a demo
+# names an obviously-fictional one. A real deployment points at a real
+# JudgeCalibrationReport run.
+judge_calibration:
+  calibration_artifact_id: "demo-mock-judge-calibration-0000"
 
 sinks:
   - type: console

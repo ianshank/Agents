@@ -5,6 +5,15 @@
 # credentials; point `target` at your own agent to use it for real.
 #
 # See docs/agent-trajectory-evaluation.md for the full scorer reference.
+#
+# Run:
+#   EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=tests \
+#     eval-harness run --config config/trajectory_eval.yaml
+#
+# A `callable` target imports and calls a module this file names, which makes a
+# config executable input. The operator — not the config — declares which modules
+# are trusted, and an unset allowlist denies (ADR 0039). Point the allowlist at
+# your own package when you point `target` at your own agent.
 
 schema_version: "1.0"
 

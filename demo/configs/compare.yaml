@@ -3,7 +3,16 @@ schema_version: "1.0"
 # Multi-model comparison: the real support bot vs. a naive "echo" baseline that
 # just parrots the question back. Same dataset, scorers, and judge for both, so
 # the ranking is apples-to-apples.
-# Run: PYTHONPATH=. eval-harness compare --config demo/configs/compare.yaml --offline
+#
+# Run:
+#   PYTHONPATH=. EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo \
+#     eval-harness compare --config demo/configs/compare.yaml --offline
+#
+# The allowlist is required because one model below is a `callable` target, which
+# imports and calls a module this file names. That makes a config executable input,
+# so the operator — not the config — declares which modules are trusted (ADR 0039).
+# `demo/run_demo.sh` exports it for you. No `judge_calibration` block is needed
+# here: this config declares no `gate`, so no judge participates in gating.
 
 run:
   name: "support-bot-compare"

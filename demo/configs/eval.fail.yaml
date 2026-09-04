@@ -3,7 +3,15 @@ schema_version: "1.0"
 # Same eval as eval.pass.yaml, with ONE stricter gate threshold (helpfulness
 # mean >= 0.95). The bot scores 0.85, so this config FAILS its quality gate and
 # the process exits NON-ZERO — exactly what breaks a CI build.
-# Run: PYTHONPATH=. eval-harness run --config demo/configs/eval.fail.yaml --offline
+#
+# Run:
+#   PYTHONPATH=. EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo \
+#     eval-harness run --config demo/configs/eval.fail.yaml --offline
+#
+# The allowlist is required because `target` below is a `callable`, which imports
+# and calls a module this file names. That makes a config executable input, so the
+# operator — not the config — declares which modules are trusted (ADR 0039).
+# `demo/run_demo.sh` exports it for you.
 
 run:
   name: "support-bot-demo-strict"
@@ -43,6 +51,13 @@ judge:
     default_score: 0.9
     rules:
       - { contains: "cancel", score: 0.4 }
+
+# The gate below scores on `helpfulness`, which is judge-backed, so F-057 requires
+# the calibration run that authorised this judge to gate. Same fictional demo ID as
+# eval.pass.yaml: the two configs differ only in one gate threshold, and the judge
+# they share is the same one.
+judge_calibration:
+  calibration_artifact_id: "demo-mock-judge-calibration-0000"
 
 sinks:
   - type: console

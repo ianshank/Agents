@@ -23,6 +23,7 @@ framework.
 - [Extend (no core changes)](#extend-no-core-changes)
 - [Test](#test)
 - [Quality Gates](#quality-gates)
+- [Config files are executable input](#config-files-are-executable-input)
 - [Security Scanning](#security-scanning)
 - [Layout](#layout)
 - [CI Integration](#ci-integration)
@@ -364,6 +365,34 @@ The regression gate and protected-path guard run in
 `.github/workflows/quality-gates.yml`. The auto-fix loop (`F-008`) is disabled and is
 **not** wired into CI.
 
+## Config files are executable input
+
+The `callable` target resolves `params.path` ("module:attribute") by **importing that
+module and calling that attribute**. An eval config is therefore code, not data, and
+must be treated with the trust you would give a script.
+
+Two environment variables draw that boundary. They live in the environment rather than
+in the config because the config is the untrusted side:
+
+| Variable | Controls | Unset means |
+|---|---|---|
+| `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST` | Module prefixes a `callable` target may import | **deny** |
+| `DATA_ROOT` | Root that dataset **reads** are confined to | unconfined (warns) |
+| `OUTPUT_ROOT` | Root that sink **writes** are confined to | unconfined (warns) |
+
+```bash
+export EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=my_project
+```
+
+Matching is on module boundaries, so `my_project` admits `my_project.targets` and never
+`my_project_evil`. Set it to `*` only for a local loop where you wrote every config
+yourself; that is logged at `WARNING` every time it is honoured. See
+[ADR 0039](docs/decisions/0039-callable-target-allowlist.md) for the reasoning, and
+`.env.example` for the full set.
+
+**Do not run an eval config you did not write** without reading it first, the same way
+you would not run an unfamiliar shell script.
+
 ## Security Scanning
 
 ```bash
@@ -391,7 +420,9 @@ src/eval_harness/
                      engine attaches when a state_adapter is configured — the latter
                      fails independently of goal success (F-060)
   datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
-  targets/           echo, callable (dynamic import), model (alias llm; calls an
+  targets/           echo, callable (dynamic import — gated by
+                     EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST; see "Config files are
+                     executable input" below), model (alias llm; calls an
                      OpenAI-compatible / LM Studio / Nemotron endpoint)
   sinks/             console, json_file, html_file, langfuse, phoenix, braintrust
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,

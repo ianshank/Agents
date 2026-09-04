@@ -46,6 +46,32 @@ that configs are trusted input.
   with a config-supplied name. Materially weaker (one module's namespace, not every importable
   module) but the same shape; tracked as follow-up.
 
+### Fixed — two of the four demo configs were broken and nothing noticed
+
+`demo/configs/eval.pass.yaml` and `eval.fail.yaml` both crashed with
+`ValueError: judge_calibration.calibration_artifact_id is required to gate on ['helpfulness']`.
+The F-057 calibration gate landed 2026-08-18; the demo configs were last touched 2026-07-22.
+They had been broken for over two weeks because **no workflow and no Makefile target runs
+`demo/`** — and the demo is the first thing a new user tries.
+
+- Both configs now declare a `judge_calibration` block. The ID is an opaque provenance
+  string the harness records rather than resolves, so the demo names an obviously-fictional
+  one and says so in a comment.
+- `demo/run_demo.sh`, all three offline configs, and `config/trajectory_eval.yaml` now
+  document `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST`, which their `callable` targets need
+  after the change above. The demo exports `demo` rather than `*`, so the guard stays
+  meaningful even there.
+- All three offline demo configs verified end to end: `eval.pass.yaml` reports
+  `QUALITY GATE: PASS`, `eval.fail.yaml` reports `FAIL`, `compare.yaml` completes.
+- `README.md` and `SECURITY.md` gain a "config files are executable input" section stating
+  the trust boundary and the three variables that draw it. Nothing previously said this;
+  the README listed `callable (dynamic import)` as a plain feature.
+
+**Not fixed here**: `demo/` and `experiments/` still run in no CI job, so this class of rot
+can recur. `AGENTS.md` documents `experiments/backend-validation` as deliberately isolated
+and out of `make check-all`, so wiring it in is a call for the maintainer rather than a
+silent change.
+
 ### Security — dataset path confinement was bypassable, and sinks had none at all
 
 `_validate_dataset_path` decided containment with `str(resolved).startswith(str(data_root))`.
