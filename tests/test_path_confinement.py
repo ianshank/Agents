@@ -98,6 +98,28 @@ class TestResolveConfinedPath:
         present.write_text("{}\n", encoding="utf-8")
         assert resolve_confined_path(present, root_env_var=DATA_ROOT_ENV, must_exist=True) == present.resolve()
 
+    def test_a_permission_error_is_not_reported_as_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``PermissionError`` is an ``OSError`` subclass, same as
+        ``FileNotFoundError`` -- found by review: a blanket ``except OSError``
+        reported both as "does not exist", which is wrong for a file that
+        exists but is unreadable and sends an operator looking in the wrong
+        place. Simulated by monkeypatching ``resolve`` directly rather than
+        chmod, since root (this test's likely runner) ignores permission bits.
+        """
+        target = tmp_path / "present.jsonl"
+        target.write_text("{}\n", encoding="utf-8")
+
+        def _raise_permission_error(self: Path, strict: bool = False) -> Path:
+            raise PermissionError(13, "Permission denied")
+
+        monkeypatch.setattr(Path, "resolve", _raise_permission_error)
+
+        with pytest.raises(ValueError, match="could not be resolved") as excinfo:
+            resolve_confined_path(target, root_env_var=DATA_ROOT_ENV, must_exist=True)
+        assert "does not exist" not in str(excinfo.value)
+
     def test_write_path_allows_missing_file_and_missing_parent(self, tmp_path: Path) -> None:
         """The write path must validate a file whose parent will be created later."""
         target = tmp_path / "not" / "yet" / "there.json"

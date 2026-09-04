@@ -179,3 +179,32 @@ def test_cli_compare_without_comparison_block_errors(tmp_path):
     cfg_path.write_text(yaml.safe_dump(cfg.model_dump(mode="json")), encoding="utf-8")
     rc = cli_main(["compare", "--config", str(cfg_path), "--offline"])
     assert rc == 2
+
+
+def test_compare_metric_preserves_config_order_among_ties():
+    """A blanket reversal of the sorted list flips tied models' relative order
+    even though neither one's value differs -- found by review, reproduced
+    directly: sorted() is stable, but a trailing [::-1] reverses the WHOLE
+    result, undoing that stability rather than just the ascending-vs-descending
+    intent. Four models, two genuinely tied, in a config order that would
+    expose either direction of the bug.
+    """
+    from datetime import UTC, datetime
+
+    from eval_harness.core.types import RunResult, ScoreAggregate
+
+    def _run(name: str, mean: float) -> tuple[str, RunResult]:
+        now = datetime.now(UTC)
+        return name, RunResult(
+            run_id=name,
+            config_name=name,
+            items=[],
+            aggregate={"acc": ScoreAggregate(count=1, mean=mean, pass_rate=None)},
+            started_at=now,
+            finished_at=now,
+        )
+
+    runs = [_run("A", 1.0), _run("B", 1.0), _run("C", 0.5), _run("D", 2.0)]
+    cmp = compare_metric(runs, score="acc", metric="mean")
+
+    assert cmp.ranking == ["D", "A", "B", "C"]

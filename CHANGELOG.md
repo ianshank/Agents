@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — two findings from GitHub review, on the merged PR that added this code
+
+Neither predates this dev cycle; both are in code this same series of changes introduced,
+found by review after the PR merged and fixed as immediate follow-up.
+
+- **`compare_metric`'s ranking could flip two tied models' relative order.** `sorted()` is
+  stable, so an ascending sort followed by a blanket `[::-1]` reverses the whole result — not
+  just the ascending-vs-descending intent — which also swaps two equal-valued models even
+  though neither one's key differed. Contradicted the function's own comment ("stable within
+  ties / Nones — config order"). Fixed by sorting on a negated key so descending order falls
+  out directly, with no reversal step to undo stability. Regression test pins four models,
+  two genuinely tied, in a config order that exposes either direction of the bug.
+- **`resolve_confined_path` reported every `OSError` as "does not exist".** `PermissionError`
+  is an `OSError` subclass, so a file that exists but is unreadable was reported as missing —
+  wrong, and it sends an operator looking in the wrong place. Now `FileNotFoundError` alone
+  maps to "does not exist"; any other `OSError` reports "could not be resolved" with the
+  underlying error. Regression test simulates a `PermissionError` via monkeypatching
+  `Path.resolve` (chmod is unreliable under a root-run test suite).
+
 ### Security — an eval config could execute arbitrary commands and report the run as clean
 
 **Breaking, deliberately.** `CallableTarget` resolved `params.path` ("module:attribute") with

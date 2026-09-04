@@ -297,12 +297,15 @@ def compare_metric(
     for name, val in values.items():
         deltas[name] = (val - base_val) if (val is not None and base_val is not None) else None
 
-    # Rank by value descending; None last. Stable within ties / Nones (config order).
-    ranking = sorted(values, key=lambda n: (values[n] is not None, values[n] if values[n] is not None else 0.0))
-    # sorted() above is ascending on (has_value, value); reverse for best-first but
-    # keep None entries (has_value False) at the end.
-    present = [n for n in ranking if values[n] is not None][::-1]
-    absent = [n for n in ranking if values[n] is None]
+    # Rank by value descending; None last. Stable within ties / Nones (config order):
+    # sorted() is itself stable, so the key must encode "descending" directly rather
+    # than sorting ascending and reversing the whole list afterward -- a trailing
+    # [::-1] flips the RESULT's order wholesale, which also swaps two tied models'
+    # relative order even though neither one's key differs. Negating the numeric
+    # part of the key gives descending-by-value while leaving equal keys, and
+    # therefore config order, untouched.
+    present = sorted((n for n in values if values[n] is not None), key=lambda n: -values[n])  # type: ignore[operator]
+    absent = [n for n in values if values[n] is None]
     ordered = present + absent
 
     stats = _model_stats(runs, score, metric, conf.wilson_z)
