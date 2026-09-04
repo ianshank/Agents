@@ -11,6 +11,10 @@
 name: claude-foundation CI (staging)
 
 on:
+  # Keep both filters in flow style: `scripts/validations/F_037.py` asserts the literal
+  # substring `paths: ["claude-foundation/**"` is present, so reflowing these into block
+  # lists fails that validator. `required-check-stubs.yml` reads this list too and parses
+  # either style.
   push:
     branches: [main]
     paths: ["claude-foundation/**", ".github/workflows/claude-foundation-ci.yml"]
@@ -27,7 +31,9 @@ concurrency:
 
 jobs:
   test:
-    name: py${{ matrix.python-version }}
+    # Namespaced -- see ADR 0040. The bare `py<version>` name collided with
+    # eval-harness-ci.yml and agent-core-ci.yml on the same check contexts.
+    name: claude-foundation py${{ matrix.python-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:

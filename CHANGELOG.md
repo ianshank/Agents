@@ -46,6 +46,51 @@ that configs are trusted input.
   with a config-supplied name. Materially weaker (one module's namespace, not every importable
   module) but the same shape; tracked as follow-up.
 
+### CI — prerequisites for turning on required status checks (ADR 0037)
+
+Enabling required status checks today would have made things worse, in two independent ways.
+Both are fixed here so ADR 0037's settings change becomes safe to make.
+
+- **Three workflows emitted the same check contexts.** `eval-harness-ci.yml`,
+  `agent-core-ci.yml` and `claude-foundation-ci.yml` all declared `name: py${{ matrix.python-version }}`,
+  so all three posted `py3.11`/`py3.12`/`py3.13`. Branch protection matches required checks by
+  context string, so a green `py3.12` from one package would have satisfied a requirement meant
+  for another — a **false green**, not merely a nuisance. Now namespaced
+  (`eval-harness py3.12`, `agent-core py3.12`, `claude-foundation py3.12`), matching the
+  convention `behavioral-regression-ci.yml` and `flow-corpus-ci.yml` already used. No CI
+  reference to the old names existed anywhere.
+- **A path-filtered workflow reports no check at all**, and a required check with no run waits
+  forever. ADR 0037 deliberately does not enable Code-Owner review, so there is no override:
+  a docs-only, `skills/`-only or `Makefile`-only PR would have been permanently unmergeable.
+  `.github/workflows/required-check-stubs.yml` posts each context exactly once.
+
+  It deliberately does **not** use the textbook `paths-ignore:` mirror. `paths:` and
+  `paths-ignore:` are not complements — GitHub runs the first when *at least one* changed file
+  matches and the second when *at least one* does not, so a PR touching both `src/` and `docs/`
+  triggers both, which is most PRs here. That would post a duplicate green context beside the
+  real one, re-introducing the exact hazard the namespacing above removes. Instead one gate job
+  reads each real workflow's own `on.pull_request.paths:` block and evaluates it against the
+  PR's changed files, so there is one list per workflow and no mirror to drift. Fail-closed:
+  an unparseable `paths:` block reds the gate and leaves contexts unreported, because a loud
+  red is recoverable and a silent green is not.
+- **`tests/test_required_check_stubs.py`** makes the stub/real name pairing mechanical. The
+  workflow's own header calls those names "the contract", but a note is not a gate, and a
+  rename on either side silently reintroduces the deadlock. The test derives both sides from
+  the workflow files and compares them in both directions. Verified by mutation: renaming a
+  real job with its stub untouched fails with both the missing and the orphan contexts named.
+- **`agent-core` source changes now re-run the suites that depend on them.** `eval_harness`
+  has 58 import sites into `agent_core` and `eval-harness-ci.yml` already *installed* it, but
+  `agent-core/**` was absent from its paths filter, so a signature change to `wilson_interval`
+  could merge green and break `main`. Added to `eval-harness-ci.yml`; `quality-gates.yml` gets
+  the narrower `agent-core/agent_core/**` instead, because a broad `agent-core/**` shadows the
+  `agent-core/tests/**` entry that `scripts/validations/F_052.py` mutation-tests and would have
+  silently disarmed that validator.
+- **`.github/dependabot.yml`** (new) covers `pip` for the root and all five siblings plus
+  `github-actions`, monthly and grouped so each entry opens at most one PR. `ruff` and `mypy`
+  are ignored in every pip entry: they are lockstep-pinned fleet-wide (ADR 0034, `F_055.py`),
+  so a per-directory bump would fail CI by construction. Nothing grants a token, permission or
+  auto-merge.
+
 ### Fixed — two of the four demo configs were broken and nothing noticed
 
 `demo/configs/eval.pass.yaml` and `eval.fail.yaml` both crashed with

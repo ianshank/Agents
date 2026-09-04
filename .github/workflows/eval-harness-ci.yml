@@ -11,6 +11,12 @@ on:
       - ".github/actions/run-quality-gate/**"
       - "scripts/**"
       - "config/**"
+      # `src/eval_harness` imports `agent_core` directly (58 import sites across
+      # src/tests/scripts — e.g. `campaign.py` -> `wilson_interval`,
+      # `agent_core_adapter/calibration.py` -> `cohen_kappa`), which is why the job below
+      # installs `./agent-core` before running the gate. Without this entry a signature
+      # change in agent-core merged green and broke this suite on main.
+      - "agent-core/**"
       - "features.yaml"
       - "architecture.yaml"
       - "CHANGELOG.md"
@@ -26,6 +32,9 @@ on:
       - ".github/actions/run-quality-gate/**"
       - "scripts/**"
       - "config/**"
+      # See the push-paths note above: eval_harness depends on agent_core, so an
+      # agent-core-only PR must re-run this suite.
+      - "agent-core/**"
       - "features.yaml"
       - "architecture.yaml"
       - "CHANGELOG.md"
@@ -42,7 +51,12 @@ concurrency:
 
 jobs:
   test:
-    name: py${{ matrix.python-version }}
+    # Namespaced. Three workflows used to declare the bare name `py<version>`, so all three
+    # published the identical check contexts `py3.11`/`py3.12`/`py3.13`. Branch protection
+    # matches required checks by context string, so a PR touching only `claude-foundation/`
+    # could satisfy a requirement meant for this suite with a green check this workflow
+    # never produced (ADR 0040). Any new matrix job must carry its own prefix.
+    name: eval-harness py${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

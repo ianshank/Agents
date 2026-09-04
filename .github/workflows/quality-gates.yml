@@ -10,6 +10,12 @@ on:
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
+      # The gates job installs `./agent-core` and the suites it runs import `agent_core`
+      # directly, so an agent-core source change can break these gates. Only
+      # `agent-core/tests/**` was listed (and only on pull_request), which covered the
+      # protected-path guard but not the dependency. Scoped to the package source rather
+      # than all of `agent-core/**` for the reason spelled out on the pull_request list.
+      - "agent-core/agent_core/**"
       # `.github/**` is a PROTECTED_PATTERN (scripts/eval_protected_paths.py), but this
       # filter used to match only this file — so a workflow- or action-only PR skipped the
       # protected-path guard AND the feature validators entirely. PR #64 merged through that
@@ -41,6 +47,19 @@ on:
       - "flow-corpus/tests/**"
       - "flow-protocol/tests/**"
       - "claude-foundation/tests/**"
+      # Beyond the protected tests/ root above: the gates job installs `./agent-core` and
+      # the validators/suites it runs import `agent_core`, so an agent-core *source* change
+      # can break these gates. Deliberately kept alongside `agent-core/tests/**` rather
+      # than replacing it -- that entry documents the protected-path obligation, this one
+      # documents the build dependency, and the two have different reasons to exist.
+      #
+      # Scoped to the package source, NOT `agent-core/**`: a filter that broad would also
+      # cover `agent-core/tests/**`, and `scripts/validations/F_052.py` mutation-tests this
+      # very list by deleting the `agent-core/tests/**` line and requiring the pattern to
+      # become unreachable. A shadowing filter silently disarms that mutation test. The
+      # remaining agent-core inputs these gates read are already listed below
+      # (`agent-core/pyproject.toml`, `agent-core/scripts/quality-gate.sh`).
+      - "agent-core/agent_core/**"
       - "pyproject.toml"
       # Broadened from workflows/ + actions/ to all of .github/**: CODEOWNERS is what makes
       # the label gate meaningful, and it sat outside both narrower prefixes.
