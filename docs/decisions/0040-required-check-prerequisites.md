@@ -79,13 +79,29 @@ stood would have produced three failures, all of them silent:
   false green (decision 1) or a permanently unmergeable docs-only pull request (decision 2).
 - **Positive.** An `agent-core`-only pull request now re-runs the eval-harness suite that
   depends on it, which is what `eval-harness-ci.yml`'s own install step always implied.
-- **Negative.** The stub workflow's job list is a hand-maintained contract: a real job's
+- **Negative, now mitigated.** The stub workflow's job list is a contract: a real job's
   `name:` renamed without renaming its stub leaves the required context unreported on
-  filtered-out pull requests. The file says so at the top; nothing yet asserts it
-  mechanically, and a follow-up assertion in the spirit of
-  `scripts/check_guard_reachability.py` is the obvious next step.
+  filtered-out pull requests. The file says so at the top, but a note is not a gate, so
+  `tests/test_required_check_stubs.py` now derives both sides from the workflow files and
+  asserts they match in both directions — missing stubs *and* orphan stubs. Verified by
+  mutation: renaming a real job with its stub untouched fails with both sets named.
 - **Negative.** One extra small job (`required-check stub gate`) runs on every pull request.
   That is the price of deciding the stub condition from live data instead of a mirrored list.
-- **Neutral.** On a pull request that straddles a filter, the real workflow runs and its stub
-  is skipped by a job-level `if:`. GitHub reports a skipped job as a check run; because the
-  stub is skipped rather than green, the authoritative result is the real workflow's.
+- **Neutral, and confirmed against a live run rather than predicted.** On a pull request that
+  straddles a filter, the real workflow runs and its stub is skipped by a job-level `if:`.
+  GitHub reports a skipped job as a check run, and for a **matrix** stub it does *not* expand
+  the matrix before skipping — the run is posted under the literal name
+  `eval-harness py${{ matrix.python-version }}`. Observed on this ADR's own pull request
+  (`a9b2d65`), where the `eval-harness`, `agent-core`, `claude-foundation`, quality-gates and
+  architecture-drift stubs were skipped while their real workflows ran, and the
+  `flow-corpus`, `flow-protocol` and `behavioral-regression` stubs ran and posted correctly
+  expanded names.
+
+  Two consequences follow, and the first is the one that matters. A skipped matrix stub
+  therefore posts a context that **no required check can ever name**, so it can never satisfy
+  a requirement on the real job's behalf — the duplicate-context hazard decision 1 exists to
+  remove does not arise here. The cost is cosmetic: a handful of unexpanded placeholder rows
+  in the checks list on pull requests that trigger a matrix workflow. Left as-is deliberately.
+  Suppressing them means driving the matrix itself from `fromJSON(...)` so it evaluates to an
+  empty list, which trades a proven mechanism for an exotic one to remove noise that misleads
+  nobody. Revisit only if the noise becomes a real review burden.
