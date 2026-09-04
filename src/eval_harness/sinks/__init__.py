@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 
 from ..braintrust_client import BrainTrustClient, NullBrainTrustClient, build_client
+from ..core._paths import OUTPUT_ROOT_ENV, resolve_confined_path
 from ..core._serialize import as_text as _as_text
 from ..core.interfaces import ResultSink
 from ..core.types import ItemResult, RunResult
@@ -16,6 +17,30 @@ from ..phoenix_client import PhoenixScoreClient, build_score_client
 from ..plugins import SINKS
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_output_path(path: str | Path) -> Path:
+    """Validate and resolve a file sink's output path.
+
+    The file sinks create directories and overwrite files, so an unvalidated
+    config-supplied path let a run write anywhere the process could. This confines
+    the write to the root named by ``OUTPUT_ROOT`` — a *separate* variable from the
+    dataset read root, so naming a read-only corpus as ``DATA_ROOT`` never makes it
+    a legal write target.
+
+    ``must_exist=False``: the report does not exist yet, and its parent directory is
+    created by ``emit``. Confinement is still decided on the fully resolved path.
+
+    With ``OUTPUT_ROOT`` unset the write stays unrestricted, exactly as before, and
+    an absolute path logs one warning — emitted here in ``__init__`` rather than in
+    ``emit``, so it fires once per sink instead of once per run.
+    """
+    return resolve_confined_path(
+        path,
+        root_env_var=OUTPUT_ROOT_ENV,
+        description="sink output path",
+        must_exist=False,
+    )
 
 
 @SINKS.register("console")
@@ -38,7 +63,7 @@ class ConsoleSink(ResultSink):
 @SINKS.register("json_file", aliases=("json",))
 class JsonFileSink(ResultSink):
     def __init__(self, path: str, indent: int = 2):
-        self.path = Path(path)
+        self.path = _validate_output_path(path)
         self.indent = indent
 
     def emit(self, run: RunResult) -> None:
@@ -75,7 +100,7 @@ class HtmlFileSink(ResultSink):
         embed_items: bool = True,
         bar_width_px: int = _DEFAULT_BAR_WIDTH_PX,
     ):
-        self.path = Path(path)
+        self.path = _validate_output_path(path)
         self.title = title
         self.embed_items = embed_items
         self.bar_width_px = bar_width_px
