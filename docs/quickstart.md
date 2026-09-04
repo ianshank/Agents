@@ -113,6 +113,12 @@ Each line must be a JSON object with `id`, `inputs`, and optionally `expected`:
 {"id": "s2", "inputs": {"text": "rockets are loud"}, "expected": "summary: rockets are loud"}
 ```
 
+On a shared or CI runner, set `DATA_ROOT` to confine dataset reads to a directory
+(`export DATA_ROOT=./data`); unset is unconfined and only logs a warning. If your target is
+`type: callable`, see [Config files are executable input](../README.md#config-files-are-executable-input)
+before you run it — an eval config that can import and call a module is executable input, not
+plain data.
+
 ---
 
 ## 5. Connect a Real LLM Judge
@@ -175,7 +181,8 @@ Scores and traces will appear in your Langfuse dashboard.
 
 ## 7. Multi-Model Comparison
 
-Compare two models side-by-side with an HTML report:
+Compare several targets side-by-side with an HTML report. This example is fully offline —
+swap either `echo` target for `type: model` (see step 5) to compare real endpoints:
 
 ```yaml
 schema_version: "1.0"
@@ -184,34 +191,40 @@ run:
   name: "model-comparison"
   seed: 42
 
+target:
+  type: echo
+  params: { output_key: question }
+
 dataset:
   type: inline
   params:
     items:
       - id: q1
-        inputs: { question: "What is Python?" }
+        inputs: { question: "What is Python?", off_topic: "I like turtles." }
         expected: "A programming language."
 
 comparison:
-  targets:
-    - name: "gpt-4o-mini"
-      type: model
-      params: { model: "gpt-4o-mini", provider: "openai" }
-    - name: "echo-baseline"
-      type: echo
-      params: { output_key: question }
+  models:
+    - name: "on-topic-echo"
+      target: { type: echo, params: { output_key: question } }
+    - name: "off-topic-echo"
+      target: { type: echo, params: { output_key: off_topic } }
+  rank_metric: pass_rate
 
 scorers:
   - type: contains
     params: { name: mentions_python, substring: "Python" }
 
-judge:
-  type: openai
-  params: { model: "gpt-4o-mini" }
-
 sinks:
   - type: console
 ```
+
+Run it with `eval-harness compare --config <this file>`. Each model's ranking now carries a
+Wilson-interval verdict, not just a point estimate (ADR 0041): with one item per model the
+comparison honestly reports `overall_verdict: cant_tell` rather than declaring a winner —
+raise `comparison.min_sample` (default 30) or add more dataset items before trusting a
+ranking. `rank_metric: pass_rate` gets a confidence interval; `mean` (the default) does not,
+since it is not a proportion.
 
 ```bash
 eval-harness compare --config comparison_eval.yaml

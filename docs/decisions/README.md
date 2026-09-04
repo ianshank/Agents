@@ -55,3 +55,7 @@ changes course is a *new* ADR that supersedes the old one, not an edit.
 | [0035](0035-panel-judge.md) | PanelJudge: aggregate N member judges, abstain rather than guess |
 | [0036](0036-decompose-engine-and-agent-core-adapter.md) | Decompose `engine.py` and `agent_core_adapter` into focused modules |
 | [0037](0037-branch-protection-under-a-single-maintainer.md) | Branch protection under a single maintainer: required status checks, deferred Code-Owner review |
+| [0038](0038-item-error-policy.md) | `item_error_policy`: a target failure is data, and `max_workers` decides nothing about it |
+| [0039](0039-callable-target-allowlist.md) | An eval config is untrusted input: allowlist `callable` target imports |
+| [0040](0040-required-check-prerequisites.md) | Prerequisites for required status checks: namespaced check contexts and stub jobs |
+| [0041](0041-confidence-aware-model-comparison.md) | Confidence-aware multi-model comparison (additive) |

@@ -52,7 +52,7 @@ C4Container
         Container(cli, "CLI", "Python / argparse", "Entry point — parses args, loads config, runs engine")
         Container(engine, "EvalEngine", "Python", "Orchestrates: load → sample → run → score → aggregate → emit")
         Container(config, "Config Loader", "Python / Pydantic", "YAML → migrate → interpolate → validate → EvalConfig")
-        Container(core, "Core (core)", "Python", "Structural Protocol contracts (Scorer, Judge, DatasetSource, TargetRunner, ResultSink) + generic Registry[T] with structured logging and alias support (src/eval_harness/core/)")
+        Container(core, "Core (core)", "Python", "Structural Protocol contracts (Scorer, Judge, DatasetSource, TargetRunner, ResultSink) + generic Registry[T] with structured logging and alias support (src/eval_harness/core/). Also holds the two operator-controlled trust-boundary gates: _imports.py (allowlist for config-driven dynamic imports, ADR 0039) and _paths.py (DATA_ROOT/OUTPUT_ROOT read/write confinement) — both pure stdlib, so neither adds a dependency")
         Container(plugins, "Plugin Loader (plugins)", "Python", "Central registries (SCORERS, JUDGES, ...) — built-in self-registration + entry-point discovery via the eval_harness.plugins group (src/eval_harness/plugins.py)")
         Container(agent_core_adapter, "agent_core_adapter", "Python", "Bridge to agent_core (config.py, bridge.py, budget.py, gate_authorization.py submodules, ADR 0036) — BudgetLedger cost caps (F-022), sliding-window rate limits (F-030), judge-calibration gate authorization (F-057), CycleRunner/CostEstimator protocol bridge for LoopController")
     }
@@ -60,11 +60,11 @@ C4Container
     Container_Boundary(components, "Pluggable Components (Tested completely offline via deterministic mocks)") {
         Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, weighted, llm_judge, autoevals; trajectory_{exact,in_order,any_order,precision_recall,step_efficiency,loop_detection,recovery} (F-051)")
         Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible), anthropic, phoenix_evals")
-        Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust")
-        Container(targets, "Targets", "Python", "echo, callable (dynamic import)")
-        Container(sinks, "Sinks", "Python", "console, json_file, html_file, langfuse, phoenix, braintrust")
+        Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust — file-backed sources resolve through core/_paths.py, confined to DATA_ROOT when set")
+        Container(targets, "Targets", "Python", "echo, callable (dynamic import, gated by core/_imports.py's EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST — unset denies, ADR 0039)")
+        Container(sinks, "Sinks", "Python", "console, json_file, html_file, langfuse, phoenix, braintrust — file-backed sinks resolve through core/_paths.py, confined to OUTPUT_ROOT when set")
         Container(state_adapters, "State Adapters", "Python", "in_memory, filesystem, sqlite, mock_http — local, deterministic; the engine brackets target.run with reset/snapshot/evaluate when configured, detecting an agent that reports success without changing anything (F-060)")
-        Container(gating, "Quality Gate", "Python", "Config-driven pass/fail for CI, including pass_at_k/pass_power_k reliability metrics (F-056) and judge-calibration-artifact enforcement (F-057)")
+        Container(gating, "Quality Gate", "Python", "Config-driven pass/fail for CI, including pass_at_k/pass_power_k reliability metrics (F-056), judge-calibration-artifact enforcement (F-057), and a refusal to pass over item-execution failures unless gate.allow_item_errors=true (ADR 0038)")
         Container(reliability, "Reliability Metrics", "Python", "Pure pass@k/pass^k aggregation over repeated attempts (F-056, src/eval_harness/reliability.py) — no I/O, clock or RNG; gating consumes it lazily, on demand, only when a gate rule asks for it")
     }
 
@@ -131,13 +131,13 @@ C4Component
     Container_Boundary(engine_boundary, "EvalEngine") {
         Component(from_config, "from_config()", "classmethod", "Bootstrap registries, resolve components, inject client")
         Component(run_method, "run()", "method", "Orchestrate full evaluation: load → sample → score → aggregate → emit")
-        Component(run_one, "_run_one()", "method", "Execute single item: [state_adapter: reset→snapshot→]target.run()[→snapshot→evaluate] → scorer.score() → link trace. The bracketed span, when a state_adapter is configured, holds a lock across target.run() itself (F-060) — serializing it under max_workers>1, the documented cost of a shared adapter instance")
+        Component(run_one, "_run_one()", "method", "Execute single item: [state_adapter: reset→snapshot→]target.run()[→snapshot→evaluate] → scorer.score() → link trace. The bracketed span, when a state_adapter is configured, holds a lock across target.run() itself (F-060) — serializing it under max_workers>1, the documented cost of a shared adapter instance. Wrapped by run_item_guarded() (ADR 0038): a target exception is fatal by default (item_error_policy='raise', identical on both execution paths) or, opted into via 'record', rendered as a visibly-failed ItemResult rather than dropped or silently completing the run")
         Component(sample, "_sample()", "method", "Deterministic sampling via seeded RNG")
         Component(aggregate, "_aggregate()", "staticmethod", "Compute mean, pass_rate per scorer across all items")
     }
 
     Container_Boundary(exec_boundary, "core/_execution_strategies.py (ADR 0036)") {
-        Component(exec_strategies, "_execute_parallel(), _execute_sequential_repeated()", "functions", "Pure, parameterized item-execution strategies -- explicit leaf params only, never self/EvalConfig/EvalEngine (core has zero declared architecture.yaml dependencies)")
+        Component(exec_strategies, "_execute_parallel(), _execute_sequential_repeated(), run_item_guarded()", "functions", "Pure, parameterized item-execution strategies -- explicit leaf params only, never self/EvalConfig/EvalEngine (core has zero declared architecture.yaml dependencies). item_error_policy, never max_workers, decides whether a target failure aborts the run or is recorded; FATAL_RUN_ERRORS (StateResetError, ImportError) always aborts regardless of policy")
     }
 
     Container_Boundary(deps, "Dependencies") {
@@ -149,7 +149,7 @@ C4Component
     Rel(from_config, run_method, "creates engine, then caller invokes run()")
     Rel(run_method, sample, "filter items by sample_rate")
     Rel(run_method, run_one, "for each sampled item")
-    Rel(run_method, exec_strategies, "delegates when max_workers>1 or run.repetitions>1, via a make_ctx(item_index, rng) closure")
+    Rel(run_method, exec_strategies, "delegates when max_workers>1 or run.repetitions>1, via a make_ctx(item_index, rng) closure; the single-attempt sequential path also calls run_item_guarded() directly, so item_error_policy applies uniformly")
     Rel(run_method, aggregate, "after all items scored")
     Rel(run_one, run_context, "threaded through scorers")
     Rel(run_method, run_result, "produces")
@@ -339,6 +339,8 @@ flowchart TB
     PR --> DRIFT[check_skill_script_drift.py<br/>vendored skill copies == canonical]
     PR --> CHARTER[check_charter_drift.py<br/>docs/CHARTER.md references resolve — via test suite]
     PR --> CHARTERINV[check_charter_invariants.py<br/>docs/CHARTER.md's claims still hold in the code]
+    PR --> COVFLOOR[check_coverage_floors.py<br/>coverage-floors.yaml pinned minimums — ADR: lowering a floor now fails CI]
+    PR --> STUBS[required-check-stubs.yml<br/>posts a green stub for a required check its real workflow's paths: filter skipped — ADR 0040]
     PR --> MG[calibrated-merge-gate.yml<br/>F-010 acting job — default-off]
     PR --> SHADOW[shadow job F-035<br/>log-only, never blocks]
 

@@ -95,6 +95,7 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 
 - **No hard-coded secrets, absolute paths, or production URLs in source.** Credentials come from environment variables (`LANGFUSE_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `PHOENIX_COLLECTOR_ENDPOINT`, `AWS_*`). See `.env.example` for the canonical set.
 - **No hard-coded numeric defaults at call sites.** They belong in a `*Config` dataclass field with the default documented on the field. Example: `JudgeBudgetConfig.skip_score` replaces a literal `0.0` at the call site.
+- **An eval config is untrusted input, not data.** The `callable` target turns `params.path` into an import and a call, so it is gated by `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST` (unset means deny; matching is on module boundaries, never a string prefix — see ADR 0039). Dataset reads and sink writes are separately confined by `DATA_ROOT`/`OUTPUT_ROOT` (`src/eval_harness/core/_paths.py`; unset means unconfined, with one warning). Do not add a new config-driven filesystem or import path without routing it through one of these two gates.
 - **`SCHEMA_VERSION` is single-sourced** in `src/eval_harness/version.py`. Do not touch it in a feature branch. Bumps happen in dedicated release commits and require migration code (see `src/eval_harness/config/migrations.py`).
 - **`from_dict` is strict.** Unknown keys raise `ConfigError`. Do not add permissive fallbacks.
 - **`ClaimId` is opaque `str`.** Never sanitize `CycleState.unresolved`.
