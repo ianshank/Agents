@@ -44,6 +44,29 @@ PROTECTED_PATTERNS: tuple[str, ...] = (
     # declared component edges could quietly let the corpus and harness import each
     # other. Treat edge changes as eval-integrity changes requiring human review.
     "architecture.yaml",
+    # Gate THRESHOLDS, and the manifest that pins them. Everything above protects files
+    # that *define* a gate; none of them covered the files where the gate's number lives.
+    # A PR lowering `fail_under = 96` to 50 in pyproject.toml and the matching
+    # `--cov-fail-under=` in the gate script passed every check here, with no label and no
+    # code owner: check_charter_invariants only asserts a floor *exists*, and
+    # test_e2e_matrix only asserts two anchors state the *same* number, not which.
+    # coverage-floors.yaml is the declarative pin (scripts/check_coverage_floors.py
+    # enforces it); the rest are the files it reads.
+    "coverage-floors.yaml",
+    "pyproject.toml",
+    "scripts/quality-gate.sh",
+    "scripts/.coveragerc",
+    # Each sibling package states its own floor twice, in the same two places.
+    "agent-core/pyproject.toml",
+    "agent-core/scripts/quality-gate.sh",
+    "behavioral-regression/pyproject.toml",
+    "behavioral-regression/scripts/quality-gate.sh",
+    "flow-corpus/pyproject.toml",
+    "flow-corpus/scripts/quality-gate.sh",
+    "flow-protocol/pyproject.toml",
+    "flow-protocol/scripts/quality-gate.sh",
+    "claude-foundation/pyproject.toml",
+    "claude-foundation/scripts/quality-gate.sh",
 )
 
 

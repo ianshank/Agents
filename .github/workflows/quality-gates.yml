@@ -48,6 +48,21 @@ on:
       # The architecture manifest is the airgap's enforcement surface — editing its declared
       # component edges could quietly let the corpus and harness import each other.
       - "architecture.yaml"
+      # Gate thresholds. The pins live in coverage-floors.yaml; the rest are the files it
+      # reads, where a floor could otherwise be lowered with no label and no code owner.
+      # (`scripts/quality-gate.sh` and `scripts/.coveragerc` are already inside
+      # `scripts/**` above; the sibling packages' copies are not, so each is named here.)
+      - "coverage-floors.yaml"
+      - "agent-core/pyproject.toml"
+      - "agent-core/scripts/quality-gate.sh"
+      - "behavioral-regression/pyproject.toml"
+      - "behavioral-regression/scripts/quality-gate.sh"
+      - "flow-corpus/pyproject.toml"
+      - "flow-corpus/scripts/quality-gate.sh"
+      - "flow-protocol/pyproject.toml"
+      - "flow-protocol/scripts/quality-gate.sh"
+      - "claude-foundation/pyproject.toml"
+      - "claude-foundation/scripts/quality-gate.sh"
   workflow_dispatch:
 
 permissions:
@@ -139,6 +154,13 @@ jobs:
       # including architecture.yaml, the airgap's own enforcement surface (F-052).
       - name: Protected-path guard reachability
         run: python scripts/check_guard_reachability.py
+      # Coverage-floor pin gate: the protected-path guard covers files that *define* a
+      # gate, but nothing asserted the gate THRESHOLDS. check_charter_invariants only
+      # checks a floor exists and test_e2e_matrix only checks two anchors agree, so
+      # 96 -> 50 in both places passed everything. coverage-floors.yaml pins the minimum
+      # for each unit and this asserts no declared floor has dropped beneath its pin.
+      - name: Coverage-floor pins
+        run: python scripts/check_coverage_floors.py
       # Charter-drift guard: every markdown reference in docs/CHARTER.md resolves to a
       # real repo file/ADR (also enforced via the full test suite; this is the first-class
       # gate signal, mirroring the sibling guards above).
@@ -164,12 +186,13 @@ jobs:
           tests/test_check_charter_drift.py tests/test_check_charter_invariants.py
           tests/test_check_guard_reachability.py tests/test_matrix_coverage.py
           tests/test_agent_confidence.py tests/test_extract_registries.py
+          tests/test_check_coverage_floors.py
           --override-ini addopts=""
           --cov=regression_gate --cov=eval_protected_paths
           --cov=check_protected_changes --cov=fix_loop
           --cov=check_skill_script_drift --cov=_cli --cov=check_size_budget
           --cov=check_charter_drift --cov=check_charter_invariants
-          --cov=check_guard_reachability --cov=agent_confidence
+          --cov=check_guard_reachability --cov=check_coverage_floors --cov=agent_confidence
           --cov=skill_marketplace --cov=_common --cov=extract_registries
           --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023 --cov=F_024 --cov=F_025 --cov=F_026 --cov=F_027 --cov=F_028 --cov=F_029 --cov=F_030 --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037 --cov=F_038 --cov=F_039 --cov=F_040 --cov=F_041 --cov=F_042 --cov=F_043 --cov=F_044 --cov=F_045 --cov=F_046 --cov=F_047 --cov=F_048 --cov=F_049 --cov=F_050 --cov=F_051 --cov=F_052 --cov=F_053 --cov=F_054 --cov=F_055 --cov=F_056 --cov=F_057 --cov=F_058 --cov=F_059 --cov=F_060 --cov=F_061
           --cov=tests._matrix_coverage

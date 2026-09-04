@@ -57,8 +57,9 @@ matrix-update: ## Regenerate docs/matrix-coverage.md from the live registry cens
 
 .PHONY: e2e-matrix-check e2e-matrix-update invariants e2e-matrix
 
-invariants: ## Verify charter invariants and architecture drift
+invariants: ## Verify charter invariants, coverage-floor pins and architecture drift
 	$(PYTHON) scripts/check_charter_invariants.py
+	$(PYTHON) scripts/check_coverage_floors.py
 	$(PYTHON) scripts/check_charter_drift.py
 
 e2e-matrix: ## Run the full end-to-end matrix test suite
@@ -111,6 +112,7 @@ pre-pr: ## Full pre-PR validation: every gate CI enforces, chained locally; accu
 	echo "[pre-pr] make invariants"; $(MAKE) invariants || { echo "[pre-pr]   FAILED: make invariants"; rc=1; }; \
 	echo "[pre-pr] check_size_budget.py"; $(PYTHON) scripts/check_size_budget.py || { echo "[pre-pr]   FAILED: check_size_budget.py"; rc=1; }; \
 	echo "[pre-pr] check_guard_reachability.py"; $(PYTHON) scripts/check_guard_reachability.py || { echo "[pre-pr]   FAILED: check_guard_reachability.py"; rc=1; }; \
+	echo "[pre-pr] check_coverage_floors.py"; $(PYTHON) scripts/check_coverage_floors.py || { echo "[pre-pr]   FAILED: check_coverage_floors.py"; rc=1; }; \
 	echo "[pre-pr] check_skill_script_drift.py"; $(PYTHON) scripts/check_skill_script_drift.py || { echo "[pre-pr]   FAILED: check_skill_script_drift.py"; rc=1; }; \
 	echo "[pre-pr] check_protected_changes.py"; $(PYTHON) scripts/check_protected_changes.py || { echo "[pre-pr]   FAILED: check_protected_changes.py"; rc=1; }; \
 	echo "[pre-pr] regression_gate.py --base-ref $(PRE_PR_BASE_REF)"; $(PYTHON) scripts/regression_gate.py --base-ref "$(PRE_PR_BASE_REF)" || { echo "[pre-pr]   FAILED: regression_gate.py"; rc=1; }; \
