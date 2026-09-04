@@ -18,10 +18,23 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 
+from ._imports import DisallowedImportError
 from .interfaces import StateResetError
 from .types import EvalItem, ItemResult, RunContext, ScoreResult, TargetOutput
 
 logger = logging.getLogger(__name__)
+
+#: Failures that abort the whole run regardless of ``item_error_policy``,
+#: because they are not item outcomes and recording them per item would be
+#: misleading rather than informative.
+#:
+#: * ``StateResetError`` -- continuing risks scoring against dirty state.
+#: * ``DisallowedImportError`` -- the target could not be resolved at all, so
+#:   every item would fail identically. That is a configuration or trust
+#:   decision, not N independent measurements, and a run that "completed" with
+#:   everything failed is exactly the kind of misleading artefact this module
+#:   now exists to prevent.
+FATAL_RUN_ERRORS: tuple[type[BaseException], ...] = (StateResetError, DisallowedImportError)
 
 #: Score name carried by an item whose target raised. A structural identifier,
 #: not a tuning knob, so it is a module constant rather than a config field --
@@ -85,8 +98,9 @@ def run_item_guarded(
     """Run one attempt, applying ``item_error_policy`` to a target failure.
 
     Shared by both sequential paths so they cannot drift from the parallel one.
-    ``StateResetError`` is re-raised untouched under every policy: continuing
-    past a failed reset risks scoring against dirty state (``_state_lifecycle``).
+    Every member of ``FATAL_RUN_ERRORS`` is re-raised untouched under every
+    policy -- see that constant for why each one aborts the run rather than
+    becoming a recorded item failure.
 
     ``call`` is a zero-argument closure rather than a runner plus arguments, so
     each caller keeps its own exact invocation -- notably the legacy two-argument
@@ -94,7 +108,7 @@ def run_item_guarded(
     """
     try:
         return call()
-    except StateResetError:
+    except FATAL_RUN_ERRORS:
         raise
     except Exception as exc:
         if item_error_policy == ITEM_ERROR_POLICY_RAISE:
@@ -194,8 +208,9 @@ def _execute_parallel(
         for future, (item, attempt_index, item_run_id) in zip(futures, submitted, strict=True):
             try:
                 index, result_or_exc = future.result()
-            except StateResetError:
-                # Never policy-gated -- continuing risks scoring against dirty state.
+            except FATAL_RUN_ERRORS:
+                # Never policy-gated: see FATAL_RUN_ERRORS for why each member
+                # aborts the run rather than becoming a recorded item failure.
                 executor.shutdown(wait=False, cancel_futures=True)
                 raise
             if isinstance(result_or_exc, Exception):

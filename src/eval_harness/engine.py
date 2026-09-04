@@ -20,6 +20,7 @@ from typing import Any, cast
 
 from .config.models import EvalConfig
 from .core._execution_strategies import (
+    FATAL_RUN_ERRORS,
     ITEM_ERROR_POLICY_RAISE,
     _execute_parallel,
     _execute_sequential_repeated,
@@ -36,7 +37,6 @@ from .core.interfaces import (
     ResultSink,
     Scorer,
     StateAdapter,
-    StateResetError,
     TargetRunner,
     _uses_judge,
 )
@@ -308,8 +308,8 @@ class EvalEngine:
                 result = self._run_one(item, ctx, attempt_index=attempt_index, item_run_id=item_run_id)
             item_logger.debug("Completed item %s (index=%d)", item.id, index)
             return (index, result)
-        except StateResetError:
-            raise  # never swallowed -- always aborts the run, regardless of fail_fast
+        except FATAL_RUN_ERRORS:
+            raise  # never swallowed -- always aborts the run, regardless of policy
         except Exception as exc:
             item_logger.error("Item %s (index=%d) failed: %s", item.id, index, exc)
             return (index, exc)

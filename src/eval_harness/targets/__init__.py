@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import importlib
 import time
 from collections.abc import Callable
 from typing import Any
 
+from ..core._imports import import_allowed_module
 from ..core.interfaces import TargetRunner
 from ..core.types import EvalItem, TargetOutput
 from ..plugins import TARGETS
@@ -39,11 +39,21 @@ class CallableTarget(TargetRunner):
         self._fn: Callable[..., Any] | None = None
 
     def _resolve(self) -> Callable[..., Any]:
+        """Resolve ``path`` to a callable, refusing modules the operator has not
+        allowed.
+
+        ``import_allowed_module`` replaces a bare ``importlib.import_module``:
+        this method turns a configuration string into executed code, so the
+        module has to clear ``EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST`` *before*
+        it is imported. Deliberately still lazy -- resolving in ``__init__``
+        would move the failure to registry construction and change when an
+        unresolvable path is reported.
+        """
         if self._fn is None:
             module_name, _, attr = self.path.partition(":")
             if not attr:
                 raise ValueError(f"target path {self.path!r} must be 'module:function'")
-            module = importlib.import_module(module_name)
+            module = import_allowed_module(module_name)
             self._fn = getattr(module, attr)
         return self._fn
 

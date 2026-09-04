@@ -28,7 +28,7 @@ from eval_harness.config import load_config_dict
 from eval_harness.config.models import RunSettings
 from eval_harness.core._execution_strategies import ITEM_ERROR_SCORE_NAME
 from eval_harness.core.interfaces import StateResetError
-from eval_harness.core.types import EvalItem, TargetOutput
+from eval_harness.core.types import EvalItem, ItemResult, RunResult, ScoreResult, TargetOutput
 from eval_harness.engine import EvalEngine
 from eval_harness.langfuse_client import NullLangfuseClient
 from eval_harness.plugins import TARGETS, bootstrap
@@ -127,15 +127,18 @@ def _config(
     }
 
 
-def _run(**overrides: object):
+def _run(**overrides: object) -> RunResult:
     """Build an engine from a config dict and run it."""
     cfg_dict = _config(**overrides)  # type: ignore[arg-type]
-    engine = EvalEngine.from_config(load_config_dict(cfg_dict), langfuse_client=NullLangfuseClient())
+    engine: EvalEngine = EvalEngine.from_config(load_config_dict(cfg_dict), langfuse_client=NullLangfuseClient())
     engine.clock = _fixed_clock
-    return engine.run()
+    # Bound to a typed local first: EvalEngine.run is @observe()-decorated, so
+    # its return type erases to Any at the call site.
+    result: RunResult = engine.run()
+    return result
 
 
-def _scores_by_name(item_result) -> dict[str, object]:
+def _scores_by_name(item_result: ItemResult) -> dict[str, ScoreResult]:
     return {s.name: s for s in item_result.scores}
 
 
@@ -280,7 +283,9 @@ class TestRepeatedAttempts:
         assert len(run.items) == N_ITEMS * repetitions
         failed = [ir for ir in run.items if ir.item.id == FAILING_ITEM_ID]
         assert len(failed) == repetitions
-        assert sorted(ir.attempt_index for ir in failed) == list(range(repetitions))
+        # Every attempt of a failing item carries its own identity, so the set of
+        # attempt indices must be complete -- not merely the right length.
+        assert sorted(ir.attempt_index for ir in failed if ir.attempt_index is not None) == list(range(repetitions))
         for ir in failed:
             assert ir.attempt_id == f"{FAILING_ITEM_ID}:{ir.attempt_index}"
             assert ir.item_run_id is not None

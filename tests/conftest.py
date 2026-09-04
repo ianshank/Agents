@@ -30,9 +30,35 @@ for _p in (
 if str(SCRIPTS) not in sys.path:
     sys.path.append(str(SCRIPTS))
 
+from eval_harness.core._imports import CALLABLE_ALLOWLIST_ENV  # noqa: E402
 from eval_harness.plugins import bootstrap  # noqa: E402
 
 bootstrap()
+
+# --------------------------------------------------------------------------- #
+# Allowlist for config-named dynamic imports (ADR 0039).
+#
+# `CallableTarget` turns a config string into executed code, so an unset
+# allowlist now means *deny*. The suite is a trusted operator context and must
+# still exercise the registered `callable` path (ADR 0032's matrix obligation),
+# so it declares its own allowlist here -- once, rather than in each of the
+# eleven test modules that resolve a callable.
+#
+# Enumerated rather than set to "*" on purpose: the gate stays LIVE for the
+# whole run, so a test that reached for `subprocess` or `os` would still be
+# refused. Each entry earns its place:
+#
+#   tests       -- `tests._sut`, the suite's system-under-test fixtures.
+#   json        -- the matrix M1 correctness row resolves `json:dumps`.
+#   nonexistent -- the matrix M6 error row resolves `nonexistent.module_xyz` to
+#                  prove a genuinely missing module still raises ImportError.
+#                  Without it, the allowlist would refuse that row first and it
+#                  would pass for the wrong reason.
+#
+# setdefault, not an unconditional set, so an operator can widen it for a local
+# debugging run without editing this file.
+# --------------------------------------------------------------------------- #
+os.environ.setdefault(CALLABLE_ALLOWLIST_ENV, "tests,json,nonexistent")
 
 # --------------------------------------------------------------------------- #
 # Hypothesis profiles. Mirrors agent-core/tests/conftest.py so the whole monorepo shares one

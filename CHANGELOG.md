@@ -6,6 +6,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Security — an eval config could execute arbitrary commands and report the run as clean
+
+**Breaking, deliberately.** `CallableTarget` resolved `params.path` ("module:attribute") with
+a bare `importlib.import_module` plus `getattr`, with no allowlist anywhere — `plugins.py`
+gates the component `type` name, never the callable path — and then called the result with
+the dataset item's `inputs`. A config naming `subprocess:call` with a dict of `inputs` reaches
+`Popen`, which builds argv by iterating its argument, so the dict's keys become a command
+line. Verified end to end through the real registry: the command ran and the harness reported
+`error: None`. A second variant needs no attribute at all, since `import_module` runs a
+module's import-time side effects before `getattr` is reached.
+
+Live rather than theoretical: `demo/configs/` already ships `type: callable` configs and
+`demo/` is **not** a protected path, so a PR could add a weaponised demo config with no
+`eval-change-approved` label; and nothing in `README.md`, `SECURITY.md` or the charter states
+that configs are trusted input.
+
+- **[ADR 0039](docs/decisions/0039-callable-target-allowlist.md)** records the decision.
+- **`EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST`** (new, documented in `.env.example`) names the
+  module prefixes a config may import. It lives in the environment, not the config, because
+  the config is the untrusted side of the boundary. **Unset means deny** — the previous
+  default, "import anything this interpreter can reach", is not one a tool that loads YAML
+  from disk can keep. The refusal names the variable and the module, so recovery is one
+  `export`.
+- **The check precedes the import**, so a denied module's import-time side effects never run.
+  Asserted by a test that stubs `import_module` and proves it is never reached.
+- **Matching is on dotted-component boundaries**, never a raw string prefix: `tests` admits
+  `tests._sut` and refuses `tests_evil`. A naive `startswith` here would have reproduced the
+  `DATA_ROOT` sibling-prefix bypass fixed in this same release, one subsystem over.
+- **`DisallowedImportError` subclasses `ImportError`**, so `except ImportError` keeps working,
+  and it joins `FATAL_RUN_ERRORS` (ADR 0038) so a refusal aborts the run rather than becoming
+  N identical recorded item failures. A trust decision is not a measurement.
+- **`*` disables the gate** for an operator who authored every config, and logs at WARNING
+  *every time it is honoured*, so it cannot be set in CI and quietly forgotten.
+- **Migration**: any config using `type: callable` needs the variable set. `tests/conftest.py`
+  declares `tests,json,nonexistent` once for the suite rather than editing the eleven modules
+  that resolve a callable — enumerated rather than `*` so the gate stays live during the run.
+- **Not addressed here**: `scorers/__init__.py` does `getattr(autoevals, scorer)(**kwargs)`
+  with a config-supplied name. Materially weaker (one module's namespace, not every importable
+  module) but the same shape; tracked as follow-up.
+
+### Security — dataset path confinement was bypassable, and sinks had none at all
+
+`_validate_dataset_path` decided containment with `str(resolved).startswith(str(data_root))`.
+A string prefix is not a path prefix: with `DATA_ROOT=/srv/data`, a path resolving to
+`/srv/data-secrets/leak.jsonl` was accepted. Worse, setting `DATA_ROOT` also switched off the
+`..` traversal check (`and not data_root_env`), so the variable that exists to confine reads
+made validation strictly weaker. Both bypasses were reproduced before the fix and are now
+regression tests.
+
+Separately, the write path had no validation whatsoever. `JsonFileSink` and `HtmlFileSink`
+took a path straight from config and called `mkdir(parents=True)` then `write_text`, so a
+config could create and overwrite a file anywhere the process could write, including
+directories that did not yet exist. The read path had been hardened; the write path never was.
+
+- **`src/eval_harness/core/_paths.py`** (new) single-sources the rule for both directions.
+  Containment uses `Path.is_relative_to` on resolved paths, matching how
+  `experiments/backend-validation`'s deploy module already checks bind-mount containment.
+  The `..` check is now unconditional, so `DATA_ROOT` can only ever make validation stronger.
+- **`OUTPUT_ROOT`** (new) confines sink writes. Deliberately a separate variable from
+  `DATA_ROOT`: a deployment that mounts its corpus read-only and names it as the read root
+  must not thereby declare that corpus a legal write target.
+- **Backwards compatible.** Both roots unset means unconfined, as before, with one warning
+  per sink rather than per `emit`. `ValueError` type and all three message shapes are
+  preserved verbatim, so existing tests and `F_019` still match.
+- The read/write difference is one documented parameter, not a duplicated function: a read
+  requires the target to exist (`resolve(strict=True)`), a write accepts a not-yet-existing
+  file whose parent the caller creates.
+
+### Hardening — coverage floors are pinned, and lowering one now fails CI
+
+The eval-integrity system protected the files that *define* a gate, never the files where
+the gate *thresholds* live. `pyproject.toml`, `scripts/quality-gate.sh`, `scripts/.coveragerc`
+and every sibling package's copies were all unprotected, and no gate asserted the values:
+`check_charter_invariants.check_coverage_floors_declared` is existence-only, and
+`tests/test_e2e_matrix.py::test_floor_anchors_agree_with_each_other` asserts only that two
+anchors state the *same* number, not which. A pull request changing `fail_under = 96` to `50`
+in both places passed every gate with no `eval-change-approved` label and no code owner. The
+intended values existed only as prose in `docs/CHARTER_ALIGNMENT_AUDIT.md`, which no gate reads.
+
+- **New `coverage-floors.yaml`** — the declarative pin for every gated unit's minimum coverage
+  floor (root 96, agent-core/behavioral-regression/flow-corpus/flow-protocol 95,
+  claude-foundation 85, scripts 85), listing each file that independently declares it.
+- **New `scripts/check_coverage_floors.py`** — reads that manifest, extracts the floor actually
+  declared in each source (`[tool.coverage.report] fail_under`, `--cov-fail-under=`,
+  `[report] fail_under`) and fails with the file, the pin and the actual value when a floor has
+  dropped beneath its pin. It hard-codes no threshold; raising a floor needs no change, lowering
+  one means editing the manifest. Wired into `quality-gates.yml`, `make invariants` and
+  `make pre-pr` alongside the sibling guards, with `tests/test_check_coverage_floors.py`.
+- **`PROTECTED_PATTERNS` extended** to the threshold files and the manifest, with the matching
+  `pull_request: paths:` entries in `quality-gates.yml` (asserted by
+  `check_guard_reachability.py`, which fails when the two lists drift) and the mirrored
+  `.github/CODEOWNERS` rules.
+
 ### Fixed — a parallel run silently deleted failed items and inflated `pass_rate`
 
 `RunSettings.max_workers` decided failure semantics. When a `TargetRunner` raised, the
