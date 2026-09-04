@@ -46,6 +46,39 @@ that configs are trusted input.
   with a config-supplied name. Materially weaker (one module's namespace, not every importable
   module) but the same shape; tracked as follow-up.
 
+### Added — multi-model comparison now states its confidence (ADR 0041)
+
+The repo held two features to two different standards of evidence. `campaign.py` decides A/B
+significance from Wilson intervals, enforces a `min_sample` power floor, and returns an
+explicit `cant_tell` rather than claiming a difference it cannot support. `comparison.py`,
+in the same package, ranked models on raw point estimates with no interval, no sample-size
+consideration and no abstention — so on a small dataset a noise-level difference was reported
+as a winner. That mattered more given the `pass_rate` inflation fixed above: the model with
+the most infrastructure failures could win the comparison.
+
+- **`RankVerdict`** names the *shape* of the claim — `ranked`, `no_difference`, `cant_tell`,
+  `no_interval` — reusing `campaign.Decision`'s vocabulary where it carries over.
+  `Decision` names a winning arm, which does not generalise past two models.
+- **`confident_ranking`** is a list of tiers. A tier boundary opens only where the whole upper
+  group's lowest `ci_low` exceeds the whole lower group's highest `ci_high`, so "each model
+  here beats each model below" holds pairwise, not just between neighbours. Overlapping
+  intervals stay in one unordered tier, and any model below the power floor makes the whole
+  metric `cant_tell`.
+- **`mean` gets no interval, and says so.** A Wilson interval is valid for a proportion;
+  `mean` is an arbitrary-range average, so applying one would invent a result. It reports
+  `interval="none"` and verdict `no_interval` instead. Note the consequence:
+  `rank_metric` defaults to `mean`, so the default path now honestly claims nothing and
+  `pass_rate` is the opt-in that carries a defensible ordering.
+- **`ComparisonConfig.min_sample` / `wilson_z`** make the power floor and interval width
+  configuration rather than literals, mirroring `ABCampaignConfig`. Optional with declared
+  defaults, so `SCHEMA_VERSION` is unchanged.
+- **`n` is `pass_counts`, not `ScoreAggregate.count`**, which counts scores whose `passed` is
+  `None` and would have silently widened the denominator away from `pass_rate` semantics.
+- **Backwards compatible**: `values`, `deltas`, `ranking`, `overall_ranking` and every existing
+  `to_dict()` key keep their meaning, and all 13 pre-existing comparison tests pass unmodified.
+- **Fixed a double-escape in the HTML report**: `esc(" &gt; ".join(...))` turned the already-escaped
+  entity into `&amp;gt;`, so the browser rendered a literal `&gt;`. Only the model names are escaped now.
+
 ### CI — prerequisites for turning on required status checks (ADR 0037)
 
 Enabling required status checks today would have made things worse, in two independent ways.

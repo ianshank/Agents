@@ -130,7 +130,13 @@ def test_no_stub_is_orphaned_from_the_gate_map() -> None:
 def test_stub_workflow_runs_on_every_pull_request() -> None:
     """The gate cannot decide for a workflow run that never starts, so the stub
     workflow itself must carry no ``paths:`` filter."""
-    trigger = _load(STUB_WORKFLOW)[True]["pull_request"]
+    workflow = _load(STUB_WORKFLOW)
+    # YAML 1.1 resolves the bare key `on:` to the boolean True, not the string
+    # "on" -- the long-standing "Norway problem" in GitHub Actions files. Accept
+    # either so this does not depend on the loader's resolver version.
+    triggers = workflow.get("on", workflow.get(True))  # type: ignore[call-overload]
+    assert triggers is not None, "stub workflow declares no triggers"
+    trigger = triggers["pull_request"]
 
     assert "paths" not in trigger
     assert "paths-ignore" not in trigger

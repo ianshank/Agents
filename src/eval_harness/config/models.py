@@ -257,6 +257,28 @@ class ComparisonConfig(BaseModel):
     baseline: str | None = None
     rank_by: str | None = None
     rank_metric: str = "mean"
+    # Confidence-aware ranking (ADR 0041). Both mirror ABCampaignConfig's fields so
+    # the two features share one honesty convention: a difference is never claimed
+    # below the power floor. Optional with declared defaults, so SCHEMA_VERSION is
+    # unchanged and a config predating them behaves exactly as it did.
+    min_sample: int = Field(
+        default=30,
+        ge=1,
+        description=(
+            "Minimum scored items a model needs before the ranking will claim anything about "
+            "it. Below this the verdict is 'cant_tell' rather than a winner, so a noise-level "
+            "difference on a small dataset is not reported as a result."
+        ),
+    )
+    wilson_z: float = Field(
+        default=1.96,
+        gt=0,
+        description=(
+            "Standard-normal multiplier for the per-model Wilson interval. 1.96 (default) is "
+            "roughly 95%. Applies to pass_rate only; a mean is not a proportion, so it is "
+            "reported with no interval rather than an invalid one."
+        ),
+    )
 
     @field_validator("rank_metric")
     @classmethod
