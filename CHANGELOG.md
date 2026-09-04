@@ -6,6 +6,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — a parallel run silently deleted failed items and inflated `pass_rate`
+
+`RunSettings.max_workers` decided failure semantics. When a `TargetRunner` raised, the
+sequential path propagated the exception and aborted the run; the parallel path caught it
+and — because `fail_fast` defaults to `False` — dropped the item from `RunResult.items`
+entirely. A four-item run whose third item failed returned three items, `pass_rate = 1.0`,
+empty `diagnostics`, and no record of the failure anywhere in `to_dict()`, so nothing
+reached the sinks or Langfuse. `evaluate_gate` reads that `pass_rate`, so a release gate
+could be cleared by a run in which a quarter of the items never executed.
+
+The repository had already written the invariant down, for the state-adapter lifecycle:
+*"the item always gets a normal, visibly-failed result, never silently dropped."* The
+parallel target path was the one place it had not been applied.
+
+- **[ADR 0038](docs/decisions/0038-item-error-policy.md)** records the decision.
+- **`RunSettings.item_error_policy`** (`"record"` default, or `"raise"`) now owns the
+  decision and `max_workers` owns none of it. `record` keeps the item as a visibly-failed
+  `ItemResult` carrying the exception in `TargetOutput.error` plus a failing
+  `item_execution` score, so it holds its position and its weight in every aggregate.
+  `raise` aborts the run — the legacy sequential behaviour, now an explicit choice rather
+  than a side effect of leaving `max_workers` at 1. `fail_fast=True` still aborts
+  immediately and is folded into the effective policy once, in
+  `EvalEngine._item_error_policy`, so no execution path re-derives it.
+- **`RunSettings.item_error_score`** (default `0.0`, bounded `0.0..1.0`) makes the recorded
+  score a declared field rather than a literal at a call site, mirroring
+  `JudgeBudgetConfig.skip_score`.
+- **A degraded denominator is now reported.** A recorded failure means that item's scorers
+  never ran, so every *other* score's aggregate covers fewer attempts than the run holds.
+  `item_error_diagnostics` emits one `item_execution_failures` diagnostic saying how many.
+  Scorers that never ran are **not** given a fabricated `0.0` — the same reasoning that
+  makes `judges/panel.py` exclude a failed member rather than count it as a zero vote.
+- **`StateResetError` stays outside the policy** and propagates under every setting.
+- **Backwards compatible for a clean run**: no failure means no `item_execution` score, no
+  diagnostic, and no `reliability` key, so ADR 0031 obligation 4 holds. `SCHEMA_VERSION` is
+  unchanged — both new fields are optional with declared defaults.
+- **Behaviour change to be aware of**: runs that previously reported an inflated `pass_rate`
+  over a silently reduced denominator will now report a lower one, and gates calibrated
+  against those numbers may go red. That is the defect surfacing, not a regression.
+
+### Testing
+
+- **`tests/test_item_error_policy.py`** (31 tests) covers the defect directly and, more
+  importantly, adds the missing *oracle*: sequential and parallel must agree on items,
+  aggregates and serialised payload **when an item fails**. This was never a coverage gap —
+  both sides of the `fail_fast` branch were already exercised at 98% branch coverage, and
+  `test_parallel_sequential_same_aggregate` already asserted the violated property. It ran
+  on an all-passing dataset, so it could not observe the divergence.
+- **`test_reset_runs_again_for_the_next_attempt_even_after_a_target_failure`** now asserts
+  `reset_calls == 2` instead of `1`. Its name, docstring and `_CountingTargetThatFailsOnce`
+  helper all describe a two-attempt scenario the old abort made unreachable; the previous
+  assertion could only ever see the first reset, and its inline comment said as much. The
+  legacy abort is retained as a separate test under `item_error_policy: raise`.
+
 ### Added — eval evidence integrity: branch protection ADR, gate-integrity fix, M8 execution proposal
 
 A peer review of an eval-tool test-matrix readiness brief (`docs/plans/eval-evidence-integrity/REVIEW.md`)

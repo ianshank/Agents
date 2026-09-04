@@ -14,18 +14,21 @@ import threading
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from importlib import import_module
 from typing import Any, cast
 
 from .config.models import EvalConfig
 from .core._execution_strategies import (
+    ITEM_ERROR_POLICY_RAISE,
     _execute_parallel,
     _execute_sequential_repeated,
+    run_item_guarded,
 )
 from .core._execution_strategies import (
     _make_item_rng as _make_item_rng,
 )
-from .core._reliability_diagnostics import _reliability_diagnostics
+from .core._reliability_diagnostics import _reliability_diagnostics, item_error_diagnostics
 from .core._state_lifecycle import log_state_adapter_configured, run_state_bracketed_attempt
 from .core.interfaces import (
     DatasetSource,
@@ -163,6 +166,20 @@ class EvalEngine:
         )
         engine.langfuse_client = langfuse_client
         return engine
+
+    @property
+    def _item_error_policy(self) -> str:
+        """The effective policy for an item whose target raises.
+
+        ``fail_fast`` is the stronger statement, so it collapses into
+        ``"raise"`` here rather than being re-tested at each execution site.
+        Folding it once, in one place, is what keeps the sequential and parallel
+        paths from drifting apart again: neither path reads ``fail_fast`` to
+        decide *whether* a failure is fatal, only this policy.
+        """
+        if self.config.run.fail_fast:
+            return ITEM_ERROR_POLICY_RAISE
+        return str(self.config.run.item_error_policy)
 
     def _sample(self, items: list[EvalItem]) -> list[EvalItem]:
         """Apply probabilistic sampling using the run-level RNG."""
@@ -332,6 +349,8 @@ class EvalEngine:
             fail_fast=self.config.run.fail_fast,
             make_ctx=make_ctx,
             run_one_safe=self._run_one_safe,
+            item_error_policy=self._item_error_policy,
+            item_error_score=self.config.run.item_error_score,
         )
 
     @observe()
@@ -368,9 +387,7 @@ class EvalEngine:
 
         if max_workers == 1:
             if repetitions == 1:
-                # --- Sequential path: EXACTLY the original behaviour ---
-                ctx = RunContext(config=self.config, judge=self.judge, rng=self.rng, now=started)
-                results = [self._run_one(item, ctx) for item in items]
+                results = self._run_sequential_single(items, started)
             else:
                 results = self._run_sequential_repeated(items, started, run_id)
         else:
@@ -378,7 +395,10 @@ class EvalEngine:
             results = self._run_parallel(items, started, run_id)
 
         aggregate = self._aggregate(results)
-        diagnostics = self._run_reliability_diagnostics(results)
+        # Item-execution failures first: they qualify every other diagnostic and
+        # every other aggregate below them. Both lists are empty on a clean run,
+        # so `diagnostics` stays absent from the payload exactly as before.
+        diagnostics = [*item_error_diagnostics(results), *self._run_reliability_diagnostics(results)]
 
         run = RunResult(
             run_id=run_id,
@@ -392,6 +412,31 @@ class EvalEngine:
         for sink in self.sinks:
             sink.emit(run)
         return run
+
+    def _run_sequential_single(self, items: list[EvalItem], started: datetime) -> list[ItemResult]:
+        """The single-attempt sequential path: one shared, continuously-advancing
+        RNG and one ``RunContext`` across every item -- the original engine
+        behaviour, preserved.
+
+        The only change is that a target failure now goes through
+        ``run_item_guarded`` like every other path, so ``item_error_policy``
+        (never ``max_workers``) decides whether it aborts the run or is recorded
+        as a visibly-failed item. A clean run is byte-identical to before.
+        ``_run_one(item, ctx)`` keeps its exact two-argument form inside the
+        closure, so a test double bound to the legacy signature still resolves.
+        """
+        ctx = RunContext(config=self.config, judge=self.judge, rng=self.rng, now=started)
+        policy = self._item_error_policy
+        error_score = self.config.run.item_error_score
+        return [
+            run_item_guarded(
+                partial(self._run_one, item, ctx),
+                item,
+                item_error_policy=policy,
+                item_error_score=error_score,
+            )
+            for item in items
+        ]
 
     def _run_sequential_repeated(self, items: list[EvalItem], started: datetime, run_id: str) -> list[ItemResult]:
         """See ``core/_execution_strategies.py`` for the strategy itself (split
@@ -407,6 +452,8 @@ class EvalEngine:
             repetitions=self.config.run.repetitions,
             make_ctx=make_ctx,
             run_one=self._run_one,
+            item_error_policy=self._item_error_policy,
+            item_error_score=self.config.run.item_error_score,
         )
 
     def _run_reliability_diagnostics(self, results: list[ItemResult]) -> list[dict[str, str]]:

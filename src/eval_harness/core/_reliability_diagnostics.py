@@ -9,7 +9,40 @@ trivially unit-testable on its own.
 
 from __future__ import annotations
 
+from ._execution_strategies import ITEM_ERROR_SCORE_NAME
 from .types import ItemResult, ScoreResult
+
+
+def item_error_diagnostics(results: list[ItemResult]) -> list[dict[str, str]]:
+    """Flag a run whose denominator was degraded by target failures.
+
+    An item whose target raised is recorded rather than dropped, so it is
+    plainly visible in ``items`` and carries its own ``item_execution``
+    aggregate. What is *not* otherwise visible is the knock-on effect: that
+    item's scorers never ran, so every **other** score's aggregate is computed
+    over the remaining attempts. A gate rule naming one of those other scores
+    would read a healthy-looking rate over a quietly smaller sample.
+
+    Fabricating a 0.0 for the scorers that never ran would be inventing data --
+    the same reasoning that makes a panel judge exclude a failed member instead
+    of counting it as a zero vote -- so the honest move is to state the caveat
+    once, at run level, and let the consumer decide.
+
+    Returns ``[]`` for a clean run, so ``RunResult.diagnostics`` stays empty and
+    a run with no failures serializes exactly as it did before (ADR 0031).
+    """
+    failed = sum(1 for ir in results if any(s.name == ITEM_ERROR_SCORE_NAME for s in ir.scores))
+    if not failed:
+        return []
+    return [
+        {
+            "code": "item_execution_failures",
+            "message": (
+                f"{failed} of {len(results)} attempt(s) failed before scoring; every other "
+                "score's aggregate is computed over the remaining attempts, not the full run."
+            ),
+        }
+    ]
 
 
 def _reliability_diagnostics(

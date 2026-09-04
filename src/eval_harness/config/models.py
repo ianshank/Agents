@@ -7,7 +7,7 @@ the engine itself — defaults are declared on these models and overridable.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -44,6 +44,27 @@ class RunSettings(BaseModel):
             "Number of independent target.run(item) attempts per item. "
             "1 = legacy behaviour, byte-identical output (default). "
             ">1 computes pass@k/pass^k reliability metrics over k independent attempts."
+        ),
+    )
+    item_error_policy: Literal["record", "raise"] = Field(
+        default="record",
+        description=(
+            "How the run treats an item whose target raises. 'record' (the default) keeps the item "
+            "in the run as a visibly-failed ItemResult carrying the exception in TargetOutput.error "
+            "plus a failing item-execution score, so the item stays in the denominator of every "
+            "aggregate. 'raise' aborts the run on the first such error. This setting — never "
+            "max_workers — decides failure semantics: the sequential and parallel paths honour it "
+            "identically. fail_fast=True is the stronger statement and still aborts immediately."
+        ),
+    )
+    item_error_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Score recorded for an item whose target raised, under item_error_policy='record'. "
+            "0.0 (default) counts the item as a failure in both mean and pass_rate. Raise it only "
+            "if a gate must treat an infrastructure failure differently from a wrong answer."
         ),
     )
 
