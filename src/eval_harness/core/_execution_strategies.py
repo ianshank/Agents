@@ -18,7 +18,6 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 
-from ._imports import DisallowedImportError
 from .interfaces import StateResetError
 from .types import EvalItem, ItemResult, RunContext, ScoreResult, TargetOutput
 
@@ -29,12 +28,16 @@ logger = logging.getLogger(__name__)
 #: misleading rather than informative.
 #:
 #: * ``StateResetError`` -- continuing risks scoring against dirty state.
-#: * ``DisallowedImportError`` -- the target could not be resolved at all, so
-#:   every item would fail identically. That is a configuration or trust
-#:   decision, not N independent measurements, and a run that "completed" with
-#:   everything failed is exactly the kind of misleading artefact this module
-#:   now exists to prevent.
-FATAL_RUN_ERRORS: tuple[type[BaseException], ...] = (StateResetError, DisallowedImportError)
+#: * ``ImportError`` -- the target could not be resolved at all, so every item
+#:   would fail identically. That is a configuration or trust decision, not N
+#:   independent measurements, and a run that "completed" with everything failed
+#:   is exactly the kind of misleading artefact this module exists to prevent.
+#:   Keyed on *what* failed (target resolution) rather than *why*: a refused
+#:   import (``DisallowedImportError``, a subclass) and a genuinely missing
+#:   module produce the identical useless run, so treating only the first as
+#:   fatal was an inconsistency in the original rule. A target's own lazy import
+#:   failing mid-run is the same situation -- it cannot serve any item.
+FATAL_RUN_ERRORS: tuple[type[BaseException], ...] = (StateResetError, ImportError)
 
 #: Score name carried by an item whose target raised. A structural identifier,
 #: not a tuning knob, so it is a module constant rather than a config field --
@@ -144,7 +147,6 @@ def _execute_parallel(
     max_workers: int,
     base_seed: int,
     repetitions: int,
-    fail_fast: bool,
     make_ctx: Callable[[int, random.Random], RunContext],
     run_one_safe: Callable[..., tuple[int, ItemResult | Exception]],
     item_error_policy: str,
@@ -160,8 +162,8 @@ def _execute_parallel(
     ``ctx.item_index``, which nothing reads back). At ``repetitions == 1`` this
     submits exactly one future per item with ``attempt_index=None``, identical
     to the pre-reliability-metrics engine. Results are collected in submission
-    order -- item-major, attempts ascending within an item. On ``fail_fast``,
-    the executor is shut down immediately.
+    order -- item-major, attempts ascending within an item. Under the ``raise``
+    policy the executor is shut down as soon as the first error surfaces.
 
     ``item_error_policy`` is the *effective* policy (the engine has already
     folded ``fail_fast`` into it), and it -- never ``max_workers`` -- decides
@@ -216,7 +218,7 @@ def _execute_parallel(
             if isinstance(result_or_exc, Exception):
                 if first_error is None:
                     first_error = result_or_exc
-                if fail_fast:
+                if item_error_policy == ITEM_ERROR_POLICY_RAISE:
                     executor.shutdown(wait=False, cancel_futures=True)
                     break
                 if item_error_policy == ITEM_ERROR_POLICY_RECORD:
@@ -235,8 +237,11 @@ def _execute_parallel(
             else:
                 collected.append((index, result_or_exc))
 
-    # ``fail_fast`` has already been folded into the effective policy by the
-    # caller, so this single condition covers both aborts.
+    # One condition, one meaning. ``fail_fast`` used to be a second, independent
+    # switch here; the pair (fail_fast=True, policy="record") then broke early and
+    # returned a TRUNCATED list without raising -- reintroducing, inside this very
+    # function, the silent item loss it exists to prevent. The engine folds
+    # ``fail_fast`` into the effective policy, so the parameter is gone.
     if first_error is not None and item_error_policy == ITEM_ERROR_POLICY_RAISE:
         raise first_error
 

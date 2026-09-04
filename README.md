@@ -477,14 +477,21 @@ scripts/
 
 skills/
   marketplace.yaml          registry of local skills (schema in marketplace.schema.json)
+  common/                   shared skill tooling (skill_validator.py and its tests)
   openai-judge/             OpenAI-compatible LLM judge evaluation
   architecture-drift-guard/ import-graph → C4 drift detector + mermaid freshness gate
+  dataset-lint/             dataset schema/quality linting
   eval-corpus-forge/        synthetic-corpus construction and validation
   model-bench/              model benchmark orchestration
   project-setup/            deterministic Makefile generator (from detected toolchain)
   quality-gate/             deterministic lint+type+test+coverage gate-script generator
   deploy/                   safety-railed deployment-script generator (dry-run/confirm/rollback)
-  reasoning-skills/         composable reasoning skills (hierarchical-recursive-brainstorm, openspec-quality-plan, openspec-peer-review)
+  pre-pr-gate/              pre-PR validation chain
+  repo-invariant-review/    advisory repo-invariant findings
+  openspec-implementation-review/  reviews an implementation against its OpenSpec package
+  hierarchical-recursive-brainstorm/  expands a research question into a pruned tree
+  openspec-quality-plan/    turns the strongest leaves into a full OpenSpec package
+  openspec-peer-review/     critiques and rewrites an OpenSpec package to standard
 
 experiments/
   backend-validation/ isolated, temporary experiment (eval-backend-validation_v1): validates

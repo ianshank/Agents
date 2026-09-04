@@ -67,6 +67,18 @@ PROTECTED_PATTERNS: tuple[str, ...] = (
     "flow-protocol/scripts/quality-gate.sh",
     "claude-foundation/pyproject.toml",
     "claude-foundation/scripts/quality-gate.sh",
+    # The Makefiles that INVOKE those gates. Pinning a floor's value protects the
+    # number and nothing else: every package's CI delegates through `make check`,
+    # so replacing a `check:` recipe body with `@echo 'ok'` disables the gate
+    # while leaving `--cov-fail-under` untouched — greener, quieter and cheaper
+    # than editing the number this list already guards. `coverage-floors.yaml`
+    # cannot see it, because the manifest describes declarations, not invocation.
+    "Makefile",
+    "agent-core/Makefile",
+    "behavioral-regression/Makefile",
+    "flow-corpus/Makefile",
+    "flow-protocol/Makefile",
+    "claude-foundation/Makefile",
 )
 
 

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
-from ..core._imports import import_allowed_module
+from ..core._imports import import_allowed_module, resolve_allowed_attribute
 from ..core.interfaces import TargetRunner
 from ..core.types import EvalItem, TargetOutput
 from ..plugins import TARGETS
@@ -54,7 +54,9 @@ class CallableTarget(TargetRunner):
             if not attr:
                 raise ValueError(f"target path {self.path!r} must be 'module:function'")
             module = import_allowed_module(module_name)
-            self._fn = getattr(module, attr)
+            # The attribute is checked as well as the module: allowlisting a
+            # package does not extend to names it re-exports from elsewhere.
+            self._fn = cast(Callable[..., Any], resolve_allowed_attribute(module, attr))
         return self._fn
 
     def run(self, item: EvalItem) -> TargetOutput:

@@ -46,6 +46,76 @@ that configs are trusted input.
   with a config-supplied name. Materially weaker (one module's namespace, not every importable
   module) but the same shape; tracked as follow-up.
 
+### Fixed — corrections found by adversarial review of this branch's own changes
+
+An adversarial review of the commits above, run against reproductions rather than
+inspection, found that two of them did not do what their commit messages claimed. Both are
+corrected here; the ADRs are amended rather than quietly rewritten, so the record shows what
+was wrong and why.
+
+- **`item_error_policy` now defaults to `raise`, not `record`.** Recording by default turned
+  the sequential path's hard abort into a completed run whose gate **passed** — the safe path
+  made to match the broken one. `fail_fast=False` governs *scorer* failures; a target
+  exception was always fatal on the path that behaved correctly. The parallel path now aborts
+  too, instead of dropping the item silently, so both paths are strictly safer than before.
+- **The gate no longer reads a sample it does not know shrank.** Recording a failed item left
+  its scorers unrun, so `acc.count` was 3 of 4 while `acc.pass_rate` read 1.0 and the gate
+  passed. `evaluate_gate` now fails on a run carrying item-execution failures;
+  `GateConfig.allow_item_errors` (default `False`) is the explicit opt-in. Fabricating a
+  per-scorer score for an item that produced none was rejected: `judges/panel.py` already
+  settles that precedent by excluding a failed member rather than counting it as a zero vote.
+- **The callable allowlist now bounds the attribute, not just the module.** A one-line
+  re-export (`from subprocess import call` in an allowlisted package's `__init__.py`) reached
+  `subprocess.call` and the harness reported `error: None` again. `resolve_allowed_attribute`
+  requires the object's *defining* module to clear the allowlist too. ADR 0039 now states
+  plainly that this narrows the surface rather than making an untrusted config safe.
+- **Any unresolvable target aborts the run.** `FATAL_RUN_ERRORS` keyed on
+  `DisallowedImportError` but not on a plain missing module, which produces the identical
+  useless run. It now keys on `ImportError` — on *what* failed, not *why*.
+- **`_execute_parallel` lost its redundant `fail_fast` parameter.** The pair
+  (`fail_fast=True`, `policy="record"`) broke early and returned a **truncated** list without
+  raising, reintroducing the silent item loss inside the very function that exists to prevent
+  it. It was unreachable only because the engine happened to collapse the two.
+- **`pass^k` was computed over a shrunk denominator.** `reliability.py` measured "passed all
+  k attempts" against the attempts that produced a score for that scorer, not the item's own
+  attempt count, so an item completing two of three could report `pass_power_k = True`. It is
+  the strictest gate the harness offers, so it is the one that must not overstate.
+
+### Fixed — CI enforcement gaps found in the same review
+
+- **The Makefiles that invoke the gates are now protected paths.** Pinning a coverage floor
+  guards the number; every package's CI reaches that number through `make check`, so
+  replacing a `check:` recipe body with `@echo` disabled the gate while every pinned value
+  stayed untouched — greener and cheaper than editing the number. Six `Makefile` entries added
+  to `PROTECTED_PATTERNS`, the `quality-gates.yml` filter and `CODEOWNERS`, with
+  `check_guard_reachability.py` confirming all 35 patterns reachable via 33 filters.
+- **The stub gate's YAML reader is gone, replaced by `scripts/workflow_paths.py`.** The inline
+  reader returned a *truncated* glob list — not an error — on a trailing comment, a glob
+  containing a space, or a `!` negation. A short list reads as "the real workflow did not
+  run", so the stub posted a green check **beside** the real job: the duplicate-context false
+  green the stub mechanism exists to prevent. The extracted module uses `yaml.safe_load`, is
+  unit-tested at 100% branch coverage, and fails closed on anything it cannot model. Inline
+  workflow code can never be reached by pytest or by any coverage gate here, which is why the
+  bug survived.
+- **`tests/test_required_check_stubs.py` and `tests/test_workflow_paths.py` now run when they
+  matter.** Both were only reachable through the root suite, whose workflow does not fire for
+  a workflow-only PR — so renaming a CI job name never ran the test that checks job names.
+  Both are now in the `quality-gates.yml` tooling step, which triggers on `.github/**`.
+
+### Testing — gaps the review named
+
+- **`tests/test_item_error_policy.py` now calls `evaluate_gate`.** Every test asserted on
+  `items`, `aggregate` and `diagnostics`; none exercised the gate, which is precisely why the
+  gate defect shipped.
+- **Symlink confinement is pinned.** `test_path_confinement.py` had no symlink test at all —
+  a directory inside the root symlinked out is the textbook escape. The behaviour was already
+  correct; nothing was holding it there.
+- **The re-export bypass is a regression test**, along with the missing-module abort.
+- **Three tautological tests were replaced with behavioural ones.** `assert
+  DisallowedImportError in FATAL_RUN_ERRORS` restated a source literal and would have passed
+  with every handler deleted; `assert issubclass(...)` restated a class declaration. Each now
+  exercises the behaviour its docstring claimed.
+
 ### Added — multi-model comparison now states its confidence (ADR 0041)
 
 The repo held two features to two different standards of evidence. `campaign.py` decides A/B

@@ -93,114 +93,29 @@ jobs:
       # either. The parser is intentionally strict -- a `paths:` block it cannot read is an
       # error, never an empty list (an empty list would silently mean "the real workflow
       # never runs", i.e. "always stub", i.e. a green check for a suite nothing ran).
+      # The trigger decision lives in scripts/workflow_paths.py, not inline here.
+      # An inline reader is invisible to pytest and to every coverage gate in this
+      # repo, and its hand-rolled YAML parsing silently truncated a `paths:` list on
+      # a trailing comment or a glob containing a space -- which reads as "the real
+      # workflow did not run" and posts a stub BESIDE the real job, the duplicate
+      # green this whole workflow exists to prevent. The extracted module uses
+      # yaml.safe_load (the parser GitHub itself uses) and is unit-tested.
+      - name: Install the workflow-paths reader's one dependency
+        run: python -m pip install --quiet "pyyaml>=6"
       - name: Decide which real workflows this PR triggers
         id: decide
         run: |
-          python3 - <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          WORKFLOWS = {
-              "quality_gates": ".github/workflows/quality-gates.yml",
-              "eval_harness": ".github/workflows/eval-harness-ci.yml",
-              "agent_core": ".github/workflows/agent-core-ci.yml",
-              "behavioral_regression": ".github/workflows/behavioral-regression-ci.yml",
-              "flow_corpus": ".github/workflows/flow-corpus-ci.yml",
-              "claude_foundation": ".github/workflows/claude-foundation-ci.yml",
-              "architecture_drift": ".github/workflows/architecture-drift.yml",
-          }
-
-
-          def pull_request_paths(workflow: str) -> list[str]:
-              """The `on.pull_request.paths:` globs of *workflow*, in declaration order.
-
-              Handles both styles in use here: a block list (most workflows) and a flow list
-              (`claude-foundation-ci.yml`, whose literal form `scripts/validations/F_037.py`
-              asserts, so it cannot be reflowed). `paths-ignore:` is never matched.
-              """
-              lines = Path(workflow).read_text(encoding="utf-8").splitlines()
-              starts = [i for i, ln in enumerate(lines) if ln.rstrip() == "  pull_request:"]
-              if not starts:
-                  raise SystemExit(f"{workflow}: no `  pull_request:` trigger found")
-              block: list[str] = []
-              for line in lines[starts[0] + 1 :]:
-                  if line.strip() and not line.startswith("    "):
-                      break  # dedented out of the pull_request block
-                  block.append(line)
-              heads = [i for i, ln in enumerate(block) if re.match(r"^    paths:(\s|$)", ln)]
-              if not heads:
-                  raise SystemExit(f"{workflow}: pull_request has no `paths:` list")
-              head = heads[0]
-              globs: list[str] = []
-              inline = block[head].split("paths:", 1)[1].strip()
-              if inline.startswith("["):
-                  buffer = inline
-                  cursor = head + 1
-                  while "]" not in buffer and cursor < len(block):
-                      buffer += " " + block[cursor].strip()
-                      cursor += 1
-                  if "]" not in buffer:
-                      raise SystemExit(f"{workflow}: unterminated flow-style `paths:` list")
-                  body = buffer[buffer.index("[") + 1 : buffer.rindex("]")]
-                  globs = [item.strip().strip("\"'") for item in body.split(",") if item.strip()]
-              elif inline:
-                  raise SystemExit(f"{workflow}: unsupported `paths:` scalar {inline!r}")
-              else:
-                  for line in block[head + 1 :]:
-                      item = line.strip()
-                      if not item or item.startswith("#"):
-                          continue
-                      match = re.match(r"""^-\s*["']?([^"'\s]+)["']?\s*$""", item)
-                      if not match:
-                          break  # left the list
-                      globs.append(match.group(1))
-              if not globs:
-                  raise SystemExit(f"{workflow}: `paths:` list is empty or unreadable")
-              return globs
-
-
-          def to_regex(glob: str) -> re.Pattern[str]:
-              """GitHub path-filter semantics: `**` spans `/`, `*` and `?` do not."""
-              out: list[str] = []
-              i = 0
-              while i < len(glob):
-                  if glob.startswith("**", i):
-                      out.append(".*")
-                      i += 2
-                  elif glob[i] == "*":
-                      out.append("[^/]*")
-                      i += 1
-                  elif glob[i] == "?":
-                      out.append("[^/]")
-                      i += 1
-                  else:
-                      out.append(re.escape(glob[i]))
-                      i += 1
-              return re.compile("^" + "".join(out) + "$")
-
-
-          changed = [
-              ln.strip()
-              for ln in Path("changed-files.txt").read_text(encoding="utf-8").splitlines()
-              if ln.strip()
-          ]
-
-          results: list[str] = []
-          for key, workflow in WORKFLOWS.items():
-              globs = pull_request_paths(workflow)
-              matchers = [to_regex(g) for g in globs]
-              hits = [f for f in changed if any(m.match(f) for m in matchers)]
-              ran = bool(hits)
-              print(
-                  f"{workflow}: {'RUNS' if ran else 'does not run'} "
-                  f"({len(globs)} filter(s); e.g. {hits[0] if hits else '-'})"
-              )
-              results.append(f"{key}={'true' if ran else 'false'}")
-
-          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
-              fh.write("\n".join(results) + "\n")
-          PY
+          python scripts/workflow_paths.py \
+            --changed-files changed-files.txt \
+            --output "$GITHUB_OUTPUT" \
+            --verbose \
+            --workflow quality_gates=.github/workflows/quality-gates.yml \
+            --workflow eval_harness=.github/workflows/eval-harness-ci.yml \
+            --workflow agent_core=.github/workflows/agent-core-ci.yml \
+            --workflow behavioral_regression=.github/workflows/behavioral-regression-ci.yml \
+            --workflow flow_corpus=.github/workflows/flow-corpus-ci.yml \
+            --workflow claude_foundation=.github/workflows/claude-foundation-ci.yml \
+            --workflow architecture_drift=.github/workflows/architecture-drift.yml
 
   # --- quality-gates.yml ----------------------------------------------------------------
   quality-gates-gates:

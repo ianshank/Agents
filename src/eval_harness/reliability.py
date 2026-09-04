@@ -111,7 +111,13 @@ def _aggregate_one(
     success_count = len(success)
     pass_rate = success_count / attempts if attempts else 0.0
     pass_at_k = any(s.passed for _, s in known)
-    pass_power_k = len(known) == attempts and all(s.passed for _, s in known)
+    # Denominator is the item's OWN attempt count, not the attempts that happened
+    # to produce a verdict for this scorer. "Passed all k attempts" is a claim
+    # about k; measuring it against the scored subset asserts it for an item that
+    # completed fewer -- e.g. one attempt whose target raised (so no scorer ran)
+    # and two that passed would report pass^k = True over 3 attempts. That is the
+    # strictest gate this harness offers, so it is the one that must not overstate.
+    pass_power_k = len(known) == item_attempts and all(s.passed for _, s in known)
 
     score_quantiles = _quantiles([s.value for _, s in pairs])
     latency_values = [ir.output.latency_ms for ir, _ in success if ir.output.latency_ms is not None]

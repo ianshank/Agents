@@ -40,3 +40,13 @@
 /flow-protocol/scripts/quality-gate.sh       @ianshank
 /claude-foundation/pyproject.toml            @ianshank
 /claude-foundation/scripts/quality-gate.sh   @ianshank
+
+# The Makefiles that invoke the gates above. Pinning a coverage floor protects the
+# number; every package's CI reaches that number through `make check`, so a gutted
+# `check:` recipe disables the gate while every pinned value stays untouched.
+/Makefile                                    @ianshank
+/agent-core/Makefile                         @ianshank
+/behavioral-regression/Makefile              @ianshank
+/flow-corpus/Makefile                        @ianshank
+/flow-protocol/Makefile                      @ianshank
+/claude-foundation/Makefile                  @ianshank

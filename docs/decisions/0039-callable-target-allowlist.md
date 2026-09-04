@@ -69,15 +69,36 @@ naive `startswith` here would reproduce exactly the bug that made `DATA_ROOT`
 containment bypassable through a sibling directory sharing its prefix — the
 same mistake, one subsystem over.
 
+**The attribute is checked as well as the module, and the first version of this
+ADR missed that.** Allowlisting a module is not allowlisting what is reachable
+through it: any name bound in an allowlisted package's namespace is fetchable by
+`getattr`, and a one-line re-export is utterly ordinary.
+
+```python
+# my_project/__init__.py
+from subprocess import call
+```
+
+With `…ALLOWLIST=my_project` — the exact configuration this ADR's own error
+message recommends — a config of `my_project:call` reached `subprocess.call` and
+the harness again reported `error: None`. An adversarial review demonstrated it
+end to end. `resolve_allowed_attribute` now requires the object's *defining*
+module to clear the allowlist too: `subprocess.call.__module__` is
+`"subprocess"`, which does not, while a legitimate internal re-export
+(`my_project.impl:run` surfaced as `my_project:run`) resolves to
+`my_project.impl`, which does. An object whose defining module cannot be
+determined is refused, because unattributable is not the same as harmless.
+
 **`DisallowedImportError` subclasses `ImportError`.** A denial *is* a refusal to
 import, so `except ImportError` keeps working and the matrix's M6 error row
 still expresses a true statement.
 
-**A refusal aborts the run.** `DisallowedImportError` joins `StateResetError` in
-ADR 0038's `FATAL_RUN_ERRORS`, so it is never converted into a recorded item
-failure. Otherwise every item would fail identically and produce a "completed"
-run with everything red — precisely the misleading artefact ADR 0038 exists to
-prevent. A trust decision is not N independent measurements.
+**Any unresolvable target aborts the run.** `FATAL_RUN_ERRORS` (ADR 0038) keys
+on `ImportError`, of which `DisallowedImportError` is a subclass, so a refusal is
+never converted into a recorded item failure. It originally named only the
+refusal, which was an inconsistency: a *missing* module produces the identical
+useless run — every item failing identically — and was completing rather than
+aborting. The rule keys on **what** failed (target resolution), not **why**.
 
 **`*` is supported, and is loud.** An operator who authored every config can
 disable the gate, and it logs at WARNING *every time it is honoured*, so it
@@ -99,6 +120,17 @@ for the wrong reason.
 
 **`config/trajectory_eval.yaml`, `demo/`, and the docs need the variable.** They
 are operator-controlled contexts; the demo runner and quickstart say so.
+
+**This narrows the surface; it does not make a config safe to run untrusted.**
+The allowlist stops a config from reaching a module the operator has not
+trusted, and now from reaching a name that module merely re-exports. It does not
+stop a config from calling anything genuinely defined inside a trusted package,
+so the grant is only as good as the code it names. Two grants in this repository
+are worth reading in that light: `demo/run_demo.sh` exports `demo`, and
+`tests/conftest.py` exports `tests` — both directories a contributor can add
+files to. Against the "weaponised demo config" threat this ADR opens with, those
+grants are worth little; they are appropriate for an operator running their own
+checkout and are not a claim that an untrusted config is safe.
 
 **This does not harden every dynamic-dispatch site.** `scorers/__init__.py` does
 `getattr(autoevals, scorer)(**scorer_kwargs)` with a config-supplied name. It is

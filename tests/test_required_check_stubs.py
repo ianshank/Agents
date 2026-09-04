@@ -37,10 +37,10 @@ STUB_WORKFLOW = WORKFLOW_DIR / "required-check-stubs.yml"
 #: How a stub job declares which real workflow it stands in for.
 _GATE_CONDITION = re.compile(r"needs\.gate\.outputs\.(?P<key>\w+)\s*==\s*'false'")
 
-#: The gate job's own WORKFLOWS mapping, parsed out of its inline Python. Read
-#: from the workflow rather than restated here, so this test cannot pass against
-#: a stale copy of the list it is meant to be checking.
-_WORKFLOWS_ENTRY = re.compile(r'^\s*"(?P<key>\w+)":\s*"(?P<path>\.github/workflows/[\w.-]+\.yml)",\s*$')
+#: The gate job's own ``--workflow KEY=PATH`` arguments to
+#: ``scripts/workflow_paths.py``. Read from the workflow rather than restated
+#: here, so this test cannot pass against a stale copy of the list it checks.
+_WORKFLOWS_ENTRY = re.compile(r"--workflow\s+(?P<key>\w+)=(?P<path>\.github/workflows/[\w.-]+\.yml)")
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -75,12 +75,8 @@ def _rendered_job_names(workflow: dict[str, Any]) -> set[str]:
 def _gate_workflow_map() -> dict[str, Path]:
     """The gate job's ``key -> workflow file`` mapping, read from its own source."""
     text = STUB_WORKFLOW.read_text(encoding="utf-8")
-    mapping = {
-        m.group("key"): WORKFLOW_DIR.parent.parent / m.group("path")
-        for m in map(_WORKFLOWS_ENTRY.match, text.splitlines())
-        if m
-    }
-    assert mapping, "could not parse the gate job's WORKFLOWS mapping"
+    mapping = {m.group("key"): WORKFLOW_DIR.parent.parent / m.group("path") for m in _WORKFLOWS_ENTRY.finditer(text)}
+    assert mapping, "could not parse the gate job's --workflow arguments"
     return mapping
 
 

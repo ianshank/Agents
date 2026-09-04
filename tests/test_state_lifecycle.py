@@ -291,10 +291,10 @@ class TestResetFailureAbortsTheRun:
         """A target failure (unrelated to the adapter) must not skip the next
         attempt's reset -- reset is per-attempt, not gated on prior success."""
         adapter = _RecordingAdapter()
-        engine = _engine(_config(n_items=2))
+        engine = _engine(_config(n_items=2, extra_run={"item_error_policy": "record"}))
         engine.target = _CountingTargetThatFailsOnce()
         engine.state_adapter = adapter
-        # Under the default item_error_policy='record' the run continues past the
+        # Under item_error_policy='record' the run continues past the
         # failed item, so the *next* attempt's reset is directly observable. That
         # is what this test's name and _CountingTargetThatFailsOnce's own docstring
         # both promise; the previous abort-on-first-target-error behaviour made it

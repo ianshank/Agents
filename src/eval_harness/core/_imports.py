@@ -79,6 +79,51 @@ def is_allowed(module_name: str, allowlist: tuple[str, ...]) -> bool:
     return any(module_name == entry or module_name.startswith(f"{entry}.") for entry in allowlist)
 
 
+def resolve_allowed_attribute(module: ModuleType, attr: str, *, env: Mapping[str, str] | None = None) -> object:
+    """Fetch ``attr`` from *module*, refusing anything that only lives there by re-export.
+
+    Allowlisting the *module* is not the same as allowlisting what is reachable
+    through it. Any name bound in an allowlisted package's namespace is fetchable
+    by ``getattr``, and a one-line re-export is utterly ordinary::
+
+        # my_project/__init__.py
+        from subprocess import call
+
+    With ``…ALLOWLIST=my_project``, a config of ``my_project:call`` then reaches
+    ``subprocess.call`` -- the exact sink the allowlist exists to deny, through a
+    module the operator does trust. So the object's *defining* module has to clear
+    the allowlist too: ``subprocess.call.__module__`` is ``"subprocess"``, which
+    does not, while a legitimate internal re-export (``my_project.impl:run``
+    surfaced as ``my_project:run``) resolves to ``my_project.impl`` and does.
+
+    A callable without a ``__module__`` (a class instance implementing
+    ``__call__``) is judged by its type's module instead. An object with neither
+    is refused: unattributable is not the same as harmless.
+    """
+    obj = getattr(module, attr)
+
+    origin = getattr(obj, "__module__", None)
+    if origin is None:
+        origin = getattr(type(obj), "__module__", None)
+    if origin is None:
+        raise DisallowedImportError(
+            f"refusing to call {module.__name__}.{attr}: its defining module cannot be "
+            "determined, so it cannot be checked against "
+            f"{CALLABLE_ALLOWLIST_ENV}."
+        )
+
+    allowlist = read_allowlist(env)
+    if not is_allowed(origin, allowlist):
+        raise DisallowedImportError(
+            f"refusing to call {module.__name__}.{attr}: it is defined in {origin!r}, which is "
+            f"outside {CALLABLE_ALLOWLIST_ENV}={_ENTRY_SEPARATOR.join(allowlist)}. Allowlisting "
+            f"{module.__name__!r} does not extend to names it merely re-exports from elsewhere."
+        )
+
+    logger.debug("Resolved %s.%s (defined in %r)", module.__name__, attr, origin)
+    return obj
+
+
 def import_allowed_module(module_name: str, *, env: Mapping[str, str] | None = None) -> ModuleType:
     """Import *module_name*, refusing anything outside the allowlist.
 

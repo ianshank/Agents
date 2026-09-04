@@ -92,9 +92,17 @@ class TestTheExploitIsRefused:
         assert CALLABLE_ALLOWLIST_ENV in message
         assert POC_MODULE in message
 
-    def test_refusal_is_an_importerror(self) -> None:
-        """A denial is a refusal to import, so existing handlers keep working."""
-        assert issubclass(DisallowedImportError, ImportError)
+    def test_an_existing_importerror_handler_still_catches_a_refusal(self) -> None:
+        """The compatibility claim, exercised rather than restated: code that
+        already handled an unresolvable path keeps working unchanged."""
+        target = _callable_target(f"{POC_MODULE}:{POC_ATTR}")
+
+        try:
+            target.run(EvalItem(id="1", inputs={}))
+        except ImportError as exc:
+            assert CALLABLE_ALLOWLIST_ENV in str(exc)
+        else:
+            raise AssertionError("a refused import did not surface as an ImportError")
 
 
 # ---------------------------------------------------------------------------
@@ -217,33 +225,133 @@ class TestRefusalAbortsTheRun:
     record policy exists to prevent.
     """
 
-    @pytest.mark.parametrize("max_workers", [1, 4])
-    def test_refusal_propagates_out_of_run(self, max_workers: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    @staticmethod
+    def _run_with_target(path: str, max_workers: int, **run_overrides: object) -> None:
         from eval_harness.config import load_config_dict
         from eval_harness.engine import EvalEngine
         from eval_harness.langfuse_client import NullLangfuseClient
         from eval_harness.version import SCHEMA_VERSION
 
-        monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "tests")
+        run: dict[str, object] = {"name": "t", "run_id": "fixed-deny", "seed": 1, "max_workers": max_workers}
+        run.update(run_overrides)
         config = load_config_dict(
             {
                 "schema_version": SCHEMA_VERSION,
-                "run": {"name": "t", "run_id": "fixed-deny", "seed": 1, "max_workers": max_workers},
+                "run": run,
                 "dataset": {
                     "type": "inline",
                     "params": {"items": [{"id": str(i), "inputs": {"q": "x"}, "expected": "x"} for i in range(3)]},
                 },
-                "target": {"type": "callable", "params": {"path": f"{POC_MODULE}:{POC_ATTR}"}},
+                "target": {"type": "callable", "params": {"path": path}},
                 "scorers": [{"type": "exact_match", "params": {"name": "acc"}}],
                 "sinks": [],
             }
         )
-        engine = EvalEngine.from_config(config, langfuse_client=NullLangfuseClient())
+        EvalEngine.from_config(config, langfuse_client=NullLangfuseClient()).run()
+
+    @pytest.mark.parametrize("max_workers", [1, 4])
+    def test_refusal_propagates_out_of_run(self, max_workers: int, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "tests")
 
         with pytest.raises(DisallowedImportError):
-            engine.run()
+            self._run_with_target(f"{POC_MODULE}:{POC_ATTR}", max_workers)
 
-    def test_it_is_registered_as_a_fatal_run_error(self) -> None:
-        from eval_harness.core._execution_strategies import FATAL_RUN_ERRORS
+    @pytest.mark.parametrize("max_workers", [1, 4])
+    def test_a_missing_module_aborts_too(self, max_workers: int, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An allowed-but-absent module is the same useless run as a refused one.
 
-        assert DisallowedImportError in FATAL_RUN_ERRORS
+        Both mean the target cannot serve any item, so both abort. Treating only
+        the refusal as fatal left a config typo producing a "completed" run with
+        every item failed identically -- the artefact the rule exists to prevent.
+        """
+        monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "totally_absent_pkg")
+
+        with pytest.raises(ModuleNotFoundError):
+            self._run_with_target("totally_absent_pkg.mod:fn", max_workers, item_error_policy="record")
+
+    @pytest.mark.parametrize("max_workers", [1, 4])
+    def test_a_refusal_is_not_converted_into_a_scored_error(
+        self, max_workers: int, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """CallableTarget.run resolves OUTSIDE its own try/except, so the gate
+        cannot be silently disabled by the broad handler that turns target
+        failures into TargetOutput(error=...)."""
+        monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "tests")
+
+        with pytest.raises(DisallowedImportError):
+            self._run_with_target(f"{POC_MODULE}:{POC_ATTR}", max_workers, item_error_policy="record")
+
+
+# ---------------------------------------------------------------------------
+# 7. Allowlisting a module is not allowlisting everything reachable through it
+# ---------------------------------------------------------------------------
+
+
+class TestReExportBypass:
+    """A one-line re-export must not launder a denied module into an allowed one.
+
+    ``from subprocess import call`` in a package's ``__init__.py`` is utterly
+    ordinary. With only the *module* gated, a config of ``my_project:call``
+    then reached ``subprocess.call`` through a module the operator does trust --
+    the same clean-looking eval that had already run a command. So the object's
+    defining module has to clear the allowlist too.
+    """
+
+    @staticmethod
+    def _package(tmp_path, name: str, body: str):
+        """Build an importable package under a name unique to the calling test.
+
+        Each test gets its own name because ``sys.modules`` caches by name: two
+        tests writing different bodies to the same package name would silently
+        share whichever one imported first, and the second would assert against
+        the first's source.
+        """
+        pkg = tmp_path / name
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text(body, encoding="utf-8")
+        return pkg.parent
+
+    def test_reexported_denied_callable_is_refused(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+        root = self._package(tmp_path, "reexport_denied", "from subprocess import call\n")
+        monkeypatch.syspath_prepend(str(root))
+        monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "reexport_denied")
+
+        with pytest.raises(DisallowedImportError, match="re-exports"):
+            _callable_target("reexport_denied:call").run(EvalItem(id="1", inputs={"/bin/true": 1}))
+
+    def test_the_refusal_names_the_real_defining_module(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+        root = self._package(tmp_path, "reexport_named", "from subprocess import call\n")
+        monkeypatch.syspath_prepend(str(root))
+        monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "reexport_named")
+
+        with pytest.raises(DisallowedImportError) as excinfo:
+            _callable_target("reexport_named:call").run(EvalItem(id="1", inputs={}))
+
+        assert "subprocess" in str(excinfo.value)
+
+    def test_an_internal_re_export_is_still_allowed(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The common, legitimate case must keep working: a package surfacing its
+        own submodule's function at top level."""
+        root = self._package(tmp_path, "reexport_internal", "from .impl import run\n")
+        (root / "reexport_internal" / "impl.py").write_text("def run(inputs):\n    return 'ok'\n", encoding="utf-8")
+        monkeypatch.syspath_prepend(str(root))
+        monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "reexport_internal")
+
+        out = _callable_target("reexport_internal:run").run(EvalItem(id="1", inputs={}))
+
+        assert out.output == "ok"
+        assert out.error is None
+
+    def test_an_object_with_no_determinable_module_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unattributable is not the same as harmless."""
+        import types
+
+        from eval_harness.core._imports import resolve_allowed_attribute
+
+        monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "anything")
+        module = types.ModuleType("anything")
+        opaque: object = object.__new__(type("Opaque", (), {"__module__": None}))
+        module.thing = opaque  # type: ignore[attr-defined]
+
+        with pytest.raises(DisallowedImportError, match="cannot be determined"):
+            resolve_allowed_attribute(module, "thing")

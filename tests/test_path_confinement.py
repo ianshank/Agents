@@ -273,3 +273,87 @@ class TestSinkOutputConfinement:
     def test_validate_output_path_is_the_shared_helper(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(OUTPUT_ROOT_ENV, str(tmp_path))
         assert _validate_output_path(str(tmp_path / "a.json")) == (tmp_path / "a.json").resolve()
+
+
+# ---------------------------------------------------------------------------
+# Symlinks: the case containment exists for, and the one nothing was holding
+# ---------------------------------------------------------------------------
+
+
+def _can_symlink(tmp_path: Path) -> bool:
+    """Windows needs SeCreateSymbolicLinkPrivilege; skip rather than fail there."""
+    try:
+        (tmp_path / "_probe_link").symlink_to(tmp_path)
+    except (OSError, NotImplementedError):
+        return False
+    (tmp_path / "_probe_link").unlink()
+    return True
+
+
+class TestSymlinkConfinement:
+    """Containment rests entirely on ``Path.resolve`` following symlinks.
+
+    That is correct today and was completely untested: a directory inside the
+    root symlinked out is the textbook escape, and nothing in the suite pinned
+    it. These tests exist so a future refactor to ``resolve(strict=False)``
+    semantics, or a switch to a non-resolving comparison, cannot pass silently.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _require_symlinks(self, tmp_path: Path) -> None:
+        if not _can_symlink(tmp_path):
+            pytest.skip("symlink creation not permitted on this platform")
+
+    @staticmethod
+    def _root_and_outside(tmp_path: Path) -> tuple[Path, Path]:
+        root = tmp_path / "root"
+        outside = tmp_path / "outside"
+        root.mkdir()
+        outside.mkdir()
+        return root, outside
+
+    def test_directory_symlink_escaping_the_root_is_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        root, outside = self._root_and_outside(tmp_path)
+        (outside / "secret.jsonl").write_text("{}\n", encoding="utf-8")
+        (root / "link").symlink_to(outside, target_is_directory=True)
+        monkeypatch.setenv(DATA_ROOT_ENV, str(root))
+
+        with pytest.raises(ValueError, match="outside"):
+            _validate_dataset_path(root / "link" / "secret.jsonl", allow_absolute=True)
+
+    def test_file_symlink_escaping_the_root_is_rejected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        root, outside = self._root_and_outside(tmp_path)
+        real = outside / "secret.jsonl"
+        real.write_text("{}\n", encoding="utf-8")
+        (root / "alias.jsonl").symlink_to(real)
+        monkeypatch.setenv(DATA_ROOT_ENV, str(root))
+
+        with pytest.raises(ValueError, match="outside"):
+            _validate_dataset_path(root / "alias.jsonl", allow_absolute=True)
+
+    def test_a_root_that_is_itself_a_symlink_still_admits_its_contents(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Deny-by-accident would be as bad as allow-by-accident: a root given
+        via a symlinked path (a very common deployment shape) must still work."""
+        real_root, _ = self._root_and_outside(tmp_path)
+        (real_root / "data.jsonl").write_text("{}\n", encoding="utf-8")
+        linked_root = tmp_path / "root-link"
+        linked_root.symlink_to(real_root, target_is_directory=True)
+        monkeypatch.setenv(DATA_ROOT_ENV, str(linked_root))
+
+        resolved = _validate_dataset_path(linked_root / "data.jsonl", allow_absolute=True)
+
+        assert resolved == (real_root / "data.jsonl").resolve()
+
+    def test_a_sink_cannot_write_through_a_symlinked_parent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        root, outside = self._root_and_outside(tmp_path)
+        (root / "reports").symlink_to(outside, target_is_directory=True)
+        monkeypatch.setenv(OUTPUT_ROOT_ENV, str(root))
+
+        with pytest.raises(ValueError, match="outside"):
+            JsonFileSink(path=str(root / "reports" / "out.json"))

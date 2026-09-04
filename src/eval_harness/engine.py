@@ -346,7 +346,6 @@ class EvalEngine:
             max_workers=self.config.run.max_workers,
             base_seed=self.config.run.seed,
             repetitions=self.config.run.repetitions,
-            fail_fast=self.config.run.fail_fast,
             make_ctx=make_ctx,
             run_one_safe=self._run_one_safe,
             item_error_policy=self._item_error_policy,
