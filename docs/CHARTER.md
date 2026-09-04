@@ -159,6 +159,11 @@ restated here.**
    pytest suites stay green at their per-package coverage floors (defined in each package's
    [pyproject.toml](../pyproject.toml) and [scripts/.coveragerc](../scripts/.coveragerc), not
    copied here); the regression, protected-path, drift, and size-budget gates stay green.
+   Each floor's *minimum value* — not just its existence — is pinned in
+   [coverage-floors.yaml](../coverage-floors.yaml) and enforced by
+   [scripts/check_coverage_floors.py](../scripts/check_coverage_floors.py): every source that
+   declares one, plus the Makefiles that invoke it, is a protected path, so lowering a floor
+   is a reviewed act rather than a quiet edit.
    [scripts/check_charter_invariants.py](../scripts/check_charter_invariants.py)
    mechanically re-checks this charter's own claims (package roles, zero-dep agent-core,
    `SCHEMA_VERSION` single-sourcing, coverage floors, Protocol-based DI, default-off flags)

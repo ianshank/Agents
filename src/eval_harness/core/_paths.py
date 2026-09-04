@@ -120,8 +120,15 @@ def resolve_confined_path(
 
     try:
         resolved = Path(path).resolve(strict=must_exist)
-    except OSError as exc:
+    except FileNotFoundError as exc:
         raise ValueError(f"{description.capitalize()} does not exist: {raw}") from exc
+    except OSError as exc:
+        # Anything else -- PermissionError (also an OSError subclass) on an
+        # unreadable parent directory, most plausibly -- is not "does not
+        # exist" and must not be reported as such: the file may be exactly
+        # where it should be, just inaccessible, and telling an operator the
+        # wrong thing sends them looking in the wrong place.
+        raise ValueError(f"{description.capitalize()} could not be resolved: {raw} ({exc})") from exc
 
     root = confinement_root(root_env_var)
     if root is None:
