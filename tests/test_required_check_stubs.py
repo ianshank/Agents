@@ -37,6 +37,14 @@ STUB_WORKFLOW = WORKFLOW_DIR / "required-check-stubs.yml"
 #: How a stub job declares which real workflow it stands in for.
 _GATE_CONDITION = re.compile(r"needs\.gate\.outputs\.(?P<key>\w+)\s*==\s*'false'")
 
+#: The matrix expression to expand when rendering a job name into a check
+#: context. Matched as a pattern, not a literal substring: GitHub treats
+#: whitespace inside ``${{ ... }}`` as insignificant, so ``${{matrix.python-version}}``
+#: renders identically. A literal ``.replace`` would silently miss a reformatted
+#: expression on one side of the stub/real comparison and report drift that
+#: is not there -- or, worse, agree because both sides failed to render.
+_PYTHON_VERSION_EXPR = re.compile(r"\$\{\{\s*matrix\.python-version\s*\}\}")
+
 #: The gate job's own ``--workflow KEY=PATH`` arguments to
 #: ``scripts/workflow_paths.py``. Read from the workflow rather than restated
 #: here, so this test cannot pass against a stale copy of the list it checks.
@@ -68,7 +76,12 @@ def _rendered_job_names(workflow: dict[str, Any]) -> set[str]:
             continue
         assert set(axes) == {"python-version"}, f"job {job_id!r} has an unsupported matrix axis: {sorted(axes)}"
         for version in axes["python-version"]:
-            names.add(name.replace("${{ matrix.python-version }}", str(version)))
+            rendered = _PYTHON_VERSION_EXPR.sub(str(version), name)
+            # Substitution must be total. Comparing a half-rendered name against
+            # another half-rendered one would agree for the wrong reason, and this
+            # test's entire job is to catch names that disagree.
+            assert "${{" not in rendered, f"job {job_id!r} has an expression this test cannot render: {name!r}"
+            names.add(rendered)
     return names
 
 
@@ -146,3 +159,32 @@ def test_stub_jobs_do_no_work() -> None:
         steps = job["steps"]
         assert len(steps) == 1, f"stub {job_id!r} should have exactly one step"
         assert "run" in steps[0] and "uses" not in steps[0], f"stub {job_id!r} must not use an action"
+
+
+def test_matrix_expansion_tolerates_reformatted_whitespace() -> None:
+    """GitHub treats whitespace inside ``${{ }}`` as insignificant.
+
+    A literal-substring replace would miss a reformatted expression, leaving the
+    name unrendered on one side of the comparison. Pinned because reformatting a
+    workflow is exactly the kind of harmless edit that should not break a gate.
+    """
+    spaced = {
+        "jobs": {
+            "a": {"name": "pkg py${{ matrix.python-version }}", "strategy": {"matrix": {"python-version": ["3.12"]}}}
+        }
+    }
+    tight = {
+        "jobs": {
+            "a": {"name": "pkg py${{matrix.python-version}}", "strategy": {"matrix": {"python-version": ["3.12"]}}}
+        }
+    }
+
+    assert _rendered_job_names(spaced) == _rendered_job_names(tight) == {"pkg py3.12"}
+
+
+def test_an_unrenderable_expression_fails_loudly() -> None:
+    """Half-rendered names could agree for the wrong reason, so refuse to compare them."""
+    workflow = {"jobs": {"a": {"name": "pkg ${{ matrix.os }}", "strategy": {"matrix": {"python-version": ["3.12"]}}}}}
+
+    with pytest.raises(AssertionError, match="cannot render"):
+        _rendered_job_names(workflow)

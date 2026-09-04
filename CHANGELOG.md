@@ -241,9 +241,12 @@ directories that did not yet exist. The read path had been hardened; the write p
 - **`OUTPUT_ROOT`** (new) confines sink writes. Deliberately a separate variable from
   `DATA_ROOT`: a deployment that mounts its corpus read-only and names it as the read root
   must not thereby declare that corpus a legal write target.
-- **Backwards compatible.** Both roots unset means unconfined, as before, with one warning
-  per sink rather than per `emit`. `ValueError` type and all three message shapes are
-  preserved verbatim, so existing tests and `F_019` still match.
+- **Backwards compatible where it counts.** Both roots unset means unconfined, as before,
+  with one warning per sink rather than per `emit`. The `ValueError` type and each message's
+  leading sentence are unchanged, so existing tests and `F_019` still match. The traversal
+  message's *remediation advice* deliberately changed: it used to read "Set DATA_ROOT env var
+  to explicitly allow controlled access", which is now false — setting `DATA_ROOT` no longer
+  disables the `..` check, and telling an operator otherwise would document the bug.
 - The read/write difference is one documented parameter, not a duplicated function: a read
   requires the target to exist (`resolve(strict=True)`), a write accepts a not-yet-existing
   file whose parent the caller creates.

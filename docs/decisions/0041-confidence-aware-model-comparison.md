@@ -77,10 +77,12 @@ Bring F-024 up to F-025's standard **additively**, reusing F-025's machinery and
 - **The default path claims nothing yet.** `ComparisonConfig.rank_metric` defaults to `mean`,
   which yields `no_interval`. That is the honest answer, and it makes the `pass_rate` opt-in
   the path that carries a defensible ordering.
-- **Config fields still owed.** `ComparisonConfig` should gain `min_sample: int = Field(30,
-  ge=1)` and `wilson_z: float = Field(1.96, gt=0)`, mirroring `ABCampaignConfig`. They were
-  not added in this change because `config/models.py` was being edited concurrently; the
-  attribute-read in `_resolve_confidence` is forward compatible with them.
+- **Config fields landed.** `ComparisonConfig` carries `min_sample` (default 30, `ge=1`) and
+  `wilson_z` (default 1.96, `gt=0`), mirroring `ABCampaignConfig`, so the power floor is
+  settable from YAML rather than only through the API. `_resolve_confidence` still reads them
+  by attribute rather than importing the model: it accepts any config-like object, which is
+  what lets the pure ranking functions be unit-tested without constructing an `EvalConfig`,
+  and an explicit `confidence=` argument still overrides both.
 - **Report fix.** `_render_html` gained `n` and CI columns plus per-metric and overall verdict
   lines, and a real double-escaping bug was fixed: `esc(" &gt; ".join(...))` turned the
   already-entity separator into `&amp;gt;`, which browsers rendered as a literal `&gt;`.

@@ -339,10 +339,12 @@ def _score_names(runs: list[tuple[str, RunResult]]) -> list[str]:
 def _resolve_confidence(comp: Any, override: RankConfidenceConfig | None) -> RankConfidenceConfig:
     """Power floor / z for this comparison: explicit argument, else the config.
 
-    Read off the comparison config by attribute so this works both today (where
-    ``ComparisonConfig`` carries no such fields and the documented
-    ``RankConfidenceConfig`` defaults apply) and once ``min_sample``/``wilson_z``
-    are added there — no literal appears at the call site either way.
+    ``ComparisonConfig`` declares ``min_sample``/``wilson_z``, so a YAML config
+    sets them. They are read by *attribute* rather than by importing that model:
+    this accepts any config-like object, which is what lets the pure ranking
+    functions be unit-tested without building a whole ``EvalConfig``, and it
+    keeps a hand-built comparison working. No literal appears at the call site
+    either way -- the defaults live on ``RankConfidenceConfig``.
     """
     if override is not None:
         return override

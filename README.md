@@ -371,7 +371,7 @@ The `callable` target resolves `params.path` ("module:attribute") by **importing
 module and calling that attribute**. An eval config is therefore code, not data, and
 must be treated with the trust you would give a script.
 
-Two environment variables draw that boundary. They live in the environment rather than
+Three environment variables draw that boundary. They live in the environment rather than
 in the config because the config is the untrusted side:
 
 | Variable | Controls | Unset means |
