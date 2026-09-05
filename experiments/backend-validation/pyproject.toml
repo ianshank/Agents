@@ -30,7 +30,7 @@ dependencies = [
 # (clients degrade to Null doubles, mirroring src/eval_harness/braintrust_client).
 langfuse = ["langfuse>=2"]
 # Opik is evolving quickly; pin the tested minor so probe evidence stays reproducible.
-opik = ["opik>=1.7,<2"]
+opik = ["opik>=1.7,<3"]
 dev = [
     "pytest>=8",
     "pytest-cov>=5",
