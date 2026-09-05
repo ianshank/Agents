@@ -12,6 +12,16 @@ live evaluation in merge CI.
 This document is the compile-down target the four change packages name in their
 `Compiles down to:` headers.
 
+> **Numbers below are as of `a8a7d93` and several are now stale.** Deliberately not edited in place:
+> this is a dated artifact and rewriting its integers would falsify the record. Read
+> [`./DELIVERY.md`](./DELIVERY.md) §1 before quoting any figure from here. In short — 63 capabilities
+> is now **63 done plus 2 deferred out of 65 declared**; 41 components is now **45**; blocker **B4 is
+> closed**; and Deck B is no longer blocked on scorers (they merged) but on the absence of any step
+> that makes an agent write a suite. DELIVERY.md §6 also adds rows to the "Numbers that must not
+> appear" table below, including the one that matters most: the shipped test-generation config scores
+> 1.000 on every axis because it is scoring **the corpus's own reference suite**, with no agent in the
+> loop.
+
 ---
 
 ## The uncomfortable part, first
