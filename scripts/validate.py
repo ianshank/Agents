@@ -25,6 +25,7 @@ from typing import Any
 
 import yaml
 from _cli import configure_logging
+from _provenance import ANCESTRY_REF, check_refs, is_shallow_clone, ref_problem, run_git
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -157,89 +158,50 @@ def _check_dag(features: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
-def _run_git(args: list[str]) -> subprocess.CompletedProcess[str] | None:
-    """Run a git command, or return ``None`` when git itself is unavailable.
+# --- git provenance -------------------------------------------------------------------
+#
+# The implementation lives in `_provenance.py`: the ancestry check pushed this file past
+# the 500-line hard budget (scripts/check_size_budget.py), and the house answer to that
+# gate is to move a cohesive concern to its own owner (ADR 0036, ADR 0019), not to trim
+# documentation to fit.
+#
+# The names below are re-bound rather than dropped so every existing caller and test keeps
+# working across the split.
 
-    ``subprocess.run(["git", ...])`` raises ``FileNotFoundError`` (an ``OSError``) when
-    git is not on ``PATH`` — a minimal container, a docs-only image, a sandbox. The
-    other three checks in this validator (schema, DAG, validation commands) need no git
-    at all, so an absent git must not take the whole run down with a bare traceback.
-    Every git call in this module goes through here so there is one place that can fail.
-    """
-    try:
-        return subprocess.run(["git", *args], capture_output=True, text=True)
-    except OSError as exc:  # git missing, or not executable
-        logger.debug("git unavailable (%s): %s", type(exc).__name__, exc)
-        return None
-
-
-def _is_shallow_clone() -> bool:
-    """Whether the working repository has truncated history.
-
-    A shallow clone is missing most commits, so *every* older ``implemented_in`` ref
-    fails to resolve — 30 of 50 in the clone this check was written against, none of
-    them actually broken. Reporting that as provenance rot is worse than not checking:
-    it trains readers to ignore the finding. ``--strict`` therefore downgrades itself
-    here, and says why.
-
-    Returns ``False`` when git is unavailable: "cannot tell" is not "shallow", and
-    ``_check_git_refs`` handles the missing-git case explicitly rather than inferring
-    it from this answer.
-    """
-    result = _run_git(["rev-parse", "--is-shallow-repository"])
-    return result is not None and result.returncode == 0 and result.stdout.strip() == "true"
+_run_git = run_git
+_is_shallow_clone = is_shallow_clone
+_git_ref_problem = ref_problem
 
 
 def _check_git_refs(
     features: list[dict[str, Any]],
     *,
     strict: bool = False,
+    ancestry_ref: str = ANCESTRY_REF,
 ) -> list[str]:
-    """Verify each implemented_in ref resolves to a real commit.
+    """Verify each ``implemented_in`` ref resolves *and* is reachable from this history.
 
-    Parameters
-    ----------
-    strict:
-        When *True*, unresolvable refs are reported as errors.
-        When *False* (default), they are warnings only.
-
-        Downgraded to warnings on a shallow clone: the refs are absent because the
-        history is, not because the provenance is wrong. CI checks out with
-        ``fetch-depth: 0``, so the strict path is the one that actually runs there.
-
-    A **missing git** is treated differently from a shallow clone, and deliberately so.
-    A shallow clone is a detectable, benign reason for the data to be absent, so
-    downgrading is honest. No git at all means nothing was verified — and passing a
-    check that measured nothing is the exact failure this validator exists to prevent.
-    Under ``--strict`` that is an error; without it, a warning, since the remaining
-    checks are still worth running.
+    A thin adapter over :func:`_provenance.check_refs`. It exists for one reason worth
+    stating: ``shallow_probe`` is passed as a lambda that looks ``_is_shallow_clone`` up in
+    *this* module's globals at call time, so
+    ``monkeypatch.setattr(validate, "_is_shallow_clone", ...)`` still takes effect after the
+    split. Binding the function object directly here would silently disconnect that seam and
+    leave the shallow-clone test asserting nothing.
     """
-    errors: list[str] = []
-    refs = [f for f in features if f.get("implemented_in")]
-    if refs and _run_git(["rev-parse", "--git-dir"]) is None:
-        msg = "Git: git is not available, so no implemented_in ref could be verified"
-        if strict:
-            errors.append(msg)
-            logger.error("%s (--strict requires them verified)", msg)
-        else:
-            logger.warning("%s", msg)
-        return errors
-    if strict and _is_shallow_clone():
-        logger.warning(
-            "shallow clone detected - downgrading --strict provenance checks to warnings; "
-            "run `git fetch --unshallow` to check them for real"
-        )
-        strict = False
-    for feat in refs:
-        ref: str = feat["implemented_in"]
-        result = _run_git(["rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"])
-        if result is None or result.returncode != 0:
-            msg = f"Git: {feat['id']} implemented_in ref '{ref}' does not resolve"
-            if strict:
-                errors.append(msg)
-                logger.error(msg)
-            else:
-                logger.warning(msg)
+    # Annotated rather than returned directly: `from _provenance import ...` is the same
+    # flat bootstrap import as `from _cli import ...`, and `scripts/` is not on `mypy_path`,
+    # so the imported names resolve to Any under `ignore_missing_imports` and
+    # `warn_return_any` fires on a bare return. Adding "scripts" to `mypy_path` is the fix
+    # the smokes entry uses for this symptom, but here it makes mypy see `scripts/__init__.py`
+    # and `scripts/validations/__init__.py` as two modules named `__main__` and stop. The
+    # module itself is fully type-checked; only this cross-module link is opaque.
+    errors: list[str] = check_refs(
+        features,
+        strict=strict,
+        ancestry_ref=ancestry_ref,
+        shallow_probe=lambda: _is_shallow_clone(),
+        ref_probe=lambda ref, *, ancestry_ref=ancestry_ref: _git_ref_problem(ref, ancestry_ref=ancestry_ref),
+    )
     return errors
 
 
