@@ -10,6 +10,11 @@ execution** in this checkout before being believed. Two agent claims were overst
 corrected below. Every fix landed here was negative-controlled: the fix was reverted and the
 new test observed to fail.
 
+**Findings 21-24 came from an automated review of the pull request, after this document was
+first written**, and are kept in their own section for the same reason the corrections are
+kept: an audit that silently absorbs what a reviewer caught reads as more complete than it
+was. One of them (24) was in this audit's own raw output and was lost in consolidation.
+
 ---
 
 ## The finding that matters most
@@ -80,6 +85,27 @@ Ordered by severity. Every row was verified before and after.
 | 18 | Git subprocesses unbounded and un-isolated | no `timeout`; `GIT_DIR`/`GIT_CONFIG_*`/`core.hooksPath` from the host made a "throwaway" fixture neither throwaway nor a fixture |
 | 19 | `"!"` raise-marker tested with `.startswith` at three sites | a reference value legitimately beginning with `"!"` would be misread as an exception at all three |
 | 20 | Two ratio scorers hard-coded `passed = value > 0.0` | killing 1 of 100 mutants reported `passed=True` while the gate rule failed the same run |
+
+### Raised in review of this PR, after the audit above was written
+
+Recorded here rather than folded into the tables, so that what this audit found on its own
+stays distinguishable from what a reviewer had to find for it.
+
+| # | Finding | Evidence |
+|---|---|---|
+| 21 | `timeout_seconds` accepted anything `float()` accepted | `"abc"` raised `ValueError` **out of the target**, which aborts the whole run under ADR 0038 — one malformed item costs every other item's measurement. `-1` fired `TimeoutExpired` in under a millisecond, recording a fabricated timeout over a suite nothing had run; `nan`/`inf` disabled the limit the subprocess exists to enforce |
+| 22 | A mutant id was interpolated into a filesystem path unsanitised | an id of `../../../../ESCAPED` wrote `focal.py` **outside the execution root**, verified. The index now in the label also closes a collision: two mutants sharing an id shared a sandbox |
+| 23 | `timeout_seconds: true` became a 1-second limit | `bool` subclasses `int` and `float(True) == 1.0`, so the numeric guard could not see it. Every suite over that budget then reported a timeout it never earned |
+| 24 | `_covered` guarded `i < len(grid)` but not `0 <= i` | a negative index counts from the END of the grid, so `differs_at: [-1]` made the last grid point stand in for a mutant that differs nowhere near it — coverage the suite never earned |
+| — | `_suite_runner` ordering: docstring vs code | **Not taken as proposed.** The review asked for definition order to match the prose; the prose was the defect. Definition order is a property of a file a *model* wrote, so a regenerated suite with rearranged functions would execute differently — and `repetitions > 1` measures the target's variance, not variance acquired from the input |
+
+**Finding 24 is a miss by this audit, not by the review.** It was in the raw output of this
+audit's own test-practice pass (as "2.14 — negative `differs_at` index") and was dropped
+when the twenty findings above were consolidated. Everything else in that pass was either
+fixed or carried into "Open, not fixed here"; this one was neither, and nothing recorded
+the decision because there was not one. A per-finding disposition column — fixed, deferred
+with a reason, or rejected with a reason — would have made the omission visible at the time
+it happened. That is the process gap; the code defect is fixed.
 
 ### New guards, each negative-controlled
 
