@@ -15,10 +15,20 @@ Protocol, because two files must agree on it:
 
     argv:    <workdir>
     workdir: focal.py + suite.py, written by the caller
-    stdout:  one JSON object (the schema in `_report`)
-    exit:    0 whether tests passed or failed — a non-zero exit is reserved for the runner
-             itself failing, which the caller reports as a runner error rather than as a
-             suite verdict. A failing test is data, not an error.
+    result:  <workdir>/result.json — one JSON object (the schema in `_report`)
+    error:   <workdir>/runner_error.txt — a traceback, only when the runner itself broke
+    exit:    0 whether tests passed or failed. A failing test is data, not an error.
+
+The verdict travels through a FILE, not stdout, and that is the whole point of this
+paragraph. A generated test calling ``print()`` is completely ordinary — model-authored
+suites do it constantly — and an earlier cut of this runner returned its JSON on stdout,
+so any such suite corrupted the payload and was scored NON-EXECUTABLE. A perfectly good
+suite failed for writing to a channel it had every right to write to. The protocol must
+not share a channel with the code under test.
+
+The caller therefore discards the sandbox's stdout and stderr entirely, which also removes
+an unbounded-memory path: a suite printing in a loop can no longer be buffered into the
+harness's address space.
 
 ``focal.py`` is expected to expose ``__calls__``, a list the caller's instrumentation
 appends to. Recording which inputs the suite actually drove is what makes the *normalized*
@@ -27,6 +37,7 @@ mutation denominator ("of what it reached") decidable without coverage instrumen
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import sys
@@ -34,10 +45,12 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-#: Module filenames the caller writes into the sandbox. Named here and imported by the
-#: caller so the two cannot drift.
+#: Filenames the two sides exchange through the sandbox directory. Named here and imported
+#: by the caller so the two cannot drift.
 FOCAL_FILENAME = "focal.py"
 SUITE_FILENAME = "suite.py"
+RESULT_FILENAME = "result.json"
+RUNNER_ERROR_FILENAME = "runner_error.txt"
 
 #: Prefix a callable must carry to be collected as a test. The pytest convention, so a
 #: model-authored suite written for pytest collects here unchanged.
@@ -105,12 +118,16 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) != 1:
         print("usage: _suite_runner.py <workdir>", file=sys.stderr)
         return 2
+    workdir = Path(args[0])
     try:
-        payload = _report(Path(args[0]))
+        payload = _report(workdir)
     except Exception:  # the runner itself broke; the caller must not read this as a verdict
-        traceback.print_exc(file=sys.stderr)
+        # An unwritable workdir is itself the failure; the exit code carries it, and the
+        # caller reports "no detail" rather than crashing on the missing file.
+        with contextlib.suppress(OSError):
+            (workdir / RUNNER_ERROR_FILENAME).write_text(traceback.format_exc(), encoding="utf-8")
         return 1
-    print(json.dumps(payload))
+    (workdir / RESULT_FILENAME).write_text(json.dumps(payload), encoding="utf-8")
     return 0
 
 

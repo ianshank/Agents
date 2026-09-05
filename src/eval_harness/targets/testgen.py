@@ -56,6 +56,10 @@ EVIDENCE_KEY = TESTGEN_EVIDENCE_KEY
 #: item-error policy (ADR 0038), turning one slow suite into zero measurements.
 DEFAULT_TIMEOUT_SECONDS = 30.0
 
+#: How much of a runner traceback to keep in the reported error. Bounded because the string
+#: reaches ``TargetOutput.error`` and from there a results file a human reads.
+_RUNNER_ERROR_CHARS = 200
+
 #: Instrumentation appended to every focal implementation before it is written into the
 #: sandbox. Records the arguments the suite drives, which is what makes "covered" a
 #: measurement. Kept as a template rather than assembled inline so the generated file
@@ -81,24 +85,51 @@ def _write_sandbox(workdir: Path, implementation: str, focal_name: str, suite: s
 
 
 def _execute(workdir: Path, timeout: float) -> tuple[dict[str, Any] | None, str | None]:
-    """Run the sandbox, returning ``(payload, failure)`` with exactly one of them set."""
+    """Run the sandbox, returning ``(payload, failure)`` with exactly one of them set.
+
+    The sandbox's own stdout and stderr are DISCARDED, and the verdict is read from a file
+    the runner writes. Two reasons, one correctness and one resource:
+
+    A generated test calling ``print()`` is completely ordinary. An earlier cut of this
+    read the verdict from stdout, so any suite that printed corrupted the JSON and was
+    scored NON-EXECUTABLE — a good suite failing for writing to a channel it had every
+    right to write to. Verified against this checkout before the fix.
+
+    And a suite printing in a loop would otherwise be buffered into the harness's address
+    space by ``capture_output=True``, with no bound. ``DEVNULL`` removes that path.
+    """
     runner = Path(_suite_runner.__file__)
     try:
         completed = subprocess.run(
             [sys.executable, str(runner), str(workdir)],
-            capture_output=True,
-            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             timeout=timeout,
             cwd=str(workdir),
+            check=False,
         )
     except subprocess.TimeoutExpired:
         return None, "timeout"
-    if completed.returncode != 0:
-        return None, f"runner exited {completed.returncode}: {completed.stderr.strip()[:200]}"
+
+    result_path = workdir / _suite_runner.RESULT_FILENAME
+    if result_path.exists():
+        try:
+            payload: dict[str, Any] = json.loads(result_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return None, f"runner emitted unparseable output: {exc}"
+        return payload, None
+
+    detail = _runner_error(workdir)
+    return None, f"runner exited {completed.returncode}: {detail}"
+
+
+def _runner_error(workdir: Path) -> str:
+    """The runner's own traceback, truncated, or a note that it left none."""
+    error_path = workdir / _suite_runner.RUNNER_ERROR_FILENAME
     try:
-        return json.loads(completed.stdout), None
-    except json.JSONDecodeError as exc:
-        return None, f"runner emitted unparseable output: {exc}"
+        return error_path.read_text(encoding="utf-8").strip()[-_RUNNER_ERROR_CHARS:] or "no detail"
+    except OSError:
+        return "no detail"
 
 
 def _run_against(

@@ -9,6 +9,7 @@ or two mutants. ``tests/test_testgen_corpus.py`` covers the corpus itself.
 from __future__ import annotations
 
 import socket
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -151,6 +152,41 @@ class TestBoundsAndFailureModes:
         testgen.run_generated_suite(item(KILLING_SUITE))
         assert connects == []
 
+    def test_a_suite_that_prints_is_still_scored_correctly(self) -> None:
+        """REGRESSION. A generated test calling `print()` is completely ordinary.
+
+        The first cut of this target read the verdict from the runner's stdout, so any such
+        suite corrupted the JSON and was scored NON-EXECUTABLE — a good suite failing for
+        writing to a channel it had every right to write to, and one that would have
+        systematically under-scored real model output. The verdict now travels through a
+        file. Both the collection-time and the test-time print are covered, because they
+        corrupt the stream at different points.
+        """
+        at_test_time = "from focal import add\n\ndef test_ok():\n    print('noisy')\n    assert add(2, 1) == -1\n"
+        at_import_time = (
+            "from focal import add\nprint('noisy at import')\n\ndef test_ok():\n    assert add(2, 1) == -1\n"
+        )
+        for suite in (at_test_time, at_import_time):
+            result = testgen.run_generated_suite(item(suite))
+            assert result.error is None, suite
+            assert evidence_of(result)["collected"] == 1, suite
+
+    def test_the_sandbox_stdout_is_not_buffered_into_the_harness(self) -> None:
+        """A suite printing in a loop must not be accumulated in the harness's memory.
+
+        `capture_output=True` would buffer it without bound; the sandbox's streams go to
+        DEVNULL instead. Asserted by running a suite that emits ~4MB and observing a normal
+        verdict rather than a memory-shaped failure.
+        """
+        loud = (
+            "from focal import add\n\ndef test_loud():\n"
+            "    for _ in range(4000):\n        print('x' * 1000)\n"
+            "    assert add(2, 1) == -1\n"
+        )
+        result = testgen.run_generated_suite(item(loud))
+        assert result.error is None
+        assert evidence_of(result)["green_on_correct"] == {"ran": 1, "failed": 0}
+
     def test_a_mutant_without_differs_at_is_not_counted_as_covered(self) -> None:
         """A corpus that does not publish differing indices cannot support the normalized
         denominator; counting the mutant anyway would inflate it silently."""
@@ -190,27 +226,30 @@ class TestRunnerProtocol:
 
         assert _suite_runner.main([]) == 2
 
-    def test_a_runner_failure_is_distinguishable_from_a_suite_verdict(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
-    ) -> None:
-        """A non-zero runner exit must not be read as "the suite failed"."""
+    def test_a_runner_failure_is_distinguishable_from_a_suite_verdict(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A non-zero runner exit, with no result file, must not read as "the suite failed"."""
         import subprocess
 
         def broken(*_a: Any, **_k: Any) -> Any:
-            return subprocess.CompletedProcess([], returncode=3, stdout="", stderr="runner blew up")
+            return subprocess.CompletedProcess([], returncode=3)
 
         monkeypatch.setattr(testgen.subprocess, "run", broken)
         result = testgen.run_generated_suite(item(KILLING_SUITE))
         assert result.error is not None and "runner exited 3" in result.error
         assert evidence_of(result)["collection_error"] == "reference run did not complete"
 
-    def test_unparseable_runner_output_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_an_unparseable_result_file_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The verdict file exists but is not JSON — distinct from the runner never running."""
         import subprocess
 
-        def noisy(*_a: Any, **_k: Any) -> Any:
-            return subprocess.CompletedProcess([], returncode=0, stdout="not json", stderr="")
+        from eval_harness.targets import _suite_runner
 
-        monkeypatch.setattr(testgen.subprocess, "run", noisy)
+        def corrupt(*args: Any, **kwargs: Any) -> Any:
+            workdir = Path(kwargs["cwd"])
+            (workdir / _suite_runner.RESULT_FILENAME).write_text("not json", encoding="utf-8")
+            return subprocess.CompletedProcess([], returncode=0)
+
+        monkeypatch.setattr(testgen.subprocess, "run", corrupt)
         result = testgen.run_generated_suite(item(KILLING_SUITE))
         assert result.error is not None and "unparseable" in result.error
 
@@ -266,7 +305,8 @@ class TestSuiteRunnerInProcess:
         assert payload["collection_error"] is not None and "ValueError" in payload["collection_error"]
         assert payload["calls"] == [[[0, 0], {}]]
 
-    def test_main_writes_json_to_stdout_and_exits_zero(self, tmp_path: Any, capsys: Any) -> None:
+    def test_main_writes_the_verdict_to_a_file_not_stdout(self, tmp_path: Any) -> None:
+        """The protocol must not share a channel with the code under test."""
         import json as _json
 
         from eval_harness.targets import _suite_runner
@@ -274,10 +314,15 @@ class TestSuiteRunnerInProcess:
         (tmp_path / _suite_runner.FOCAL_FILENAME).write_text("x = 1\n", encoding="utf-8")
         (tmp_path / _suite_runner.SUITE_FILENAME).write_text("def test_x():\n    pass\n", encoding="utf-8")
         assert _suite_runner.main([str(tmp_path)]) == 0
-        assert _json.loads(capsys.readouterr().out)["collected"] == 1
+        payload = _json.loads((tmp_path / _suite_runner.RESULT_FILENAME).read_text(encoding="utf-8"))
+        assert payload["collected"] == 1
 
-    def test_main_reports_a_runner_failure_as_exit_one(self, tmp_path: Any) -> None:
+    def test_main_writes_a_traceback_file_and_exits_one_when_it_breaks(self, tmp_path: Any) -> None:
         """An absent focal module is the runner failing, not a suite verdict."""
         from eval_harness.targets import _suite_runner
 
-        assert _suite_runner.main([str(tmp_path / "empty")]) == 1
+        workdir = tmp_path / "empty"
+        workdir.mkdir()
+        assert _suite_runner.main([str(workdir)]) == 1
+        assert not (workdir / _suite_runner.RESULT_FILENAME).exists()
+        assert "Traceback" in (workdir / _suite_runner.RUNNER_ERROR_FILENAME).read_text(encoding="utf-8")
