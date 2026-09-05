@@ -104,7 +104,7 @@ before this index existed:
 | agents-critical-path | [PLAN](plans/agents-critical-path/PLAN.md) · [REVIEW](plans/agents-critical-path/REVIEW.md) |
 | claude-foundation | [PLAN](plans/claude-foundation/PLAN.md) · [REVIEW](plans/claude-foundation/REVIEW.md) · [sources](plans/claude-foundation/sources.md) |
 | enterprise-docs-overhaul | [PLAN](plans/enterprise-docs-overhaul/PLAN.md) · [GAP_ANALYSIS](plans/enterprise-docs-overhaul/GAP_ANALYSIS.md) |
-| eval-delivery-sequencing | [PLAN](plans/eval-delivery-sequencing/PLAN.md) · [REVIEW](plans/eval-delivery-sequencing/REVIEW.md) |
+| eval-delivery-sequencing | [PLAN](plans/eval-delivery-sequencing/PLAN.md) · [REVIEW](plans/eval-delivery-sequencing/REVIEW.md) · [HYGIENE_AUDIT](plans/eval-delivery-sequencing/HYGIENE_AUDIT.md) |
 | eval-evidence-integrity | [PLAN](plans/eval-evidence-integrity/PLAN.md) · [REVIEW](plans/eval-evidence-integrity/REVIEW.md) |
 | orbital-drift-alignment | [PLAN](plans/orbital-drift-alignment/PLAN.md) |
 | real-data-activation | [PLAN](plans/real-data-activation/PLAN.md) · [REVIEW](plans/real-data-activation/REVIEW.md) |
