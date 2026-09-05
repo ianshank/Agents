@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import subprocess
 import sys
 import tempfile
@@ -75,6 +76,11 @@ _MAX_RECORDED_MUTANT_ERRORS = 20
 #: session, so they are named here rather than spelled inline at their two call sites.
 _REFERENCE_LABEL = "reference"
 _MUTANT_LABEL_PREFIX = "mutant-"
+
+#: How much of a mutant id to keep in its sandbox directory name. Bounded because the id is
+#: corpus data and a path component has an OS-imposed length limit; uniqueness comes from
+#: the index that precedes it, not from the id.
+_MAX_LABEL_CHARS = 40
 
 #: Instrumentation appended to every focal implementation before it is written into the
 #: sandbox. Records the arguments the suite drives, which is what makes "covered" a
@@ -167,11 +173,64 @@ def _runner_error(workdir: Path) -> str:
 def _run_against(
     root: Path, label: str, implementation: str, focal_name: str, suite: str, timeout: float
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """One sandboxed execution in its own subdirectory, so runs cannot see each other."""
+    """One sandboxed execution in its own subdirectory, so runs cannot see each other.
+
+    The subdirectory is asserted to be *inside* ``root``. Callers already pass a sanitised
+    label (see :func:`_sandbox_label`), so this is defence in depth rather than the primary
+    guard — but it is the last line before a write, and a path escape here writes
+    model-supplied bytes to an attacker-chosen location.
+    """
     workdir = root / label
+    resolved_root = root.resolve()
+    if not workdir.resolve().is_relative_to(resolved_root):
+        raise ValueError(f"sandbox label {label!r} escapes the execution root")
     workdir.mkdir(parents=True, exist_ok=True)
     _write_sandbox(workdir, implementation, focal_name, suite)
     return _execute(workdir, timeout)
+
+
+def _sandbox_label(index: int, mutant_id: Any) -> str:
+    """A filesystem-safe, collision-free directory name for one mutant's sandbox.
+
+    ``mutant['id']`` comes from a corpus file, which is **data**, and it used to be
+    interpolated into a path directly. Verified against this checkout before the fix: an id
+    of ``../../../../ESCAPED`` wrote ``focal.py`` outside the execution root entirely.
+    Corpora in this repository are generated and reviewed, but a target whose safety rests
+    on the goodwill of its input is not safe — and this is the one target that writes
+    model-adjacent code to disk and executes it.
+
+    The index is kept in the name for a second reason found by the same audit: two mutants
+    sharing an id would otherwise share a directory, so the second would overwrite the
+    first's sandbox and both could be credited from one run.
+    """
+    safe = "".join(char if char.isalnum() or char in "-_" else "_" for char in str(mutant_id))
+    return f"{_MUTANT_LABEL_PREFIX}{index:03d}-{safe[:_MAX_LABEL_CHARS]}"
+
+
+def _resolve_timeout(raw: Any) -> tuple[float, str | None]:
+    """``(seconds, problem)`` for an item's ``timeout_seconds``, never raising.
+
+    ``float(inputs.get("timeout_seconds") or DEFAULT)`` accepted anything and raised
+    ``ValueError`` on a non-numeric value — straight out of a target whose documented
+    contract is that a per-item failure is reported, never raised, because a raise aborts
+    the whole run under the default item-error policy (ADR 0038). One malformed item became
+    zero measurements for every other item.
+
+    ``0`` and ``None`` mean "unset" and take the default, matching the previous ``or``
+    behaviour. A negative value fired ``TimeoutExpired`` in under a millisecond, recording a
+    fabricated timeout over a suite nothing had run; ``nan`` and ``inf`` disable the limit
+    that is the whole reason this target uses a subprocess. All three are now refused with a
+    reason the results file carries.
+    """
+    if raw is None or raw is False or raw == 0:
+        return DEFAULT_TIMEOUT_SECONDS, None
+    try:
+        seconds = float(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_TIMEOUT_SECONDS, f"timeout_seconds must be a number, got {raw!r}"
+    if not math.isfinite(seconds) or seconds <= 0:
+        return DEFAULT_TIMEOUT_SECONDS, f"timeout_seconds must be finite and positive, got {raw!r}"
+    return seconds, None
 
 
 def _covered(mutant: dict[str, Any], called: set[tuple[int, ...]], grid: list[list[int]]) -> bool:
@@ -212,7 +271,14 @@ def run_generated_suite(inputs: dict[str, Any]) -> TargetOutput:
     mutants: list[dict[str, Any]] = list(inputs.get("mutants") or [])
     obligations: list[dict[str, Any]] = list(inputs.get("obligations") or [])
     grid: list[list[int]] = [list(point) for point in inputs.get("grid") or []]
-    timeout = float(inputs.get("timeout_seconds") or DEFAULT_TIMEOUT_SECONDS)
+    timeout, timeout_problem = _resolve_timeout(inputs.get("timeout_seconds"))
+    if timeout_problem is not None:
+        logger.warning("testgen: %s for %s", timeout_problem, focal_name)
+        return TargetOutput(
+            output=None,
+            error=timeout_problem,
+            metadata={EVIDENCE_KEY: _empty_evidence(mutants, timed_out=False)},
+        )
 
     with tempfile.TemporaryDirectory(prefix="eval-harness-testgen-") as tmp:
         root = Path(tmp)
@@ -280,11 +346,11 @@ def _run_mutants(
     errors: list[dict[str, str]] = []
     covered = 0
     timed_out = False
-    for mutant in mutants:
+    for index, mutant in enumerate(mutants):
         if mutant.get("equivalent"):
             continue
         result, failure = _run_against(
-            root, f"{_MUTANT_LABEL_PREFIX}{mutant['id']}", mutant["source"], focal_name, suite, timeout
+            root, _sandbox_label(index, mutant.get("id")), mutant["source"], focal_name, suite, timeout
         )
         # Killed = a test that PASSED on the reference now fails. "Any failure" would let a
         # suite that is red on correct code claim every mutant it already failed.

@@ -17,6 +17,7 @@ import pytest
 from eval_harness.core._imports import CALLABLE_ALLOWLIST_ENV, DisallowedImportError
 from eval_harness.plugins import TARGETS, bootstrap
 from eval_harness.targets import testgen
+from eval_harness.targets._suite_runner import FOCAL_FILENAME
 
 bootstrap()
 
@@ -146,6 +147,68 @@ class TestBoundsAndFailureModes:
         result = testgen.run_generated_suite({"focal_name": FOCAL_NAME})
         assert result.error is not None and "missing" in result.error
         assert result.output is None
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pytest.param("abc", id="non-numeric"),
+            pytest.param(-1, id="negative"),
+            pytest.param(float("nan"), id="nan"),
+            pytest.param(float("inf"), id="inf"),
+        ],
+    )
+    def test_an_unusable_timeout_is_refused_rather_than_obeyed(self, value: Any) -> None:
+        """REGRESSION, from an automated review. `float(...)` accepted anything.
+
+        `"abc"` raised `ValueError` straight out of a target whose documented contract is
+        that a per-item failure is reported and never raised — and a raise aborts the whole
+        run under the default item-error policy (ADR 0038), so one malformed item became
+        zero measurements for every other item. `-1` fired `TimeoutExpired` in under a
+        millisecond, recording a fabricated timeout over a suite nothing had run; `nan` and
+        `inf` disable the limit that is the entire reason this target uses a subprocess.
+        """
+        result = testgen.run_generated_suite(item(KILLING_SUITE, timeout_seconds=value))
+        assert result.error is not None and "timeout_seconds" in result.error
+        assert evidence_of(result)["timed_out"] is False, "refusing to run is not a timeout"
+
+    @pytest.mark.parametrize("value", [None, 0, False], ids=["none", "zero", "false"])
+    def test_an_unset_timeout_takes_the_default(self, value: Any) -> None:
+        """The negative control for the case above: `or DEFAULT` behaviour is preserved,
+        so a config that omits the key is not suddenly an error."""
+        assert testgen._resolve_timeout(value) == (testgen.DEFAULT_TIMEOUT_SECONDS, None)
+
+    def test_a_mutant_id_cannot_escape_the_sandbox(self, tmp_path: Path) -> None:
+        """REGRESSION, from an automated review, verified before the fix.
+
+        `mutant['id']` came from a corpus file — data — and was interpolated straight into
+        `root / f"mutant-{id}"`. An id of `../../../../ESCAPED` wrote `focal.py` outside
+        the execution root entirely. Corpora here are generated and reviewed, but a target
+        whose safety rests on the goodwill of its input is not safe, and this is the one
+        target that writes model-adjacent code to disk and then executes it.
+        """
+        root = tmp_path / "a" / "b" / "sandbox"
+        root.mkdir(parents=True)
+        hostile = {**MUTANT, "id": "../../../../ESCAPED"}
+        testgen.run_generated_suite(
+            item(KILLING_SUITE, mutants=[hostile], timeout_seconds=10.0),
+        )
+        written = sorted(str(p.relative_to(tmp_path)) for p in tmp_path.rglob(FOCAL_FILENAME))
+        assert written == [], "the run uses its own TemporaryDirectory; nothing may land here"
+
+        label = testgen._sandbox_label(0, hostile["id"])
+        assert "/" not in label and ".." not in label, label
+        assert (root / label).resolve().is_relative_to(root.resolve())
+
+    def test_two_mutants_sharing_an_id_get_separate_sandboxes(self) -> None:
+        """The second would otherwise overwrite the first's sandbox, and both could be
+        credited from a single run. The index in the label is what prevents it."""
+        first, second = testgen._sandbox_label(0, "M1"), testgen._sandbox_label(1, "M1")
+        assert first != second
+
+    def test_a_label_that_escapes_is_refused_at_the_write(self, tmp_path: Path) -> None:
+        """Defence in depth: `_run_against` is the last line before bytes hit the disk."""
+        with pytest.raises(ValueError, match="escapes the execution root"):
+            testgen._run_against(tmp_path, "../escaped", FOCAL, FOCAL_NAME, KILLING_SUITE, 5.0)
 
     def test_each_run_gets_its_own_working_directory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """The reference and each mutant must not see each other's `focal.py`.

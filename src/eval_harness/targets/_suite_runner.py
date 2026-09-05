@@ -9,7 +9,15 @@ harness), and could not be prevented from mutating the harness's own module stat
 
 Deliberately dependency-free — stdlib only, no pytest. The harness must not acquire a
 runtime test-framework dependency to score test suites, and collection here is a dozen
-lines: import the module, take its ``test_*`` callables in definition order, call each.
+lines: import the module, take its ``test_*`` callables in **name order**, call each.
+
+Name order, not definition order, and the docstring used to say the opposite while the
+code sorted — caught by an automated review, which proposed switching the code to match
+the prose. The prose was the defect. Definition order is a property of a file a MODEL
+wrote, so the same suite regenerated with its functions rearranged would execute in a
+different order; ``repetitions > 1`` is supposed to measure the target's variance, and an
+ordering that moves with the input is exactly the variance it must not introduce. Sorting
+by name is stable across every input this runner will ever see.
 
 Protocol, because two files must agree on it:
 
