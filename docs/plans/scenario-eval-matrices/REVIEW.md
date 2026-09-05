@@ -1,4 +1,8 @@
-# Peer Review — "Three OpenSpec Change Packages for Scenario Eval Matrices"
+# Peer Review — "Four OpenSpec Change Packages for Scenario Eval Matrices"
+
+> The source plan's overview calls itself "three OpenSpec change packages" and then adds a fourth,
+> `add-judge-calibration-harness`, as a shared prerequisite. All four are in scope for this review;
+> the fourth is the one §A1 recommends deleting.
 
 **Reviewed artifact:** an externally produced plan supplied 2026-09-05 proposing four OpenSpec
 change packages (`add-testgen-eval-matrix`, `add-rca-eval-matrix`,
@@ -26,11 +30,12 @@ framework" — is correct and matches this repository's actual extension model (
 Everything downstream of that thesis was written against a *reading* of this repo rather than the
 repo. Concretely:
 
-- **Changes 2 and 3 are blocked on a CHARTER §6 Ratified Amendment.** Ingesting real incident
-  telemetry and real shipped epics into a versioned corpus is the exact scope expansion that already
-  put `openspec/changes/add-production-eval-flywheel/` into `Status: blocked` — "not … a general
-  observability platform," CHARTER §3. The plan's critical path is not judge calibration; it is that
-  amendment, or a re-scope onto synthetic corpora.
+- **Change 2's corpus needs a governance decision the plan never mentions.** Replayed internal
+  incident telemetry is host-specific by construction, which runs at CHARTER §4 invariant 7
+  ("Nothing host-specific is committed") and needs that invariant relaxed — the neighbouring route
+  to the one that put `add-production-eval-flywheel` into `Status: blocked`. Change 3 does **not**
+  have this problem; pass 1 said it did and that is retracted in §E1. The critical path is that
+  decision plus a re-scope onto synthetic corpora, not judge calibration.
 - **Change 4 duplicates an in-flight change.** `openspec/changes/extend-judge-calibration/` exists,
   is dated 2026-08-05, is partially implemented, and its proposal states as an explicit non-goal:
   "**a second calibration system.**" Change 4 is a second calibration system.
@@ -47,12 +52,15 @@ repo. Concretely:
   plan puts fourteen in one file.
 
 On the citations: **11 confirmed as stated, 9 partially confirmed with corrections that change the
-number or the scope, 3 misattributed, 1 refuted by measurement, 2 not found.** That is a better hit
-rate than most strategy documents achieve. The problem is *where* the errors are — they cluster in
-the claims the plan proposes to write into spec requirements:
+number or the scope, 3 misattributed, 1 refuted by measurement, 2 not found** — as revised by pass 2,
+which overturned two of pass 1's own verdicts (§E4, §E5). That is a better hit rate than most
+strategy documents achieve. The problem is *where* the errors are — they cluster in the claims the
+plan proposes to write into spec requirements:
 
-- **`spec-driven-with-adr` does not exist** as an OpenSpec feature (C3.a), and ADRs placed in a
-  change folder are swept into the archive rather than persisting (C3.b, verified by running it).
+- **ADRs placed in a change folder are swept into the archive** rather than persisting (C3.b,
+  verified by running `openspec archive`). The `spec-driven-with-adr` schema the plan invokes is a
+  *community* schema, not an OpenSpec built-in, and it places ADRs at `<repo>/adr/` — so the plan's
+  in-change placement is wrong even by its own citation (C3.a as corrected in §E4).
 - **The κ sample-size thresholds are wrong by 4–6×** and are sourced to a Reddit thread (C4.e). The
   plan cites two other sources that contradict both it and each other.
 - **Change 3's flagship ADR is refuted by measurement**: Drive DOCX export is not byte-stable, and
@@ -161,6 +169,10 @@ None of the four proposed `tasks.md` files updates `openspec/README.md`. All fou
 
 ### A6 · Neither `report-only` gating nor a shadow mode exists in `eval_harness` — **[R]**
 
+> **DISPOSITION RETRACTED in pass 2 — see §E3.** The mechanics stand. But whole-gate non-blocking
+> already ships at the workflow level, and pass 1 missed the larger finding: the gate decision is
+> never persisted to any sink.
+
 The plan's entire sequencing strategy rests on it:
 
 > Run all three in `report-only` gating mode from the start; this matches the repo's existing
@@ -181,6 +193,10 @@ restatement as "we simply won't add a gate rule yet", which is materially weaker
 then computes and records the decision that *would* have been made. Pick (a). Sequence it first.
 
 ### A7 · The matrix obligation is understated by roughly 30× — **[R]**
+
+> **PARTIALLY RETRACTED in pass 2 — see §E2.** 175 *cells* is right; "~175 test methods" and
+> "30×" are not. One parametrized method discharges a whole column, per the repository's own
+> `TestTrajectoryScorersShared` precedent.
 
 ADR 0032 sets per-kind dimension floors. From the generated artifact
 (`docs/matrix-coverage.md`): **`## scorer (floor: M1, M2, M3, M5, M6)`** — five mandatory
@@ -404,6 +420,10 @@ scorer, `BudgetLedger`, and `agent_core.calibration_report` all exist as claimed
 
 ### A16 · Change 2 is blocked on a CHARTER §6 Ratified Amendment it never mentions — **[R]**
 
+> **RETRACTED in pass 2 — see §E1.** Wrong section (Ratified Amendments is §3), wrong ground (§3
+> regulates behaviours, not data provenance), and wrong to bundle Change 3 with Change 2. The
+> defensible objection is CHARTER §4 invariant 7. Disposition unchanged; reasoning replaced.
+
 This is the finding that most changes the plan's delivery order, and it was already decided in this
 repo three weeks before the plan was written.
 
@@ -540,6 +560,10 @@ marked **NOT REACHED** with what was tried, rather than assumed good.
 | C1.13 | Counterfactual replay as "the strongest oracle available" | **PARTIALLY SUPPORTED / MISFRAMED** — see C1.e |
 
 #### C1.a · The "~10% → ~33%" progress claim is the weakest number in the plan
+
+> **The `max-|Z|` comparison in this section is RETRACTED in pass 2 — see §E5.** The numbers are
+> real; the comparison is invalid (different case pool, different scoring scale, different task).
+> The 11.3% → 12.5% correction stands.
 
 This matters because the plan proposes to put it on a VP slide as the honest expectation ceiling —
 i.e. it is load-bearing for the credibility argument, not decoration.
@@ -818,6 +842,10 @@ workflow, and by live Google Drive export tests — not by reading documentation
 | C3.11 | Pairing `revision_id` with a hash of exported bytes | **INCOHERENT** — export cannot target a revision |
 
 #### C3.a · `spec-driven-with-adr` does not exist
+
+> **RETRACTED in pass 2 — see §E4.** It exists as a *community* schema (not an OpenSpec built-in),
+> and its own description places ADRs at `<repo>/adr/` — which strengthens the conclusion that the
+> plan's in-change `adr/` placement is wrong.
 
 ```
 $ openspec schema which spec-driven-with-adr
@@ -1145,15 +1173,18 @@ numbers into specs, which is the worst possible place for them.
 ## Part D — Recommended disposition
 
 0. **Fix the dependency graph first.** The plan's root node is judge calibration. It is not. The
-   real ordering is: CHARTER §6 amendment (or re-scope to synthetic corpora, §A16) →
-   `prove-m8-execution` (§A17) → report-only gate rules (§A6) → scorers. Judge calibration
-   (§A1) is a leaf that is already in flight.
+   real ordering is: re-scope onto synthetic corpora (§A16 as corrected in §E1) →
+   `prove-m8-execution` (§A17) → gate-decision provenance (§A6 as corrected in §E3) → scorers.
+   Judge calibration (§A1) is a leaf that is already in flight. Change 2's real-telemetry corpus
+   needs a CHARTER §4 invariant-7 relaxation, but nothing else does, so it does not gate the
+   programme.
 1. **Drop Change 4.** Fold "calibration artifact must carry κ, N and a CI, and gating is refused
    below the floor" into `openspec/changes/extend-judge-calibration/` as a `## MODIFIED
    Requirements` delta on `require_calibration_for_judge_gating`. One change, not two.
-2. **Add Change 0 — `add-report-only-gate-rules`.** `GateRule.report_only: bool` plus a
-   `GateResult.advisory` channel, so a metric can be computed and recorded without blocking. Every
-   other change depends on it. It is small, it is in a protected path, and it should land first.
+2. **Add Change 0 — `add-gate-decision-provenance`.** Two requirements: persist the gate decision
+   on `RunResult` so it reaches the sinks at all (§E3 — today it exists only in CI stdout), and add
+   `GateRule.report_only` + `GateResult.advisory` for per-rule soaking inside a live gate. Every
+   other change depends on it. Written up at `openspec/changes/add-gate-decision-provenance/`.
 3. **Cut the scorer count to what the first demo needs.** A defensible Sprint-1 target is ~12 total,
    not 35: testgen → `test_executability`, `testgen_mutation_score`, `testgen_green_on_correct`,
    `requirement_obligation_recall`; RCA → `rca_ac_at_k`, `rca_component_match`,
@@ -1166,6 +1197,15 @@ numbers into specs, which is the worst possible place for them.
    `review.md`, `specs/<cap>/spec.md`; ADRs at `docs/decisions/0042+`; a `tasks.md` checkbox for
    `openspec/README.md` index registration; a checkbox for `public_surface_baseline.json` and
    `plugin_registry_baseline.json` regeneration; scorers as packages, not single modules.
+
+   **Done.** The four rewritten packages are in the tree:
+   [`add-gate-decision-provenance`](../../../openspec/changes/add-gate-decision-provenance/),
+   [`add-testgen-eval-matrix`](../../../openspec/changes/add-testgen-eval-matrix/),
+   [`add-rca-eval-matrix`](../../../openspec/changes/add-rca-eval-matrix/),
+   [`add-requirements-gen-eval-matrix`](../../../openspec/changes/add-requirements-gen-eval-matrix/).
+   Scorer count is cut from 35 to 13; every gate rule ships advisory; every corpus starts synthetic;
+   each package carries its own `review.md` recording which findings it applied and which it
+   retracted.
 6. **Move every number out of requirement text** onto frozen `*Config` fields, justified in
    `design.md`.
 7. **Price the protected-path review latency** into the schedule, or say plainly that the timeline
@@ -1198,6 +1238,213 @@ of those are right. Swap the third:
    threshold that would have shipped 4–6× undersized). Leading with "here are three times our own
    gates were wrong and how we caught them" is a far stronger credibility argument than any
    percentage, and it is the one claim in this whole programme that is fully evidenced today.
+
+---
+
+## Part E — Second pass (2026-09-05): corrections to this review
+
+The house idiom for this document is a two-pass fact-check with an attack section
+(`openspec/AGENTS.md`), and the precedent for what a second pass owes is
+`openspec/changes/add-repeat-reliability-metrics/review.md`, which retracts one of its own findings
+in full because it "would have made the change actively harmful, which is exactly what this review
+claimed to be preventing."
+
+Pass 2 ran the same method against pass 1: every load-bearing finding above was handed to an
+adversarial reader instructed to refute it, and every citation verdict was re-checked. **Five
+findings were wrong.** Three of them were in sentences a VP would read.
+
+### E1 · §A16 cited the wrong charter section and the wrong reasoning — **RETRACTED and rebuilt**
+
+Round 1's headline was "Changes 2 and 3 are blocked on a CHARTER §6 Ratified Amendment."
+
+- **Wrong section.** "Ratified Amendments" is a subsection of **§3** (`docs/CHARTER.md:86`; §4
+  begins at :115). §6 is the escalation clause — "surface it for human decision" — not the register.
+  Every other reference in the tree says §3. Round 1 quoted the single inconsistent line in
+  `add-production-eval-flywheel/proposal.md:27` and promoted it to a headline without checking it
+  against its own header five lines above.
+- **Wrong ground.** CHARTER §3's Included list names "datasets" in scope, and every §3 exclusion
+  regulates a *behaviour* — training, live evals in gates, auto-merge, permissive parsing — not data
+  provenance. The flywheel was blocked for an "ingestion, redaction, deduplication and review-queue
+  **pipeline**", and its own non-goal is *unredacted* production data, which concedes that redacted
+  committed data is not per se the bar. A static committed corpus is not "a general observability
+  platform".
+- **Wrong bundling.** Change 3's corpus is *text documents*. Round 1 bundled it with Change 2 by
+  association and gave no separate argument. That was the weakest sentence in the review.
+
+**The defensible objection is CHARTER §4 invariant 7:** "No secrets, no machine fingerprints in the
+repo… **Nothing host-specific is committed**." Replayed incident telemetry is host-specific by
+construction — hostnames, service identifiers, internal IPs and deploy identifiers are the signal,
+not incidental metadata. That is an *invariant relaxation*, escalated under §6 and registered under
+§3, with a different remedy: deterministic redaction gating corpus entry. It bites Change 2 hard and
+Change 3 only incidentally.
+
+Also missed in round 1 and relevant: **F-036** ("Real-transcript corpus bridge — flow_corpus
+ingestion from labeled store records") is `status: deferred` in `features.yaml`, blocked on soak
+rather than on an amendment, and superseded by the flywheel. Real records entering a corpus is
+parked, not forbidden.
+
+**Disposition unchanged, reasoning replaced:** start synthetic. Change 2's real corpus needs a
+decision; Change 3's does not.
+
+### E2 · §A7's "~175 new test methods" is wrong by 2–8× in the other direction — **RETRACTED**
+
+Round 1 said the matrix obligation was "understated by roughly 30×" and quantified it as ~175 new
+*test methods*. The cell count is right; the method count is not, and the method count is what
+carried the rhetoric.
+
+`tests/_matrix_coverage.py:645` reads
+`cells.setdefault((cls.kind, component), set()).update(cls.dims)` — a matrix class's declared
+dimension set applies to **every** name in its `MATRIX_COMPONENTS`. Method counts are used only for
+rendering the coverage table, never for the floor check, which is a set difference.
+
+The repository's own precedent is exactly this: `TestTrajectoryScorersShared`
+(`tests/test_matrix_eval_tools.py:789`) declares `MATRIX_COMPONENTS = TRAJECTORY_SCORERS` and
+discharges M2/M3/M5/M6 for all **seven** trajectory scorers in **eight** parametrized methods.
+`TestSinksShared` covers M2 for six sinks in one.
+
+**Restated:** 35 scorers owe **175 cells**, dischargeable at the repository's own observed rate in
+roughly 80–115 methods, and floor-satisfiable by as few as five. Still a large obligation, still
+budgeted as one checkbox per change, still not absorbable by waivers (ADR 0032 §3 keeps them "a
+small minority" — that part stands). But "30× understated" was itself an overstatement, and it was
+the number in the headline.
+
+Two constraints round 1 also missed, now carried into every rewritten `tasks.md`: matrix classes
+**must not inherit** (`_matrix_coverage.py:609-618` — inherited `test_m*` methods are invisible to
+the AST map), and the literal-parametrize ban applies only to `Test*Registry` classes.
+
+### E3 · §A6's disposition was wrong, and it missed the larger defect — **RETRACTED and rebuilt**
+
+The mechanics stand: there is no `report_only` anywhere in `src/eval_harness/`, `GateRule` requires
+a bound, `GateResult` is `passed` + `failures`. The disposition — "build `GateRule.report_only`,
+sequence it first" — was wrong in two ways.
+
+**Whole-gate non-blocking already ships.** `evaluate_gate` is a pure function called from exactly one
+site (`cli.py:92`) and the exit code is decided in the CLI, so a workflow can run `eval-harness run`
+and map its exit code to success — which is what `calibrated-merge-gate.yml:69-73` does. Round 1
+recommended a protected-path code change over a shipped house pattern without weighing them.
+
+That criticism is accepted but does not fully land: the workflow pattern is **all-or-nothing**, so a
+soak on new scorers would disarm every calibrated threshold for its whole duration with nothing in
+the artifact recording it. Per-rule granularity survives on that argument. Both mechanisms are kept
+in the rewritten change, each bounded to what it fits.
+
+**And round 1 missed the bigger, cheaper finding sitting next to it.** *The gate decision is never
+persisted.* `engine.py:411-412` emits to every sink; `cli.py:92` evaluates the gate **afterwards**,
+uses it for two `print` calls and an exit code, and discards it. `RunResult` has no gate field and
+`to_dict()` emits none (`core/types.py:176-196`).
+
+So the `html_file` artifact the plan builds the VP deliverable from contains no verdict; a soak's
+decisions live only in CI stdout and cannot be diffed; and "these metrics cannot be quietly
+weakened" has no artifact demonstrating it. The rewritten change
+(`openspec/changes/add-gate-decision-provenance/`) leads with that and treats advisory rules as the
+second requirement.
+
+### E4 · §C3.a — `spec-driven-with-adr` **does exist** — **RETRACTED**
+
+Round 1 stated flatly that the schema "does not exist" and made it a headline. It exists, at
+`intent-driven-dev/openspec-schemas`, path `openspec/schemas/spec-driven-with-adr/schema.yaml`,
+declaring `artifacts: proposal, specs, design, adr, tasks`.
+
+The defensible claim is narrower: it is **not an OpenSpec built-in** — `openspec schema which`
+lists only `spec-driven`, and the package ships one schema directory. It is a community schema in
+the same repository round 1 correctly identified as the home of `intent-driven`, which makes missing
+it worse rather than better.
+
+**The substantive point survives and is in fact strengthened.** That schema's own description reads
+"ADRs persist at `<repo>/adr/`" — at the **repository root**, not inside the change folder. So the
+plan's `openspec/changes/<id>/adr/` placement is wrong even by the schema it invokes, and for
+exactly the reason §C3.b established by running `openspec archive`: the whole change directory is
+moved, so an ADR inside it is buried rather than persisted. Right conclusion, wrong premise,
+corrected.
+
+Also corrected in the same pass: **§C3.c overstated the REMOVED rule.** `**Reason**` and
+`**Migration**` are schema *prose* addressed to agents, not validator rules — the validator's own
+docstring says "REMOVED: names only; no scenario/description required", and no validator code
+references either string. And the delta-header regex round 1 quoted is an *error detector* for delta
+headers illegally present in a main spec, not the delta parser; real parsing is section-name lookup
+in `change-parser.ts`. The `RENAMED` operation, the ≥1-scenario rule, the four-hashtag rule and the
+50-character `## Purpose` gate all stand.
+
+### E5 · §C1.a's `max-|Z|` comparison is invalid — **RETRACTED**
+
+Round 1 wrote: "a trivial `max-|Z|` heuristic scores 36.5% pooled — higher than the claimed 33%",
+and called it "a gift to the plan". The numbers are real (0.365 vs 0.246 for a published method,
+n=778, untuned). **The comparison is not.**
+
+- **Different case pool.** The 778 units span 11 subsystems across *three* benchmark families; the
+  reference benchmark is a minority slice, and 778 ≠ its 335.
+- **Different scoring.** The audit retains each benchmark's native scale — fractional partial credit
+  for one family, strict {0,1} for the others, deliberately un-binarised. The pooled figure
+  therefore carries partial credit, closer to the 22.4% "partial" figure than the 12.5% "strict" one.
+- **Different task.** `max-|Z|` predicts a *service identifier*; strict accuracy requires component
+  **and** onset **and** reason together.
+
+Worse, quoting a pooled figure as a ranking is **the exact misreading the audit was written to
+attack**: all six pairwise comparisons reverse sign across subsystems, every prediction interval
+crosses zero, and the published method beats the baseline on three of the eleven subsystems. Round 1
+committed the error it was citing the paper to warn against.
+
+**What survives, on better grounds:** the audit's real finding — untuned statistical baselines are
+competitive, and pooled numbers do not license recommendations — argues for measuring our own floor
+on our own corpus rather than importing anyone's number. `add-rca-eval-matrix` therefore ships the
+baseline as a first-class target evaluated by identical scorers on identical items, and reports no
+agent result without it. The design decision was right; the justification has been rebuilt from
+something this repository can verify.
+
+### E6 · Two citation caveats that weaken claims round 1 made confidently
+
+- **§C2.b's `r = 0.861`** is real (inter-model, average aggregation, branch coverage vs bug
+  detection) but has **one data point per model, n ≈ 11**, and its accumulated-aggregation twin is
+  0.542 and **not statistically significant**. The authors flag the small-n limitation themselves.
+  The claim "coverage and mutation *do* correlate" also over-generalises: the strong result is
+  coverage vs real-bug detection; coverage vs mutation score stayed weak-to-moderate (~0.443).
+- **§C1.a's "independent replication"** is a mislabel. arXiv 2602.09937 is a process-level failure
+  analysis producing a 12-type pitfall taxonomy. It *does* re-run all 335 cases across five models,
+  so 12.5%/22.4% are independently measured — but the 11.34% baseline is **quoted from the
+  original**, not re-derived.
+
+### E7 · What the second pass could not resolve, and one thing it found
+
+**Still unresolved.** The Inozemtseva primary PDF remains **NOT REACHED** — every route blocked
+(author pages, both co-author institutions, ACM DL, Semantic Scholar, CiteSeerX, OpenAlex, Crossref,
+DBLP, the Waterloo thesis repository, web.archive.org). The attribution in §C2.d is now confirmed
+from a *peer-reviewed direct replication* of that exact paper quoting both definitions verbatim,
+which is strong secondary evidence; one gap remains, in that the quoted wording does not settle
+whether Inozemtseva explicitly excluded *equivalent* mutants.
+
+**And a finding worth more than the citation it came from.** The CIbSE INVEST paper (§C4.c) still
+cannot be found: exact-title search returns zero, and its article id is unindexed while its
+immediate neighbours are all indexed with real titles. More seriously, **repeated searches returned
+confident prose asserting the paper exists** — with author names, a DOI and an abstract — while not
+one returned URL contained the title, and one summary assigned it a DOI belonging to a different
+paper.
+
+That is a search summarizer manufacturing a citation. It is also, precisely, the failure mode
+`add-requirements-gen-eval-matrix` exists to catch — and it occurred inside the review of that
+change. It belongs on the VP slide as the concrete illustration of why provenance capture is a
+requirement rather than hygiene.
+
+### What survived pass 2 unchanged
+
+§A1 (Change 4 duplicates `extend-judge-calibration`), §A2 (presence-only calibration guard, MODIFIED
+filed as ADDED), §A3 (`openspec/specs/` deliberately unpopulated), §A4/§C3.b (ADRs swept into the
+archive — verified by running it), §A5 (the change-index guard matches link targets), §A8
+(`MAX_FILE_LINES = 500` is hard, no exemption mechanism, zero current violations — though it should
+be *demoted*: it is a ten-minute packaging fix, not a schedule item), §A9 (conclusion; the reasoning
+is corrected below), §A10 (StateAdapters are not sandboxes), §A11 (the airgap is an import
+invariant, so the hedge was right — but the F-012 attribution is wrong: F-012 is a
+`flow_protocol`/`agent_core` version-pin tripwire, and the airgap negative test is F-011's own),
+§A12 (numpy off the offline path), §A13, §A14, §A17, §A18, and every §C verdict not listed in E4–E6.
+
+**§A9's reasoning is replaced.** "A scorer has no handle on the target" is false: `RunContext.config`
+is the entire `EvalConfig` and `architecture.yaml` grants `scorers: [core, plugins]`, so a scorer
+could legally construct a target. The correct and stronger ground is the attempt loop: a **fresh
+`RunContext` is built per attempt** (`core/_execution_strategies.py:281-282`, `:194-197`) with
+`extra` defaulting to a new dict and the item RNG re-derived, and `attempt_index` lives on
+`ItemResult`, constructed *after* scoring. Every attempt therefore presents an indistinguishable
+context: a scorer cannot count, order, or even detect repetition. Scorer instance state is the only
+residual seam, and it is a thread race, a guaranteed M5 failure, and forbidden by CHARTER §4
+invariant 4 ("scorers and codecs stay pure per-item maps").
 
 ---
 
