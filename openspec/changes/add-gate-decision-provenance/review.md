@@ -84,3 +84,78 @@ in-flight delta.
    only here — per-item gate attribution is a larger design and the aggregate is what a soak diffs.
 2. Should `advisory` entries carry `attempt_index` when `repetitions > 1`? Left out; the aggregate
    is already per-item. Cheap to add later, not cheap to remove.
+
+---
+
+## Implementation record (2026-09-05) — landed as F-062
+
+What the implementation changed relative to the plan above, and why. Recorded here rather than
+silently absorbed, because two of these were decisions the plan explicitly deferred to
+implementation.
+
+### Decisions the plan left open
+
+**D1 — import direction: the edge was declared, and injection alone was not sufficient.**
+Task 1.3 asked for both options to be measured. Injecting a `gate_evaluator` avoids the
+`engine → gating` edge *only* if the wiring happens outside `engine.py`; wiring it in
+`from_config` imports `gating` regardless. Leaving the wiring to the CLI would have meant every
+library caller using `EvalEngine.from_config` silently got no decision — a correctness gap traded
+for a manifest line. The edge is declared; `drift_check.py` reports "Architecture matches the
+manifest"; `architecture.mmd` regenerated. The injectable seam is kept anyway, defaulting to
+`gating.default_gate_evaluator`, so an alternative policy needs no second code path.
+
+**D2 — `GateDecision` lives in `core`, not `gating`.** Naming a `gating` type from `RunResult`
+would have inverted the dependency (`gating` imports `core`) and created a cycle. `core` imports
+nothing from its siblings, so the record type belongs there; `GateResult.to_decision()` is the one
+place the two shapes are mapped.
+
+### Findings from implementation
+
+**F1 — a backwards-compatibility regression, caught by the existing suite.** The first cut had
+`default_gate_evaluator` return `None` when a gate had no rules. That dropped the
+`QUALITY GATE: PASS` line for every config using the legacy ruleless-gate shape, because
+`evaluate_gate` has always returned a passing result for it.
+`tests/test_branch_coverage.py::test_cli_run_offline` failed immediately. Only `gate is None` now
+yields no decision. The spec's "no gate leaves the payload unchanged" scenario says *configured*,
+and this is why it says it.
+
+**F2 — the `html_file` sink did not render the decision, so persisting it was not enough.**
+Task 1.5 read "assert the sink renders the decision"; it did not. Persisting a verdict no sink
+displays leaves the reporting artifact exactly as blind as before. `HtmlFileSink._gate_table` was
+implemented as part of this change, rendering the verdict and every rule, with advisory rules
+labelled rather than filtered — a soak whose advisory outcomes are invisible in the artifact is
+not a soak. Sink coverage is 100%.
+
+**F3 — the size budget fired mid-change and was right to.** Adding the seam to `engine.py` pushed
+it to 510 lines against the hard 500 limit. `GateEvaluator` and `default_gate_evaluator` moved to
+`gating/`, which is their semantically correct owner anyway. This is the gate the parent review
+flagged as a ten-minute packaging correction; it was.
+
+**F4 — the judge stubs were made real scorers.** `mypy --strict` rejected a duck-typed
+`_JudgeBacked` as `Iterable[Scorer]`. Rather than casting, both the test and the validation stub
+now subclass `Scorer` and implement `score`. The guard resolves `.name`/`.uses_judge()` off the
+*constructed* scorer, so a partial stand-in would have exercised a different call than production
+makes.
+
+**F5 — sample-reduction failures needed a posture rule the spec did not state.**
+`_item_error_failures` refuses to gate over a reduced sample. Filed unconditionally as blocking, an
+all-advisory gate would start failing runs it was configured not to fail — stricter than the
+blocking configuration it was derived from. It now follows the gate's own posture: blocking when
+any rule can block, advisory when none can. Two tests pin both directions.
+
+### Verification
+
+- `./scripts/quality-gate.sh all` — PASS (lint, format, `mypy --strict`, 2229 passed / 33 skipped).
+- `eval_harness` branch coverage **98.70%** against the 96% floor; `gating/` 100%, `core/types.py`
+  100%, `sinks/` 100%, `engine.py` 99%.
+- `scripts/validate.py --tier fast` — 60/60 features, F-062 included.
+- `drift_check.py` — no undocumented dependencies; `architecture.mmd` up to date.
+- `check_charter_invariants.py`, `check_coverage_floors.py`, `check_size_budget.py`,
+  `check_readme_registries.py` — all pass.
+
+### Still owed before archive
+
+The `spec-guardian` conformance pass and the `peer-reviewer` adversarial pass (task 5.4). Both are
+`claude-foundation/` fleet roles, staged in-tree rather than installed (ADR 0028), and need a
+session started with `claude --plugin-dir claude-foundation`. Not run here; the findings above are
+the implementer's own record, which is not a substitute for either.

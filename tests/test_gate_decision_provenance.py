@@ -20,10 +20,12 @@ from typing import Any
 import pytest
 
 from eval_harness.config.models import EvalConfig, GateConfig, GateRule
+from eval_harness.core.interfaces import Scorer
 from eval_harness.core.types import (
     EvalItem,
     GateDecision,
     ItemResult,
+    RunContext,
     RunResult,
     ScoreAggregate,
     ScoreResult,
@@ -46,9 +48,7 @@ _UNSATISFIABLE = 1.1
 #: The exact top-level keys a ``RunResult`` payload carried before this change.
 #: Spelled out rather than derived so a future addition has to be a deliberate
 #: edit here, not an accident that this test silently absorbs.
-_PRE_CHANGE_PAYLOAD_KEYS = frozenset(
-    {"run_id", "config_name", "started_at", "finished_at", "aggregate", "items"}
-)
+_PRE_CHANGE_PAYLOAD_KEYS = frozenset({"run_id", "config_name", "started_at", "finished_at", "aggregate", "items"})
 
 
 def _run(mean: float = 0.4, *, pass_rate: float | None = None, items: list[ItemResult] | None = None) -> RunResult:
@@ -325,10 +325,19 @@ def test_sample_reduction_is_advisory_when_no_rule_can_block() -> None:
 # --------------------------------------------------------------------------
 
 
-class _JudgeBackedScorer:
-    """Minimal stand-in for a scorer whose verdict depends on a judge."""
+class _JudgeBackedScorer(Scorer):
+    """A scorer whose verdict depends on a judge.
 
-    name = "judged"
+    Implements the real protocol rather than duck-typing a partial stand-in:
+    the guard resolves ``.name``/``.uses_judge()`` off the *constructed*
+    scorer, so a stub that is not actually a scorer would exercise a different
+    call than production makes.
+    """
+
+    default_name = "judged"
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        return ScoreResult(self.name, value=1.0, passed=True)
 
     def uses_judge(self) -> bool:
         return True
@@ -358,9 +367,7 @@ def test_advisory_judge_rule_is_accepted_without_a_calibration_artifact() -> Non
     unreachable: the labelled corpus that produces the artifact is assembled
     from exactly these advisory runs.
     """
-    require_calibration_for_judge_gating(
-        _config_with_rule(min=0.5, report_only=True), [_JudgeBackedScorer()]
-    )
+    require_calibration_for_judge_gating(_config_with_rule(min=0.5, report_only=True), [_JudgeBackedScorer()])
 
 
 def test_blocking_judge_rule_is_still_refused_without_a_calibration_artifact() -> None:
@@ -514,3 +521,68 @@ def test_cli_exit_code_and_recorded_decision_come_from_one_evaluation(tmp_path: 
         "the CLI must not re-evaluate the gate: two evaluations could let the exported "
         "artifact and the exit code disagree"
     )
+
+
+# --------------------------------------------------------------------------
+# The reporting artifact carries the verdict
+# --------------------------------------------------------------------------
+
+
+def _decision(*, passed: bool, advisory: bool) -> GateDecision:
+    from eval_harness.core.types import GateRuleRecord
+
+    return GateDecision(
+        passed=passed,
+        blocking_failures=[] if advisory else ["blocked"],
+        advisory_failures=["soaking"] if advisory else [],
+        rules=[
+            GateRuleRecord(
+                score=SCORE,
+                metric="mean",
+                observed=0.4,
+                minimum=0.9,
+                maximum=None,
+                met=False,
+                advisory=advisory,
+                detail="detail",
+            )
+        ],
+    )
+
+
+def test_html_report_renders_the_gate_verdict(tmp_path: Any) -> None:
+    """The reason this change exists: the report can now state the verdict.
+
+    Before the decision was carried on ``RunResult`` this artifact could show a
+    run's scores and never say whether the gate passed.
+    """
+    from eval_harness.sinks import HtmlFileSink
+
+    run = _run(0.4)
+    run.gate = _decision(passed=False, advisory=False)
+    html = HtmlFileSink(path=str(tmp_path / "r.html")).render(run)
+
+    assert "Quality gate — FAIL" in html
+    assert "unmet (blocking)" in html
+
+
+def test_html_report_distinguishes_advisory_from_blocking(tmp_path: Any) -> None:
+    """A soak whose advisory outcomes are invisible in the artifact is not a soak."""
+    from eval_harness.sinks import HtmlFileSink
+
+    run = _run(0.4)
+    run.gate = _decision(passed=True, advisory=True)
+    html = HtmlFileSink(path=str(tmp_path / "r.html")).render(run)
+
+    assert "Quality gate — PASS" in html
+    assert "unmet (advisory)" in html
+    assert "unmet (blocking)" not in html
+
+
+def test_html_report_is_unchanged_for_an_ungated_run(tmp_path: Any) -> None:
+    """No gate configured renders exactly the markup it always did."""
+    from eval_harness.sinks import HtmlFileSink
+
+    html = HtmlFileSink(path=str(tmp_path / "r.html")).render(_run(0.4))
+
+    assert "Quality gate" not in html

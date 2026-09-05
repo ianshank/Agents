@@ -1202,6 +1202,7 @@ features:
       - "sample-reduction failures follow the gate's own posture: blocking when any rule can block, advisory when none can, so an all-advisory gate does not start failing runs it was configured not to fail (tests/test_gate_decision_provenance.py::test_sample_reduction_is_advisory_when_no_rule_can_block)"
       - "the CLI no longer exposes evaluate_gate, so there is only one evaluation to disagree with (scripts/validations/F_062.py)"
     validation_command: "python scripts/validations/F_062.py"
+    implemented_in: "14b0101dfbf623aaf2b6ac82f58c4fe0843699d1"
     depends_on: ["F-051", "F-056", "F-057"]
     notes: >-
       architecture.yaml gains the engine -> gating edge, declared rather than worked around: it is

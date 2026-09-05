@@ -22,7 +22,7 @@ for Phoenix and BrainTrust.
 | `state_adapters/` | in_memory, filesystem, sqlite, mock_http (F-060) — deterministic local adapters the engine snapshots around `target.run` when `state_adapter` is configured |
 | `langfuse_client/`, `phoenix_client/`, `braintrust_client/` | SDK-optional tracing/export seams |
 | `agent_core_adapter/` | bridge to `agent-core` (budget ledger, calibration surface, BudgetedJudge cost-cap wrapper) |
-| `gating/` | the config-driven quality gate |
+| `gating/` | the config-driven quality gate. Its verdict is attached to `RunResult.gate` **before** the sinks emit, so every exported artifact carries it (F-062). A rule marked `report_only: true` is evaluated on the identical path and filed to an advisory channel instead of failing the run — use it to soak an uncalibrated threshold inside a gate whose other rules stay live |
 | `engine.py`, `cli.py` | orchestration and the `eval-harness` entry point |
 
 ## Extending without touching core

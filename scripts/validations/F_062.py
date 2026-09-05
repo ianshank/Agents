@@ -181,9 +181,7 @@ def _check_single_evaluation_path(errors: list[str]) -> None:
     for mean in (0.0, 0.4, 0.9, 1.0):
         run = _run_result(mean)
         (blocking,) = evaluate_gate(GateConfig(rules=[GateRule(score=SCORE, min=0.5)]), run).rules
-        (advisory,) = evaluate_gate(
-            GateConfig(rules=[GateRule(score=SCORE, min=0.5, report_only=True)]), run
-        ).rules
+        (advisory,) = evaluate_gate(GateConfig(rules=[GateRule(score=SCORE, min=0.5, report_only=True)]), run).rules
         agreed &= (
             blocking.met == advisory.met
             and blocking.observed == advisory.observed
@@ -195,15 +193,28 @@ def _check_single_evaluation_path(errors: list[str]) -> None:
 
 
 def _check_calibration_guard(errors: list[str]) -> None:
+    from eval_harness.core.interfaces import Scorer
+    from eval_harness.core.types import EvalItem, RunContext, ScoreResult, TargetOutput
     from eval_harness.gating import require_calibration_for_judge_gating
 
-    class _JudgeBacked:
-        name = "judged"
+    class _JudgeBacked(Scorer):
+        """A scorer whose verdict depends on a judge.
+
+        Implements the real ``Scorer`` protocol rather than duck-typing a
+        partial stand-in: the guard resolves ``.name``/``.uses_judge()`` off
+        the *constructed* scorer, so a stub that is not actually a scorer would
+        be testing a different call than the one production makes.
+        """
+
+        default_name = "judged"
+
+        def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+            return ScoreResult(self.name, value=1.0, passed=True)
 
         def uses_judge(self) -> bool:
             return True
 
-    scorers = [_JudgeBacked()]
+    scorers: list[Scorer] = [_JudgeBacked()]
 
     try:
         require_calibration_for_judge_gating(
