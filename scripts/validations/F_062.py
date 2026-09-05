@@ -92,6 +92,7 @@ def _eval_config(rules: list[dict]):
 
 
 def _check_provenance(errors: list[str]) -> None:
+    from eval_harness.config.models import GateConfig, GateRule
     from eval_harness.engine import EvalEngine
 
     seen: list[object] = []
@@ -110,6 +111,33 @@ def _check_provenance(errors: list[str]) -> None:
         errors,
     )
 
+    # A failure that belongs to no rule must still be explained in the artifact:
+    # _item_error_failures has no GateRuleRecord behind it, and rendering only
+    # rule rows produced a report captioned FAIL whose every row read "met".
+    from eval_harness.core._execution_strategies import ITEM_ERROR_SCORE_NAME
+    from eval_harness.core.types import EvalItem, ItemResult, ScoreResult, TargetOutput
+    from eval_harness.gating import evaluate_gate
+    from eval_harness.sinks import HtmlFileSink
+
+    reduced = _run_result(0.9)
+    reduced.items = [
+        ItemResult(
+            item=EvalItem(id="i1", inputs={}),
+            output=TargetOutput(output=None, error="boom"),
+            scores=[ScoreResult(ITEM_ERROR_SCORE_NAME, value=0.0, passed=False)],
+        )
+    ]
+    reduced.gate = evaluate_gate(GateConfig(rules=[GateRule(score=SCORE, min=0.1)]), reduced).to_decision()
+    rendered = HtmlFileSink(path=os.path.join(PROJECT_ROOT, "build", "f062-gate.html")).render(reduced)
+    _check(
+        not reduced.gate.passed
+        and all(r.met for r in reduced.gate.rules)
+        and "Gate-level findings" in rendered
+        and "failed before scoring" in rendered,
+        "a gate failure belonging to no rule is still explained in the html report",
+        errors,
+    )
+
     payload = _run_result().to_dict()
     _check("gate" not in payload, "an ungated run omits the gate key entirely", errors)
     _check(
@@ -125,8 +153,6 @@ def _check_provenance(errors: list[str]) -> None:
         "no gate configured yields no decision, rather than a vacuous pass",
         errors,
     )
-
-    from eval_harness.config.models import GateConfig
 
     ruleless = default_gate_evaluator(GateConfig(rules=[]), _run_result())
     _check(

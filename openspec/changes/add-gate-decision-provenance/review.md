@@ -143,6 +143,22 @@ all-advisory gate would start failing runs it was configured not to fail — str
 blocking configuration it was derived from. It now follows the gate's own posture: blocking when
 any rule can block, advisory when none can. Two tests pin both directions.
 
+**F6 — an unexplained FAIL in the artifact, found by an automated PR review (Copilot), not by me.**
+`HtmlFileSink._gate_table` rendered only per-rule rows and ignored
+`GateDecision.blocking_failures` / `advisory_failures`. Not every reason a gate fails is a rule:
+`_item_error_failures` refuses to gate over a sample reduced by item errors, and that verdict has
+no `GateRuleRecord` behind it. Reproduced before fixing — a report captioned **"Quality gate —
+FAIL"** whose only rule row read **"met"**, with nothing anywhere explaining why.
+
+That is the same incomplete-provenance defect this whole capability exists to remove, reintroduced
+one layer down, in the change that removes it. Fixed with a "Gate-level findings" section that
+renders exactly the failures no rule row explains (a rule's own `detail` is excluded, so nothing is
+duplicated), plus three regression tests and an eighteenth check in `F_062.py`.
+
+Worth recording rather than quietly patching: the round-1 review argued that a soak whose advisory
+outcomes are invisible in the artifact is not a soak. The same argument applies to a *blocking*
+outcome, and I did not apply it to my own implementation.
+
 ### Verification
 
 - `./scripts/quality-gate.sh all` — PASS (lint, format, `mypy --strict`, 2229 passed / 33 skipped).

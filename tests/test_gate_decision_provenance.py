@@ -586,3 +586,55 @@ def test_html_report_is_unchanged_for_an_ungated_run(tmp_path: Any) -> None:
     html = HtmlFileSink(path=str(tmp_path / "r.html")).render(_run(0.4))
 
     assert "Quality gate" not in html
+
+
+def test_html_report_explains_a_failure_that_belongs_to_no_rule(tmp_path: Any) -> None:
+    """A FAIL whose cause is not a rule must still be explained in the artifact.
+
+    Regression test for a defect found in review: ``_item_error_failures``
+    refuses to gate over a sample reduced by item errors, and that verdict has
+    no ``GateRuleRecord`` behind it. Rendering only rule rows produced a report
+    captioned FAIL in which every row read "met" -- an unexplained verdict,
+    which is the same incomplete-provenance defect this capability exists to
+    remove.
+    """
+    from eval_harness.sinks import HtmlFileSink
+
+    run = _run(0.9, items=[_failing_item()])
+    # The rule is satisfied; the run fails only on the reduced sample.
+    run.gate = evaluate_gate(GateConfig(rules=[GateRule(score=SCORE, min=0.1)]), run).to_decision()
+    assert run.gate.passed is False
+    assert all(rule.met for rule in run.gate.rules), "precondition: every rule row reads 'met'"
+
+    html = HtmlFileSink(path=str(tmp_path / "r.html")).render(run)
+
+    assert "Quality gate — FAIL" in html
+    assert "Gate-level findings" in html
+    assert "failed before scoring" in html
+
+
+def test_html_report_does_not_duplicate_a_rule_failure(tmp_path: Any) -> None:
+    """A failure already shown as a rule row is not repeated below the table."""
+    from eval_harness.sinks import HtmlFileSink
+
+    run = _run(0.4)
+    run.gate = evaluate_gate(GateConfig(rules=[GateRule(score=SCORE, min=0.9)]), run).to_decision()
+    html = HtmlFileSink(path=str(tmp_path / "r.html")).render(run)
+
+    assert "unmet (blocking)" in html
+    assert "Gate-level findings" not in html
+
+
+def test_html_report_labels_an_advisory_gate_level_finding(tmp_path: Any) -> None:
+    """An all-advisory gate files sample reduction as advisory, and says so."""
+    from eval_harness.sinks import HtmlFileSink
+
+    run = _run(0.9, items=[_failing_item()])
+    run.gate = evaluate_gate(GateConfig(rules=[GateRule(score=SCORE, min=0.1, report_only=True)]), run).to_decision()
+    assert run.gate.passed is True
+
+    html = HtmlFileSink(path=str(tmp_path / "r.html")).render(run)
+
+    assert "Quality gate — PASS" in html
+    assert "advisory:" in html
+    assert "failed before scoring" in html

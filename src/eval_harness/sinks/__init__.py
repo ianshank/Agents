@@ -177,6 +177,14 @@ class HtmlFileSink(ResultSink):
         able to tell an unmet rule that blocked from an unmet rule that was
         only being measured -- a soak whose advisory outcomes are invisible in
         the artifact is not a soak.
+
+        Failures that belong to no rule are rendered too, in their own section.
+        Not every reason a gate fails is a rule: ``_item_error_failures``
+        refuses to gate over a sample reduced by item errors, and that verdict
+        has no ``GateRuleRecord`` behind it. Rendering only the rule rows
+        produced a report captioned FAIL in which every row read "met" -- an
+        unexplained verdict, which is the same incomplete-provenance defect
+        this whole capability exists to remove.
         """
         verdict = "PASS" if gate.passed else "FAIL"
         rows = [
@@ -200,7 +208,31 @@ class HtmlFileSink(ResultSink):
                 f"<td>{_html.escape(status)}</td></tr>"
             )
         rows.append("</table>")
+        rows.append(self._gate_level_findings(gate))
         return "".join(rows)
+
+    @staticmethod
+    def _gate_level_findings(gate: GateDecision) -> str:
+        """Render failures carried by the decision that no rule row explains.
+
+        A rule's own failure string is its ``detail``, so anything already
+        shown as a row is excluded rather than repeated -- this section exists
+        to close a gap, not to duplicate the table above it. Empty when every
+        failure is attributable to a rule, which is the common case.
+        """
+        explained = {rule.detail for rule in gate.rules if not rule.met}
+        unexplained = [
+            (label, text)
+            for label, failures in (("blocking", gate.blocking_failures), ("advisory", gate.advisory_failures))
+            for text in failures
+            if text not in explained
+        ]
+        if not unexplained:
+            return ""
+        items = "".join(
+            f"<li><strong>{_html.escape(label)}:</strong> {_html.escape(text)}</li>" for label, text in unexplained
+        )
+        return f"<table><caption>Gate-level findings</caption><tr><td><ul>{items}</ul></td></tr></table>"
 
     def _aggregate_table(self, run: RunResult) -> str:
         rows = [
