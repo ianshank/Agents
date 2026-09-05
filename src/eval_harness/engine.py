@@ -42,12 +42,14 @@ from .core.interfaces import (
 )
 from .core.types import (
     EvalItem,
+    GateDecision,
     ItemResult,
     RunContext,
     RunResult,
     ScoreAggregate,
     ScoreResult,
 )
+from .gating import GateEvaluator, default_gate_evaluator
 from .langfuse_client import LangfuseClient, observe
 from .plugins import DATASETS, JUDGES, SCORERS, SINKS, STATE_ADAPTERS, TARGETS, bootstrap
 
@@ -79,6 +81,7 @@ class EvalEngine:
         state_adapter: StateAdapter | None = None,
         rng: random.Random | None = None,
         clock: Callable[[], datetime] = _utcnow,
+        gate_evaluator: GateEvaluator = default_gate_evaluator,
     ) -> None:
         self.config = config
         self.dataset = dataset
@@ -93,6 +96,7 @@ class EvalEngine:
         self._state_lock = threading.Lock()
         self.rng = rng or random.Random(config.run.seed)
         self.clock = clock
+        self.gate_evaluator = gate_evaluator
         self.langfuse_client: LangfuseClient | None = None
 
     @classmethod
@@ -408,9 +412,25 @@ class EvalEngine:
             finished_at=self.clock(),
             diagnostics=diagnostics,
         )
+        # Evaluated *before* the sinks, so every exported artifact carries the
+        # verdict. Previously the gate ran in the CLI after `run()` returned,
+        # which meant no sink -- including the html_file report -- could say
+        # whether the run passed, and a soak's decisions existed only as
+        # process output.
+        run.gate = self._evaluate_gate(run)
         for sink in self.sinks:
             sink.emit(run)
         return run
+
+    def _evaluate_gate(self, run: RunResult) -> GateDecision | None:
+        """The gate's verdict on *run*, or ``None`` when no gate is configured.
+
+        Delegates to the injected ``gate_evaluator``, which defaults to
+        :func:`default_gate_evaluator`. The seam exists so a caller can supply
+        a different policy (or a stub, in tests) without the engine growing a
+        second code path for it.
+        """
+        return self.gate_evaluator(self.config.gate, run)
 
     def _run_sequential_single(self, items: list[EvalItem], started: datetime) -> list[ItemResult]:
         """The single-attempt sequential path: one shared, continuously-advancing

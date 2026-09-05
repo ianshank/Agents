@@ -1167,3 +1167,46 @@ features:
       w_size*size_cap=6.0 swamps base=1.5), which needs a weight refit plus a full-store
       recompute migration. The weights are unchanged here; this corrects what the `protected`
       term MEANS, not its magnitude.
+
+  - id: "F-062"
+    epic: "Quality Gate"
+    name: "Gate-decision provenance + advisory (report_only) gate rules"
+    description: >-
+      The quality gate's decision was never recorded anywhere. EvalEngine.run() emitted the
+      RunResult to every sink and returned; evaluate_gate then ran in cli.py purely to choose an
+      exit code, and its result was discarded. No exported artifact -- html_file included, the one
+      the business-facing report is generated from -- could say whether a run passed or which rule
+      failed, and a soak's decisions existed only as CI stdout, so they could not be diffed across
+      runs. Adds GateDecision/GateRuleRecord to core, attaches the verdict to RunResult *before*
+      the sink loop, and makes the CLI read it rather than re-evaluate (one evaluation, so the
+      artifact and the exit code cannot disagree). Separately adds GateRule.report_only: an
+      advisory rule is evaluated on the identical path and filed to an advisory channel instead of
+      the failure list, so an uncalibrated threshold can be soaked inside a gate whose other rules
+      stay live -- neutralising the exit code at the workflow level (the shadow merge-gate
+      pattern) is all-or-nothing and would disarm the calibrated rules too. Advisory rules are not
+      "gating" for require_calibration_for_judge_gating, because demanding a calibration artifact
+      before a judge may be measured makes calibration unreachable: the labelled corpus that
+      produces the artifact is assembled from exactly those advisory runs.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "the decision reaches the sinks: a recording sink observes run.gate already populated, proving attachment precedes the emit loop rather than following it (scripts/validations/F_062.py, tests/test_gate_decision_provenance.py::test_decision_reaches_the_sinks_before_they_emit)"
+      - "a run with no gate configured carries no decision and its payload keys are unchanged from the pre-change shape -- the ADR 0031 obligation-4 contract diagnostics already holds (tests/test_gate_decision_provenance.py::test_no_gate_configured_leaves_the_payload_unchanged)"
+      - "a configured but ruleless gate keeps its historical passing verdict, so the legacy gate shape does not silently lose its QUALITY GATE: PASS line (tests/test_gate_decision_provenance.py::test_configured_but_ruleless_gate_still_yields_a_decision)"
+      - "single evaluation path: across four aggregate values the same run evaluated as advisory and as blocking yields identical met/observed/detail, differing only in the advisory flag (tests/test_gate_decision_provenance.py::test_advisory_and_blocking_agree_on_the_same_run)"
+      - "an unmet advisory rule does not fail the gate and the CLI exits zero; a blocking rule unmet in the same run still exits non-zero and is reported outside the advisory section (tests/test_gate_decision_provenance.py::test_cli_exits_zero_when_only_advisory_rules_are_unmet, ::test_cli_exits_non_zero_when_a_blocking_rule_is_unmet)"
+      - "an advisory rule with neither min nor max is still rejected: the flag changes where a verdict is filed, never whether one exists (tests/test_gate_decision_provenance.py::test_advisory_rule_without_a_bound_is_still_rejected)"
+      - "require_calibration_for_judge_gating counts only non-advisory rules: an advisory judge-backed rule is accepted with no artifact, a blocking one is still refused, and promotion re-arms the refusal (tests/test_gate_decision_provenance.py::test_advisory_judge_rule_is_accepted_without_a_calibration_artifact and siblings)"
+      - "sample-reduction failures follow the gate's own posture: blocking when any rule can block, advisory when none can, so an all-advisory gate does not start failing runs it was configured not to fail (tests/test_gate_decision_provenance.py::test_sample_reduction_is_advisory_when_no_rule_can_block)"
+      - "the CLI no longer exposes evaluate_gate, so there is only one evaluation to disagree with (scripts/validations/F_062.py)"
+    validation_command: "python scripts/validations/F_062.py"
+    depends_on: ["F-051", "F-056", "F-057"]
+    notes: >-
+      architecture.yaml gains the engine -> gating edge, declared rather than worked around: it is
+      acyclic (gating depends on config/core/reliability and never on engine) and is the layering
+      the CLI already had. GateDecision lives in core, not gating, so RunResult can name it
+      without core importing gating. gate_evaluator is an injectable seam on EvalEngine defaulting
+      to gating.default_gate_evaluator, so an alternative policy needs no second code path in the
+      engine. No new matrix rows: gating is not a MATRIX_KIND (tests/_matrix_coverage.py).
