@@ -105,7 +105,7 @@ matrix's ledger agrees with reality:
 | `extend-judge-calibration` | 20 / 0 | Implemented, pending archive | Accurate |
 | `add-repeat-reliability-metrics` | 37 / 0 | Implemented, pending archive | Accurate |
 | `add-measurement-harness-wedge` | 44 open / **0 done** | **WS-0 landed as F-048**; WS-1–WS-5 open | **Stale — see R1** |
-| `add-testgen-eval-matrix` | 30 open | Genuinely new | Accurate |
+| `add-testgen-eval-matrix` | 30 open | **Landed as F-065**, all tasks checked | Now accurate |
 | `add-rca-eval-matrix` | 29 open | Genuinely new | Accurate |
 | `add-requirements-gen-eval-matrix` | 29 open | Genuinely new | Accurate |
 
@@ -279,7 +279,7 @@ exists to retire.
 
 ---
 
-## WS-3 — `add-testgen-eval-matrix` · **1 round + a soak** · the only unblocked scenario matrix
+## WS-3 — `add-testgen-eval-matrix` · ✅ **landed as F-065 (ADR 0043)**
 
 Four deterministic scorers over AI-generated test suites: executability, mutation score in both
 denominators, false alarms on correct code, obligation recall. Synthetic corpus, allowlisted
@@ -340,14 +340,14 @@ long pole.
 ```
 WS-1  provenance ancestry guard      DONE      F-064        landed 2026-09-05
 WS-2  prove-m8-execution task 4      DONE      39/41        landed 2026-09-05
-WS-3  add-testgen-eval-matrix        1 round   large        the soak is the deliverable  <- next
+WS-3  add-testgen-eval-matrix        DONE      F-065        landed 2026-09-05
 ----- decision gate: B1, B2, B3 ------------------------------------------------
 WS-4  add-rca-eval-matrix            needs B1
 WS-5  add-requirements-gen-matrix    after WS-3
 WS-6  add-measurement-harness-wedge  WS-0 done; the rest needs governance
 ```
 
-**Floor: 3 review rounds, two of them spent.** WS-1 may be batched into WS-2's round if review capacity binds; WS-2 and
+**Floor: 3 review rounds, all three spent.** WS-1 may be batched into WS-2's round if review capacity binds; WS-2 and
 WS-3 should not be batched, for the reason given above.
 
 ---
