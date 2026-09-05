@@ -108,7 +108,7 @@ before this index existed:
 | eval-evidence-integrity | [PLAN](plans/eval-evidence-integrity/PLAN.md) · [REVIEW](plans/eval-evidence-integrity/REVIEW.md) |
 | orbital-drift-alignment | [PLAN](plans/orbital-drift-alignment/PLAN.md) |
 | real-data-activation | [PLAN](plans/real-data-activation/PLAN.md) · [REVIEW](plans/real-data-activation/REVIEW.md) |
-| scenario-eval-matrices | [PLAN](plans/scenario-eval-matrices/PLAN.md) · [REVIEW](plans/scenario-eval-matrices/REVIEW.md) |
+| scenario-eval-matrices | [PLAN](plans/scenario-eval-matrices/PLAN.md) · [REVIEW](plans/scenario-eval-matrices/REVIEW.md) · [DELIVERY](plans/scenario-eval-matrices/DELIVERY.md) |
 
 ## Per-package docs
 
