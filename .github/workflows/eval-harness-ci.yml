@@ -23,6 +23,12 @@ on:
       # The generated coverage artifact: a hand edit to it alone must still run the
       # suite so tests/test_matrix_coverage.py's freshness gate can go red (F-053).
       - "docs/matrix-coverage.md"
+      # The evaluation DATA. `tests/test_testgen_corpus.py` re-derives the committed corpus
+      # and fails if a byte differs, and `config/testgen_eval.yaml` reads
+      # `corpora/testgen/v1/eval/` as its dataset — so a corpus-only change is an
+      # eval-integrity change. Without this entry it ran no workflow at all, while every
+      # required-check stub reported green.
+      - "corpora/**"
   pull_request:
     paths:
       - "src/**"
@@ -40,6 +46,8 @@ on:
       - "CHANGELOG.md"
       # See the push-paths note: freshness gate reachability for the generated doc.
       - "docs/matrix-coverage.md"
+      # See the push-paths note: the corpus is evaluation data, not a fixture.
+      - "corpora/**"
   workflow_dispatch:
 
 permissions:

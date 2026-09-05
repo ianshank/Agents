@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import pathlib
+
 import check_protected_changes as guard
 import eval_protected_paths as epp
 import pytest
@@ -32,6 +34,10 @@ PROTECTED_EXAMPLES = [
     # claude-foundation/ is structurally identical to the four packages above but was missed
     # by that sweep; test_eval_gate.py directly exercises an eval-integrity gate.
     "claude-foundation/tests/test_eval_gate.py",
+    # Evaluation DATA, not just the code that reads it: swapping a corpus for an easier one
+    # moves every score in a matrix without touching a scorer, a threshold or a gate rule.
+    "corpora/testgen/v1/items.json",
+    "corpora/testgen/v1/eval/thorough.jsonl",
 ]
 
 ALLOWED_EXAMPLES = [
@@ -55,6 +61,29 @@ def test_protected_paths_are_blocked(path: str) -> None:
 @pytest.mark.parametrize("path", ALLOWED_EXAMPLES)
 def test_implementation_paths_are_allowed(path: str) -> None:
     assert epp.is_protected(path) is False
+
+
+def test_every_dataset_the_shipped_configs_read_is_protected() -> None:
+    """The literal-example lists above pin the globs; this pins the actual surface.
+
+    A corpus swapped for an easier one moves every score in a matrix without touching a
+    scorer, a threshold or a gate rule — the cheapest way there is to make a failing eval
+    pass. `corpora/**` was added to `PROTECTED_PATTERNS` for that reason, but a future
+    config pointing its dataset somewhere else would reopen the hole silently, so the
+    assertion is derived from the configs rather than restated as another literal.
+    """
+    import yaml
+
+    repo_root = pathlib.Path(__file__).resolve().parent.parent
+    unprotected: list[str] = []
+    for config_path in sorted((repo_root / "config").glob("*.yaml")):
+        document = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        dataset = document.get("dataset")
+        path = dataset.get("path") if isinstance(dataset, dict) else None
+        # Only on-disk datasets: a Langfuse/BrainTrust dataset name is not a repo path.
+        if isinstance(path, str) and (repo_root / path).exists() and not epp.is_protected(path):
+            unprotected.append(f"{config_path.name} -> {path}")
+    assert not unprotected, f"eval datasets reachable with no label and no code owner: {unprotected}"
 
 
 def test_normalisation_handles_prefixes() -> None:

@@ -136,16 +136,18 @@ jobs:
     steps:
       - run: echo "quality-gates skipped -- no protected path changed"
 
-  # Not in ADR 0037's candidate list, but it lives in quality-gates.yml and is skipped by
-  # the same filter, so it would deadlock identically the day someone requires it.
-  quality-gates-secret-scan:
-    name: secret scan (gitleaks)
-    needs: gate
-    if: needs.gate.outputs.quality_gates == 'false'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - run: echo "quality-gates skipped -- no changed file matches its paths filter"
+  # `secret scan (gitleaks)` HAD a stub here, and it was the one stub that did active harm.
+  # gitleaks lived in quality-gates.yml, so a pull request touching only docs, demos,
+  # skills or a corpus did not start that workflow -- and this stub then reported the
+  # context GREEN. The result was a pull request showing a passing secret scan that no
+  # scanner had run, on exactly the changes least likely to be reviewed line by line.
+  #
+  # Every other stub here stands in for a suite whose paths filter genuinely means "this
+  # change cannot affect that suite". No paths filter can mean that about a credential: it
+  # can be committed in any file. So the fix was not a better stub but an unfiltered
+  # workflow -- `.github/workflows/secret-scan.yml` now runs on every pull request, which
+  # makes a stub both unnecessary (it can never deadlock) and dangerous (a second job
+  # posting the same context is the duplicate-green hazard this file's header describes).
 
   # --- eval-harness-ci.yml --------------------------------------------------------------
   eval-harness:

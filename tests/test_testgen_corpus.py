@@ -120,14 +120,112 @@ class TestReferenceSuites:
             assert assertions < grid_size / 2, (item["id"], assertions)
 
     def test_the_broken_suite_fails_at_import(self, items: list[dict]) -> None:
+        """Compiled, not grepped. `assert "raise" in source` is satisfied by a comment."""
         for item in items:
-            assert "raise" in item["suites"]["broken"]
+            source = item["suites"]["broken"]
+            module: dict[str, Any] = {}
+            with pytest.raises(BaseException):  # noqa: B017 - any import-time failure is the property
+                exec(compile(source, f"<broken:{item['id']}>", "exec"), module)
 
     def test_the_false_alarm_suite_extends_the_thorough_one(self, items: list[dict]) -> None:
         """It must differ from `thorough` ONLY by the false alarm, or it confounds two axes."""
         for item in items:
             assert item["suites"]["false_alarm"].startswith(item["suites"]["thorough"])
             assert "test_false_alarm" in item["suites"]["false_alarm"]
+
+
+class TestCalibration:
+    """The four suites are only useful if their scores are actually known.
+
+    Everything in ``TestReferenceSuites`` is a property of the suite *text* — set
+    membership, a substring, a count of ``assert ``. None of it executes anything, so the
+    corpus's entire stated purpose ("10 known-good and 10 known-bad", so four scorers with
+    no published dynamic range become calibratable) rested on nothing an automated check
+    could see. A generator change that quietly made ``thorough`` score 0.4 would have
+    passed every test in this file.
+
+    Deliberately one representative item, chosen as the one with the fewest mutants:
+    each suite kind costs one reference subprocess plus one per mutant, and the properties
+    below are about the *generator*, which produces all sixty items the same way.
+    """
+
+    @staticmethod
+    def _cheapest(items: list[dict]) -> dict[str, Any]:
+        return min(items, key=lambda item: (len([m for m in item["mutants"] if not m["equivalent"]]), item["id"]))
+
+    @staticmethod
+    def _run(item: dict[str, Any], kind: str) -> dict[str, Any]:
+        from eval_harness.targets.testgen import EVIDENCE_KEY, run_generated_suite
+
+        result = run_generated_suite(
+            {
+                "focal_name": item["focal_name"],
+                "reference": item["reference"],
+                "suite": item["suites"][kind],
+                "mutants": item["mutants"],
+                "obligations": item["obligations"],
+                "grid": [list(point) for point in lib.GRID],
+            }
+        )
+        evidence: dict[str, Any] = result.metadata[EVIDENCE_KEY]
+        return evidence
+
+    def test_the_thorough_suite_is_the_corpus_ceiling(self, items: list[dict]) -> None:
+        """Executable, green on correct code, kills every non-equivalent mutant."""
+        item = self._cheapest(items)
+        evidence = self._run(item, "thorough")
+        assert evidence["collection_error"] is None
+        assert evidence["collected"] > 0
+        assert evidence["green_on_correct"]["failed"] == 0, "the known-GOOD suite must be green on correct code"
+        assert evidence["mutants"]["killed"] == evidence["mutants"]["generated"], item["id"]
+        assert set(evidence["obligations_covered"]) == set(evidence["obligations_declared"])
+
+    def test_the_weak_suite_scores_strictly_below_the_thorough_one(self, items: list[dict]) -> None:
+        """Two known-good/known-bad points that a single blended score would collapse.
+
+        REGRESSION. `weak` used to assert the first element of the greedy set cover — the
+        single point separating the MOST mutants — so the known-BAD fixture was built from
+        the strongest assertion available. For 32 of these 60 items it came out identical
+        to `thorough` apart from the test function's name, and this assertion, the first to
+        actually RUN either suite, is what surfaced it.
+        """
+        item = self._cheapest(items)
+        thorough, weak = self._run(item, "thorough"), self._run(item, "weak")
+        assert weak["collected"] > 0, "weak is bad, not broken -- the distinction is the point"
+        assert weak["mutants"]["killed"] < thorough["mutants"]["killed"], item["id"]
+        assert len(weak["obligations_covered"]) <= len(thorough["obligations_covered"])
+
+    def test_the_manifest_reports_the_corpus_dynamic_range_honestly(self, items: list[dict], manifest: dict) -> None:
+        """`weak_strictly_weaker_items` is a measurement, and it must match the artifact.
+
+        The claim it replaces was prose: "10 known-good and 10 known-bad". Half the corpus
+        did not meet it, and no check could see that because the number was never written
+        down. Recomputed here from what SHIPPED rather than from a fresh generation, so a
+        hand-edited manifest fails.
+        """
+        recomputed = sum(1 for item in items if lib.weak_is_strictly_weaker(item))
+        assert manifest["weak_strictly_weaker_items"] == recomputed
+        assert recomputed == len(items), (
+            "every item's known-bad suite must be strictly weaker than its known-good one; "
+            f"{len(items) - recomputed} item(s) cannot calibrate the mutation axis"
+        )
+
+    def test_the_false_alarm_suite_moves_only_the_false_alarm_axis(self, items: list[dict]) -> None:
+        """The separation requirement, asserted by execution rather than by construction.
+
+        A suite that is red on correct code must not thereby look better at finding faults
+        -- the exact confound `killed` is defined to exclude.
+        """
+        item = self._cheapest(items)
+        thorough, false_alarm = self._run(item, "thorough"), self._run(item, "false_alarm")
+        assert false_alarm["green_on_correct"]["failed"] > 0, "it must actually raise a false alarm"
+        assert false_alarm["mutants"]["killed"] <= thorough["mutants"]["killed"], item["id"]
+
+    def test_the_broken_suite_is_not_executable(self, items: list[dict]) -> None:
+        """`test_executability` is the gate the other three depend on; this is its fixture."""
+        evidence = self._run(self._cheapest(items), "broken")
+        assert evidence["collection_error"] is not None
+        assert evidence["collected"] == 0
 
 
 class TestEvalDatasets:
@@ -162,7 +260,45 @@ class TestGeneratorMechanics:
 
     def test_behaviour_records_a_raise_as_behaviour(self) -> None:
         raising = "def f(n, k):\n    return n // 0\n"
-        assert all(str(v).startswith("!ZeroDivisionError") for v in lib._behaviour(raising, "f"))
+        assert all(str(v).startswith(f"{lib.RAISE_MARKER}ZeroDivisionError") for v in lib._behaviour(raising, "f"))
+
+    def test_the_raise_predicate_reads_only_the_marker_it_owns(self) -> None:
+        """The marker was a bare `"!"` tested with `.startswith` at three call sites, so a
+        reference value that legitimately began with `"!"` would have been misread as an
+        exception at all three. One predicate, one constant."""
+        assert lib.raises(f"{lib.RAISE_MARKER}ValueError") is True
+        assert lib.raises("plain") is False
+        assert lib.raises(0) is False and lib.raises(None) is False
+
+    def test_case_lines_refuses_a_raising_value_rather_than_emitting_broken_code(self) -> None:
+        """REGRESSION for a dead branch that carried a live trap.
+
+        `_case_lines` used to emit `with pytest_raises():` for a raising reference value.
+        That name is undefined in the generated suite (its header imports only the focal
+        function) and in the runner (deliberately pytest-free), so a reachable version
+        would have turned a "thorough" fixture into a NameError at import — silently
+        reclassifying the corpus's known-GOOD suite as its known-BROKEN one. It was
+        unreachable only because `_build_suites` filters raising indices out first, which
+        is a precondition, and preconditions belong in the callee.
+        """
+        raising_reference = tuple([f"{lib.RAISE_MARKER}ZeroDivisionError"] * len(lib.GRID))
+        with pytest.raises(ValueError, match="cannot pin a raising reference value"):
+            lib._case_lines("f", raising_reference, [0])
+
+    def test_the_weak_suite_picks_the_least_discriminating_point(self) -> None:
+        """The unit behind the corpus-wide property: fewest kills wins, ties on index.
+
+        Chosen from the whole assertable grid, not the covering set — for the 32 items that
+        motivated this, the cover is a single index, so choosing within it leaves no choice
+        to make and `weak` stayed identical to `thorough`.
+        """
+        mutants = [
+            lib._Mutant("M1", "relational", "", False, (0, 1, 2)),
+            lib._Mutant("M2", "relational", "", False, (0,)),
+            lib._Mutant("M3", "arithmetic", "", True, ()),
+        ]
+        assert lib._weakest_index([0, 1, 2], mutants) == 1, "index 0 kills two; 1 and 2 kill one each"
+        assert lib._weakest_index([0], mutants) == 0, "with one candidate there is no choice"
 
     def test_check_reports_a_missing_corpus(self, tmp_path: Path) -> None:
         problems = gen.check_corpus(tmp_path / "absent")

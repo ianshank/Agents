@@ -23,6 +23,14 @@ PROTECTED_PATTERNS: tuple[str, ...] = (
     "features.schema.json",
     "scripts/validations/**",
     "config/**",
+    # The evaluation DATA, not just the code that reads it. `config/testgen_eval.yaml`
+    # points its dataset straight at `corpora/testgen/v1/eval/`, so swapping the corpus for
+    # an easier one moves every score in that matrix without touching a scorer, a threshold
+    # or a gate rule -- the cheapest possible way to make a failing eval pass, and the exact
+    # class of change this list exists to require a human for. It also fixes a reachability
+    # hole: `corpora/**` appeared in no workflow `paths:` filter either, so a corpus-only
+    # pull request ran ZERO workflows while all seven required-check stubs reported green.
+    "corpora/**",
     "src/eval_harness/gating/**",
     "src/eval_harness/scorers/**",
     "src/eval_harness/judges/**",

@@ -298,7 +298,7 @@
       "broken": "from focal import focal_linear_00\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_00\n\ndef test_part_0():\n    assert focal_linear_00(-4, -2) == -2\n\n\ndef test_false_alarm():\n    assert focal_linear_00(-4, -2) == -1\n",
       "thorough": "from focal import focal_linear_00\n\ndef test_part_0():\n    assert focal_linear_00(-4, -2) == -2\n",
-      "weak": "from focal import focal_linear_00\n\ndef test_one_case():\n    assert focal_linear_00(-4, -2) == -2\n"
+      "weak": "from focal import focal_linear_00\n\ndef test_one_case():\n    assert focal_linear_00(0, -2) == -2\n"
     }
   },
   {
@@ -612,7 +612,7 @@
       "broken": "from focal import focal_linear_01\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_01\n\ndef test_part_0():\n    assert focal_linear_01(-4, -2) == -6\n\n\ndef test_false_alarm():\n    assert focal_linear_01(-4, -2) == -5\n",
       "thorough": "from focal import focal_linear_01\n\ndef test_part_0():\n    assert focal_linear_01(-4, -2) == -6\n",
-      "weak": "from focal import focal_linear_01\n\ndef test_one_case():\n    assert focal_linear_01(-4, -2) == -6\n"
+      "weak": "from focal import focal_linear_01\n\ndef test_one_case():\n    assert focal_linear_01(0, 0) == 0\n"
     }
   },
   {
@@ -929,7 +929,7 @@
       "broken": "from focal import focal_linear_02\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_02\n\ndef test_part_0():\n    assert focal_linear_02(-4, -2) == -10\n\n\ndef test_false_alarm():\n    assert focal_linear_02(-4, -2) == -9\n",
       "thorough": "from focal import focal_linear_02\n\ndef test_part_0():\n    assert focal_linear_02(-4, -2) == -10\n",
-      "weak": "from focal import focal_linear_02\n\ndef test_one_case():\n    assert focal_linear_02(-4, -2) == -10\n"
+      "weak": "from focal import focal_linear_02\n\ndef test_one_case():\n    assert focal_linear_02(0, 0) == 0\n"
     }
   },
   {
@@ -1243,7 +1243,7 @@
       "broken": "from focal import focal_linear_03\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_03\n\ndef test_part_0():\n    assert focal_linear_03(-4, -2) == -14\n\n\ndef test_false_alarm():\n    assert focal_linear_03(-4, -2) == -13\n",
       "thorough": "from focal import focal_linear_03\n\ndef test_part_0():\n    assert focal_linear_03(-4, -2) == -14\n",
-      "weak": "from focal import focal_linear_03\n\ndef test_one_case():\n    assert focal_linear_03(-4, -2) == -14\n"
+      "weak": "from focal import focal_linear_03\n\ndef test_one_case():\n    assert focal_linear_03(0, 0) == 0\n"
     }
   },
   {
@@ -1545,7 +1545,7 @@
       "broken": "from focal import focal_linear_04\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_04\n\ndef test_part_0():\n    assert focal_linear_04(-4, -2) == -2\n\n\ndef test_false_alarm():\n    assert focal_linear_04(-4, -2) == -1\n",
       "thorough": "from focal import focal_linear_04\n\ndef test_part_0():\n    assert focal_linear_04(-4, -2) == -2\n",
-      "weak": "from focal import focal_linear_04\n\ndef test_one_case():\n    assert focal_linear_04(-4, -2) == -2\n"
+      "weak": "from focal import focal_linear_04\n\ndef test_one_case():\n    assert focal_linear_04(0, -2) == -2\n"
     }
   },
   {
@@ -1859,7 +1859,7 @@
       "broken": "from focal import focal_linear_05\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_05\n\ndef test_part_0():\n    assert focal_linear_05(-4, -2) == -6\n\n\ndef test_false_alarm():\n    assert focal_linear_05(-4, -2) == -5\n",
       "thorough": "from focal import focal_linear_05\n\ndef test_part_0():\n    assert focal_linear_05(-4, -2) == -6\n",
-      "weak": "from focal import focal_linear_05\n\ndef test_one_case():\n    assert focal_linear_05(-4, -2) == -6\n"
+      "weak": "from focal import focal_linear_05\n\ndef test_one_case():\n    assert focal_linear_05(0, 0) == 0\n"
     }
   },
   {
@@ -2176,7 +2176,7 @@
       "broken": "from focal import focal_linear_06\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_06\n\ndef test_part_0():\n    assert focal_linear_06(-4, -2) == -10\n\n\ndef test_false_alarm():\n    assert focal_linear_06(-4, -2) == -9\n",
       "thorough": "from focal import focal_linear_06\n\ndef test_part_0():\n    assert focal_linear_06(-4, -2) == -10\n",
-      "weak": "from focal import focal_linear_06\n\ndef test_one_case():\n    assert focal_linear_06(-4, -2) == -10\n"
+      "weak": "from focal import focal_linear_06\n\ndef test_one_case():\n    assert focal_linear_06(0, 0) == 0\n"
     }
   },
   {
@@ -2490,7 +2490,7 @@
       "broken": "from focal import focal_linear_07\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_07\n\ndef test_part_0():\n    assert focal_linear_07(-4, -2) == -14\n\n\ndef test_false_alarm():\n    assert focal_linear_07(-4, -2) == -13\n",
       "thorough": "from focal import focal_linear_07\n\ndef test_part_0():\n    assert focal_linear_07(-4, -2) == -14\n",
-      "weak": "from focal import focal_linear_07\n\ndef test_one_case():\n    assert focal_linear_07(-4, -2) == -14\n"
+      "weak": "from focal import focal_linear_07\n\ndef test_one_case():\n    assert focal_linear_07(0, 0) == 0\n"
     }
   },
   {
@@ -2792,7 +2792,7 @@
       "broken": "from focal import focal_linear_08\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_08\n\ndef test_part_0():\n    assert focal_linear_08(-4, -2) == -2\n\n\ndef test_false_alarm():\n    assert focal_linear_08(-4, -2) == -1\n",
       "thorough": "from focal import focal_linear_08\n\ndef test_part_0():\n    assert focal_linear_08(-4, -2) == -2\n",
-      "weak": "from focal import focal_linear_08\n\ndef test_one_case():\n    assert focal_linear_08(-4, -2) == -2\n"
+      "weak": "from focal import focal_linear_08\n\ndef test_one_case():\n    assert focal_linear_08(0, -2) == -2\n"
     }
   },
   {
@@ -3106,7 +3106,7 @@
       "broken": "from focal import focal_linear_09\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_09\n\ndef test_part_0():\n    assert focal_linear_09(-4, -2) == -6\n\n\ndef test_false_alarm():\n    assert focal_linear_09(-4, -2) == -5\n",
       "thorough": "from focal import focal_linear_09\n\ndef test_part_0():\n    assert focal_linear_09(-4, -2) == -6\n",
-      "weak": "from focal import focal_linear_09\n\ndef test_one_case():\n    assert focal_linear_09(-4, -2) == -6\n"
+      "weak": "from focal import focal_linear_09\n\ndef test_one_case():\n    assert focal_linear_09(0, 0) == 0\n"
     }
   },
   {
@@ -3423,7 +3423,7 @@
       "broken": "from focal import focal_linear_10\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_10\n\ndef test_part_0():\n    assert focal_linear_10(-4, -2) == -10\n\n\ndef test_false_alarm():\n    assert focal_linear_10(-4, -2) == -9\n",
       "thorough": "from focal import focal_linear_10\n\ndef test_part_0():\n    assert focal_linear_10(-4, -2) == -10\n",
-      "weak": "from focal import focal_linear_10\n\ndef test_one_case():\n    assert focal_linear_10(-4, -2) == -10\n"
+      "weak": "from focal import focal_linear_10\n\ndef test_one_case():\n    assert focal_linear_10(0, 0) == 0\n"
     }
   },
   {
@@ -3737,7 +3737,7 @@
       "broken": "from focal import focal_linear_11\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_linear_11\n\ndef test_part_0():\n    assert focal_linear_11(-4, -2) == -14\n\n\ndef test_false_alarm():\n    assert focal_linear_11(-4, -2) == -13\n",
       "thorough": "from focal import focal_linear_11\n\ndef test_part_0():\n    assert focal_linear_11(-4, -2) == -14\n",
-      "weak": "from focal import focal_linear_11\n\ndef test_one_case():\n    assert focal_linear_11(-4, -2) == -14\n"
+      "weak": "from focal import focal_linear_11\n\ndef test_one_case():\n    assert focal_linear_11(0, 0) == 0\n"
     }
   },
   {
@@ -4047,7 +4047,7 @@
       "broken": "from focal import focal_single_branch_01\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_single_branch_01\n\ndef test_part_0():\n    assert focal_single_branch_01(1, -2) == -1\n\ndef test_part_1():\n    assert focal_single_branch_01(2, -2) == -4\n\n\ndef test_false_alarm():\n    assert focal_single_branch_01(1, -2) == 0\n",
       "thorough": "from focal import focal_single_branch_01\n\ndef test_part_0():\n    assert focal_single_branch_01(1, -2) == -1\n\ndef test_part_1():\n    assert focal_single_branch_01(2, -2) == -4\n",
-      "weak": "from focal import focal_single_branch_01\n\ndef test_one_case():\n    assert focal_single_branch_01(1, -2) == -1\n"
+      "weak": "from focal import focal_single_branch_01\n\ndef test_one_case():\n    assert focal_single_branch_01(-4, -2) == -6\n"
     }
   },
   {
@@ -4213,7 +4213,7 @@
       "broken": "from focal import focal_single_branch_02\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_single_branch_02\n\ndef test_part_0():\n    assert focal_single_branch_02(2, -2) == -4\n\ndef test_part_1():\n    assert focal_single_branch_02(3, -2) == 1\n\n\ndef test_false_alarm():\n    assert focal_single_branch_02(2, -2) == -3\n",
       "thorough": "from focal import focal_single_branch_02\n\ndef test_part_0():\n    assert focal_single_branch_02(2, -2) == -4\n\ndef test_part_1():\n    assert focal_single_branch_02(3, -2) == 1\n",
-      "weak": "from focal import focal_single_branch_02\n\ndef test_one_case():\n    assert focal_single_branch_02(2, -2) == -4\n"
+      "weak": "from focal import focal_single_branch_02\n\ndef test_one_case():\n    assert focal_single_branch_02(-4, -2) == 2\n"
     }
   },
   {
@@ -4696,7 +4696,7 @@
       "broken": "from focal import focal_single_branch_05\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_single_branch_05\n\ndef test_part_0():\n    assert focal_single_branch_05(1, -2) == -3\n\ndef test_part_1():\n    assert focal_single_branch_05(2, -2) == 0\n\n\ndef test_false_alarm():\n    assert focal_single_branch_05(1, -2) == -2\n",
       "thorough": "from focal import focal_single_branch_05\n\ndef test_part_0():\n    assert focal_single_branch_05(1, -2) == -3\n\ndef test_part_1():\n    assert focal_single_branch_05(2, -2) == 0\n",
-      "weak": "from focal import focal_single_branch_05\n\ndef test_one_case():\n    assert focal_single_branch_05(1, -2) == -3\n"
+      "weak": "from focal import focal_single_branch_05\n\ndef test_one_case():\n    assert focal_single_branch_05(-4, -2) == 2\n"
     }
   },
   {
@@ -5030,7 +5030,7 @@
       "broken": "from focal import focal_single_branch_07\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_single_branch_07\n\ndef test_part_0():\n    assert focal_single_branch_07(3, -2) == 1\n\ndef test_part_1():\n    assert focal_single_branch_07(4, -2) == -6\n\n\ndef test_false_alarm():\n    assert focal_single_branch_07(3, -2) == 2\n",
       "thorough": "from focal import focal_single_branch_07\n\ndef test_part_0():\n    assert focal_single_branch_07(3, -2) == 1\n\ndef test_part_1():\n    assert focal_single_branch_07(4, -2) == -6\n",
-      "weak": "from focal import focal_single_branch_07\n\ndef test_one_case():\n    assert focal_single_branch_07(3, -2) == 1\n"
+      "weak": "from focal import focal_single_branch_07\n\ndef test_one_case():\n    assert focal_single_branch_07(-4, -2) == -6\n"
     }
   },
   {
@@ -5517,7 +5517,7 @@
       "broken": "from focal import focal_single_branch_10\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_single_branch_10\n\ndef test_part_0():\n    assert focal_single_branch_10(2, -2) == 0\n\ndef test_part_1():\n    assert focal_single_branch_10(3, -2) == -5\n\n\ndef test_false_alarm():\n    assert focal_single_branch_10(2, -2) == 1\n",
       "thorough": "from focal import focal_single_branch_10\n\ndef test_part_0():\n    assert focal_single_branch_10(2, -2) == 0\n\ndef test_part_1():\n    assert focal_single_branch_10(3, -2) == -5\n",
-      "weak": "from focal import focal_single_branch_10\n\ndef test_one_case():\n    assert focal_single_branch_10(2, -2) == 0\n"
+      "weak": "from focal import focal_single_branch_10\n\ndef test_one_case():\n    assert focal_single_branch_10(-4, -2) == -6\n"
     }
   },
   {
@@ -5684,7 +5684,7 @@
       "broken": "from focal import focal_single_branch_11\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_single_branch_11\n\ndef test_part_0():\n    assert focal_single_branch_11(3, -2) == -5\n\ndef test_part_1():\n    assert focal_single_branch_11(4, -2) == 2\n\n\ndef test_false_alarm():\n    assert focal_single_branch_11(3, -2) == -4\n",
       "thorough": "from focal import focal_single_branch_11\n\ndef test_part_0():\n    assert focal_single_branch_11(3, -2) == -5\n\ndef test_part_1():\n    assert focal_single_branch_11(4, -2) == 2\n",
-      "weak": "from focal import focal_single_branch_11\n\ndef test_one_case():\n    assert focal_single_branch_11(3, -2) == -5\n"
+      "weak": "from focal import focal_single_branch_11\n\ndef test_one_case():\n    assert focal_single_branch_11(-4, -2) == 2\n"
     }
   },
   {
@@ -5974,7 +5974,7 @@
       "broken": "from focal import focal_nested_branch_01\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_nested_branch_01\n\ndef test_part_0():\n    assert focal_nested_branch_01(-4, 0) == 0\n\ndef test_part_1():\n    assert focal_nested_branch_01(1, 1) == 0\n\ndef test_part_2():\n    assert focal_nested_branch_01(2, -2) == -2\n\n\ndef test_false_alarm():\n    assert focal_nested_branch_01(-4, 0) == 1\n",
       "thorough": "from focal import focal_nested_branch_01\n\ndef test_part_0():\n    assert focal_nested_branch_01(-4, 0) == 0\n\ndef test_part_1():\n    assert focal_nested_branch_01(1, 1) == 0\n\ndef test_part_2():\n    assert focal_nested_branch_01(2, -2) == -2\n",
-      "weak": "from focal import focal_nested_branch_01\n\ndef test_one_case():\n    assert focal_nested_branch_01(-4, 0) == 0\n"
+      "weak": "from focal import focal_nested_branch_01\n\ndef test_one_case():\n    assert focal_nested_branch_01(-4, -2) == 8\n"
     }
   },
   {
@@ -6457,7 +6457,7 @@
       "broken": "from focal import focal_nested_branch_04\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_nested_branch_04\n\ndef test_part_0():\n    assert focal_nested_branch_04(-4, 0) == 0\n\ndef test_part_1():\n    assert focal_nested_branch_04(0, 1) == -1\n\ndef test_part_2():\n    assert focal_nested_branch_04(1, 1) == 1\n\n\ndef test_false_alarm():\n    assert focal_nested_branch_04(-4, 0) == 1\n",
       "thorough": "from focal import focal_nested_branch_04\n\ndef test_part_0():\n    assert focal_nested_branch_04(-4, 0) == 0\n\ndef test_part_1():\n    assert focal_nested_branch_04(0, 1) == -1\n\ndef test_part_2():\n    assert focal_nested_branch_04(1, 1) == 1\n",
-      "weak": "from focal import focal_nested_branch_04\n\ndef test_one_case():\n    assert focal_nested_branch_04(-4, 0) == 0\n"
+      "weak": "from focal import focal_nested_branch_04\n\ndef test_one_case():\n    assert focal_nested_branch_04(-4, -2) == 8\n"
     }
   },
   {
@@ -6966,7 +6966,7 @@
       "broken": "from focal import focal_nested_branch_07\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_nested_branch_07\n\ndef test_part_0():\n    assert focal_nested_branch_07(-4, 0) == 0\n\ndef test_part_1():\n    assert focal_nested_branch_07(3, 1) == 2\n\ndef test_part_2():\n    assert focal_nested_branch_07(4, -2) == -2\n\n\ndef test_false_alarm():\n    assert focal_nested_branch_07(-4, 0) == 1\n",
       "thorough": "from focal import focal_nested_branch_07\n\ndef test_part_0():\n    assert focal_nested_branch_07(-4, 0) == 0\n\ndef test_part_1():\n    assert focal_nested_branch_07(3, 1) == 2\n\ndef test_part_2():\n    assert focal_nested_branch_07(4, -2) == -2\n",
-      "weak": "from focal import focal_nested_branch_07\n\ndef test_one_case():\n    assert focal_nested_branch_07(-4, 0) == 0\n"
+      "weak": "from focal import focal_nested_branch_07\n\ndef test_one_case():\n    assert focal_nested_branch_07(-4, -2) == 8\n"
     }
   },
   {
@@ -7443,7 +7443,7 @@
       "broken": "from focal import focal_nested_branch_10\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_nested_branch_10\n\ndef test_part_0():\n    assert focal_nested_branch_10(-4, 0) == 0\n\ndef test_part_1():\n    assert focal_nested_branch_10(-4, 1) == -5\n\ndef test_part_2():\n    assert focal_nested_branch_10(2, -2) == -4\n\ndef test_part_3():\n    assert focal_nested_branch_10(3, -2) == -2\n\n\ndef test_false_alarm():\n    assert focal_nested_branch_10(-4, 0) == 1\n",
       "thorough": "from focal import focal_nested_branch_10\n\ndef test_part_0():\n    assert focal_nested_branch_10(-4, 0) == 0\n\ndef test_part_1():\n    assert focal_nested_branch_10(-4, 1) == -5\n\ndef test_part_2():\n    assert focal_nested_branch_10(2, -2) == -4\n\ndef test_part_3():\n    assert focal_nested_branch_10(3, -2) == -2\n",
-      "weak": "from focal import focal_nested_branch_10\n\ndef test_one_case():\n    assert focal_nested_branch_10(-4, 0) == 0\n"
+      "weak": "from focal import focal_nested_branch_10\n\ndef test_one_case():\n    assert focal_nested_branch_10(-4, -2) == 8\n"
     }
   },
   {
@@ -7830,7 +7830,7 @@
       "broken": "from focal import focal_loop_00\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_00\n\ndef test_part_0():\n    assert focal_loop_00(-4, -2) == -6\n\n\ndef test_false_alarm():\n    assert focal_loop_00(-4, -2) == -5\n",
       "thorough": "from focal import focal_loop_00\n\ndef test_part_0():\n    assert focal_loop_00(-4, -2) == -6\n",
-      "weak": "from focal import focal_loop_00\n\ndef test_one_case():\n    assert focal_loop_00(-4, -2) == -6\n"
+      "weak": "from focal import focal_loop_00\n\ndef test_one_case():\n    assert focal_loop_00(0, -2) == -2\n"
     }
   },
   {
@@ -8145,7 +8145,7 @@
       "broken": "from focal import focal_loop_01\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_01\n\ndef test_part_0():\n    assert focal_loop_01(-4, -2) == -11\n\n\ndef test_false_alarm():\n    assert focal_loop_01(-4, -2) == -10\n",
       "thorough": "from focal import focal_loop_01\n\ndef test_part_0():\n    assert focal_loop_01(-4, -2) == -11\n",
-      "weak": "from focal import focal_loop_01\n\ndef test_one_case():\n    assert focal_loop_01(-4, -2) == -11\n"
+      "weak": "from focal import focal_loop_01\n\ndef test_one_case():\n    assert focal_loop_01(0, -2) == -3\n"
     }
   },
   {
@@ -8460,7 +8460,7 @@
       "broken": "from focal import focal_loop_02\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_02\n\ndef test_part_0():\n    assert focal_loop_02(-4, -2) == -17\n\n\ndef test_false_alarm():\n    assert focal_loop_02(-4, -2) == -16\n",
       "thorough": "from focal import focal_loop_02\n\ndef test_part_0():\n    assert focal_loop_02(-4, -2) == -17\n",
-      "weak": "from focal import focal_loop_02\n\ndef test_one_case():\n    assert focal_loop_02(-4, -2) == -17\n"
+      "weak": "from focal import focal_loop_02\n\ndef test_one_case():\n    assert focal_loop_02(0, -2) == -5\n"
     }
   },
   {
@@ -8775,7 +8775,7 @@
       "broken": "from focal import focal_loop_03\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_03\n\ndef test_part_0():\n    assert focal_loop_03(-4, -2) == -24\n\n\ndef test_false_alarm():\n    assert focal_loop_03(-4, -2) == -23\n",
       "thorough": "from focal import focal_loop_03\n\ndef test_part_0():\n    assert focal_loop_03(-4, -2) == -24\n",
-      "weak": "from focal import focal_loop_03\n\ndef test_one_case():\n    assert focal_loop_03(-4, -2) == -24\n"
+      "weak": "from focal import focal_loop_03\n\ndef test_one_case():\n    assert focal_loop_03(0, -2) == -8\n"
     }
   },
   {
@@ -8998,7 +8998,7 @@
       "broken": "from focal import focal_loop_04\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_04\n\ndef test_part_0():\n    assert focal_loop_04(-4, -2) == -6\n\n\ndef test_false_alarm():\n    assert focal_loop_04(-4, -2) == -5\n",
       "thorough": "from focal import focal_loop_04\n\ndef test_part_0():\n    assert focal_loop_04(-4, -2) == -6\n",
-      "weak": "from focal import focal_loop_04\n\ndef test_one_case():\n    assert focal_loop_04(-4, -2) == -6\n"
+      "weak": "from focal import focal_loop_04\n\ndef test_one_case():\n    assert focal_loop_04(0, -2) == -2\n"
     }
   },
   {
@@ -9313,7 +9313,7 @@
       "broken": "from focal import focal_loop_05\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_05\n\ndef test_part_0():\n    assert focal_loop_05(-4, -2) == -11\n\n\ndef test_false_alarm():\n    assert focal_loop_05(-4, -2) == -10\n",
       "thorough": "from focal import focal_loop_05\n\ndef test_part_0():\n    assert focal_loop_05(-4, -2) == -11\n",
-      "weak": "from focal import focal_loop_05\n\ndef test_one_case():\n    assert focal_loop_05(-4, -2) == -11\n"
+      "weak": "from focal import focal_loop_05\n\ndef test_one_case():\n    assert focal_loop_05(0, -2) == -3\n"
     }
   },
   {
@@ -9628,7 +9628,7 @@
       "broken": "from focal import focal_loop_06\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_06\n\ndef test_part_0():\n    assert focal_loop_06(-4, -2) == -17\n\n\ndef test_false_alarm():\n    assert focal_loop_06(-4, -2) == -16\n",
       "thorough": "from focal import focal_loop_06\n\ndef test_part_0():\n    assert focal_loop_06(-4, -2) == -17\n",
-      "weak": "from focal import focal_loop_06\n\ndef test_one_case():\n    assert focal_loop_06(-4, -2) == -17\n"
+      "weak": "from focal import focal_loop_06\n\ndef test_one_case():\n    assert focal_loop_06(0, -2) == -5\n"
     }
   },
   {
@@ -9943,7 +9943,7 @@
       "broken": "from focal import focal_loop_07\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_07\n\ndef test_part_0():\n    assert focal_loop_07(-4, -2) == -24\n\n\ndef test_false_alarm():\n    assert focal_loop_07(-4, -2) == -23\n",
       "thorough": "from focal import focal_loop_07\n\ndef test_part_0():\n    assert focal_loop_07(-4, -2) == -24\n",
-      "weak": "from focal import focal_loop_07\n\ndef test_one_case():\n    assert focal_loop_07(-4, -2) == -24\n"
+      "weak": "from focal import focal_loop_07\n\ndef test_one_case():\n    assert focal_loop_07(0, -2) == -8\n"
     }
   },
   {
@@ -10166,7 +10166,7 @@
       "broken": "from focal import focal_loop_08\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_08\n\ndef test_part_0():\n    assert focal_loop_08(-4, -2) == -6\n\n\ndef test_false_alarm():\n    assert focal_loop_08(-4, -2) == -5\n",
       "thorough": "from focal import focal_loop_08\n\ndef test_part_0():\n    assert focal_loop_08(-4, -2) == -6\n",
-      "weak": "from focal import focal_loop_08\n\ndef test_one_case():\n    assert focal_loop_08(-4, -2) == -6\n"
+      "weak": "from focal import focal_loop_08\n\ndef test_one_case():\n    assert focal_loop_08(0, -2) == -2\n"
     }
   },
   {
@@ -10481,7 +10481,7 @@
       "broken": "from focal import focal_loop_09\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_09\n\ndef test_part_0():\n    assert focal_loop_09(-4, -2) == -11\n\n\ndef test_false_alarm():\n    assert focal_loop_09(-4, -2) == -10\n",
       "thorough": "from focal import focal_loop_09\n\ndef test_part_0():\n    assert focal_loop_09(-4, -2) == -11\n",
-      "weak": "from focal import focal_loop_09\n\ndef test_one_case():\n    assert focal_loop_09(-4, -2) == -11\n"
+      "weak": "from focal import focal_loop_09\n\ndef test_one_case():\n    assert focal_loop_09(0, -2) == -3\n"
     }
   },
   {
@@ -10796,7 +10796,7 @@
       "broken": "from focal import focal_loop_10\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_10\n\ndef test_part_0():\n    assert focal_loop_10(-4, -2) == -17\n\n\ndef test_false_alarm():\n    assert focal_loop_10(-4, -2) == -16\n",
       "thorough": "from focal import focal_loop_10\n\ndef test_part_0():\n    assert focal_loop_10(-4, -2) == -17\n",
-      "weak": "from focal import focal_loop_10\n\ndef test_one_case():\n    assert focal_loop_10(-4, -2) == -17\n"
+      "weak": "from focal import focal_loop_10\n\ndef test_one_case():\n    assert focal_loop_10(0, -2) == -5\n"
     }
   },
   {
@@ -11111,7 +11111,7 @@
       "broken": "from focal import focal_loop_11\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_11\n\ndef test_part_0():\n    assert focal_loop_11(-4, -2) == -24\n\n\ndef test_false_alarm():\n    assert focal_loop_11(-4, -2) == -23\n",
       "thorough": "from focal import focal_loop_11\n\ndef test_part_0():\n    assert focal_loop_11(-4, -2) == -24\n",
-      "weak": "from focal import focal_loop_11\n\ndef test_one_case():\n    assert focal_loop_11(-4, -2) == -24\n"
+      "weak": "from focal import focal_loop_11\n\ndef test_one_case():\n    assert focal_loop_11(0, -2) == -8\n"
     }
   },
   {
@@ -11443,7 +11443,7 @@
       "broken": "from focal import focal_loop_branch_00\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_00\n\ndef test_part_0():\n    assert focal_loop_branch_00(-4, -2) == -4\n\ndef test_part_1():\n    assert focal_loop_branch_00(0, -2) == 2\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_00(-4, -2) == -3\n",
       "thorough": "from focal import focal_loop_branch_00\n\ndef test_part_0():\n    assert focal_loop_branch_00(-4, -2) == -4\n\ndef test_part_1():\n    assert focal_loop_branch_00(0, -2) == 2\n",
-      "weak": "from focal import focal_loop_branch_00\n\ndef test_one_case():\n    assert focal_loop_branch_00(-4, -2) == -4\n"
+      "weak": "from focal import focal_loop_branch_00\n\ndef test_one_case():\n    assert focal_loop_branch_00(0, 0) == 0\n"
     }
   },
   {
@@ -11804,7 +11804,7 @@
       "broken": "from focal import focal_loop_branch_01\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_01\n\ndef test_part_0():\n    assert focal_loop_branch_01(1, -2) == 3\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_01(1, -2) == 4\n",
       "thorough": "from focal import focal_loop_branch_01\n\ndef test_part_0():\n    assert focal_loop_branch_01(1, -2) == 3\n",
-      "weak": "from focal import focal_loop_branch_01\n\ndef test_one_case():\n    assert focal_loop_branch_01(1, -2) == 3\n"
+      "weak": "from focal import focal_loop_branch_01\n\ndef test_one_case():\n    assert focal_loop_branch_01(0, 0) == 0\n"
     }
   },
   {
@@ -12191,7 +12191,7 @@
       "broken": "from focal import focal_loop_branch_02\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_02\n\ndef test_part_0():\n    assert focal_loop_branch_02(1, -2) == 5\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_02(1, -2) == 6\n",
       "thorough": "from focal import focal_loop_branch_02\n\ndef test_part_0():\n    assert focal_loop_branch_02(1, -2) == 5\n",
-      "weak": "from focal import focal_loop_branch_02\n\ndef test_one_case():\n    assert focal_loop_branch_02(1, -2) == 5\n"
+      "weak": "from focal import focal_loop_branch_02\n\ndef test_one_case():\n    assert focal_loop_branch_02(-4, 0) == 0\n"
     }
   },
   {
@@ -12584,7 +12584,7 @@
       "broken": "from focal import focal_loop_branch_03\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_03\n\ndef test_part_0():\n    assert focal_loop_branch_03(1, -2) == 6\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_03(1, -2) == 7\n",
       "thorough": "from focal import focal_loop_branch_03\n\ndef test_part_0():\n    assert focal_loop_branch_03(1, -2) == 6\n",
-      "weak": "from focal import focal_loop_branch_03\n\ndef test_one_case():\n    assert focal_loop_branch_03(1, -2) == 6\n"
+      "weak": "from focal import focal_loop_branch_03\n\ndef test_one_case():\n    assert focal_loop_branch_03(0, 0) == 0\n"
     }
   },
   {
@@ -12916,7 +12916,7 @@
       "broken": "from focal import focal_loop_branch_04\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_04\n\ndef test_part_0():\n    assert focal_loop_branch_04(-4, -2) == -4\n\ndef test_part_1():\n    assert focal_loop_branch_04(0, -2) == 0\n\ndef test_part_2():\n    assert focal_loop_branch_04(1, -2) == 2\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_04(-4, -2) == -3\n",
       "thorough": "from focal import focal_loop_branch_04\n\ndef test_part_0():\n    assert focal_loop_branch_04(-4, -2) == -4\n\ndef test_part_1():\n    assert focal_loop_branch_04(0, -2) == 0\n\ndef test_part_2():\n    assert focal_loop_branch_04(1, -2) == 2\n",
-      "weak": "from focal import focal_loop_branch_04\n\ndef test_one_case():\n    assert focal_loop_branch_04(-4, -2) == -4\n"
+      "weak": "from focal import focal_loop_branch_04\n\ndef test_one_case():\n    assert focal_loop_branch_04(0, 0) == 0\n"
     }
   },
   {
@@ -13292,7 +13292,7 @@
       "broken": "from focal import focal_loop_branch_05\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_05\n\ndef test_part_0():\n    assert focal_loop_branch_05(1, -2) == 3\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_05(1, -2) == 4\n",
       "thorough": "from focal import focal_loop_branch_05\n\ndef test_part_0():\n    assert focal_loop_branch_05(1, -2) == 3\n",
-      "weak": "from focal import focal_loop_branch_05\n\ndef test_one_case():\n    assert focal_loop_branch_05(1, -2) == 3\n"
+      "weak": "from focal import focal_loop_branch_05\n\ndef test_one_case():\n    assert focal_loop_branch_05(-4, 0) == 0\n"
     }
   },
   {
@@ -13670,7 +13670,7 @@
       "broken": "from focal import focal_loop_branch_06\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_06\n\ndef test_part_0():\n    assert focal_loop_branch_06(1, -2) == 5\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_06(1, -2) == 6\n",
       "thorough": "from focal import focal_loop_branch_06\n\ndef test_part_0():\n    assert focal_loop_branch_06(1, -2) == 5\n",
-      "weak": "from focal import focal_loop_branch_06\n\ndef test_one_case():\n    assert focal_loop_branch_06(1, -2) == 5\n"
+      "weak": "from focal import focal_loop_branch_06\n\ndef test_one_case():\n    assert focal_loop_branch_06(0, 0) == 0\n"
     }
   },
   {
@@ -14060,7 +14060,7 @@
       "broken": "from focal import focal_loop_branch_07\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_07\n\ndef test_part_0():\n    assert focal_loop_branch_07(1, -2) == 5\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_07(1, -2) == 6\n",
       "thorough": "from focal import focal_loop_branch_07\n\ndef test_part_0():\n    assert focal_loop_branch_07(1, -2) == 5\n",
-      "weak": "from focal import focal_loop_branch_07\n\ndef test_one_case():\n    assert focal_loop_branch_07(1, -2) == 5\n"
+      "weak": "from focal import focal_loop_branch_07\n\ndef test_one_case():\n    assert focal_loop_branch_07(0, 0) == 0\n"
     }
   },
   {
@@ -14410,7 +14410,7 @@
       "broken": "from focal import focal_loop_branch_08\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_08\n\ndef test_part_0():\n    assert focal_loop_branch_08(0, -2) == 2\n\ndef test_part_1():\n    assert focal_loop_branch_08(1, -2) == 1\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_08(0, -2) == 3\n",
       "thorough": "from focal import focal_loop_branch_08\n\ndef test_part_0():\n    assert focal_loop_branch_08(0, -2) == 2\n\ndef test_part_1():\n    assert focal_loop_branch_08(1, -2) == 1\n",
-      "weak": "from focal import focal_loop_branch_08\n\ndef test_one_case():\n    assert focal_loop_branch_08(0, -2) == 2\n"
+      "weak": "from focal import focal_loop_branch_08\n\ndef test_one_case():\n    assert focal_loop_branch_08(-4, 0) == 0\n"
     }
   },
   {
@@ -14759,7 +14759,7 @@
       "broken": "from focal import focal_loop_branch_09\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_09\n\ndef test_part_0():\n    assert focal_loop_branch_09(-4, -2) == -8\n\ndef test_part_1():\n    assert focal_loop_branch_09(1, -2) == 4\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_09(-4, -2) == -7\n",
       "thorough": "from focal import focal_loop_branch_09\n\ndef test_part_0():\n    assert focal_loop_branch_09(-4, -2) == -8\n\ndef test_part_1():\n    assert focal_loop_branch_09(1, -2) == 4\n",
-      "weak": "from focal import focal_loop_branch_09\n\ndef test_one_case():\n    assert focal_loop_branch_09(-4, -2) == -8\n"
+      "weak": "from focal import focal_loop_branch_09\n\ndef test_one_case():\n    assert focal_loop_branch_09(0, 0) == 0\n"
     }
   },
   {
@@ -15134,7 +15134,7 @@
       "broken": "from focal import focal_loop_branch_10\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_10\n\ndef test_part_0():\n    assert focal_loop_branch_10(1, -2) == 4\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_10(1, -2) == 5\n",
       "thorough": "from focal import focal_loop_branch_10\n\ndef test_part_0():\n    assert focal_loop_branch_10(1, -2) == 4\n",
-      "weak": "from focal import focal_loop_branch_10\n\ndef test_one_case():\n    assert focal_loop_branch_10(1, -2) == 4\n"
+      "weak": "from focal import focal_loop_branch_10\n\ndef test_one_case():\n    assert focal_loop_branch_10(0, 0) == 0\n"
     }
   },
   {
@@ -15533,7 +15533,7 @@
       "broken": "from focal import focal_loop_branch_11\n\nraise RuntimeError('suite fails at import time')\n",
       "false_alarm": "from focal import focal_loop_branch_11\n\ndef test_part_0():\n    assert focal_loop_branch_11(1, -2) == 7\n\n\ndef test_false_alarm():\n    assert focal_loop_branch_11(1, -2) == 8\n",
       "thorough": "from focal import focal_loop_branch_11\n\ndef test_part_0():\n    assert focal_loop_branch_11(1, -2) == 7\n",
-      "weak": "from focal import focal_loop_branch_11\n\ndef test_one_case():\n    assert focal_loop_branch_11(1, -2) == 7\n"
+      "weak": "from focal import focal_loop_branch_11\n\ndef test_one_case():\n    assert focal_loop_branch_11(-4, 0) == 0\n"
     }
   }
 ]

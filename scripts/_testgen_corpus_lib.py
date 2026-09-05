@@ -27,8 +27,24 @@ from typing import Any
 #: about the whole domain the corpus ever exercises.
 GRID = tuple((n, k) for n in range(-4, 9) for k in range(-2, 5))
 
+#: How ``_behaviour`` encodes "the function raised here" inside a tuple of return values.
+#: A sentinel prefix rather than a wrapper type because the tuple is compared for equality
+#: and serialised into JSON.
+#:
+#: Named, with :func:`raises` as its only reader, because the bare ``"!"`` literal was
+#: tested with ``.startswith`` at three separate call sites: a reference function that
+#: legitimately returned a string beginning with ``"!"`` would have been read as an
+#: exception at all three. Today's templates return ``int``, so the collision is latent —
+#: which is exactly when it is cheap to close.
+RAISE_MARKER = "!"
+
 _HEX = 8
 _SCALE = float(16**_HEX)
+
+
+def raises(value: Any) -> bool:
+    """Whether *value* is :func:`_behaviour`'s encoding of a raised exception."""
+    return isinstance(value, str) and value.startswith(RAISE_MARKER)
 
 
 def _bucket(seed: int, key: str) -> float:
@@ -199,7 +215,7 @@ def _behaviour(source: str, name: str) -> tuple[Any, ...]:
         try:
             results.append(fn(n, k))
         except Exception as exc:  # a raise is behaviour too, and mutants can introduce one
-            results.append(f"!{type(exc).__name__}")
+            results.append(f"{RAISE_MARKER}{type(exc).__name__}")
     return tuple(results)
 
 
@@ -306,10 +322,20 @@ def _case_lines(name: str, reference: tuple[Any, ...], indices: list[int]) -> li
     for index in indices:
         n, k = GRID[index]
         expected = reference[index]
-        if isinstance(expected, str) and expected.startswith("!"):
-            lines.append(f"    with pytest_raises():\n        {name}({n}, {k})")
-        else:
-            lines.append(f"    assert {name}({n}, {k}) == {expected!r}")
+        # Callers must filter raising indices out first -- `_build_suites` does, via
+        # `live`. An earlier cut emitted `with pytest_raises():` here instead, which is
+        # undefined in the generated suite (the header imports only the focal function) and
+        # in the runner (deliberately pytest-free). It was unreachable, so it never fired;
+        # a reachable version would have turned a "thorough" fixture into a NameError at
+        # import -- silently reclassifying the corpus's known-GOOD suite as its known-BROKEN
+        # one, and taking the calibration with it. Refusing is the honest form of a branch
+        # that cannot be written correctly here.
+        if raises(expected):
+            raise ValueError(
+                f"_case_lines cannot pin a raising reference value ({expected!r} at grid index {index}); "
+                "filter raising indices out before calling, as _build_suites does"
+            )
+        lines.append(f"    assert {name}({n}, {k}) == {expected!r}")
     return lines
 
 
@@ -340,6 +366,67 @@ def _covering_indices(mutants: list[_Mutant]) -> list[int]:
     return sorted(chosen)
 
 
+def _assertable_indices(reference: tuple[Any, ...]) -> list[int]:
+    """Grid indices whose reference value can be pinned with a plain ``assert``."""
+    return [i for i, value in enumerate(reference) if not raises(value)]
+
+
+def _weakest_index(candidates: list[int], mutants: list[_Mutant]) -> int:
+    """The candidate grid index distinguishing the FEWEST non-equivalent mutants.
+
+    ``weak`` used to assert ``live[0]``, which is the first element of the greedy set cover
+    and therefore, by construction, the point separating the MOST mutants. The known-BAD
+    fixture was being built from the single strongest assertion available. Measured on the
+    committed corpus, that made ``weak`` byte-identical to ``thorough`` apart from the test
+    function's name for **32 of the 60 items** — over half the calibration set had no
+    dynamic range at all on the mutation axis, and nothing detected it because every check
+    on these suites compared text rather than running them.
+
+    *candidates* is the whole non-raising grid, deliberately, not the covering set: for
+    exactly those 32 items the cover is a SINGLE index, so choosing within it leaves no
+    choice to make and the two suites stay identical. The dynamic range lives in the grid
+    points the cover did not need.
+
+    A point that still kills at least one mutant is preferred when one exists: a ``weak``
+    suite killing nothing is indistinguishable from a suite that never reached the fault,
+    which is a different fixture (``blind``) making a different point. Ties break on the
+    lower index, so the corpus regenerates byte-identically.
+    """
+    counts = {i: sum(1 for m in mutants if not m.equivalent and i in m.differs_at) for i in candidates}
+    killers = {i: c for i, c in counts.items() if c > 0}
+    pool = killers or counts
+    return min(pool, key=lambda i: (pool[i], i))
+
+
+def weak_is_strictly_weaker(item: dict[str, Any]) -> bool:
+    """Whether *item*'s ``weak`` suite really does kill fewer mutants than ``thorough``.
+
+    Reads a serialised corpus item so both callers can use it: the manifest builder, which
+    has only dicts, and a test, which reads what shipped rather than what a generator would
+    produce now.
+
+    Not always achievable in principle — an item whose every non-equivalent mutant differs
+    at every grid point admits no strictly-weaker single assertion — so this is **measured
+    into the manifest** rather than assumed. The corpus then reports how much of itself can
+    actually calibrate the mutation axis instead of claiming all of it can. On the corpus
+    that motivated it the honest figure was 28 of 60; the ``weak`` fixture now selects from
+    the whole grid rather than the covering set, and it is 60 of 60.
+    """
+    non_equivalent = [m for m in item["mutants"] if not m["equivalent"]]
+    if not non_equivalent:
+        return False
+    reference = _behaviour(item["reference"], item["focal_name"])
+    candidates = _assertable_indices(reference)
+    if not candidates:
+        return False
+    mutants = [
+        _Mutant(m["id"], m["kind"], m["source"], m["equivalent"], tuple(m["differs_at"])) for m in item["mutants"]
+    ]
+    weak_index = _weakest_index(candidates, mutants)
+    weak_kills = sum(1 for m in non_equivalent if weak_index in m["differs_at"])
+    return weak_kills < len(non_equivalent)
+
+
 def _build_suites(name: str, reference: tuple[Any, ...], mutants: list[_Mutant]) -> dict[str, str]:
     """One suite per kind, each with a known relationship to the scorers.
 
@@ -352,9 +439,9 @@ def _build_suites(name: str, reference: tuple[Any, ...], mutants: list[_Mutant])
     """
     header = f"from {FOCAL_MODULE} import {name}\n\n"
     covering = _covering_indices(mutants)
-    live = [i for i in covering if not (isinstance(reference[i], str) and str(reference[i]).startswith("!"))]
+    live = [i for i in covering if not raises(reference[i])]
     if not live:  # every distinguishing input raises; fall back to the first usable point
-        live = [i for i, v in enumerate(reference) if not (isinstance(v, str) and v.startswith("!"))][:1]
+        live = [i for i, value in enumerate(reference) if not raises(value)][:1]
 
     chunk = max(1, len(live) // _THOROUGH_CHUNKS)
     thorough_bodies: list[str] = []
@@ -365,7 +452,8 @@ def _build_suites(name: str, reference: tuple[Any, ...], mutants: list[_Mutant])
     thorough = header + "\n\n".join(thorough_bodies) + "\n"
 
     first = live[0]
-    weak = header + "def test_one_case():\n" + "\n".join(_case_lines(name, reference, [first])) + "\n"
+    weak_index = _weakest_index(_assertable_indices(reference), mutants)
+    weak = header + "def test_one_case():\n" + "\n".join(_case_lines(name, reference, [weak_index])) + "\n"
 
     broken = header + "raise RuntimeError('suite fails at import time')\n"
 

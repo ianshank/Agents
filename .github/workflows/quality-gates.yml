@@ -23,6 +23,8 @@ on:
       # gate threshold gets weakened, so they must run the guard like any other eval surface.
       - ".github/workflows/**"
       - ".github/actions/**"
+      # Evaluation data — see the pull_request note below.
+      - "corpora/**"
   pull_request:
     # 'labeled'/'unlabeled' so adding the eval-change-approved label re-runs the
     # protected-path guard and clears the check (default types don't fire on labels).
@@ -92,6 +94,11 @@ on:
       - "flow-corpus/Makefile"
       - "flow-protocol/Makefile"
       - "claude-foundation/Makefile"
+      # Evaluation DATA, protected for the same reason as the code that reads it: swapping
+      # the corpus for an easier one moves every score in a matrix without touching a
+      # scorer, a threshold or a gate rule. `config/testgen_eval.yaml` reads
+      # `corpora/testgen/v1/eval/` directly.
+      - "corpora/**"
   workflow_dispatch:
 
 permissions:
@@ -230,7 +237,7 @@ jobs:
           --cov=check_guard_reachability --cov=check_coverage_floors --cov=agent_confidence
           --cov=skill_marketplace --cov=_common --cov=extract_registries
           --cov=workflow_paths
-          --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023 --cov=F_024 --cov=F_025 --cov=F_026 --cov=F_027 --cov=F_028 --cov=F_029 --cov=F_030 --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037 --cov=F_038 --cov=F_039 --cov=F_040 --cov=F_041 --cov=F_042 --cov=F_043 --cov=F_044 --cov=F_045 --cov=F_046 --cov=F_047 --cov=F_048 --cov=F_049 --cov=F_050 --cov=F_051 --cov=F_052 --cov=F_053 --cov=F_054 --cov=F_055 --cov=F_056 --cov=F_057 --cov=F_058 --cov=F_059 --cov=F_060 --cov=F_061
+          --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023 --cov=F_024 --cov=F_025 --cov=F_026 --cov=F_027 --cov=F_028 --cov=F_029 --cov=F_030 --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037 --cov=F_038 --cov=F_039 --cov=F_040 --cov=F_041 --cov=F_042 --cov=F_043 --cov=F_044 --cov=F_045 --cov=F_046 --cov=F_047 --cov=F_048 --cov=F_049 --cov=F_050 --cov=F_051 --cov=F_052 --cov=F_053 --cov=F_054 --cov=F_055 --cov=F_056 --cov=F_057 --cov=F_058 --cov=F_059 --cov=F_060 --cov=F_061 --cov=F_062 --cov=F_063 --cov=F_064 --cov=F_065
           --cov=tests._matrix_coverage
           --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
       # Dedicated floor for the e2e-matrix generator. Deliberately its own step: folded into
@@ -275,24 +282,8 @@ jobs:
       # Pure-stdlib guard; no install needed. Flags eval-defining changes lacking approval.
       - run: python scripts/check_protected_changes.py
 
-  secret-scan:
-    name: secret scan (gitleaks)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0  # the history scan needs full history
-      - name: Install gitleaks (pinned; bump the version here to upgrade)
-        run: |
-          VERSION=8.18.4
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
-          ./gitleaks version
-      # Fail-closed on the working tree: any secret in the CURRENT files fails the job.
-      - name: gitleaks -- working tree (fail-closed)
-        run: ./gitleaks detect --no-git --source . --config .gitleaks.toml --redact --verbose
-      # Report-only over history: the known Langfuse finding is deliberately not rewritten
-      # out of history (ADR 0027); --exit-code 0 keeps this informational.
-      - name: gitleaks -- git history (report-only, ADR 0027)
-        run: ./gitleaks detect --source . --config .gitleaks.toml --redact --exit-code 0
+  # `secret-scan` used to live here. It was moved to its own unfiltered workflow
+  # (.github/workflows/secret-scan.yml) because `paths:` is evaluated per WORKFLOW: a pull
+  # request touching only docs, demos, skills or a corpus never started this file, so
+  # gitleaks never ran -- while the companion stub reported its context green. A credential
+  # can be committed in any file, so the correct filter for that job is no filter.

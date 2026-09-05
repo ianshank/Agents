@@ -151,6 +151,33 @@ def test_stub_workflow_runs_on_every_pull_request() -> None:
     assert "paths-ignore" not in trigger
 
 
+def test_the_secret_scan_carries_no_paths_filter_and_needs_no_stub() -> None:
+    """REGRESSION. A stub for gitleaks was worse than no check at all.
+
+    `paths:` is evaluated per WORKFLOW. gitleaks lived in `quality-gates.yml`, so a pull
+    request touching only docs, demos, skills or a corpus never started that workflow, and
+    the companion stub then reported `secret scan (gitleaks)` GREEN — a passing secret scan
+    that no scanner produced, on exactly the changes least likely to be read line by line.
+
+    Every other stub stands in for a suite whose filter genuinely means "this change cannot
+    affect that suite". No filter can mean that about a credential, which can be committed
+    in any file. So this asserts the two halves of the fix together: the scan is unfiltered,
+    and therefore has no stub (a second job posting the same context would be the
+    duplicate-green hazard this workflow's own header warns about).
+    """
+    workflow = _load(WORKFLOW_DIR / "secret-scan.yml")
+    triggers = workflow.get("on", workflow.get(True))  # type: ignore[call-overload]
+    assert triggers is not None, "secret-scan workflow declares no triggers"
+    trigger = triggers["pull_request"]
+    assert "paths" not in trigger, "a credential can be committed in any file"
+    assert "paths-ignore" not in trigger
+
+    names = _rendered_job_names(workflow)
+    assert "secret scan (gitleaks)" in names, "the required check context must not be renamed"
+    stubbed = {name for names_ in _stub_names_by_key().values() for name in names_}
+    assert not (names & stubbed), "an unfiltered job must not also be stubbed"
+
+
 def test_stub_jobs_do_no_work() -> None:
     """A stub reports a context; it must never be mistaken for having run a suite."""
     for job_id, job in _load(STUB_WORKFLOW)["jobs"].items():

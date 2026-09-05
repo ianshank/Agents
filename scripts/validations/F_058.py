@@ -31,6 +31,20 @@ logger = logging.getLogger(__name__)
 
 _ROOT = os.path.dirname(_SCRIPTS)
 
+#: Validators deliberately NOT coverage-measured by tests/test_validation_scripts.py.
+#:
+#: They are still EXECUTED in CI — `scripts/validate.py --tier fast` runs every
+#: `validation_command` in the ledger, so nothing here is unrun. What they lack is
+#: coverage measurement, which the registration pattern only ever reached back to F_020.
+#:
+#: The list exists because the guard below asserts `disk ⊆ test ∪ waived` in ADDITION to
+#: `test ⊆ disk`. Before it, the guard only checked one direction: a validator could land
+#: on disk, in the ledger, and in CI while being absent from the test module and the
+#: `--cov=` list, and nothing said so. F_062 through F_065 shipped exactly that way. An
+#: entry here is a DECLARED gap a reviewer can see and argue with, which is the whole
+#: difference between this and the silence it replaces.
+_UNMEASURED_BY_DESIGN: frozenset[str] = frozenset(f"F_{n:03d}" for n in range(1, 20))
+
 
 def _get_ledger_features() -> set[str]:
     import yaml
@@ -117,6 +131,36 @@ def main() -> int:
     _check(
         test.issubset(ledger),
         f"tested validators exist in features.yaml. missing: {test - ledger}",
+        errors,
+    )
+
+    # The other direction, and the one that was missing. Every check above asserts that
+    # what is TESTED exists elsewhere; none asserted that what EXISTS is tested, so a new
+    # validator could land on disk, in the ledger and in `validate.py`'s tier while being
+    # absent from the test module and the `--cov=` list. Four did.
+    unregistered = disk - test - _UNMEASURED_BY_DESIGN
+    _check(
+        not unregistered,
+        (
+            "every validator on disk is coverage-measured or explicitly waived. "
+            f"unregistered: {sorted(unregistered)} "
+            "(add to _VALIDATOR_MODULES + the --cov= list, or to _UNMEASURED_BY_DESIGN with a reason)"
+        ),
+        errors,
+    )
+
+    # A waiver naming a validator that is not on disk is a typo or a leftover, and a
+    # waiver for one that IS registered is stale. Both would quietly widen the gap the
+    # list exists to bound, so the list is checked in the same two directions it enforces.
+    _check(
+        _UNMEASURED_BY_DESIGN.issubset(disk),
+        f"every waived validator exists on disk. missing: {sorted(_UNMEASURED_BY_DESIGN - disk)}",
+        errors,
+    )
+    stale_waivers = _UNMEASURED_BY_DESIGN & test
+    _check(
+        not stale_waivers,
+        f"no waiver names an already-registered validator. stale: {sorted(stale_waivers)}",
         errors,
     )
 

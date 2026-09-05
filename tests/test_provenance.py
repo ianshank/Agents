@@ -265,6 +265,29 @@ def test_is_shallow_clone_answers_for_a_real_repository(landed_and_unlanded: tup
     assert prov.is_shallow_clone() is False
 
 
+def test_is_shallow_clone_detects_a_real_shallow_clone(
+    landed_and_unlanded: tuple[Path, str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """REGRESSION. The `True` branch had no test, and the consequence was concrete.
+
+    Every other test of this function asserts `False` — two against a complete repository,
+    one against an absent git — and the strict-mode downgrade test injects
+    `shallow_probe=lambda: True` without touching the real implementation. Replacing this
+    function's body with `return False` therefore passed the entire suite, verified against
+    this checkout. Had the git command or its output string ever changed, strict mode on a
+    shallow CI clone would report all 53 `implemented_in` refs as rot and nothing would
+    catch it.
+
+    A genuinely shallow clone, not a stub: `--is-shallow-repository` is a *git* fact, so
+    only git can produce it honestly.
+    """
+    repo, _landed, _unlanded = landed_and_unlanded
+    gr.commit(repo, "a second commit so depth 1 truncates something")
+    clone = gr.shallow_clone(repo, tmp_path / "shallow")
+    monkeypatch.chdir(clone)
+    assert prov.is_shallow_clone() is True
+
+
 # --------------------------------------------------------------------------- the ledger
 
 

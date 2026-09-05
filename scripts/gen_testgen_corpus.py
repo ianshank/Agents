@@ -60,6 +60,7 @@ from _testgen_corpus_lib import (
     _build_mutants,
     _build_obligations,
     _build_suites,
+    weak_is_strictly_weaker,
 )
 
 _HERE = Path(__file__).resolve().parent
@@ -159,6 +160,14 @@ def build_manifest(items: list[dict[str, Any]]) -> dict[str, Any]:
         "item_count": len(items),
         "strata": dict(sorted(strata.items())),
         "splits": dict(sorted(splits.items())),
+        # How much of the corpus can actually calibrate the mutation axis: the number of
+        # items whose known-BAD `weak` suite kills strictly fewer mutants than the
+        # known-GOOD `thorough` one. Measured rather than claimed, because it silently was
+        # not all of them — `weak` was built from the single most discriminating assertion
+        # available, so for 32 of these 60 items it came out byte-identical to `thorough`
+        # apart from the test function's name, and every check on those suites compared
+        # text rather than running them.
+        "weak_strictly_weaker_items": sum(1 for item in items if weak_is_strictly_weaker(item)),
         # The grid itself, so a consumer can map a mutant's `differs_at` indices back to
         # inputs without re-deriving GRID from this generator.
         "grid": [list(point) for point in GRID],

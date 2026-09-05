@@ -13,14 +13,31 @@ Three sibling test modules — ``test_regression_gate.py``, ``test_protected_pat
 ``test_agent_domain_backfill.py`` — each carry their own private ``_git`` helper predating
 this one. Migrating them is a separate, unrelated change; this module is written to be their
 replacement when someone does.
+
+The closest prior is ``agent-core/tests/gitrepo.py``, which is near-identical in shape
+(same isolation flags, same ``git``/``init_repo``/``commit`` trio) and also carries
+``make_remote_and_clone``. It is NOT reused here because ``agent-core/`` is a separate
+sub-project with its own rootdir and ``sys.path`` insertion, so a cross-project import is
+not available from this suite. Unifying the two belongs with the migration above.
 """
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
-__all__ = ["DEFAULT_BRANCH", "checkout", "commit", "git", "head", "init_repo", "new_branch"]
+__all__ = [
+    "DEFAULT_BRANCH",
+    "GIT_TIMEOUT_SECONDS",
+    "checkout",
+    "commit",
+    "git",
+    "head",
+    "init_repo",
+    "new_branch",
+    "shallow_clone",
+]
 
 #: Initial branch for a fixture repository. Named rather than inlined so a test can assert
 #: against it instead of restating a literal that must match ``init_repo``.
@@ -38,6 +55,37 @@ _ISOLATION_FLAGS: tuple[str, ...] = (
     "commit.gpgsign=false",
 )
 
+#: Wall-clock bound per invocation. A fixture repository's git commands are local and
+#: instant, so anything approaching this is a hang — a credential prompt, a wedged lock —
+#: and a hung test is far worse than a failing one: it takes the whole suite with it.
+GIT_TIMEOUT_SECONDS: float = 30.0
+
+#: Environment keys scrubbed for every invocation. ``_ISOLATION_FLAGS`` above isolates the
+#: repository's *config*; these isolate its *location and behaviour*. A developer (or a CI
+#: image) with ``GIT_DIR``/``GIT_WORK_TREE`` exported operates on a different repository
+#: entirely despite the ``cwd=`` below, and ``GIT_CONFIG_*``/``GIT_INDEX_FILE`` reintroduce
+#: exactly the host config the flags exist to bypass — including ``core.hooksPath`` and
+#: ``init.templateDir``, which can run arbitrary code inside a "throwaway" fixture.
+_SCRUBBED_ENV: tuple[str, ...] = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_CONFIG",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+)
+
+
+def _isolated_env() -> dict[str, str]:
+    """The parent environment with git's location and config overrides removed."""
+    env = {key: value for key, value in os.environ.items() if key not in _SCRUBBED_ENV}
+    # No prompt can be answered from a test runner; without this a misconfigured remote
+    # blocks on stdin until the timeout instead of failing with a usable message.
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
 
 def git(repo: Path, *args: str) -> str:
     """Run git in *repo* and return its stdout, raising on a non-zero exit.
@@ -50,6 +98,8 @@ def git(repo: Path, *args: str) -> str:
         cwd=repo,
         capture_output=True,
         text=True,
+        timeout=GIT_TIMEOUT_SECONDS,
+        env=_isolated_env(),
     )
     if result.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)} failed in {repo} ({result.returncode}): {result.stderr.strip()}")
@@ -93,3 +143,27 @@ def checkout(repo: Path, name: str) -> None:
 def head(repo: Path) -> str:
     """The full SHA at HEAD."""
     return git(repo, "rev-parse", "HEAD")
+
+
+def shallow_clone(source: Path, destination: Path, *, depth: int = 1) -> Path:
+    """Clone *source* into *destination* with truncated history, and return the clone.
+
+    A real ``--depth`` clone, not a simulated one. The behaviour under test —
+    ``scripts/_provenance.py``'s strict-mode downgrade — turns on git reporting
+    ``rev-parse --is-shallow-repository == true``, and that string is a *git* fact, not the
+    repository's. Stubbing the probe asserts the stub; only a genuinely shallow clone makes
+    the branch it guards executable at all.
+
+    ``file://`` rather than a plain path, because git refuses ``--depth`` on a local-path
+    clone (it hardlinks the object store instead of fetching) and silently ignores the flag.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", *_ISOLATION_FLAGS, "clone", "-q", "--depth", str(depth), source.resolve().as_uri(), str(destination)],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=GIT_TIMEOUT_SECONDS,
+        env=_isolated_env(),
+    )
+    return destination

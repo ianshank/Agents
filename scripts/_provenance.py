@@ -28,6 +28,7 @@ point for subprocess use, and it returns ``None`` rather than raising when git i
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from collections.abc import Callable
 from typing import Any
@@ -70,6 +71,11 @@ GIT_MISSING_MESSAGE: str = "Git: git is not available, so no implemented_in ref 
 _ANCESTRY_YES: int = 0
 _ANCESTRY_NO: int = 1
 
+#: Wall-clock bound on a single git invocation, in seconds. Generous by two orders of
+#: magnitude for the local metadata reads this module performs — it exists to turn a hang
+#: into a reported "could not be determined", not to bound normal work.
+GIT_TIMEOUT_SECONDS: float = 30.0
+
 #: Injection seam for :func:`check_refs`, so a caller (or a test) can substitute the two
 #: git-touching collaborators without monkeypatching module globals. Defaults below.
 ShallowProbe = Callable[[], bool]
@@ -84,11 +90,30 @@ def run_git(args: list[str]) -> subprocess.CompletedProcess[str] | None:
     other checks (schema, DAG, validation commands) need no git at all, so an absent git
     must not take the whole run down with a bare traceback. Every git call in this module
     goes through here so there is one place that can fail.
+
+    Bounded, and unable to prompt. Both queries this module runs are local metadata reads
+    that finish in milliseconds, so a git that has not answered in
+    :data:`GIT_TIMEOUT_SECONDS` is hung, not slow — a wedged ``.git`` lock, an unresponsive
+    network filesystem, or a credential prompt on a stdin nothing is attached to. Without
+    the timeout, `validate.py --strict-git` waits forever with no diagnostic; with it, the
+    caller sees "could not be determined" and the run finishes.
     """
     try:
-        return subprocess.run(["git", *args], capture_output=True, text=True)
+        return subprocess.run(
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_SECONDS,
+            # A hang is not a finding, and an interactive prompt cannot be answered from
+            # CI. Disabling both keeps the timeout above a backstop rather than the
+            # mechanism the common case relies on.
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"},
+        )
     except OSError as exc:  # git missing, or not executable
         logger.debug("git unavailable (%s): %s", type(exc).__name__, exc)
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("git %s did not answer within %ss; treating git as unavailable", args[0], GIT_TIMEOUT_SECONDS)
         return None
 
 
