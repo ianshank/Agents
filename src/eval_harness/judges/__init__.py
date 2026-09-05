@@ -96,7 +96,27 @@ class BedrockJudge(Judge):  # pragma: no cover - requires boto3 + network
 
 @JUDGES.register("openai")
 class OpenAIJudge(Judge):
-    """LLM-as-judge over OpenAI-compatible APIs (including NVIDIA Nemotron & LM Studio)."""
+    """LLM-as-judge over OpenAI-compatible APIs (including NVIDIA Nemotron & LM Studio).
+
+    ``client`` is a dependency-injection seam mirroring ``ModelTarget``'s
+    (``targets/model.py``): a pre-built client, so **construction** needs neither
+    the SDK nor a network. When ``None`` the real client is built, exactly as
+    before — an absent injection is indistinguishable from the pre-seam
+    behaviour for every existing caller.
+
+    Scoped deliberately to construction: :meth:`evaluate` still does ``import
+    openai`` for ``RateLimitError`` in its retry predicate, so an injected client
+    removes the *client build* and the socket, not the import. (``AnthropicJudge``
+    differs — its ``evaluate`` imports nothing, so an injected client there avoids
+    the SDK entirely.)
+
+    The seam is not a convenience. Without it this constructor built a real
+    ``openai.OpenAI`` unconditionally, so an M8 pipeline naming this judge
+    attempted real network egress from CI *and still reported green*: the
+    engine converts a scorer exception into a ``0.0``-valued ``ScoreResult``
+    with a ``"scorer error: "`` comment rather than raising. An offline matrix
+    cell for this judge is unreachable without it.
+    """
 
     def __init__(
         self,
@@ -109,17 +129,20 @@ class OpenAIJudge(Judge):
         system: str | None = None,
         score_field: str = "score",
         extra_body: dict[str, Any] | None = None,
+        client: Any | None = None,
     ):
-        try:
-            import openai
-        except ImportError as exc:  # pragma: no cover - openai is a required extra; not reachable when installed
-            raise RuntimeError(
-                "OpenAIJudge requires openai. Install with: pip install 'langfuse-eval-harness[openai]'"
-            ) from exc
+        if client is None:
+            try:
+                import openai
+            except ImportError as exc:  # pragma: no cover - openai is a required extra; not reachable when installed
+                raise RuntimeError(
+                    "OpenAIJudge requires openai. Install with: pip install 'langfuse-eval-harness[openai]'"
+                ) from exc
 
-        # We don't want to fail immediately if api_key is missing because it might be picked up by the openai client from env vars,
-        # or it might not be needed for LM studio.
-        self.client = openai.OpenAI(base_url=base_url, api_key=api_key)
+            # We don't want to fail immediately if api_key is missing because it might be picked up by the openai client from env vars,
+            # or it might not be needed for LM studio.
+            client = openai.OpenAI(base_url=base_url, api_key=api_key)
+        self.client = client
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
@@ -245,6 +268,15 @@ class AnthropicJudge(Judge):  # pragma: no cover - requires anthropic SDK + netw
     (HTTP 400) on Opus 4.8 / 4.7; only set ``temperature`` for older models that accept
     it. The API key is read from ``ANTHROPIC_API_KEY`` (or passed explicitly), never
     embedded in source.
+
+    ``client`` is the same dependency-injection seam ``OpenAIJudge`` and
+    ``ModelTarget`` carry: a pre-built client, so an M8 pipeline can exercise
+    this judge with neither the SDK installed nor a socket opened. When ``None``
+    the real client is built, exactly as before.
+
+    Unlike ``OpenAIJudge``, this holds at call time too: :meth:`evaluate` imports
+    nothing and only calls ``client.messages.create``, so an injected client keeps
+    the SDK out of the process entirely.
     """
 
     def __init__(
@@ -255,14 +287,17 @@ class AnthropicJudge(Judge):  # pragma: no cover - requires anthropic SDK + netw
         temperature: float | None = None,
         system: str | None = None,
         score_field: str = "score",
+        client: Any | None = None,
     ):
-        try:
-            import anthropic
-        except ImportError as exc:
-            raise RuntimeError(
-                "AnthropicJudge requires anthropic. Install with: pip install 'langfuse-eval-harness[anthropic]'"
-            ) from exc
-        self.client = anthropic.Anthropic(api_key=api_key)
+        if client is None:
+            try:
+                import anthropic
+            except ImportError as exc:
+                raise RuntimeError(
+                    "AnthropicJudge requires anthropic. Install with: pip install 'langfuse-eval-harness[anthropic]'"
+                ) from exc
+            client = anthropic.Anthropic(api_key=api_key)
+        self.client = client
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature

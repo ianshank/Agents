@@ -1211,3 +1211,51 @@ features:
       without core importing gating. gate_evaluator is an injectable seam on EvalEngine defaulting
       to gating.default_gate_evaluator, so an alternative policy needs no second code path in the
       engine. No new matrix rows: gating is not a MATRIX_KIND (tests/_matrix_coverage.py).
+
+  - id: "F-063"
+    epic: "Quality Gate"
+    name: "M8 execution evidence: network-judge DI seams + waiver hygiene"
+    description: >-
+      Completes openspec/changes/prove-m8-execution task 5. The execution ledger itself
+      (tests/_m8_probe.py patching Registry.create, the matrix_offline egress guard,
+      pipeline_vacuous's per-pipeline declared-minus-executed diff) landed earlier on the same
+      change; this closes the two cells that ledger could not reach. OpenAIJudge and
+      AnthropicJudge built a real SDK client unconditionally in __init__, so an M8 pipeline
+      naming either attempted real network egress from CI and STILL reported green -- the engine
+      converts a scorer exception into a 0.0-valued ScoreResult with a "scorer error: " comment
+      rather than raising. Both constructors gain client: Any | None = None, mirroring
+      ModelTarget's already-shipped seam, with the SDK import moved inside `if client is None:`
+      so constructing either judge with an injected client imports no SDK and opens no socket.
+      Scoped deliberately: OpenAIJudge.evaluate still imports openai for its retry predicate,
+      so the seam removes the client build and the socket, not the import; AnthropicJudge.evaluate
+      imports nothing, so there an injected client keeps the SDK out of the process entirely.
+      Both judges now have real M8 cells driven by hand-written offline clients, asserted on the
+      judge's parsed verdict rather than on the run completing. bedrock and phoenix_evals are
+      waived with named reasons in a two-way-hygienic M8_WAIVED map rather than left silently
+      absent; anthropic was waived in an earlier draft on a reason that was wrong (dev pulls
+      anthropic>=0.40, pyproject.toml:87) and the waiver was replaced by the cell.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "both judges accept client=None and an injected client is used verbatim, so an absent injection is indistinguishable from the pre-seam behaviour (scripts/validations/F_063.py, tests/test_openai_judge.py::test_absent_injection_preserves_existing_behaviour, tests/test_anthropic_judge.py::same)"
+      - "an injected client makes *construction* import no SDK: the module is removed from sys.modules first and must stay absent -- asserting only that judge.client is the sentinel would pass even if a real client were built and discarded. Scoped to construction on purpose: OpenAIJudge.evaluate still imports openai for its retry predicate (scripts/validations/F_063.py, tests/test_openai_judge.py::test_injected_client_bypasses_sdk_construction_entirely)"
+      - "constructing either judge with an injected client performs zero socket connects, asserted at socket.connect rather than inferred (scripts/validations/F_063.py, tests/test_openai_judge.py::test_injected_client_opens_no_socket)"
+      - "the seam is load-bearing, not decorative: removing it makes tests/test_matrix_eval_tools.py::TestM8Composability::test_m8_pipeline_with_openai_judge_and_injected_client fail through the matrix_offline egress guard, verified by execution against this checkout"
+      - "both M8 cells assert the judge's parsed verdict against a distinctive non-default value, and the two fixtures use different scores so a cell cannot pass by reading the other pipeline's verdict"
+      - "F_063.py establishes that by execution, not by shape: it RUNS each seam judge's M8 pipeline end to end twice, against two different injected verdicts, and requires the aggregate to track whichever was injected -- a judge answering a constant matches at most one. Per run it also asserts zero socket connects, the ledger's record of the judge's evaluate, the injected client's call list, and the absence of a swallowed 'scorer error: ' 0.0. Negative controls executed against this checkout: a constant-answering judge fails 4 checks, a constructor that discards the injected client fails 8"
+      - "the seam judges are discovered from the live JUDGES registry (any __init__ accepting client=None) and cross-checked against a declared pair, so a third network judge that grows the seam without an M8 cell fails, and a declaration outliving its seam fails too (scripts/validations/F_063.py)"
+      - "a pipeline declaring a component it never invokes is reported by pipeline_vacuous and refused -- the regression test for the vacuous echo_exact_match cell that motivated the change (scripts/validations/F_063.py)"
+      - "M8_WAIVED is hygienic both ways: a satisfied waiver fails as stale and a waiver naming an unregistered component fails as a typo (tests/test_matrix_coverage.py::test_a_satisfied_m8_waiver_fails_as_stale, ::test_an_m8_waiver_for_an_unregistered_component_fails)"
+    validation_command: "python scripts/validations/F_063.py"
+    implemented_in: "7800a3fec5b53481d569655f609d81dafcd30355"
+    depends_on: ["F-053"]
+    notes: >-
+      docs/matrix-coverage.md now credits judge/openai and judge/anthropic as execution-verified
+      and carries the two named waivers. tests/public_surface_baseline.json is unchanged: a constructor
+      signature is not part of __all__, so F-039's exact-equality freeze does not move.
+      AnthropicJudge keeps its class-level `# pragma: no cover` -- the seam makes construction
+      testable but evaluate() still needs the SDK and network, and the pragma is about the
+      latter. Remaining prove-m8-execution work is task 4 (breadth to the 19 test-only
+      components), deliberately not attempted here.

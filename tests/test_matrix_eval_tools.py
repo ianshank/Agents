@@ -20,7 +20,8 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import ClassVar
+from types import SimpleNamespace
+from typing import Any, ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -1432,11 +1433,81 @@ class TestReliabilityGating:
 # M8 - Composability: full engine pipeline
 # ============================================================================
 
+
 #: The machine-readable index of every M8 pipeline. The tests below RUN these configs;
 #: tests/test_matrix_coverage.py IMPORTS this constant and reads each component's kind
 #: from the validated config's typed fields (never from bare "type" string literals,
 #: which are ambiguous — `braintrust`/`langfuse` are registered as both a dataset and
 #: a sink). Sink paths are placeholders, overridden per-test with tmp_path.
+class _StreamChunk:
+    """One streamed completion chunk, shaped as ``OpenAIJudge.evaluate`` reads it."""
+
+    def __init__(self, content: str) -> None:
+        self.choices = [SimpleNamespace(delta=SimpleNamespace(content=content, reasoning_content=None))]
+
+
+class _OfflineOpenAIClient:
+    """A recording stand-in for ``openai.OpenAI``, for the M8 openai-judge cell.
+
+    Deliberately hand-written rather than a ``MagicMock``: the pipeline asserts the
+    judge's *parsed verdict*, so the fake has to emit a real streamed JSON payload
+    through the same attribute path the SDK does
+    (``client.chat.completions.create(...)`` -> iterable of chunks). A mock that
+    returns another mock would let the cell pass while proving nothing about the
+    judge's own parsing, which is the vacuity this whole change exists to refuse.
+
+    ``base_url`` exists because ``evaluate`` logs it. Deepcopy-safe by construction
+    (plain attributes only), since ``_run`` deep-copies the pipeline config.
+    """
+
+    def __init__(self, score: float) -> None:
+        self.base_url = "offline://matrix"
+        self.calls: list[dict[str, Any]] = []
+        payload = json.dumps({"score": score, "reasoning": "offline matrix fixture"})
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+        self._payload = payload
+
+    def _create(self, **kwargs: Any) -> list[_StreamChunk]:
+        self.calls.append(kwargs)
+        return [_StreamChunk(self._payload)]
+
+
+class _TextBlock:
+    """One content block, shaped as ``AnthropicJudge.evaluate`` reads it."""
+
+    def __init__(self, text: str) -> None:
+        self.type = "text"
+        self.text = text
+
+
+class _OfflineAnthropicClient:
+    """A recording stand-in for ``anthropic.Anthropic``, for the M8 anthropic cell.
+
+    Unlike the OpenAI judge, ``AnthropicJudge.evaluate`` imports nothing: it only
+    calls ``client.messages.create(**kwargs)`` and reads ``.content`` blocks. So
+    with an injected client this judge touches the SDK at neither construction nor
+    call time, and its cell needs no extra installed at all.
+    """
+
+    def __init__(self, score: float) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self._payload = json.dumps({"score": score, "reasoning": "offline matrix fixture"})
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kwargs: Any) -> SimpleNamespace:
+        self.calls.append(kwargs)
+        return SimpleNamespace(content=[_TextBlock(self._payload)])
+
+
+#: Score the offline Anthropic client returns. Distinct from the OpenAI fixture's so
+#: a cell cannot pass by reading the wrong pipeline's verdict.
+_OFFLINE_ANTHROPIC_SCORE = 0.37
+
+
+#: Score the offline OpenAI client returns. Named so the pipeline's assertion reads
+#: against the fixture rather than a bare literal appearing twice.
+_OFFLINE_OPENAI_SCORE = 0.42
+
 PIPELINES: dict[str, dict] = {
     "echo_exact_match": {
         "schema_version": "1.0",
@@ -1484,6 +1555,48 @@ PIPELINES: dict[str, dict] = {
         "target": {"type": "echo", "params": {"output_key": "q"}},
         "scorers": [{"type": "llm_judge", "params": {"name": "quality"}}],
         "judge": {"type": "mock", "params": {"default_score": 0.7}},
+        "sinks": [{"type": "console"}],
+    },
+    # The `openai` judge with an injected offline client. Before the `client=` seam
+    # this cell was unreachable: the constructor built a real SDK client, so the
+    # pipeline attempted network egress from CI and *still reported green* -- the
+    # engine converts a scorer exception into a 0.0 ScoreResult with a
+    # "scorer error: " comment rather than raising. Both halves are now guarded:
+    # the seam keeps it offline, and `matrix_offline` fails any socket that opens
+    # anyway.
+    "openai_judge": {
+        "schema_version": "1.0",
+        "run": {"name": "openai-judge-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "o1", "inputs": {"q": "test"}, "expected": "test"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "llm_judge", "params": {"name": "quality"}}],
+        "judge": {
+            "type": "openai",
+            "params": {"model": "offline-fixture", "client": _OfflineOpenAIClient(_OFFLINE_OPENAI_SCORE)},
+        },
+        "sinks": [{"type": "console"}],
+    },
+    # The `anthropic` judge, same seam. Its `evaluate` imports nothing, so this cell
+    # is offline by construction rather than by the CI job happening to install a
+    # dependency. Waived in an earlier draft of this change on a reason that was
+    # simply wrong -- `dev` pulls anthropic>=0.40 (pyproject.toml:87), so the SDK
+    # was never absent from the matrix job at all.
+    "anthropic_judge": {
+        "schema_version": "1.0",
+        "run": {"name": "anthropic-judge-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "a1", "inputs": {"q": "test"}, "expected": "test"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "llm_judge", "params": {"name": "quality"}}],
+        "judge": {
+            "type": "anthropic",
+            "params": {"model": "offline-fixture", "client": _OfflineAnthropicClient(_OFFLINE_ANTHROPIC_SCORE)},
+        },
         "sinks": [{"type": "console"}],
     },
     "weighted": {
@@ -1702,6 +1815,36 @@ class TestM8Composability:
         """LLM judge scorer uses injected mock judge through ctx."""
         _, result, _, _ledger = self._run("llm_judge")
         assert result.aggregate["quality"].mean == 0.7
+
+    def test_m8_pipeline_with_openai_judge_and_injected_client(self) -> None:
+        """The `openai` judge composes offline, through its `client=` seam.
+
+        Asserts the parsed verdict, not merely that the pipeline ran: the score can
+        only be `_OFFLINE_OPENAI_SCORE` if the judge actually called the injected
+        client and parsed its streamed JSON. `matrix_offline` (class-level) fails
+        the test if any socket opens, so a regression that drops the seam surfaces
+        as an egress failure rather than as a swallowed `0.0`.
+        """
+        config, result, _, ledger = self._run("openai_judge")
+
+        assert result.aggregate["quality"].mean == _OFFLINE_OPENAI_SCORE
+        assert ledger.invoked("judge", "openai"), "the openai judge was declared but never invoked"
+        assert config.judge is not None
+        assert config.judge.params["client"].calls, "the injected client was never called"
+
+    def test_m8_pipeline_with_anthropic_judge_and_injected_client(self) -> None:
+        """The `anthropic` judge composes offline, through its `client=` seam.
+
+        This judge's `evaluate` imports nothing, so the cell is offline by
+        construction. The score asserted is distinct from the OpenAI fixture's, so
+        a cell cannot pass by reading the wrong pipeline's verdict.
+        """
+        config, result, _, ledger = self._run("anthropic_judge")
+
+        assert result.aggregate["quality"].mean == _OFFLINE_ANTHROPIC_SCORE
+        assert ledger.invoked("judge", "anthropic"), "the anthropic judge was declared but never invoked"
+        assert config.judge is not None
+        assert config.judge.params["client"].calls, "the injected client was never called"
 
     def test_m8_pipeline_with_composite_scorer(self) -> None:
         """Composite scorer composes children inside the engine pipeline."""

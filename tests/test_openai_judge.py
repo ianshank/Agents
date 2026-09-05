@@ -165,3 +165,57 @@ def test_openai_judge_attach_client_langfuse_import_error(mock_openai):
         judge.attach_client(sdk_client)  # must not raise
 
     assert judge.client is original_client
+
+
+# --------------------------------------------------------------------------
+# The `client=` dependency-injection seam (prove-m8-execution, task 5)
+# --------------------------------------------------------------------------
+
+
+def test_injected_client_bypasses_sdk_construction_entirely() -> None:
+    """Scenario: an injected client bypasses SDK construction entirely.
+
+    Asserted by unimporting ``openai`` first and checking it stays unimported:
+    a test that only checked ``judge.client is sentinel`` would pass even if the
+    constructor built a real SDK client and then threw it away, which is exactly
+    the network egress this seam exists to prevent.
+    """
+    import sys
+
+    sentinel = object()
+    saved = sys.modules.pop("openai", None)
+    try:
+        judge = OpenAIJudge(model="m", client=sentinel)
+        assert judge.client is sentinel
+        assert "openai" not in sys.modules, "the SDK was imported despite an injected client"
+    finally:
+        if saved is not None:
+            sys.modules["openai"] = saved
+
+
+def test_injected_client_opens_no_socket() -> None:
+    """Construction with an injected client performs zero socket connects."""
+    import socket
+
+    with patch.object(socket.socket, "connect", side_effect=AssertionError("egress")) as connect:
+        OpenAIJudge(model="m", client=object())
+
+    connect.assert_not_called()
+
+
+def test_absent_injection_preserves_existing_behaviour() -> None:
+    """Scenario: absent injection preserves existing behaviour.
+
+    ``client`` defaults to ``None`` and the real construction path still runs,
+    so no existing caller sees a difference.
+    """
+    import inspect
+
+    default = inspect.signature(OpenAIJudge.__init__).parameters["client"].default
+    assert default is None
+
+    with patch("openai.OpenAI") as factory:
+        judge = OpenAIJudge(model="m", base_url="http://x", api_key="k")
+
+    factory.assert_called_once_with(base_url="http://x", api_key="k")
+    assert judge.client is factory.return_value
