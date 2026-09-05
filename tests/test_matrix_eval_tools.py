@@ -1472,6 +1472,38 @@ class _OfflineOpenAIClient:
         return [_StreamChunk(self._payload)]
 
 
+class _TextBlock:
+    """One content block, shaped as ``AnthropicJudge.evaluate`` reads it."""
+
+    def __init__(self, text: str) -> None:
+        self.type = "text"
+        self.text = text
+
+
+class _OfflineAnthropicClient:
+    """A recording stand-in for ``anthropic.Anthropic``, for the M8 anthropic cell.
+
+    Unlike the OpenAI judge, ``AnthropicJudge.evaluate`` imports nothing: it only
+    calls ``client.messages.create(**kwargs)`` and reads ``.content`` blocks. So
+    with an injected client this judge touches the SDK at neither construction nor
+    call time, and its cell needs no extra installed at all.
+    """
+
+    def __init__(self, score: float) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self._payload = json.dumps({"score": score, "reasoning": "offline matrix fixture"})
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kwargs: Any) -> SimpleNamespace:
+        self.calls.append(kwargs)
+        return SimpleNamespace(content=[_TextBlock(self._payload)])
+
+
+#: Score the offline Anthropic client returns. Distinct from the OpenAI fixture's so
+#: a cell cannot pass by reading the wrong pipeline's verdict.
+_OFFLINE_ANTHROPIC_SCORE = 0.37
+
+
 #: Score the offline OpenAI client returns. Named so the pipeline's assertion reads
 #: against the fixture rather than a bare literal appearing twice.
 _OFFLINE_OPENAI_SCORE = 0.42
@@ -1544,6 +1576,26 @@ PIPELINES: dict[str, dict] = {
         "judge": {
             "type": "openai",
             "params": {"model": "offline-fixture", "client": _OfflineOpenAIClient(_OFFLINE_OPENAI_SCORE)},
+        },
+        "sinks": [{"type": "console"}],
+    },
+    # The `anthropic` judge, same seam. Its `evaluate` imports nothing, so this cell
+    # is offline by construction rather than by the CI job happening to install a
+    # dependency. Waived in an earlier draft of this change on a reason that was
+    # simply wrong -- `dev` pulls anthropic>=0.40 (pyproject.toml:87), so the SDK
+    # was never absent from the matrix job at all.
+    "anthropic_judge": {
+        "schema_version": "1.0",
+        "run": {"name": "anthropic-judge-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "a1", "inputs": {"q": "test"}, "expected": "test"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "llm_judge", "params": {"name": "quality"}}],
+        "judge": {
+            "type": "anthropic",
+            "params": {"model": "offline-fixture", "client": _OfflineAnthropicClient(_OFFLINE_ANTHROPIC_SCORE)},
         },
         "sinks": [{"type": "console"}],
     },
@@ -1777,6 +1829,20 @@ class TestM8Composability:
 
         assert result.aggregate["quality"].mean == _OFFLINE_OPENAI_SCORE
         assert ledger.invoked("judge", "openai"), "the openai judge was declared but never invoked"
+        assert config.judge is not None
+        assert config.judge.params["client"].calls, "the injected client was never called"
+
+    def test_m8_pipeline_with_anthropic_judge_and_injected_client(self) -> None:
+        """The `anthropic` judge composes offline, through its `client=` seam.
+
+        This judge's `evaluate` imports nothing, so the cell is offline by
+        construction. The score asserted is distinct from the OpenAI fixture's, so
+        a cell cannot pass by reading the wrong pipeline's verdict.
+        """
+        config, result, _, ledger = self._run("anthropic_judge")
+
+        assert result.aggregate["quality"].mean == _OFFLINE_ANTHROPIC_SCORE
+        assert ledger.invoked("judge", "anthropic"), "the anthropic judge was declared but never invoked"
         assert config.judge is not None
         assert config.judge.params["client"].calls, "the injected client was never called"
 

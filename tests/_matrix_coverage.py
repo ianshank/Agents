@@ -101,12 +101,6 @@ WAIVED: dict[tuple[str, str, int], str] = {
 #: execution-credited fails as satisfied, so a cell that becomes feasible cannot
 #: sit here stale.
 M8_WAIVED: dict[tuple[str, str], str] = {
-    ("judge", "anthropic"): (
-        "the `anthropic` SDK is absent from eval-harness-ci.yml's install line "
-        "(`[dev,langfuse,openai,parquet,autoevals]`), and `evaluate` imports it at call time. "
-        "The `client=` seam ships and is unit-tested (F-063); only the pipeline cell is deferred, "
-        "until the extra is added to that job"
-    ),
     ("judge", "bedrock"): "boto3 is absent from eval-harness-ci.yml's install line",
     ("judge", "phoenix_evals"): (
         "arize-phoenix-evals is absent from eval-harness-ci.yml's install line and has no "

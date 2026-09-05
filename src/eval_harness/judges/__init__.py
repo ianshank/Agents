@@ -99,10 +99,16 @@ class OpenAIJudge(Judge):
     """LLM-as-judge over OpenAI-compatible APIs (including NVIDIA Nemotron & LM Studio).
 
     ``client`` is a dependency-injection seam mirroring ``ModelTarget``'s
-    (``targets/model.py``): a pre-built client, used by tests so no real SDK and
-    no network are needed. When ``None`` the real client is built, exactly as
+    (``targets/model.py``): a pre-built client, so **construction** needs neither
+    the SDK nor a network. When ``None`` the real client is built, exactly as
     before — an absent injection is indistinguishable from the pre-seam
     behaviour for every existing caller.
+
+    Scoped deliberately to construction: :meth:`evaluate` still does ``import
+    openai`` for ``RateLimitError`` in its retry predicate, so an injected client
+    removes the *client build* and the socket, not the import. (``AnthropicJudge``
+    differs — its ``evaluate`` imports nothing, so an injected client there avoids
+    the SDK entirely.)
 
     The seam is not a convenience. Without it this constructor built a real
     ``openai.OpenAI`` unconditionally, so an M8 pipeline naming this judge
@@ -267,6 +273,10 @@ class AnthropicJudge(Judge):  # pragma: no cover - requires anthropic SDK + netw
     ``ModelTarget`` carry: a pre-built client, so an M8 pipeline can exercise
     this judge with neither the SDK installed nor a socket opened. When ``None``
     the real client is built, exactly as before.
+
+    Unlike ``OpenAIJudge``, this holds at call time too: :meth:`evaluate` imports
+    nothing and only calls ``client.messages.create``, so an injected client keeps
+    the SDK out of the process entirely.
     """
 
     def __init__(

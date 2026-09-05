@@ -73,22 +73,40 @@ Coverage floor: **96%** (root `eval_harness`).
       mirroring `ModelTarget`'s seam; move the SDK import inside `if client is None:`.
 - [x] `[P]` M8 pipelines for `openai`/`anthropic` using recorded fake clients, asserted
       through the ledger **and** the `matrix_offline` egress guard from task 1.
-      **`openai` only.** `evaluate()` imports its SDK at call time and `anthropic` is absent
-      from `eval-harness-ci.yml`'s install line, so its cell is waived with that reason
-      rather than shipped under an `importorskip` that CI could never satisfy — the exact
-      anti-pattern F-053 had to remove for the braintrust cells. The seam itself ships and
-      is unit-tested for both judges.
+      **Both.** An earlier draft of this line shipped `openai` only and waived `anthropic`
+      on the reason "absent from `eval-harness-ci.yml`'s install line" — which was simply
+      false: `dev` pulls `anthropic>=0.40` (`pyproject.toml:87`), so the SDK was never
+      absent from the matrix job. The waiver was removed and the cell built.
+      `AnthropicJudge.evaluate` imports nothing, so with an injected client that judge
+      touches its SDK at neither construction nor call time; `OpenAIJudge.evaluate` still
+      imports `openai` for its retry predicate, which is why the seam's claim is scoped to
+      construction. Both cells assert the judge's *parsed verdict*, against two distinct
+      fixture scores so neither can pass by reading the other's.
 - [x] `[P]` `python tests/test_public_surface.py --update` in the same PR (protected path;
       cannot be split from the constructor-signature change).
 - [x] `[P]` `features.yaml` F-ID: constructing each judge with an injected client performs
       zero socket connects.
+- [x] `[P]` `scripts/validations/F_063.py` proves the seam is load-bearing **by execution**.
+      Recorded because the first cut did not, and an automated PR review caught it: that
+      version read the pipeline dict and the fixture's score constant and concluded *from
+      their shape* that the cell was falsifiable — crediting a declaration instead of an
+      execution, which is the exact defect this change exists to remove, reintroduced inside
+      the validator that proves the change. It now runs each seam judge's pipeline end to end
+      twice against two different injected verdicts and requires the aggregate to follow, with
+      the egress guard armed at `socket.connect`. Negative controls executed against this
+      checkout: a constant-answering judge fails 4 checks; a constructor that discards the
+      injected client fails 8, including the egress assertion.
 - [ ] New ADR for the seam (own document, referenced from this change's design.md).
       **Not written.** The seam is a two-line constructor change that copies
       `ModelTarget`'s already-ADR'd pattern verbatim rather than deciding anything new;
       F-063's `verification` bullets and this change's `design.md` carry the reasoning.
       Raise it at review if a separate ADR is still wanted before archive.
-- [ ] Waive `bedrock`/`phoenix_evals` M8 cells explicitly, with the reasons in proposal.md's
-      non-goals, rather than leaving them silently absent.
+- [x] Waive `bedrock`/`phoenix_evals` M8 cells explicitly, with the reasons in proposal.md's
+      non-goals, rather than leaving them silently absent. Shipped as `M8_WAIVED`
+      (`tests/_matrix_coverage.py`), rendered into `docs/matrix-coverage.md` and hygienic in
+      both directions: a waiver a live cell has satisfied fails as stale, and a waiver naming
+      an unregistered component fails as a typo. The anthropic entry was removed under the
+      first of those rules once its cell was built.
 
 ## 6. Verification
 

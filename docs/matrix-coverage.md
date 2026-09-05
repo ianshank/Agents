@@ -143,7 +143,7 @@ Aliases (target):
 
 | suite | floor | dims covered (method counts) |
 |---|---|---|
-| engine | M8 | M8×7 |
+| engine | M8 | M8×8 |
 | gating | M1, M2, M6 | M1×2, M2×2, M6×4 |
 
 ## M8 pipelines — kinds exercised
@@ -158,7 +158,7 @@ invoked it, which is the vacuous credit the ledger exists to refuse.
 | kind | canonical components exercised in ≥1 pipeline |
 |---|---|
 | dataset | `inline` |
-| judge | `mock`, `openai` |
+| judge | `anthropic`, `mock`, `openai` |
 | scorer | `contains`, `exact_match`, `llm_judge`, `trajectory_any_order`, `trajectory_exact`, `trajectory_in_order`, `trajectory_loop_detection`, `trajectory_precision_recall`, `trajectory_recovery`, `trajectory_step_efficiency`, `weighted` |
 | sink | `console`, `json_file` |
 | state_adapter | `in_memory` |
@@ -168,7 +168,6 @@ Waived M8 cells — infeasible in the matrix CI job, with the reason. Named here
 rather than left absent: a component missing from the table above with no
 explanation is indistinguishable from one nobody considered.
 
-- `judge/anthropic`: the `anthropic` SDK is absent from eval-harness-ci.yml's install line (`[dev,langfuse,openai,parquet,autoevals]`), and `evaluate` imports it at call time. The `client=` seam ships and is unit-tested (F-063); only the pipeline cell is deferred, until the extra is added to that job
 - `judge/bedrock`: boto3 is absent from eval-harness-ci.yml's install line
 - `judge/phoenix_evals`: arize-phoenix-evals is absent from eval-harness-ci.yml's install line and has no _EXTRA_PROVIDES entry; its pandas/numpy footprint against the pyarrow>=14,<20 pin is an open question phoenix-live.yml's dep-resolve job should answer first
 

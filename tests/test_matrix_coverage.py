@@ -154,10 +154,25 @@ def test_a_satisfied_m8_waiver_fails_as_stale() -> None:
     Without this, `M8_WAIVED` could keep explaining the absence of a cell that
     now exists -- an artifact that documents a gap it no longer has is the same
     class of stale accounting the execution ledger was built to remove.
-    """
-    problems = mc.m8_waiver_problems({"judge": {"anthropic"}})
 
-    assert any("satisfied" in p and "anthropic" in p for p in problems)
+    Injects its own waiver over a genuinely registered component rather than
+    borrowing a live row, so the test survives the table changing under it. It did
+    not: an earlier cut named `anthropic`, and broke the moment that waiver was
+    retired because its cell got built. Waivers are meant to reach zero as
+    `prove-m8-execution` widens M8, and a guard test that reads the live table
+    cannot outlive that.
+    """
+    kind = "judge"
+    component = mc.census_names(mc.registry_census(), kind)[0]
+    original = dict(mc.M8_WAIVED)
+    mc.M8_WAIVED[(kind, component)] = "synthetic waiver, this test only"
+    try:
+        problems = mc.m8_waiver_problems({kind: {component}})
+    finally:
+        mc.M8_WAIVED.clear()
+        mc.M8_WAIVED.update(original)
+
+    assert any("satisfied" in p and component in p for p in problems)
 
 
 def test_an_m8_waiver_for_an_unregistered_component_fails() -> None:
