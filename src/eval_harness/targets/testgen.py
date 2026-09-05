@@ -224,6 +224,13 @@ def _resolve_timeout(raw: Any) -> tuple[float, str | None]:
     """
     if raw is None or raw is False or raw == 0:
         return DEFAULT_TIMEOUT_SECONDS, None
+    if isinstance(raw, bool):
+        # `float(True) == 1.0`, so a mis-typed `timeout_seconds: true` in YAML silently
+        # became a ONE-SECOND limit and every suite over that budget reported a timeout it
+        # never earned. `bool` is a subclass of `int`, so the numeric check below cannot
+        # see it; this has to come first. `False` is handled above as "unset", matching the
+        # `or DEFAULT` behaviour it replaced.
+        return DEFAULT_TIMEOUT_SECONDS, f"timeout_seconds must be a number, got {raw!r}"
     try:
         seconds = float(raw)
     except (TypeError, ValueError):
@@ -240,7 +247,13 @@ def _covered(mutant: dict[str, Any], called: set[tuple[int, ...]], grid: list[li
         # A corpus that does not publish differing indices cannot support the normalized
         # denominator. Counting the mutant as covered anyway would inflate it silently.
         return False
-    return any(tuple(grid[i]) in called for i in differs if i < len(grid))
+    # `0 <= i`, not just `i < len(grid)`: a negative index is valid Python and silently
+    # counts from the END of the grid, so a `differs_at` of [-1] made the LAST grid point
+    # stand in for a mutant that differs nowhere near it. That credits coverage the suite
+    # never earned and inflates the normalized denominator — the same class of unearned
+    # credit this capability exists to refuse. An out-of-range index is skipped rather than
+    # raising, because a malformed corpus item must not abort the run (ADR 0038).
+    return any(tuple(grid[i]) in called for i in differs if 0 <= i < len(grid))
 
 
 def _called_inputs(payload: dict[str, Any]) -> set[tuple[int, ...]]:

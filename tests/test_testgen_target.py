@@ -155,6 +155,10 @@ class TestBoundsAndFailureModes:
             pytest.param(-1, id="negative"),
             pytest.param(float("nan"), id="nan"),
             pytest.param(float("inf"), id="inf"),
+            # `bool` is a subclass of `int` and `float(True) == 1.0`, so a mis-typed
+            # `timeout_seconds: true` in YAML became a ONE-SECOND limit and every suite
+            # over that budget reported a timeout it never earned.
+            pytest.param(True, id="boolean-true"),
         ],
     )
     def test_an_unusable_timeout_is_refused_rather_than_obeyed(self, value: Any) -> None:
@@ -198,6 +202,23 @@ class TestBoundsAndFailureModes:
         label = testgen._sandbox_label(0, hostile["id"])
         assert "/" not in label and ".." not in label, label
         assert (root / label).resolve().is_relative_to(root.resolve())
+
+    def test_a_negative_differs_at_index_is_not_credited_as_coverage(self) -> None:
+        """REGRESSION, from an automated review. `_covered` guarded only `i < len(grid)`.
+
+        A negative index is valid Python and silently counts from the END of the grid, so a
+        `differs_at` of `[-1]` made the LAST grid point stand in for a mutant that differs
+        nowhere near it — coverage the suite never earned, inflating the normalized
+        denominator. Skipped rather than raised: a malformed corpus item must not abort the
+        run (ADR 0038).
+        """
+        grid = [[0, 0], [2, 1], [5, 3]]
+        drove_the_last_point: set[tuple[int, ...]] = {(5, 3)}
+        drove_the_origin: set[tuple[int, ...]] = {(0, 0)}
+        assert testgen._covered({"differs_at": [-1]}, drove_the_last_point, grid) is False
+        assert testgen._covered({"differs_at": [-3]}, drove_the_origin, grid) is False
+        # The negative control: a real in-range index at the same point still counts.
+        assert testgen._covered({"differs_at": [2]}, drove_the_last_point, grid) is True
 
     def test_two_mutants_sharing_an_id_get_separate_sandboxes(self) -> None:
         """The second would otherwise overwrite the first's sandbox, and both could be
