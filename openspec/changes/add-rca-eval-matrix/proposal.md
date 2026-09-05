@@ -101,7 +101,7 @@ Also cut, on evidence rather than scope:
 
 - **`counterfactual_support`** — replaying an incident with the alleged cause removed requires
   re-executing a system, which recorded telemetry cannot support, and a `Scorer` cannot re-execute
-  anything anyway (`core/interfaces.py:39-49`). Prior art exists (AID, SIGMOD 2020; Sage, ASPLOS
+  anything anyway (`src/eval_harness/core/interfaces.py:39-49`). Prior art exists (AID, SIGMOD 2020; Sage, ASPLOS
   2021) and is *live*; Sage's own workaround on historical data is model-based counterfactual
   estimation, whose causal machinery scores 0.00 at Acc@1 and Acc@10 on this benchmark family. The
   well-posed substitute is the fault-injection record, not a replay.

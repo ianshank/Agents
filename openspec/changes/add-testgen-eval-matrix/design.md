@@ -4,7 +4,7 @@
 
 The source plan put sandbox execution in the state adapters: "Sandbox execution uses the existing
 `filesystem` and `sqlite` state adapters (F-060)." That is not what a `StateAdapter` is.
-`state_adapters/__init__.py:28-36` says so directly — "the adapter does not intercept or observe the
+`src/eval_harness/state_adapters/__init__.py:28-36` says so directly — "the adapter does not intercept or observe the
 target's execution, only what it is told." Its protocol is `snapshot(ctx)` plus `evaluate(...)`: it
 captures world state *around* `target.run(item)` so a claimed side-effect can be verified. It is a
 snapshot/diff seam, not an execution sandbox.
@@ -24,7 +24,7 @@ collect / execute / mutate     ──►  TargetOutput.metadata["testgen_evidenc
 
 This is the `state_transition` pattern with the producer moved from the engine to the target:
 "pure over data the engine already computed, no state comparison or I/O of their own"
-(`scorers/state.py:1-13`). `TargetOutput.metadata` is already a `dict[str, Any]`
+(`src/eval_harness/scorers/state.py:1-13`). `TargetOutput.metadata` is already a `dict[str, Any]`
 (`core/types.py:104-119`), so nothing in the core model changes and ADR 0031's additive-extension
 authority is not needed.
 

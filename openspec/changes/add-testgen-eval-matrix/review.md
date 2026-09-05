@@ -17,7 +17,7 @@ four have oracles this corpus can actually provide.
 
 | # | Finding | Correction |
 |---|---|---|
-| A10 | "Sandbox execution uses the `filesystem` and `sqlite` state adapters" | A `StateAdapter` is a snapshot/diff seam — `state_adapters/__init__.py:28-36` says it "does not intercept or observe the target's execution". Execution moved into an allowlisted callable target; scorers read `TargetOutput.metadata` |
+| A10 | "Sandbox execution uses the `filesystem` and `sqlite` state adapters" | A `StateAdapter` is a snapshot/diff seam — `src/eval_harness/state_adapters/__init__.py:28-36` says it "does not intercept or observe the target's execution". Execution moved into an allowlisted callable target; scorers read `TargetOutput.metadata` |
 | A9 | `testgen_flake_rate` registered as a scorer | `Scorer.score(item, output, ctx)` sees one attempt. Replaced with `repetitions: 5` + `metric: pass_power_k` on `test_executability` (F-056) |
 | A8 | One 14-scorer module | `MAX_FILE_LINES = 500` is a hard gate; `trajectory.py` is 454 lines for 7. Cut to 4 scorers in a 3-file package |
 | A7 | "Add MATRIX_KIND rows for all scorers" as one checkbox | Scorer floor is M1,M2,M3,M5,M6. 4 scorers = **20 cells**, enumerated in task 4.1, plus both baselines and both READMEs |

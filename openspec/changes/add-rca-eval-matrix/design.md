@@ -80,7 +80,7 @@ behind calibration.
 
 Five scorers × the scorer floor (M1, M2, M3, M5, M6) = **25 cells**. Cells, not methods: a class
 declaring `MATRIX_COMPONENTS` applies its dim set to every listed component
-(`_matrix_coverage.py:645`), so one parametrized method covers a whole column — the pattern
+(`tests/_matrix_coverage.py:645`), so one parametrized method covers a whole column — the pattern
 `TestTrajectoryScorersShared` already uses for seven trajectory scorers in eight methods. Matrix
 classes must not inherit (`:609-618`).
 
@@ -141,7 +141,7 @@ family, Granger, PC, FCI, LiNGAM and NTLR all score **0.00 at Acc@1 and Acc@10**
 timestamps per window are being fitted against 640–2500 metric columns.
 
 **And it cannot be a `Scorer` regardless.** A scorer receives one `(item, output)` pair and is
-handed a fresh `RunContext` per attempt (`core/_execution_strategies.py:281-282`), with `extra`
+handed a fresh `RunContext` per attempt (`src/eval_harness/core/_execution_strategies.py:281-282`), with `extra`
 defaulting to a new dict and the item RNG re-derived — so it cannot detect repetition, let alone
 re-execute under a modified configuration. Counterfactual replay needs re-configuration, for which
 no seam exists anywhere.

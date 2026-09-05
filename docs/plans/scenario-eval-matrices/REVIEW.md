@@ -269,7 +269,16 @@ class Scorer(Protocol):
     def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult: ...
 ```
 
-A scorer receives **one** output and has no handle on the target. It cannot re-run anything.
+A scorer receives **one** output and cannot observe or trigger a second attempt.
+
+> **Reasoning corrected in pass 2 — see §E7.** The original wording here was "has no handle on the
+> target", which is false: `RunContext.config` is the entire `EvalConfig` and `architecture.yaml`
+> grants `scorers: [core, plugins]`, so a scorer *could* legally construct a target. The correct and
+> stronger ground is the attempt loop: a **fresh `RunContext` is built per attempt**
+> (`src/eval_harness/core/_execution_strategies.py:281-282`, `:194-197`), with `extra` defaulting to
+> a new dict and the item RNG re-derived, and `attempt_index` lives on `ItemResult`, constructed
+> *after* scoring. Every attempt therefore presents an indistinguishable context: a scorer cannot
+> count, order, or even detect repetition. The conclusion below is unchanged.
 
 - **`testgen_flake_rate` (5 re-runs)** is not a new scorer; it is F-056's existing
   `run.repeat` + `ReliabilityAggregator` applied to an existing pass/fail scorer. Registering it as

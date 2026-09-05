@@ -41,7 +41,7 @@ and is deferred. Four scorers that are trusted beat fourteen that are not.
 ## Scope / non-goals
 
 - **Non-goal: `testgen_flake_rate` as a scorer.** A `Scorer` receives one `(item, output)` pair
-  (`core/interfaces.py:39-49`) and cannot re-execute a target. Flakiness is already expressible:
+  (`src/eval_harness/core/interfaces.py:39-49`) and cannot re-execute a target. Flakiness is already expressible:
   `repetitions: 5` on `RunSettings` plus `metric: pass_power_k` on `test_executability` (F-056).
   Registering a scorer for it would duplicate shipped machinery and owe five unnecessary matrix
   cells.
