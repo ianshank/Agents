@@ -97,7 +97,12 @@ jobs:
       - run: pip install -e "./agent-core"
       # regression_gate runs the offline ROOT suite in both trees; it needs the
       # same extras quality-gates installs (dev alone cannot collect the suite).
-      - run: pip install -e ".[dev,langfuse,openai,archguard,parquet,autoevals]"
+      # `e2e-matrix` was missing while this comment claimed parity, so the two
+      # `importorskip("openpyxl")` tests in tests/test_e2e_matrix.py were silently
+      # skipped here -- consistently in both trees, so the regression gate saw no
+      # net-new finding and reported a clean comparison over a smaller suite than
+      # the one it names.
+      - run: pip install -e ".[dev,langfuse,openai,archguard,parquet,e2e-matrix,autoevals]"
       - name: Sync store (read-only pull; tolerate failure -> cold start)
         run: |
           set +e

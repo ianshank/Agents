@@ -38,6 +38,23 @@ updates:
       github-actions:
         patterns: ["*"]
 
+  # --- GitHub Actions: the composite action -------------------------------------------
+  # `directory: "/"` above scans `.github/workflows/` and NOTHING ELSE, so the `uses:`
+  # pins inside `.github/actions/*/action.yml` were never updated. The effect was
+  # measurable: every workflow ran `setup-python` at v7.0.0 while the composite action
+  # every one of them delegates to sat at v5 — two majors behind, unnoticed, because the
+  # grouped bump PRs looked complete. A composite action needs its own directory entry.
+  - package-ecosystem: github-actions
+    directory: "/.github/actions/run-quality-gate"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(ci)
+    groups:
+      github-actions:
+        patterns: ["*"]
+
   # --- pip: root harness ----------------------------------------------------------------
   - package-ecosystem: pip
     directory: "/"
@@ -127,6 +144,28 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    ignore:
+      - dependency-name: ruff
+      - dependency-name: mypy
+    groups:
+      python:
+        patterns: ["*"]
+
+  # --- pip: experiments/backend-validation ----------------------------------------------
+  # An experiment, and deliberately outside CI — but it declares two 95% coverage floors in
+  # its own pyproject.toml and installs real third-party packages, so its dependencies age
+  # like any other tree's. Excluded from `coverage-floors.yaml` and from every workflow;
+  # this entry is the only thing that will tell anyone its pins have rotted. Promote it to
+  # a CI job or delete it; leaving an unwatched tree that claims a floor is the worst of
+  # the three.
+  - package-ecosystem: pip
+    directory: "/experiments/backend-validation"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
     commit-message:
       prefix: chore(deps)
       prefix-development: chore(deps-dev)
