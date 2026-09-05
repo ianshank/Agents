@@ -49,6 +49,7 @@ from eval_harness.plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS, boot
 from tests import _trajectory_helpers as traj
 from tests._m8_probe import ExecutionLedger, probe
 from tests._matrix_coverage import PipelineConfig, format_vacuous, pipeline_vacuous
+from tests.test_matrix_testgen_scorers import TESTGEN_SCORERS
 
 bootstrap()
 
@@ -1906,6 +1907,54 @@ PIPELINES: dict[str, PipelineConfig] = {
         "state_adapter": {"type": "filesystem", "params": {}},
         "sinks": [{"type": "console"}],
     },
+    # The four test-generation scorers over the suite-execution target. Inline rather than
+    # corpus-backed so the cell stays fast (one mutant = two sandbox subprocesses) and has
+    # no dependency on a committed data file. The suite drives the exact input at which the
+    # mutant diverges, so a green run here means the sandbox really executed both.
+    "testgen_scorers": {
+        "schema_version": "1.0",
+        "run": {"name": "testgen-scorers-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "tg1",
+                        "inputs": {
+                            "focal_name": "add",
+                            "reference": "def add(n, k):\n    if n < 2:\n        return n + k\n    return k - n\n",
+                            "suite": "from focal import add\n\ndef test_boundary():\n    assert add(2, 1) == -1\n",
+                            "mutants": [
+                                {
+                                    "id": "M1",
+                                    "kind": "relational",
+                                    "equivalent": False,
+                                    "source": (
+                                        "def add(n, k):\n    if n <= 2:\n        return n + k\n    return k - n\n"
+                                    ),
+                                    "differs_at": [1],
+                                }
+                            ],
+                            "obligations": [{"id": "OB-1", "witness_mutant": "M1"}],
+                            "grid": [[0, 0], [2, 1]],
+                        },
+                        "expected": None,
+                    }
+                ]
+            },
+        },
+        "target": {
+            "type": "callable",
+            "params": {"path": "eval_harness.targets.testgen:run_generated_suite"},
+        },
+        "scorers": [
+            {"type": "test_executability"},
+            {"type": "testgen_mutation_score"},
+            {"type": "testgen_green_on_correct"},
+            {"type": "requirement_obligation_recall"},
+        ],
+        "sinks": [{"type": "console"}],
+    },
     "weighted": {
         "schema_version": "1.0",
         "run": {"name": "composite-test", "seed": 1},
@@ -2450,6 +2499,22 @@ class TestM8Composability:
         _, result, _, ledger = self._run("state_filesystem", tmp_path)
         assert result.aggregate["pv"].pass_rate == 1.0
         assert ledger.invoked("state_adapter", "filesystem")
+
+    def test_m8_testgen_scorers_pipeline(self) -> None:
+        """The four test-generation scorers, over a suite the sandbox really executed.
+
+        Asserts the verdicts and not merely that the run completed: the mutation score can
+        only be 1.0 if the sandbox ran the suite against the mutant and observed the kill,
+        and the recall can only be 1.0 if the witness mutant was the one killed.
+        """
+        _, result, _, ledger = self._run("testgen_scorers")
+        assert result.aggregate["test_executability"].pass_rate == 1.0
+        assert result.aggregate["testgen_mutation_score"].mean == 1.0
+        assert result.aggregate["testgen_green_on_correct"].mean == 0.0
+        assert result.aggregate["requirement_obligation_recall"].mean == 1.0
+        for component in TESTGEN_SCORERS:
+            assert ledger.invoked("scorer", component), component
+        assert ledger.invoked("target", "callable")
 
     def test_m8_pipeline_with_composite_scorer(self) -> None:
         """Composite scorer composes children inside the engine pipeline."""

@@ -64,7 +64,11 @@ Aliases (judge):
 | `llm_judge` | 3 | 1 | 1 | 1 | 1 |
 | `policy_violation` | 3 | 2 | 1 | 1 | 1 |
 | `regex_match` | 2 | 1 | 1 | 1 | 1 |
+| `requirement_obligation_recall` | 3 | 4 | 1 | 2 | 4 |
 | `state_transition` | 4 | 3 | 2 | 1 | 1 |
+| `test_executability` | 3 | 4 | 1 | 2 | 4 |
+| `testgen_green_on_correct` | 3 | 4 | 1 | 2 | 4 |
+| `testgen_mutation_score` | 4 | 4 | 1 | 2 | 4 |
 | `trajectory_any_order` | 2 | 5 | 1 | 1 | 1 |
 | `trajectory_exact` | 2 | 5 | 1 | 1 | 1 |
 | `trajectory_in_order` | 2 | 5 | 1 | 1 | 1 |
@@ -143,7 +147,7 @@ Aliases (target):
 
 | suite | floor | dims covered (method counts) |
 |---|---|---|
-| engine | M8 | M8×23 |
+| engine | M8 | M8×24 |
 | gating | M1, M2, M6 | M1×2, M2×2, M6×4 |
 
 ## M8 pipelines — kinds exercised
@@ -159,7 +163,7 @@ invoked it, which is the vacuous credit the ledger exists to refuse.
 |---|---|
 | dataset | `braintrust`, `csv`, `inline`, `jsonl`, `langfuse`, `parquet` |
 | judge | `anthropic`, `mock`, `openai`, `panel` |
-| scorer | `autoevals`, `contains`, `exact_match`, `json_keys`, `llm_judge`, `policy_violation`, `regex_match`, `state_transition`, `trajectory_any_order`, `trajectory_exact`, `trajectory_in_order`, `trajectory_loop_detection`, `trajectory_precision_recall`, `trajectory_recovery`, `trajectory_step_efficiency`, `weighted` |
+| scorer | `autoevals`, `contains`, `exact_match`, `json_keys`, `llm_judge`, `policy_violation`, `regex_match`, `requirement_obligation_recall`, `state_transition`, `test_executability`, `testgen_green_on_correct`, `testgen_mutation_score`, `trajectory_any_order`, `trajectory_exact`, `trajectory_in_order`, `trajectory_loop_detection`, `trajectory_precision_recall`, `trajectory_recovery`, `trajectory_step_efficiency`, `weighted` |
 | sink | `braintrust`, `console`, `html_file`, `json_file`, `langfuse`, `phoenix` |
 | state_adapter | `filesystem`, `in_memory`, `mock_http`, `sqlite` |
 | target | `callable`, `echo`, `model` |

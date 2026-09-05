@@ -66,7 +66,9 @@ before that guard existed.
   scorer can be measured inside a gate that stays live for everything else. It needed its own ADR —
   ADR 0031 covers agent evaluation only — and got one: ADR 0042. Prerequisite for the three below,
   now satisfied. Motivated by `docs/plans/scenario-eval-matrices/REVIEW.md`.
-- [`changes/add-testgen-eval-matrix/`](changes/add-testgen-eval-matrix/) — *proposed.* Four
+- [`changes/add-testgen-eval-matrix/`](changes/add-testgen-eval-matrix/) — *implemented,
+  pending archive.* Landed as **F-065** (ADR 0043); the soak's starting distribution is in
+  `review.md`. Four
   deterministic scorers over AI-generated test suites (executability, mutation score in both
   denominators, false alarms on correct code, obligation recall), executed by an allowlisted
   callable target with scorers as pure readers of its evidence. Synthetic generated corpus; no

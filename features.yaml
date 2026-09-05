@@ -1309,3 +1309,53 @@ features:
       tests/_gitrepo.py is new shared fixture infrastructure (throwaway repositories, the underscore
       support-module convention this directory already uses); three sibling test modules carry their
       own private _git helpers predating it and should migrate in a separate change.
+
+  - id: "F-065"
+    epic: "Eval Harness"
+    name: "Test-generation evaluation: the target executes, the scorers read"
+    description: >-
+      The harness scored an agent's answer, its path (F-051) and its effect on the world (F-060),
+      and had nothing that scored an agent's TEST SUITE. Adds a suite-execution callable target and
+      four deterministic scorers over its evidence: test_executability, testgen_mutation_score,
+      testgen_green_on_correct, requirement_obligation_recall. The seam is ADR 0043's -- the target
+      runs the suite in a subprocess sandbox against the known-correct implementation and each
+      seeded mutant, publishes a payload on TargetOutput.metadata, and every scorer is a pure
+      function of it, performing no execution, no filesystem mutation and no network access. That
+      keeps the scorers deterministic under repetitions > 1, offline in the zero-dependency suite,
+      and cheap to matrix-cover. Execution runs in a subprocess because a wall-clock limit is
+      unenforceable in-process; it is gated by the deny-by-default callable allowlist (ADR 0039)
+      with the module prefix, not the whole harness package; and a timeout is recorded as evidence
+      rather than raised, because a raise aborts the run under ADR 0038's default policy. Corpus at
+      corpora/testgen/v1/ -- 60 generated focal methods across five control-flow strata, mutant
+      equivalence DECIDED against a bounded input grid rather than declared, obligations derived as
+      equivalence classes of inputs under which mutants detect them, each with a witness mutant so
+      coverage is decidable by execution and never inferred from the suite being scored.
+    category: "functional"
+    priority: "high"
+    status: "in_progress"
+    tier: "fast"
+    verification:
+      - "an unlisted suite-execution target is refused by the callable allowlist BEFORE any generated code runs, established by running it under a foreign allowlist (scripts/validations/F_065.py, tests/test_testgen_target.py::TestAllowlist)"
+      - "the sandbox really executes: a suite driving the input at which a mutant diverges covers AND kills it, and a suite driving only an agreeing input does neither -- so 'covered' is measured from the inputs the suite drove, never assumed (scripts/validations/F_065.py, tests/test_testgen_target.py::test_a_blind_suite_is_neither_covered_nor_killed)"
+      - "a suite red on correct code kills nothing: 'killed' requires a test that PASSED on the reference to fail on the mutant, or a false-alarm defect would read as perfect fault detection (scripts/validations/F_065.py, tests/test_testgen_target.py::test_a_suite_red_on_correct_code_cannot_claim_the_kill)"
+      - "absent evidence yields passed=None for all four scorers, and a non-executable suite makes the other three not-applicable -- a missing payload, an unrunnable suite and a total agent failure stay three distinguishable outcomes (scripts/validations/F_065.py, tests/test_matrix_testgen_scorers.py)"
+      - "both mutation denominators are emitted on every verdict, each labelled with the count it was computed from, and equivalent mutants are excluded from both with the exclusion count recorded (scripts/validations/F_065.py, tests/test_matrix_testgen_scorers.py::TestTestgenMutationScore)"
+      - "the scorers are pure: identical verdicts over one payload, and zero socket connects and zero subprocess spawns across all four, asserted at socket.connect and subprocess.run rather than inferred (scripts/validations/F_065.py)"
+      - "every shipped gate rule for this capability is advisory (report_only), so no uncalibrated threshold blocks a run; the four bounds are soak starting points in config/testgen_eval.yaml and none appears in the spec delta (scripts/validations/F_065.py)"
+      - "the committed corpus regenerates byte-identically, its equivalence marks are re-derived from the committed sources rather than trusted, and every obligation's witness is a real non-equivalent mutant (python scripts/gen_testgen_corpus.py --check, tests/test_testgen_corpus.py)"
+      - "the four scorers discriminate on independent axes, measured on the held-out split: the false-alarm suite moves only testgen_green_on_correct (0.35 vs 0.00) and the weak suite moves only mutation score and recall (0.59 vs 1.00) -- recorded in openspec/changes/add-testgen-eval-matrix/review.md"
+      - "20 matrix cells across the scorer floor M1/M2/M3/M5/M6, plus an M8 pipeline running all four over the real suite-execution target, so M8 reads 43 of 45 components rather than regressing to 39 of 45 (tests/test_matrix_testgen_scorers.py, tests/test_matrix_eval_tools.py::test_m8_testgen_scorers_pipeline)"
+    validation_command: "python scripts/validations/F_065.py"
+    depends_on: ["F-051", "F-056", "F-060", "F-062", "F-063"]
+    notes: >-
+      ADR 0043 records the seam and the subprocess decision. src/eval_harness/ now spawns
+      subprocesses for the first time, confined to targets/_suite_runner.py, reachable only through
+      an allowlisted config entry. TESTGEN_EVIDENCE_KEY lives in core/types.py, not beside either
+      party: defining it in targets/testgen.py and importing it from the scorers created a real
+      scorers -> targets component edge that the architecture drift guard caught -- the change's
+      design.md had predicted no new edge and was right about the package mapping while missing
+      this import. Deliberately NOT shipped: testgen_flake_rate (a scorer sees one attempt;
+      repetitions: 5 + pass_power_k on test_executability already expresses it, F-056),
+      coverage-delta (needs a second instrumented run per item), and any judge-backed scorer (which
+      would queue behind calibration). public_surface_baseline.json is unchanged and correctly so:
+      the scorers subpackage declares no __all__, following state.py and trajectory.py.

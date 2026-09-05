@@ -72,3 +72,103 @@ present one number as the tool's score.
 2. Mutant generation currently has no equivalence detector — items carry equivalence marks from the
    generator. That is sound for synthetic items and will not transfer to any future real corpus.
    Flagged now so it is a known boundary rather than a surprise later.
+
+---
+
+## Implementation record (2026-09-05) — landed as F-065, ADR 0043
+
+### Task 6.4 — the soak's starting distribution
+
+Dry-run over the **held-out split** (11 of 60 items, keyed by `sha256(seed:item_id)`), each
+item scored against all four reference suites. Executed against this checkout; the target
+ran every suite in a subprocess sandbox against the reference implementation and each
+non-equivalent mutant.
+
+| reference suite | `test_executability` | `testgen_mutation_score` (raw) | `testgen_green_on_correct` | `requirement_obligation_recall` |
+|---|---|---|---|---|
+| `thorough` | 1.00 | 1.00 | 0.00 | 1.00 |
+| `weak` | 1.00 | **0.59** | 0.00 | **0.59** |
+| `broken` | **0.00** | n/a | n/a | n/a |
+| `false_alarm` | 1.00 | 1.00 | **0.35** | 1.00 |
+
+The table's value is what it shows about **independence**, not the absolute numbers:
+
+- `weak` differs from `thorough` on mutation score and recall **and on nothing else** — its
+  false-alarm rate stays 0.00.
+- `false_alarm` differs from `thorough` on the false-alarm rate **and on nothing else** —
+  its mutation score stays 1.00. This is the spec's own scenario ("*a suite that fails on
+  correct code is penalised … `testgen_mutation_score` is unchanged by it*"), confirmed
+  empirically rather than argued.
+- `broken` is non-executable, and the other three report not-applicable rather than zero, so
+  an infrastructure failure stays distinguishable from a total agent failure.
+
+The four config bounds (`0.90` / `0.60` / `0.05` / `0.70`) sit inside this range and are
+**soak starting points recorded in config**, not spec thresholds. Every rule is advisory.
+
+### Findings from implementation
+
+**F1 — the design predicted no new import edge, and was wrong about one.** `design.md` said
+a scorers subpackage "resolves to the existing component and adds no import edge". True of
+the package mapping, but the scorers imported the evidence key from `targets/testgen.py`,
+which created a real `scorers → targets` edge. The architecture drift guard caught it. The
+key moved to `core/types.py` — it is the *contract between* the two, both already depend on
+`core`, and the neutral home costs nothing. The design's own instruction ("re-run the drift
+guard anyway; the manifest is a protected path precisely so that assumption gets checked
+rather than assumed") is what made this a two-minute fix instead of a review finding.
+
+**F2 — obligations had to be redefined before they measured anything.** The first
+derivation partitioned the input grid by *output value*, producing a median of 16
+obligations per item and a maximum of 43. Those are test cases ("returns 47 for this
+input"), not obligations, and a recall denominator built from them would have measured how
+exhaustively a suite enumerated the grid. Obligations are now equivalence classes of inputs
+under *which mutants detect a difference there* — median 4, max 10 — each with a witness
+mutant that provably breaks it. Coverage is then decidable by execution and never inferred
+from the suite being scored.
+
+**F3 — three of twelve loop items shipped dead code.** The threshold cycled `0,1,2,3` across
+all strata, so `for i in range(0)` made the `loop_branch` predicate unreachable: no mutation
+inside it could ever be killed, and the item silently taught nothing about the stratum it
+claimed to represent. Thresholds are now per-stratum. Found by *reading a generated item*,
+which is the argument for committing the corpus rather than generating it on the fly.
+
+**F4 — the "known-good" suite was enumeration, not coverage.** The first `thorough` suite
+asserted all 91 grid points. That is not what a competent engineer writes, and shipping it
+as the reference would have made the corpus reward exhaustive enumeration; it also
+quadrupled the committed corpus. It is now a greedy minimal covering set — typically two to
+four assertions — that still distinguishes every non-equivalent mutant.
+
+**F5 — mutant equivalence is decided, not declared.** A generator that labelled mutations
+equivalent *by operator* would put an unchecked claim into the denominator of every mutation
+score. Equivalence is determined by evaluating both implementations over the grid, and
+`tests/test_testgen_corpus.py` re-derives every mark from the committed sources rather than
+trusting the manifest.
+
+**F6 — the 500-line budget fired on the generator**, as it has on every substantial addition
+this week. Split into `scripts/_testgen_corpus_lib.py` (pure domain logic: templates,
+mutation, obligations, suites) and `scripts/gen_testgen_corpus.py` (assembly, manifest, CLI),
+following ADR 0036/0019.
+
+**F7 — M8 would have regressed without a cell.** `prove-m8-execution` had just taken M8 to
+39 of 41 components; registering four scorers with no pipeline would have made it 39 of 45
+the same day. A `testgen_scorers` M8 pipeline runs the four scorers over the real
+suite-execution target, so the artifact reads **43 of 45** — the two uncredited still being
+exactly the two waived.
+
+### Verification
+
+- `./scripts/quality-gate.sh all` — PASS (2387 passed / 32 skipped)
+- `eval_harness` branch coverage **98.63%** against the 96 floor; scorers 100%,
+  `_suite_runner.py` 100%, `targets/testgen.py` 94%
+- `scripts` coverage 95.60% against the 85 floor
+- `python scripts/validations/F_065.py` — every check established by execution, including a
+  negative control that a suite red on correct code kills nothing
+- `python scripts/gen_testgen_corpus.py --check` — the committed corpus regenerates
+  byte-identically
+- `drift_check.py` — no undocumented dependencies after F1
+
+### Still owed before archive
+
+The `spec-guardian` conformance pass and the `peer-reviewer` adversarial pass (task 6.6).
+Both are `claude-foundation/` fleet roles staged in-tree rather than installed (ADR 0028),
+and need a session started with `claude --plugin-dir claude-foundation`. Not run here; the
+findings above are the implementer's own record, which is not a substitute for either.

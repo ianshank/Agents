@@ -1,0 +1,67 @@
+# Test-generation evaluation (F-065) — four deterministic scorers over an executed suite.
+#
+# Run:
+#   EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=eval_harness.targets.testgen \
+#     eval-harness run --config config/testgen_eval.yaml
+#
+# The allowlist entry is required and deliberately narrow (ADR 0039, deny-by-default):
+# this target executes model-authored test code, which is the highest-privilege operation
+# in the capability. `eval_harness` alone would allowlist the whole harness for
+# config-named calls; the module prefix grants exactly this one entry point.
+#
+# The dataset ships with the repository. `corpora/testgen/v1/eval/` carries one file per
+# reference suite kind — `thorough` and `weak` are the known-good/known-bad pair, `broken`
+# and `false_alarm` pin the two failure shapes that must stay distinguishable from a merely
+# low score. Point `path` at whichever slice you are measuring; an agent's own suites go in
+# a file of the same shape.
+
+schema_version: "1.0"
+
+run:
+  name: "testgen-eval"
+  seed: 7
+  # Five independent attempts so `pass^k` over `test_executability` measures whether the
+  # suite runs EVERY time, not whether it ran once. This is why no `testgen_flake_rate`
+  # scorer exists: a scorer sees one attempt and cannot observe variation across them.
+  repetitions: 5
+
+dataset:
+  type: jsonl
+  params:
+    path: "corpora/testgen/v1/eval/thorough.jsonl"
+
+target:
+  type: callable
+  params:
+    path: "eval_harness.targets.testgen:run_generated_suite"
+
+scorers:
+  - type: test_executability
+  # The headline figure is the raw denominator (all non-equivalent mutants). The
+  # normalized figure is emitted alongside it on every verdict — neither is reported
+  # alone, and each names the count it was computed from.
+  - type: testgen_mutation_score
+    params: { denominator: raw }
+  - type: testgen_green_on_correct
+  - type: requirement_obligation_recall
+
+# Every rule is advisory. These four bounds are SOAK STARTING POINTS recorded in config,
+# not spec thresholds — none of them appears in the spec delta, and they exist to be moved
+# by evidence. A blocking threshold is a later, separate change that states the soak
+# evidence it rests on.
+#
+# `report_only` is what makes that possible without disarming anything else: the rule is
+# evaluated on the identical path and filed to the advisory channel instead of failing the
+# gate (F-062). Neutralising the process exit code at the workflow level would disarm every
+# rule in the gate, for the soak's whole duration.
+gate:
+  rules:
+    - { score: test_executability, metric: pass_power_k, min: 0.90, report_only: true }
+    - { score: testgen_mutation_score, metric: mean, min: 0.60, report_only: true }
+    # `max`, not `min`: this scorer is a false-alarm RATE, where lower is better.
+    - { score: testgen_green_on_correct, metric: mean, max: 0.05, report_only: true }
+    - { score: requirement_obligation_recall, metric: mean, min: 0.70, report_only: true }
+
+sinks:
+  - type: console
+    params: { verbose: true }

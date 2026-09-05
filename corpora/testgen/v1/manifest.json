@@ -1,0 +1,447 @@
+{
+  "generator": "scripts/gen_testgen_corpus.py",
+  "generator_seed": 20260905,
+  "grid": [
+    [
+      -4,
+      -2
+    ],
+    [
+      -4,
+      -1
+    ],
+    [
+      -4,
+      0
+    ],
+    [
+      -4,
+      1
+    ],
+    [
+      -4,
+      2
+    ],
+    [
+      -4,
+      3
+    ],
+    [
+      -4,
+      4
+    ],
+    [
+      -3,
+      -2
+    ],
+    [
+      -3,
+      -1
+    ],
+    [
+      -3,
+      0
+    ],
+    [
+      -3,
+      1
+    ],
+    [
+      -3,
+      2
+    ],
+    [
+      -3,
+      3
+    ],
+    [
+      -3,
+      4
+    ],
+    [
+      -2,
+      -2
+    ],
+    [
+      -2,
+      -1
+    ],
+    [
+      -2,
+      0
+    ],
+    [
+      -2,
+      1
+    ],
+    [
+      -2,
+      2
+    ],
+    [
+      -2,
+      3
+    ],
+    [
+      -2,
+      4
+    ],
+    [
+      -1,
+      -2
+    ],
+    [
+      -1,
+      -1
+    ],
+    [
+      -1,
+      0
+    ],
+    [
+      -1,
+      1
+    ],
+    [
+      -1,
+      2
+    ],
+    [
+      -1,
+      3
+    ],
+    [
+      -1,
+      4
+    ],
+    [
+      0,
+      -2
+    ],
+    [
+      0,
+      -1
+    ],
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      1
+    ],
+    [
+      0,
+      2
+    ],
+    [
+      0,
+      3
+    ],
+    [
+      0,
+      4
+    ],
+    [
+      1,
+      -2
+    ],
+    [
+      1,
+      -1
+    ],
+    [
+      1,
+      0
+    ],
+    [
+      1,
+      1
+    ],
+    [
+      1,
+      2
+    ],
+    [
+      1,
+      3
+    ],
+    [
+      1,
+      4
+    ],
+    [
+      2,
+      -2
+    ],
+    [
+      2,
+      -1
+    ],
+    [
+      2,
+      0
+    ],
+    [
+      2,
+      1
+    ],
+    [
+      2,
+      2
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      2,
+      4
+    ],
+    [
+      3,
+      -2
+    ],
+    [
+      3,
+      -1
+    ],
+    [
+      3,
+      0
+    ],
+    [
+      3,
+      1
+    ],
+    [
+      3,
+      2
+    ],
+    [
+      3,
+      3
+    ],
+    [
+      3,
+      4
+    ],
+    [
+      4,
+      -2
+    ],
+    [
+      4,
+      -1
+    ],
+    [
+      4,
+      0
+    ],
+    [
+      4,
+      1
+    ],
+    [
+      4,
+      2
+    ],
+    [
+      4,
+      3
+    ],
+    [
+      4,
+      4
+    ],
+    [
+      5,
+      -2
+    ],
+    [
+      5,
+      -1
+    ],
+    [
+      5,
+      0
+    ],
+    [
+      5,
+      1
+    ],
+    [
+      5,
+      2
+    ],
+    [
+      5,
+      3
+    ],
+    [
+      5,
+      4
+    ],
+    [
+      6,
+      -2
+    ],
+    [
+      6,
+      -1
+    ],
+    [
+      6,
+      0
+    ],
+    [
+      6,
+      1
+    ],
+    [
+      6,
+      2
+    ],
+    [
+      6,
+      3
+    ],
+    [
+      6,
+      4
+    ],
+    [
+      7,
+      -2
+    ],
+    [
+      7,
+      -1
+    ],
+    [
+      7,
+      0
+    ],
+    [
+      7,
+      1
+    ],
+    [
+      7,
+      2
+    ],
+    [
+      7,
+      3
+    ],
+    [
+      7,
+      4
+    ],
+    [
+      8,
+      -2
+    ],
+    [
+      8,
+      -1
+    ],
+    [
+      8,
+      0
+    ],
+    [
+      8,
+      1
+    ],
+    [
+      8,
+      2
+    ],
+    [
+      8,
+      3
+    ],
+    [
+      8,
+      4
+    ]
+  ],
+  "grid_size": 91,
+  "holdout_fraction": 0.25,
+  "item_count": 60,
+  "items": {
+    "tg-linear-00": "273fce98340c4a4d18d57742e7c125c9a53169741437835f4b0012c11ea9afa8",
+    "tg-linear-01": "2768856dda5fb05ae6832520a694429d3a02127b7eb58207fb80f2771564b487",
+    "tg-linear-02": "7ad39d265aaa318e04bad400cb95293a33fe730d74e619799fc24a5d20693602",
+    "tg-linear-03": "d47201a395f99400834ca65ea5cd39881d4db635bf29919b96519cab366d8a15",
+    "tg-linear-04": "237f600abcf041f0c1f1f88055534c4c1e7d9501e90913d8b9476834e8693b9d",
+    "tg-linear-05": "6eb2e8225f3c53475492af6d71eb36a3e746975b6b9aa38295193a7a84e539d7",
+    "tg-linear-06": "a67c9a461b47ebc315a25673823036f91926775715ddbff1f2d870cd7d9500f8",
+    "tg-linear-07": "635363f2d96ce52ac7763d99e866e91c95684e145e67ad11686b5599cfecfc90",
+    "tg-linear-08": "cb1c29d69089e9188e31747b69cd376782d76aa1ea12fa86f3ab84af93d6e6a9",
+    "tg-linear-09": "d86fc0fd041a46b314580261701ff8c09375b6933b1b9f00d9135a5a86c1322a",
+    "tg-linear-10": "6ffa3f0446456e1599c678c631fcc137a57e9e3dfcec8a58324a9550d216f68a",
+    "tg-linear-11": "2c1ff91ab91f51bdda9e42fd11510e31c205ac110c64ce0a23dae5246b620045",
+    "tg-loop-00": "f032ea37e1fd83274eb5d99d9bfbaff548938d241cbd42a763e29c3c905f277f",
+    "tg-loop-01": "efb83fcb8bae10c02dc6fd1b9a36f950918e12317df9a0f0f761f96b09516c3a",
+    "tg-loop-02": "24dc05331cf9896a94b375242c426267ef4d15633bc1832b6712b1656f38e3b0",
+    "tg-loop-03": "81504d9598c9fede3a47a7a8dfc926c2dcbf6bbf02dc204504a52a6784562af7",
+    "tg-loop-04": "2ac1eed1ce47d7886593a7fc088d356f9a04cff4e474a0c1d0a2656288228b9a",
+    "tg-loop-05": "45359a2ff81ae42fe387d18d2249bef60148cb0e887a3295641add5b86f8ea83",
+    "tg-loop-06": "d8da0710fdc94d6147061f75f17dd82a95c98f5027cbdab1ec43a13b8b34a49b",
+    "tg-loop-07": "d43bea41e23610abda16806e68551c57ed71b6381e66dff8627fd4296b8b2d1d",
+    "tg-loop-08": "64b3e63b703aeb790dc4d7a166b8a4823f4a385a0fa73e0169cb76b1651a2d0f",
+    "tg-loop-09": "3fb56afc90103df56d7a2d1b451ce9858d64f507c60195c5bc8100208ca88e17",
+    "tg-loop-10": "76e395f6b2263cb747723c3756620ff42e7a0e3d6b8b63a39f8382e59d4ccf6b",
+    "tg-loop-11": "60e46f101fbf1b486fa8c4ddfdff513856b324cdeeae6d2179f3f049c5068e5e",
+    "tg-loop_branch-00": "244b57377bd5da6da4f2c8442273bd69255112cc5da1f9fe6ccb1e3745f1789c",
+    "tg-loop_branch-01": "83fd315ab0ef23c8d89ffaaeef2739c2a599b5737fd03e3954a4abd85caeda9a",
+    "tg-loop_branch-02": "b20cfc399db3d75dc634d66c8a42acf3fb5eae63a1562ea2aeb38661a93414a8",
+    "tg-loop_branch-03": "e3216ce2b8b4d36f971c77cd3e401ea79d770caed0885719bfa0704894f7c78c",
+    "tg-loop_branch-04": "c9d735b9c507c77680443b7fb5c5ed06be96c83ffab051ff23dfa4aeaeaafd38",
+    "tg-loop_branch-05": "06add8fadf535f87ded36a9e2c21701383c998048e5da9be2bc48dc5c38355e3",
+    "tg-loop_branch-06": "d9cb3c3705abc4cb25bf33c5edecab082b45654d3cd05bc1aec042dcb67714a8",
+    "tg-loop_branch-07": "3f600feb158eb3e42c30d43824f12692a690da3baa7d83a2323311c1b385e7a4",
+    "tg-loop_branch-08": "4a218927fc402f18a6510acc59cafd881f25d584e4864badb5c5aefe6590d415",
+    "tg-loop_branch-09": "e510ce1340d1e1f3b8869a108e57adbda71d05ec609344a7a1c62d22ee395ee6",
+    "tg-loop_branch-10": "43c010bd1182fb99c2c65eabf3412ffce7a23090803680118ee21093e3b7dcc3",
+    "tg-loop_branch-11": "cbed79e2d000e806a3599370d0558e0ee782d88842e3b27f0b3aa4bdf2af3c8f",
+    "tg-nested_branch-00": "c81a896393af45475e3a543ef181ed6c0554f895b8921535438c4c54d890df01",
+    "tg-nested_branch-01": "d0b4d0fc41465688b9a9cde5e545bddbb056c71b882efad8c419776b44fd5ec4",
+    "tg-nested_branch-02": "1ba64ef850f56e6ed16c1cf59efab372db16927687733a444fea74848487fa67",
+    "tg-nested_branch-03": "a2f27ab6b5aa0cd2a409b8160ccec5bdfcd1297b8458814e297363ad38abe3b8",
+    "tg-nested_branch-04": "b122a232a79bba5bfcfc250486b09259939469cf834f7e278e0ff137b29e8cf1",
+    "tg-nested_branch-05": "86c713e6efaaaf66e6dc3e9560164b576e56660af32cafe842ef83a9c4ad2d9f",
+    "tg-nested_branch-06": "341e92ef74337dff7695300172797cd4cab1bb8d253879ae09207f50a7c526d1",
+    "tg-nested_branch-07": "872e6dbf032c137f55bd6120e9141a07b2f47021e59b10850a10137488b13d66",
+    "tg-nested_branch-08": "557c65517db1948f65ec5f9d5c600693213ea5092080f83f801f59c411f195b0",
+    "tg-nested_branch-09": "d68714f9283193b0ae539f26bd0a43c1e9c975d8a3b32994b925efcf5912a2b0",
+    "tg-nested_branch-10": "4f1a930af618c857a4200c35fabf8b127d0165806e633a6486349e6ffd6b0762",
+    "tg-nested_branch-11": "b5c5ceedb26b1f01a74d146964bbe71b6962fce0b6c5f59e19d84de77f400757",
+    "tg-single_branch-00": "8e1ec89ac07a14a83590a02ac77207a4755b9b655b482172ea16b864cf97774b",
+    "tg-single_branch-01": "b4d2df4eac4e1240c527b1eebb14bb03105f8316a6a20e765f088ce076c2be02",
+    "tg-single_branch-02": "ab40d6104613aa002df439743714d670eb23f186b62443b18102e3d1d7d4aef3",
+    "tg-single_branch-03": "42bca45877d1d1ef18629809b515a888ce70ac10742c22b6a5d969ad2c0f4c2f",
+    "tg-single_branch-04": "a190ed07ce7a4c1d204ea3a8dddd90da0fdd0a37b0b846f8c1f264e438c15528",
+    "tg-single_branch-05": "4d0bf1179844973f400d7898be477837c5db7253c41299b5ae800f82c75cf503",
+    "tg-single_branch-06": "477069803eebbb52a71ee4451ffc40f669533b16db642ff255b2e26a4fbe9199",
+    "tg-single_branch-07": "32076ce930bd2001baf5f8f80a5936540461513546b6ab955351e43efbbdee68",
+    "tg-single_branch-08": "f2cd1ba42bb657e5c5cf7302a70cf563ce604841fd0438872069508255cf1aa2",
+    "tg-single_branch-09": "0a8ba3c12f68adcd266736b5ad2bd095efa497e4bece2d0a9799e2f85f470277",
+    "tg-single_branch-10": "46bda88f10a3330b8fea6e0f4b0d80598b8375567a36b8e9b0f10528ea62ac1b",
+    "tg-single_branch-11": "d5da468b3e2282e342a6b27924e1c756781b2290827fe6b7cdba1e417a5bc475"
+  },
+  "schema_version": "1.0",
+  "splits": {
+    "holdout": 11,
+    "train": 49
+  },
+  "strata": {
+    "linear": 12,
+    "loop": 12,
+    "loop_branch": 12,
+    "nested_branch": 12,
+    "single_branch": 12
+  }
+}

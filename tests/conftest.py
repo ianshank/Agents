@@ -50,6 +50,11 @@ bootstrap()
 #
 #   tests       -- `tests._sut`, the suite's system-under-test fixtures.
 #   json        -- the matrix M1 correctness row resolves `json:dumps`.
+#   eval_harness.targets.testgen
+#               -- the M8 testgen cell resolves the suite-execution target from a
+#                  config, which is the only way that target is ever reachable.
+#                  Narrowed to the module, not the `eval_harness` package: allowlisting
+#                  the whole harness would let any config call anything in it.
 #   nonexistent -- the matrix M6 error row resolves `nonexistent.module_xyz` to
 #                  prove a genuinely missing module still raises ImportError.
 #                  Without it, the allowlist would refuse that row first and it
@@ -58,7 +63,7 @@ bootstrap()
 # setdefault, not an unconditional set, so an operator can widen it for a local
 # debugging run without editing this file.
 # --------------------------------------------------------------------------- #
-os.environ.setdefault(CALLABLE_ALLOWLIST_ENV, "tests,json,nonexistent")
+os.environ.setdefault(CALLABLE_ALLOWLIST_ENV, "tests,json,nonexistent,eval_harness.targets.testgen")
 
 # --------------------------------------------------------------------------- #
 # Hypothesis profiles. Mirrors agent-core/tests/conftest.py so the whole monorepo shares one
