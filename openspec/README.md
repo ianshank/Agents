@@ -51,6 +51,30 @@ before that guard existed.
   **blocked.** Ingesting production traces back into the golden dataset. Blocked on a
   CHARTER §3 ratified amendment plus its own ADR — §3 lists "a general observability
   platform" as a non-goal — and on the three changes above.
+- [`changes/add-gate-decision-provenance/`](changes/add-gate-decision-provenance/) — *proposed.*
+  The quality gate's decision is never recorded: sinks fire in `EvalEngine.run()` before
+  `evaluate_gate` runs in the CLI, so no exported artifact carries a verdict and a soak cannot be
+  diffed. Persists the decision on `RunResult`, and adds per-rule `report_only` so an uncalibrated
+  scorer can be measured inside a gate that stays live for everything else. Needs its own ADR —
+  ADR 0031 covers agent evaluation only. Prerequisite for the three below. Motivated by
+  `docs/plans/scenario-eval-matrices/REVIEW.md`.
+- [`changes/add-testgen-eval-matrix/`](changes/add-testgen-eval-matrix/) — *proposed.* Four
+  deterministic scorers over AI-generated test suites (executability, mutation score in both
+  denominators, false alarms on correct code, obligation recall), executed by an allowlisted
+  callable target with scorers as pure readers of its evidence. Synthetic generated corpus; no
+  judge, so it does not queue behind calibration. Depends on `add-gate-decision-provenance` and
+  `prove-m8-execution`.
+- [`changes/add-rca-eval-matrix/`](changes/add-rca-eval-matrix/) — *proposed (synthetic scope).*
+  Ranked root-cause diagnosis over a finite candidate set — AC@k, component match, timezone-pinned
+  onset tolerance, and abstention as a first-class outcome — with a trivial `max-|Z|` baseline
+  shipped as a target so no agent result is reported without its floor. The real-incident corpus is
+  explicitly out of scope: replayed telemetry is host-specific, which needs CHARTER §4 invariant 7
+  relaxed.
+- [`changes/add-requirements-gen-eval-matrix/`](changes/add-requirements-gen-eval-matrix/) —
+  *proposed.* Provenance capture that actually reproduces (revision-scoped export, unpinnable
+  sources recorded as unpinnable) plus four deterministic scorers including an offline,
+  temperature-qualified diversity floor. Ships no judge-backed scorer: which requirement attributes
+  a judge may score is an empirical question for `extend-judge-calibration`, not a literature claim.
 
 ## Archived changes
 

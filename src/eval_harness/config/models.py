@@ -213,6 +213,18 @@ class GateRule(BaseModel):
     metric: str = "mean"  # "mean" | "pass_rate" | "pass_at_k" | "pass_power_k"
     min: float | None = None
     max: float | None = None
+    report_only: bool = Field(
+        default=False,
+        description=(
+            "Whether this rule is advisory: evaluated on the same path as a blocking rule, but "
+            "filed to the run's advisory channel instead of failing the gate. Default False, "
+            "reproducing the pre-change behaviour. Use it to soak a threshold nobody has "
+            "calibrated yet inside a gate whose other rules stay live -- neutralising the "
+            "process exit code at the workflow level would disarm those too, for the soak's "
+            "whole duration. An advisory rule still requires a bound: see "
+            "_require_at_least_one_bound, which the flag deliberately does not relax."
+        ),
+    )
 
     @field_validator("metric")
     @classmethod

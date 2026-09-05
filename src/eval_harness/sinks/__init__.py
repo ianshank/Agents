@@ -11,7 +11,7 @@ from ..braintrust_client import BrainTrustClient, NullBrainTrustClient, build_cl
 from ..core._paths import OUTPUT_ROOT_ENV, resolve_confined_path
 from ..core._serialize import as_text as _as_text
 from ..core.interfaces import ResultSink
-from ..core.types import ItemResult, RunResult
+from ..core.types import GateDecision, ItemResult, RunResult
 from ..langfuse_client import LangfuseClient
 from ..phoenix_client import PhoenixScoreClient, build_score_client
 from ..plugins import SINKS
@@ -117,6 +117,11 @@ class HtmlFileSink(ResultSink):
             self._summary(run),
             self._aggregate_table(run),
         ]
+        # Only when a gate was configured. An ungated run renders exactly the
+        # markup it always did, so the sink's existing byte-for-byte output is
+        # unchanged for every config that has no gate.
+        if run.gate is not None:
+            sections.append(self._gate_table(run.gate))
         if self.embed_items:
             sections.append(self._items_table(run))
         sections.append("</body></html>")
@@ -160,6 +165,74 @@ class HtmlFileSink(ResultSink):
             f'<rect width="{self.bar_width_px}" height="{self._BAR_HEIGHT_PX}" fill="{self._COLOR_BAR_BG}"/>'
             f'<rect width="{fill:.2f}" height="{self._BAR_HEIGHT_PX}" fill="{self._COLOR_BAR_FILL}"/></svg>'
         )
+
+    def _gate_table(self, gate: GateDecision) -> str:
+        """Render the quality gate's verdict and every rule it evaluated.
+
+        The reason this sink exists in the reporting story at all: before the
+        decision was carried on ``RunResult``, this report could show a run's
+        scores but never say whether the gate passed or which rule failed.
+
+        Advisory rules are labelled rather than filtered out. A reader must be
+        able to tell an unmet rule that blocked from an unmet rule that was
+        only being measured -- a soak whose advisory outcomes are invisible in
+        the artifact is not a soak.
+
+        Failures that belong to no rule are rendered too, in their own section.
+        Not every reason a gate fails is a rule: ``_item_error_failures``
+        refuses to gate over a sample reduced by item errors, and that verdict
+        has no ``GateRuleRecord`` behind it. Rendering only the rule rows
+        produced a report captioned FAIL in which every row read "met" -- an
+        unexplained verdict, which is the same incomplete-provenance defect
+        this whole capability exists to remove.
+        """
+        verdict = "PASS" if gate.passed else "FAIL"
+        rows = [
+            f"<table><caption>Quality gate — {verdict}</caption>"
+            "<tr><th>score</th><th>metric</th><th>observed</th><th>bound</th><th>status</th></tr>"
+        ]
+        for rule in gate.rules:
+            observed = "n/a" if rule.observed is None else f"{rule.observed:.3f}"
+            bounds = ", ".join(
+                part
+                for part in (
+                    None if rule.minimum is None else f"min {rule.minimum}",
+                    None if rule.maximum is None else f"max {rule.maximum}",
+                )
+                if part is not None
+            )
+            status = "met" if rule.met else "unmet (advisory)" if rule.advisory else "unmet (blocking)"
+            rows.append(
+                f"<tr><td>{_html.escape(rule.score)}</td><td>{_html.escape(rule.metric)}</td>"
+                f"<td>{observed}</td><td>{_html.escape(bounds)}</td>"
+                f"<td>{_html.escape(status)}</td></tr>"
+            )
+        rows.append("</table>")
+        rows.append(self._gate_level_findings(gate))
+        return "".join(rows)
+
+    @staticmethod
+    def _gate_level_findings(gate: GateDecision) -> str:
+        """Render failures carried by the decision that no rule row explains.
+
+        A rule's own failure string is its ``detail``, so anything already
+        shown as a row is excluded rather than repeated -- this section exists
+        to close a gap, not to duplicate the table above it. Empty when every
+        failure is attributable to a rule, which is the common case.
+        """
+        explained = {rule.detail for rule in gate.rules if not rule.met}
+        unexplained = [
+            (label, text)
+            for label, failures in (("blocking", gate.blocking_failures), ("advisory", gate.advisory_failures))
+            for text in failures
+            if text not in explained
+        ]
+        if not unexplained:
+            return ""
+        items = "".join(
+            f"<li><strong>{_html.escape(label)}:</strong> {_html.escape(text)}</li>" for label, text in unexplained
+        )
+        return f"<table><caption>Gate-level findings</caption><tr><td><ul>{items}</ul></td></tr></table>"
 
     def _aggregate_table(self, run: RunResult) -> str:
         rows = [

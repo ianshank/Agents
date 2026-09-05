@@ -18,7 +18,10 @@ from eval_harness.version import SCHEMA_VERSION
 class _FakeEngine:
     @classmethod
     def from_config(cls, config, **kwargs):
-        return SimpleNamespace(scorers=[], run=lambda: SimpleNamespace(aggregate={}))
+        # ``gate=None`` is the honest shape for a stub that evaluates no gate: the
+        # engine now attaches the decision to the run itself, so a run carrying no
+        # decision is how "nothing to gate on" is expressed.
+        return SimpleNamespace(scorers=[], run=lambda: SimpleNamespace(aggregate={}, gate=None))
 
 
 def _eval_config(**data: Any) -> EvalConfig:
@@ -29,7 +32,6 @@ def _stub_run_pipeline(monkeypatch, cfg, captured):
     monkeypatch.setattr(cli, "load_config", lambda *a, **k: cfg)
     monkeypatch.setattr(cli, "configure_tracing", lambda pc: captured.__setitem__("pc", pc))
     monkeypatch.setattr(cli, "EvalEngine", _FakeEngine)
-    monkeypatch.setattr(cli, "evaluate_gate", lambda gate, run: SimpleNamespace(passed=True, failures=[]))
 
 
 def test_run_activates_tracing_with_phoenix_config(monkeypatch) -> None:

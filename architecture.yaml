@@ -79,7 +79,11 @@ dependencies:
   behavioral_regression: [agent_core, flow_corpus]
   cli: [config, engine, gating, langfuse_client, phoenix_client, plugins]
   datasets: [braintrust_client, core, langfuse_client, plugins]
-  engine: [agent_core_adapter, config, core, langfuse_client, plugins]
+  # engine -> gating added with the gate-decision-provenance change: the gate is
+  # evaluated inside EvalEngine.run() *before* the sinks emit, so every exported
+  # artifact carries the verdict. Acyclic -- gating depends on config/core/reliability
+  # and never on engine -- and it is the layering the CLI already had (cli -> both).
+  engine: [agent_core_adapter, config, core, gating, langfuse_client, plugins]
   gating: [config, core, reliability]
   judges: [core, langfuse_client, plugins]
   plugins: [core, datasets, judges, scorers, sinks, state_adapters, targets]

@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 from .config import load_config
 from .engine import EvalEngine
-from .gating import evaluate_gate, require_calibration_for_judge_gating
+from .gating import require_calibration_for_judge_gating
 from .langfuse_client import LangfuseClient, NullLangfuseClient
 from .phoenix_client import configure_tracing
 from .plugins import bootstrap
@@ -89,12 +89,22 @@ def _cmd_run(args: argparse.Namespace) -> int:
             pr = "n/a" if agg.pass_rate is None else f"{agg.pass_rate:.2f}"
             print(f"{name}: mean={agg.mean:.3f} pass_rate={pr} n={agg.count}")
 
-    gate = evaluate_gate(config.gate, run)
-    if gate.passed:
+    # Read the decision the engine already recorded rather than re-evaluating.
+    # Two evaluations could disagree, which would let the exported artifact say
+    # one thing and CI another -- the exit code and the persisted verdict must
+    # come from the same computation.
+    decision = run.gate
+    if decision is None:
+        return 0
+    for advisory in decision.advisory_failures:
+        # Reported, never counted: advisory outcomes are the visible half of a
+        # soak, and they must not be mistaken for blocking ones.
+        print(f"  ~ (advisory, non-blocking) {advisory}")
+    if decision.passed:
         print("QUALITY GATE: PASS")
         return 0
     print("QUALITY GATE: FAIL")
-    for f in gate.failures:
+    for f in decision.blocking_failures:
         print(f"  - {f}")
     return 1
 

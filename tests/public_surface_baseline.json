@@ -29,6 +29,8 @@
       "AgentTrajectory",
       "DatasetSource",
       "EvalItem",
+      "GateDecision",
+      "GateRuleRecord",
       "ItemResult",
       "Judge",
       "JudgeVerdict",

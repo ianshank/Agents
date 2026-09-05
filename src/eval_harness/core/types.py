@@ -167,6 +167,78 @@ class ScoreAggregate:
     pass_rate: float | None
 
 
+@dataclass(frozen=True)
+class GateRuleRecord:
+    """One gate rule's outcome, as data rather than as a formatted sentence.
+
+    A soak's whole purpose is diffing a gate's verdict across runs, and a
+    rendered string cannot be diffed on the field that changed — the same
+    reasoning that makes ``RunResult.diagnostics`` a list of mappings rather
+    than log lines.
+
+    ``observed`` is ``None`` when the rule could not be evaluated at all (the
+    named score is absent, or carries no value for the requested metric). That
+    is deliberately distinct from an observed value that missed its bound:
+    "could not measure" and "measured and failed" are different facts, and
+    collapsing them is how a gate comes to report a pass having measured
+    nothing (ADR 0029).
+
+    ``detail`` carries the human-readable rendering so a reader never has to
+    reconstruct it, and so the CLI and the sinks cannot drift apart on wording.
+    """
+
+    score: str
+    metric: str
+    observed: float | None
+    minimum: float | None
+    maximum: float | None
+    met: bool
+    advisory: bool
+    detail: str
+
+
+@dataclass(frozen=True)
+class GateDecision:
+    """What the quality gate decided about a run, carried on the run itself.
+
+    Lives in ``core`` rather than in ``gating`` so that ``RunResult`` can name
+    it without inverting the dependency direction: ``core`` imports nothing
+    from its siblings, ``gating`` imports ``core``, and the engine imports
+    both.
+
+    ``blocking_failures`` and ``advisory_failures`` are separate lists rather
+    than one list with a flag because every consumer treats them differently —
+    the process exit code reads only the first, a soak report reads only the
+    second — and a single list invites a consumer to forget the distinction.
+    """
+
+    passed: bool
+    blocking_failures: list[str] = field(default_factory=list)
+    advisory_failures: list[str] = field(default_factory=list)
+    rules: list[GateRuleRecord] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Render as JSON-ready plain data for sinks and result payloads."""
+        return {
+            "passed": self.passed,
+            "blocking_failures": list(self.blocking_failures),
+            "advisory_failures": list(self.advisory_failures),
+            "rules": [
+                {
+                    "score": r.score,
+                    "metric": r.metric,
+                    "observed": r.observed,
+                    "min": r.minimum,
+                    "max": r.maximum,
+                    "met": r.met,
+                    "advisory": r.advisory,
+                    "detail": r.detail,
+                }
+                for r in self.rules
+            ],
+        }
+
+
 @dataclass
 class RunResult:
     """Appended last: ``diagnostics``, defaulting to ``[]`` so historical positional
@@ -180,6 +252,12 @@ class RunResult:
     started_at: datetime
     finished_at: datetime
     diagnostics: list[dict[str, str]] = field(default_factory=list)
+    #: The quality gate's verdict on this run, attached by the engine before the
+    #: sinks are emitted so that every exported artifact carries it. ``None``
+    #: when no gate is configured — and, as with ``diagnostics``, the key is then
+    #: omitted from ``to_dict()`` entirely, so an ungated run serializes
+    #: byte-identically to the pre-change payload (ADR 0031 obligation 4).
+    gate: GateDecision | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -194,6 +272,8 @@ class RunResult:
         }
         if self.diagnostics:
             payload["reliability"] = {"diagnostics": self.diagnostics}
+        if self.gate is not None:
+            payload["gate"] = self.gate.to_dict()
         return payload
 
     @staticmethod
