@@ -80,6 +80,17 @@ Coverage floor: **96%** (root `eval_harness`).
       single-sourced rather than counted from outside tests).
 - [x] `[P]` Regenerate `docs/matrix-coverage.md`. **M8 now credits 39 of 41 components; the
       two uncredited are exactly the two waived (`bedrock`, `phoenix_evals`).**
+- [x] `[P]` **CI follow-up, found by the regression gate rather than by review.** The
+      `text_scorers` cell constructs the `autoevals` scorer unconditionally, and
+      `AutoevalsScorer` raises at construction when the package is absent. Every autoevals
+      test before it used `importorskip`, so the two jobs that run the ROOT suite without
+      that extra — `quality-gates.yml` and `calibrated-merge-gate.yml` — could skip them
+      silently; an M8 pipeline is a dict and cannot. Both install lines now carry
+      `autoevals`. Reproduced first by blocking the import and observing exactly one
+      failing test, which also confirmed no other cell has the same gap.
+      **Structural gap left open:** `_EXTRA_PROVIDES` models which extra provides which
+      component, and nothing cross-checks it against the install lines of the jobs that run
+      the suite. A guard for that is its own change.
 
 ## 5. Judge DI seams — PR (own protected PR, cannot split unprotected-first)
 

@@ -160,7 +160,12 @@ jobs:
       # coverage" step further below measures tests._e2e_matrix_xlsx, whose writer would
       # otherwise importorskip and report as uncovered -- the vacuous-coverage shape this
       # repo already fixed once for parquet.
-      - run: pip install -e ".[dev,langfuse,openai,archguard,parquet,e2e-matrix]"
+      # autoevals is required, not optional, since the M8 `text_scorers` cell landed: that
+      # pipeline constructs the `autoevals` scorer unconditionally, and AutoevalsScorer
+      # raises at construction when the package is absent. Before it, every autoevals test
+      # used `importorskip` and this job could skip them silently; an M8 pipeline is a dict
+      # and cannot. Caught by this job's own regression gate rather than by review.
+      - run: pip install -e ".[dev,langfuse,openai,archguard,parquet,e2e-matrix,autoevals]"
       # Feature ledger: schema + DAG + git provenance + tier-fast validation commands.
       # --strict makes an unresolvable `implemented_in` an ERROR, not a warning. Without it
       # the provenance check was decorative: 6 SHAs from squash-merged branches had rotted

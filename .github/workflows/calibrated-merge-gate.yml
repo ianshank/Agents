@@ -97,7 +97,7 @@ jobs:
       - run: pip install -e "./agent-core"
       # regression_gate runs the offline ROOT suite in both trees; it needs the
       # same extras quality-gates installs (dev alone cannot collect the suite).
-      - run: pip install -e ".[dev,langfuse,openai,archguard,parquet]"
+      - run: pip install -e ".[dev,langfuse,openai,archguard,parquet,autoevals]"
       - name: Sync store (read-only pull; tolerate failure -> cold start)
         run: |
           set +e
