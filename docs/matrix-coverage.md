@@ -143,7 +143,7 @@ Aliases (target):
 
 | suite | floor | dims covered (method counts) |
 |---|---|---|
-| engine | M8 | M8×8 |
+| engine | M8 | M8×23 |
 | gating | M1, M2, M6 | M1×2, M2×2, M6×4 |
 
 ## M8 pipelines — kinds exercised
@@ -157,12 +157,12 @@ invoked it, which is the vacuous credit the ledger exists to refuse.
 
 | kind | canonical components exercised in ≥1 pipeline |
 |---|---|
-| dataset | `inline` |
-| judge | `anthropic`, `mock`, `openai` |
-| scorer | `contains`, `exact_match`, `llm_judge`, `trajectory_any_order`, `trajectory_exact`, `trajectory_in_order`, `trajectory_loop_detection`, `trajectory_precision_recall`, `trajectory_recovery`, `trajectory_step_efficiency`, `weighted` |
-| sink | `console`, `json_file` |
-| state_adapter | `in_memory` |
-| target | `callable`, `echo` |
+| dataset | `braintrust`, `csv`, `inline`, `jsonl`, `langfuse`, `parquet` |
+| judge | `anthropic`, `mock`, `openai`, `panel` |
+| scorer | `autoevals`, `contains`, `exact_match`, `json_keys`, `llm_judge`, `policy_violation`, `regex_match`, `state_transition`, `trajectory_any_order`, `trajectory_exact`, `trajectory_in_order`, `trajectory_loop_detection`, `trajectory_precision_recall`, `trajectory_recovery`, `trajectory_step_efficiency`, `weighted` |
+| sink | `braintrust`, `console`, `html_file`, `json_file`, `langfuse`, `phoenix` |
+| state_adapter | `filesystem`, `in_memory`, `mock_http`, `sqlite` |
+| target | `callable`, `echo`, `model` |
 
 Waived M8 cells — infeasible in the matrix CI job, with the reason. Named here
 rather than left absent: a component missing from the table above with no

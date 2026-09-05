@@ -40,6 +40,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from tests._registry_probe import run_probe
 
@@ -760,7 +761,20 @@ def coverage_problems(
     return problems
 
 
-def pipeline_kinds(pipelines: Mapping[str, Mapping[str, object]]) -> dict[str, set[str]]:
+#: One M8 pipeline's config, as `PIPELINES` stores it.
+#:
+#: A plain dict, and that is a *result*, not an oversight. WS-2's D1 asked whether these
+#: had to become zero-argument factories so that a cell needing a pytest fixture could
+#: exist. Nineteen cells later the answer is no: a deep copy per run already isolates a
+#: literal (including the live recording clients the network-judge and model-target cells
+#: inject), a path that must be built per test comes from `_run`'s tmp-path tables, a
+#: client that must be injected at engine construction comes from a `_run` parameter, and
+#: a cell needing `sys.modules` faked has its TEST METHOD request the fixture. Nothing was
+#: left for a factory to do, so the seam that would have supported one is not here.
+PipelineConfig = dict[str, Any]
+
+
+def pipeline_kinds(pipelines: Mapping[str, PipelineConfig]) -> dict[str, set[str]]:
     """Component kinds exercised by each M8 pipeline, read from typed config fields.
 
     Never from bare ``"type"`` string literals — the name→kind mapping is not
@@ -775,8 +789,8 @@ def pipeline_kinds(pipelines: Mapping[str, Mapping[str, object]]) -> dict[str, s
     def _canonical(kind: str, name: str) -> str:
         return census_aliases(census, kind).get(name, name)
 
-    for config_dict in pipelines.values():
-        config = EvalConfig.model_validate(config_dict)
+    for spec in pipelines.values():
+        config = EvalConfig.model_validate(spec)
         used["dataset"].add(_canonical("dataset", config.dataset.type))
         used["target"].add(_canonical("target", config.target.type))
         for scorer in config.scorers:
@@ -790,13 +804,13 @@ def pipeline_kinds(pipelines: Mapping[str, Mapping[str, object]]) -> dict[str, s
     return used
 
 
-def pipeline_declared(name: str, config_dict: Mapping[str, object]) -> dict[str, set[str]]:
+def pipeline_declared(name: str, config_dict: PipelineConfig) -> dict[str, set[str]]:
     """The kinds/components ONE pipeline declares — ``pipeline_kinds`` over a singleton."""
     return pipeline_kinds({name: config_dict})
 
 
 def pipeline_vacuous(
-    pipelines: Mapping[str, Mapping[str, object]],
+    pipelines: Mapping[str, PipelineConfig],
     executed_by_pipeline: Mapping[str, Mapping[str, set[str]]],
 ) -> dict[str, dict[str, set[str]]]:
     """``{pipeline: {kind: {component}}}`` for every declared-but-never-invoked component.

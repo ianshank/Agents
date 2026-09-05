@@ -29,15 +29,15 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
-- [`changes/prove-m8-execution/`](changes/prove-m8-execution/) — *partially implemented.*
-  Tasks 1-3 and 5 have landed (execution ledger, egress guard, per-pipeline vacuity refusal,
-  and the two network-judge `client=` seams — F-063); task 4, breadth to the 19 test-only
-  components, is outstanding. The M8
-  (Composability) matrix dimension credits a component for appearing in a validated pipeline
-  config, not for executing — one credited cell is provably invoked zero times. Replaces
-  config-presence credit with an execution ledger, adds the two network judges' missing
-  `client=` seams, and widens M8 honestly across the 41 registered components once the
-  mechanism means something. Motivated by `docs/plans/eval-evidence-integrity/REVIEW.md`.
+- [`changes/prove-m8-execution/`](changes/prove-m8-execution/) — *implemented, pending archive.*
+  All tasks have landed: the execution ledger, the egress guard, per-pipeline vacuity refusal,
+  the two network-judge `client=` seams (F-063), and task 4's breadth — **M8 now credits 39 of
+  the 41 registered components, with the two uncredited being exactly the two waived.** The M8
+  (Composability) dimension *had* credited a component for appearing in a validated pipeline
+  config rather than for executing, and one credited cell was provably invoked zero times.
+  Replaced config-presence credit with an execution ledger, added the two network judges'
+  missing `client=` seams, and widened M8 honestly across the registered components once the
+  mechanism meant something. Motivated by `docs/plans/eval-evidence-integrity/REVIEW.md`.
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
   *partially implemented.* **WS-0 (the blocking hygiene gate) landed as F-048** — credential scrub,
   `.gitleaks.toml`, and the fail-closed secret scan at `quality-gates.yml`. WS-1 through WS-5 are

@@ -209,7 +209,7 @@ rests on, and WS-2 and WS-3 will each stamp new refs. The guard should exist bef
 
 ---
 
-## WS-2 — `prove-m8-execution` task 4 · **1 round** · the sprint's largest engineering item
+## WS-2 — `prove-m8-execution` task 4 · **1 round** · ✅ **landed — 39/41 credited**
 
 ### Correction carried into the sibling plan
 
@@ -237,7 +237,7 @@ Two cases genuinely resist a literal:
 2. **A value from a pytest fixture** — `NullLangfuseClient(dataset_items=...)`, `fake_braintrust`
    (`tests/conftest.py:79-119`). A function-scoped fixture cannot be read at module import.
 
-**Recommendation: the hybrid.** Literals stay literals; only fixture-dependent entries become
+**Recommended the hybrid; implementation resolved it to *neither*.**  Literals stay literals; only fixture-dependent entries become
 callables; `pipeline_kinds` tolerates both. Cost — corrected from revision 1's five breakages:
 
 | Site | Reads | Change |
@@ -339,15 +339,15 @@ long pole.
 
 ```
 WS-1  provenance ancestry guard      DONE      F-064        landed 2026-09-05
-WS-2  prove-m8-execution task 4      1 round   large        settle D1 first  <- next
-WS-3  add-testgen-eval-matrix        1 round   large        the soak is the deliverable
+WS-2  prove-m8-execution task 4      DONE      39/41        landed 2026-09-05
+WS-3  add-testgen-eval-matrix        1 round   large        the soak is the deliverable  <- next
 ----- decision gate: B1, B2, B3 ------------------------------------------------
 WS-4  add-rca-eval-matrix            needs B1
 WS-5  add-requirements-gen-matrix    after WS-3
 WS-6  add-measurement-harness-wedge  WS-0 done; the rest needs governance
 ```
 
-**Floor: 3 review rounds, one of them spent.** WS-1 may be batched into WS-2's round if review capacity binds; WS-2 and
+**Floor: 3 review rounds, two of them spent.** WS-1 may be batched into WS-2's round if review capacity binds; WS-2 and
 WS-3 should not be batched, for the reason given above.
 
 ---
@@ -359,7 +359,7 @@ Stated so a reader in three weeks can check it rather than re-derive it.
 | If this turns out to be true | Then |
 |---|---|
 | B3 comes back as "one round per week or worse" | Batch WS-1 into WS-2 immediately, and reconsider whether WS-3's soak can start before its scorers are fully reviewed |
-| D1 resolves to whole-dict conversion | WS-2 grows by every literal rewritten; it stops being co-schedulable with anything |
+| D1 resolves to whole-dict conversion | WS-2 grows by every literal rewritten; it stops being co-schedulable with anything. **Resolved: neither — no conversion was needed, and the hybrid seam built for it was removed once nineteen cells proved it had no consumer** |
 | B2 gets funded | `extend-judge-calibration` jumps ahead of WS-3 — a calibrated judge unblocks two matrices, testgen unblocks one |
 | B1 resolves to "real telemetry" | WS-4 acquires a redaction workstream and stops being a one-round change |
 | The wedge's governance blockers clear | It outranks WS-5 immediately; it is the only item here that produces *external* evidence |
