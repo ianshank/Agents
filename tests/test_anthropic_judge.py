@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 import types
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from eval_harness.judges import AnthropicJudge
 from eval_harness.plugins import JUDGES
@@ -89,3 +89,51 @@ def test_temperature_forwarded_when_set(monkeypatch):
     judge.evaluate("prompt")
     _, kwargs = judge.client.messages.create.call_args
     assert kwargs["temperature"] == 0.0
+
+
+# --------------------------------------------------------------------------
+# The `client=` dependency-injection seam (prove-m8-execution, task 5)
+# --------------------------------------------------------------------------
+
+
+def test_injected_client_bypasses_sdk_construction_entirely() -> None:
+    """Scenario: an injected client bypasses SDK construction entirely.
+
+    ``anthropic`` is unimported first and must stay unimported: checking only
+    ``judge.client is sentinel`` would pass even if the constructor built a real
+    SDK client and discarded it.
+    """
+    import sys
+
+    sentinel = object()
+    saved = sys.modules.pop("anthropic", None)
+    try:
+        judge = AnthropicJudge(client=sentinel)
+        assert judge.client is sentinel
+        assert "anthropic" not in sys.modules, "the SDK was imported despite an injected client"
+    finally:
+        if saved is not None:
+            sys.modules["anthropic"] = saved
+
+
+def test_injected_client_opens_no_socket() -> None:
+    """Construction with an injected client performs zero socket connects."""
+    import socket
+
+    with patch.object(socket.socket, "connect", side_effect=AssertionError("egress")) as connect:
+        AnthropicJudge(client=object())
+
+    connect.assert_not_called()
+
+
+def test_absent_injection_preserves_existing_behaviour() -> None:
+    """Scenario: absent injection preserves existing behaviour."""
+    import inspect
+
+    assert inspect.signature(AnthropicJudge.__init__).parameters["client"].default is None
+
+    with patch("anthropic.Anthropic") as factory:
+        judge = AnthropicJudge(api_key="k")
+
+    factory.assert_called_once_with(api_key="k")
+    assert judge.client is factory.return_value

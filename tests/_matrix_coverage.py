@@ -90,6 +90,31 @@ WAIVED: dict[tuple[str, str, int], str] = {
     ("sink", "console", 6): "prints to stdout; no failure path to exercise",
 }
 
+#: M8 cells that cannot be exercised in the matrix CI job's environment, with the
+#: concrete technical reason. Recorded rather than silently absent: a component
+#: missing from the execution-evidence table with no explanation is
+#: indistinguishable from one nobody thought about, which is the accounting gap
+#: the execution ledger exists to close (``prove-m8-execution`` spec, "Cells known
+#: to be infeasible are waived with a stated reason, never silently absent").
+#:
+#: Self-guarded by ``tests/test_matrix_coverage.py``: a waiver whose component IS
+#: execution-credited fails as satisfied, so a cell that becomes feasible cannot
+#: sit here stale.
+M8_WAIVED: dict[tuple[str, str], str] = {
+    ("judge", "anthropic"): (
+        "the `anthropic` SDK is absent from eval-harness-ci.yml's install line "
+        "(`[dev,langfuse,openai,parquet,autoevals]`), and `evaluate` imports it at call time. "
+        "The `client=` seam ships and is unit-tested (F-063); only the pipeline cell is deferred, "
+        "until the extra is added to that job"
+    ),
+    ("judge", "bedrock"): "boto3 is absent from eval-harness-ci.yml's install line",
+    ("judge", "phoenix_evals"): (
+        "arize-phoenix-evals is absent from eval-harness-ci.yml's install line and has no "
+        "_EXTRA_PROVIDES entry; its pandas/numpy footprint against the pyarrow>=14,<20 pin is an "
+        "open question phoenix-live.yml's dep-resolve job should answer first"
+    ),
+}
+
 #: The directed alias→canonical pairing per kind, frozen by exact equality. The
 #: committed registry baseline stores names and aliases merged flat, and
 #: ``Registry._aliases`` assignment has no duplicate guard — a silently repointed
@@ -936,6 +961,18 @@ def _render_tail_sections(
     for kind in sorted(m8):
         names = ", ".join(f"`{name}`" for name in sorted(m8[kind])) or "MISSING"
         lines.append(f"| {kind} | {names} |")
+    if M8_WAIVED:
+        lines.extend(
+            [
+                "",
+                "Waived M8 cells — infeasible in the matrix CI job, with the reason. Named here",
+                "rather than left absent: a component missing from the table above with no",
+                "explanation is indistinguishable from one nobody considered.",
+                "",
+            ]
+        )
+        for (kind, component), reason in sorted(M8_WAIVED.items()):
+            lines.append(f"- `{kind}/{component}`: {_cell(reason)}")
     lines.extend(
         [
             "",
@@ -951,6 +988,33 @@ def _render_tail_sections(
     lines.extend(f"| `{_cell(row.change_id)}` | {_cell(row.note)} |" for row in FOLLOW_ON)
     lines.append("")
     return lines
+
+
+def m8_waiver_problems(m8: Mapping[str, set[str]]) -> list[str]:
+    """Two-way hygiene on ``M8_WAIVED``, mirroring the grid waivers' own contract.
+
+    A waiver that is *satisfied* — its component is now execution-credited — is
+    stale and must be removed, or the artifact keeps explaining an absence that
+    is no longer there. A waiver naming a component no registry has is a typo or
+    a rename nobody followed through. Both fail here rather than rotting quietly:
+    the same "waivers are data, and stale data fails" rule ADR 0032 §3 applies to
+    the grid dimensions.
+    """
+    census = registry_census()
+    problems: list[str] = []
+    for kind, component in sorted(M8_WAIVED):
+        known = census.get(kind)
+        if known is None:
+            problems.append(f"M8 waiver names unknown kind {kind!r}")
+            continue
+        if component not in set(known["names"]) | set(census_aliases(census, kind)):
+            problems.append(f"M8 waiver names unregistered {kind} {component!r} (renamed or removed?)")
+            continue
+        if component in m8.get(kind, set()):
+            problems.append(
+                f"M8 waiver for {kind}/{component!r} is satisfied — it is execution-credited now; remove the row"
+            )
+    return problems
 
 
 def render_doc() -> str:

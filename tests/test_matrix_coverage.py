@@ -141,6 +141,38 @@ def test_skip_gate_check_catches_a_stale_declaration(tmp_path: Path) -> None:
     assert any("stale skip gate" in p for p in problems)
 
 
+def test_m8_waivers_are_hygienic_in_both_directions() -> None:
+    """A waiver must name a real component, and must not still be needed."""
+    from tests.test_matrix_eval_tools import PIPELINES
+
+    assert mc.m8_waiver_problems(mc.pipeline_kinds(PIPELINES)) == []
+
+
+def test_a_satisfied_m8_waiver_fails_as_stale() -> None:
+    """The guard's own falsifiability: a credited component cannot stay waived.
+
+    Without this, `M8_WAIVED` could keep explaining the absence of a cell that
+    now exists -- an artifact that documents a gap it no longer has is the same
+    class of stale accounting the execution ledger was built to remove.
+    """
+    problems = mc.m8_waiver_problems({"judge": {"anthropic"}})
+
+    assert any("satisfied" in p and "anthropic" in p for p in problems)
+
+
+def test_an_m8_waiver_for_an_unregistered_component_fails() -> None:
+    """A renamed or removed component cannot hide behind a waiver."""
+    original = dict(mc.M8_WAIVED)
+    mc.M8_WAIVED[("judge", "no_such_judge")] = "typo"
+    try:
+        problems = mc.m8_waiver_problems({})
+    finally:
+        mc.M8_WAIVED.clear()
+        mc.M8_WAIVED.update(original)
+
+    assert any("unregistered" in p and "no_such_judge" in p for p in problems)
+
+
 def test_matrix_doc_is_fresh() -> None:
     """Stale artifact fails, and the failure says HOW it differs, not just that it does."""
     fresh, rendered = mc.doc_is_fresh()
