@@ -223,6 +223,23 @@ workstreams. Ordered by what they cost if left.
     `autoevals` gap that CI caught during WS-2, and the `e2e-matrix` gap fixed here, are the
     same shape: nothing cross-checks the model of which extra provides which component
     against the install lines of the jobs that run the suite.
+14. **Two third-party review bots report a GREEN status context for a review that did not
+    happen.** Observed on this branch's own head:
+
+    ```
+    Devin Review  success  "Full review skipped: trial expired and no credits remaining"
+    CodeRabbit    success  "Review skipped: manual review required for this OSS repository"
+    ```
+
+    This is the vacuous-green pattern the branch spent its effort on, one layer further out:
+    not a workflow stub this repository controls, but a third-party status context. The
+    reason sits in a `description` field nobody reads; the colour says reviewed. It is
+    latent rather than live — ADR 0037 nominates neither as a required check — but the day
+    one is required, branch protection would be satisfied by a bot that explicitly declined
+    to look. `scripts/eval_protected_paths.py` and the stub workflow cannot see status
+    contexts at all, so nothing here would notice. The cheap guard is a check that reads the
+    combined status and fails when a *required* context's description matches a
+    skipped/declined pattern; the cheaper answer is simply never to require either.
 
 ---
 
