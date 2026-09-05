@@ -1283,7 +1283,7 @@ features:
       existing monkeypatch seam keeps working.
     category: "validation"
     priority: "high"
-    status: "in_progress"
+    status: "done"
     tier: "fast"
     verification:
       - "a ref that RESOLVES but sits on a branch that never merged is refused -- established by building a two-branch repository and running the real check inside it, never by inspecting source; the ref is proved to resolve first so the check cannot pass for the trivial reason (scripts/validations/F_064.py, tests/test_provenance.py::test_an_unmerged_branch_ref_resolves_and_is_still_a_problem)"
@@ -1297,6 +1297,7 @@ features:
       - "the guard is falsifiable, verified by execution against this checkout: neutralising the ancestry half back to resolution-only makes F_064.py fail 3 checks and exit 1"
       - "CI runs it -- quality-gates.yml invokes validate.py --tier fast --strict-git, asserted through _common.ci_enforces so the check does not pin one wiring (scripts/validations/F_064.py)"
     validation_command: "python scripts/validations/F_064.py"
+    implemented_in: "3cae4e46f17c774cdc827b74c2649895f085a856"
     depends_on: ["F-031", "F-058"]
     notes: >-
       Implements docs/plans/eval-delivery-sequencing/PLAN.md WS-1, whose REVIEW.md R6 records that

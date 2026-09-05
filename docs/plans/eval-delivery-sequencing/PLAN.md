@@ -115,7 +115,7 @@ matrix's ledger agrees with reality:
 
 ---
 
-## WS-1 — Provenance ancestry guard · **1 round** · small · *do first*
+## WS-1 — Provenance ancestry guard · **1 round** · small · ✅ **landed as F-064**
 
 ### The gap, stated precisely
 
@@ -165,17 +165,41 @@ to ignore findings.
 
 ### Tasks
 
-- [ ] Re-run the rule over all 61 refs before adopting it. **At `d7deacf` exactly 1 fails**; a
-      different count at implementation time means re-scope, not override.
-- [ ] `_check_git_refs`: add the ancestry assertion, sharing the shallow-clone downgrade and the
-      missing-git path. Distinct message text — "does not resolve" and "is not in this branch's
-      history" are different defects with different fixes.
-- [ ] Correct F-040's `implemented_in` to `3e26747a7be62eb91c1ebac6985d916b32ab7cdc`, recording the
-      rebase in `notes` rather than silently repointing.
-- [ ] Tests: unmerged-branch ref fails; in-flight ref on the current branch passes; shallow clone
-      downgrades; landed ref passes. The first two are the ones that matter.
-- [ ] Claim an F-ID at land, with a validation script that constructs a throwaway repository and
-      **observes the guard firing**, rather than asserting the code contains a call.
+- [x] Re-run the rule over all 61 refs before adopting it. Re-verified at implementation time:
+      **exactly 1 of 61 entries fails** (51 distinct SHAs; several features share a landing commit).
+- [x] Add the ancestry assertion, sharing the shallow-clone downgrade and the missing-git path,
+      with distinct message text. A third outcome the plan had not anticipated is also reported
+      rather than swallowed: git answering neither 0 nor 1 means the question went unanswered.
+- [x] Correct F-040's `implemented_in` to `3e26747a7be62eb91c1ebac6985d916b32ab7cdc`, with the
+      rebase recorded in `notes`.
+- [x] Tests: `tests/test_provenance.py`, 18 cases against a real two-branch repository built by
+      new shared fixture infrastructure (`tests/_gitrepo.py`). A stub returning a canned exit code
+      would assert the stub, not the property that a *resolvable* ref can still be unlanded.
+- [x] **F-064** claimed at land, with `scripts/validations/F_064.py` building the two-branch
+      repository, proving the unlanded ref resolves, then watching the check refuse it. Negative
+      control executed: neutralising the ancestry half back to resolution-only makes it fail 3
+      checks and exit 1.
+
+### What implementation changed relative to the plan
+
+**The 500-line budget fired, exactly as it did during F-062.** Adding the check pushed
+`validate.py` to 506 lines, so the logic moved to `scripts/_provenance.py` — the house answer to
+that gate (ADR 0036, ADR 0019), and the reason `scripts/_cli.py` and `scripts/_config.py` already
+exist. The plan did not anticipate the split and should have: the same gate fired on the same kind
+of addition three days earlier.
+
+**The split nearly broke a test seam silently.** `tests/test_validate_script.py` patches
+`validate._is_shallow_clone`; had `_check_git_refs` become a plain alias for the moved function,
+that patch would have kept succeeding and stopped having any effect, leaving the shallow-clone test
+asserting nothing. `_check_git_refs` is therefore a thin adapter that resolves the name from its own
+globals at call time. Recorded because a monkeypatch that silently stops biting is invisible in a
+green suite.
+
+**One mypy constraint, and a rejected fix.** The flat `from _provenance import ...` bootstrap (the
+same shape as `from _cli import ...`) resolves to `Any`, so `warn_return_any` fires on a bare
+return. Adding `"scripts"` to `mypy_path` — the fix `pyproject.toml` already documents for
+`scripts/smokes` — makes mypy see `scripts/__init__.py` and `scripts/validations/__init__.py` as two
+modules named `__main__` and stop. Tried, measured, reverted; the return is annotated instead.
 
 **Exit:** `validate.py --tier fast --strict-git` fails on a synthetic unmerged-branch ref, passes on
 `main`, and all 61 refs are ancestors of `HEAD`.
@@ -314,8 +338,8 @@ long pole.
 ## Sequencing summary
 
 ```
-WS-1  provenance ancestry guard      1 round   small        do first
-WS-2  prove-m8-execution task 4      1 round   large        settle D1 first
+WS-1  provenance ancestry guard      DONE      F-064        landed 2026-09-05
+WS-2  prove-m8-execution task 4      1 round   large        settle D1 first  <- next
 WS-3  add-testgen-eval-matrix        1 round   large        the soak is the deliverable
 ----- decision gate: B1, B2, B3 ------------------------------------------------
 WS-4  add-rca-eval-matrix            needs B1
@@ -323,7 +347,7 @@ WS-5  add-requirements-gen-matrix    after WS-3
 WS-6  add-measurement-harness-wedge  WS-0 done; the rest needs governance
 ```
 
-**Floor: 3 review rounds.** WS-1 may be batched into WS-2's round if review capacity binds; WS-2 and
+**Floor: 3 review rounds, one of them spent.** WS-1 may be batched into WS-2's round if review capacity binds; WS-2 and
 WS-3 should not be batched, for the reason given above.
 
 ---
@@ -339,7 +363,7 @@ Stated so a reader in three weeks can check it rather than re-derive it.
 | B2 gets funded | `extend-judge-calibration` jumps ahead of WS-3 — a calibrated judge unblocks two matrices, testgen unblocks one |
 | B1 resolves to "real telemetry" | WS-4 acquires a redaction workstream and stops being a one-round change |
 | The wedge's governance blockers clear | It outranks WS-5 immediately; it is the only item here that produces *external* evidence |
-| Another `implemented_in` ref fails the ancestry rule at implementation time | WS-1 is a data-cleanup change first and a guard second; re-scope rather than force the guard through |
+| Another `implemented_in` ref fails the ancestry rule at implementation time | WS-1 is a data-cleanup change first and a guard second; re-scope rather than force the guard through. **Resolved: still exactly 1, so the guard went in with a one-line data fix** |
 
 ---
 
