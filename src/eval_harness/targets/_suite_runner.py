@@ -56,6 +56,11 @@ RUNNER_ERROR_FILENAME = "runner_error.txt"
 #: model-authored suite written for pytest collects here unchanged.
 TEST_PREFIX = "test_"
 
+#: How much of a failing test's exception message to keep. Bounded because the payload is
+#: read back by the harness and lands in a results file; a test asserting on a large
+#: structure can otherwise produce a megabyte of `assert` repr.
+FAILURE_DETAIL_CHARS = 300
+
 
 def _load(path: Path, name: str) -> Any:
     """Import *path* as a module named *name*, raising on any failure."""
@@ -84,6 +89,7 @@ def _report(workdir: Path) -> dict[str, Any]:
             "collection_error": f"{type(exc).__name__}: {exc}",
             "passed": [],
             "failed": [],
+            "failures": {},
             "calls": list(getattr(focal, "__calls__", [])),
         }
 
@@ -96,11 +102,21 @@ def _report(workdir: Path) -> dict[str, Any]:
 
     passed: list[str] = []
     failed: list[str] = []
+    # Why the exception is kept and not just the name: `testgen_green_on_correct` reports
+    # "3/4 test(s) failed against the correct implementation", and without this there is no
+    # artifact anywhere in the harness that says WHY. That is the single most useful
+    # diagnostic this capability can produce, and the first cut dropped it on the floor.
+    failures: dict[str, str] = {}
     for name, fn in tests:
         try:
             fn()
-        except BaseException:
+        except BaseException as exc:
+            # BaseException, not Exception: a generated test calling `sys.exit()` or
+            # raising `KeyboardInterrupt` is a failing test, and letting either escape
+            # would abort the run and lose every other test's verdict. This interpreter
+            # exists to be expendable.
             failed.append(name)
+            failures[name] = f"{type(exc).__name__}: {exc}"[:FAILURE_DETAIL_CHARS]
         else:
             passed.append(name)
 
@@ -109,6 +125,7 @@ def _report(workdir: Path) -> dict[str, Any]:
         "collection_error": None,
         "passed": passed,
         "failed": failed,
+        "failures": failures,
         "calls": list(getattr(focal, "__calls__", [])),
     }
 

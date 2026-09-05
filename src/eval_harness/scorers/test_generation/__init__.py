@@ -23,9 +23,12 @@ not-applicable for an item whose suite did not collect.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from ...core.types import TESTGEN_EVIDENCE_KEY, ScoreResult, TargetOutput
+
+logger = logging.getLogger(__name__)
 
 #: Comment attached when the payload is absent entirely — no suite-execution target ran, or
 #: it failed before producing evidence. Named so a reader of a results file can grep it.
@@ -35,6 +38,11 @@ NO_EVIDENCE = "no testgen evidence on the target output"
 #: from :data:`NO_EVIDENCE` on purpose: one is an infrastructure gap, the other is a real
 #: measurement of a real suite, and a soak needs to tell them apart.
 NOT_EXECUTABLE = "suite was not executable, so this measure is not applicable"
+
+#: Comment attached when a required sub-object of the payload is present but the wrong
+#: type. Its own constant rather than :data:`NO_EVIDENCE`: a malformed payload is a bug in
+#: whatever produced it, and a soak must be able to tell it from an item nothing ran on.
+MALFORMED_EVIDENCE = "testgen evidence is malformed, so this measure is not applicable"
 
 
 def read_evidence(output: TargetOutput) -> dict[str, Any] | None:
@@ -46,6 +54,71 @@ def read_evidence(output: TargetOutput) -> dict[str, Any] | None:
     """
     evidence = output.metadata.get(TESTGEN_EVIDENCE_KEY) if output.metadata else None
     return evidence if isinstance(evidence, dict) else None
+
+
+def read_section(evidence: dict[str, Any], key: str) -> dict[str, Any] | None:
+    """A nested mapping from the payload, or ``None`` when it is present but not a mapping.
+
+    :func:`read_evidence` type-checks only the top level, so ``{"mutants": [1, 2, 3]}``
+    used to reach ``.get`` on a list and raise ``AttributeError`` **out of the scorer** —
+    which, under the default item-error policy (ADR 0038), aborts the entire run. That
+    directly contradicts this package's stated contract that a payload of the wrong shape
+    degrades rather than raises, so the guard has to hold at every level a scorer indexes.
+
+    A missing key is ``{}`` (the scorers' existing "absent counts are zero" behaviour); a
+    key of the wrong type is ``None``, which the caller turns into a not-applicable verdict.
+    """
+    section = evidence.get(key)
+    if section is None:
+        return {}
+    if not isinstance(section, dict):
+        logger.warning("testgen evidence: %r is %s, expected a mapping", key, type(section).__name__)
+        return None
+    return section
+
+
+def read_id_list(evidence: dict[str, Any], key: str) -> list[Any] | None:
+    """A nested list from the payload, or ``None`` when present but not a list."""
+    values = evidence.get(key)
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        logger.warning("testgen evidence: %r is %s, expected a list", key, type(values).__name__)
+        return None
+    return values
+
+
+def bounded_ratio(numerator: int, denominator: int) -> tuple[float, bool]:
+    """``numerator / denominator`` clamped to ``[0, 1]``, plus whether clamping fired.
+
+    Every figure these scorers publish is a *rate*, and ``config/testgen_eval.yaml`` gates
+    on the **mean** across items — so a single out-of-range value silently moves the gate
+    for every other item in the run. Three such values were reachable before this existed:
+    ``killed/covered`` at 2.0 from a real target run, ``failed/ran`` at 3.5, and obligation
+    recall at 2.0 from duplicate witnesses.
+
+    The clamp is a floor under a malformed payload, not a substitute for producing a
+    well-formed one: each caller emits ``clamped`` into its metadata and logs, so a reader
+    of a results file sees an anomaly rather than a plausible number. A zero denominator
+    is 0.0 — callers that need "not applicable" instead must test for it themselves,
+    because only they know whether a zero denominator means "nothing to measure" or
+    "measured nothing".
+    """
+    if denominator <= 0:
+        return 0.0, numerator != 0
+    raw = numerator / denominator
+    if 0.0 <= raw <= 1.0:
+        return raw, False
+    clamped = min(1.0, max(0.0, raw))
+    logger.warning(
+        "testgen: ratio %d/%d = %.3f is outside [0, 1]; reporting %.3f. "
+        "The evidence that produced it is internally inconsistent.",
+        numerator,
+        denominator,
+        raw,
+        clamped,
+    )
+    return clamped, True
 
 
 def is_executable(evidence: dict[str, Any]) -> bool:

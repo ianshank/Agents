@@ -37,6 +37,7 @@ import logging
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -60,18 +61,49 @@ DEFAULT_TIMEOUT_SECONDS = 30.0
 #: reaches ``TargetOutput.error`` and from there a results file a human reads.
 _RUNNER_ERROR_CHARS = 200
 
+#: The failure string :func:`_execute` returns when the wall-clock limit fired, named
+#: rather than repeated: three call sites compare against it, and a typo in any of them
+#: would fail *open* — recording a timeout as a generic error and leaving ``timed_out``
+#: false, which is the one distinction a soak needs from this field.
+TIMEOUT_FAILURE = "timeout"
+
+#: How many mutant-run failures to keep in the evidence. Bounded for the same reason as
+#: ``_RUNNER_ERROR_CHARS``: this list is serialised into a results file.
+_MAX_RECORDED_MUTANT_ERRORS = 20
+
+#: Sandbox subdirectory names. Both reach a filesystem path, a log line and any debugging
+#: session, so they are named here rather than spelled inline at their two call sites.
+_REFERENCE_LABEL = "reference"
+_MUTANT_LABEL_PREFIX = "mutant-"
+
 #: Instrumentation appended to every focal implementation before it is written into the
 #: sandbox. Records the arguments the suite drives, which is what makes "covered" a
 #: measurement. Kept as a template rather than assembled inline so the generated file
 #: stays readable when a failure needs debugging.
+#:
+#: Arguments are **bound to the focal signature** before being recorded, so
+#: ``add(n=2, k=1)`` and ``add(2, 1)`` record the same grid point. Recording raw
+#: ``args`` alone made a keyword call — entirely idiomatic in a generated suite — look like
+#: a call with no arguments, so the mutant it reached was scored uncovered while still
+#: being killed. That produced a *normalized mutation score above 1.0*, verified end to end
+#: at 2.0 before this fix. Binding fails only for a call the focal method would reject
+#: anyway; the raw form is kept for that case so the evidence still shows what was tried.
 _RECORDER_TEMPLATE = """
+
+import inspect as _inspect
 
 __calls__ = []
 _focal_undecorated = {name}
+_focal_signature = _inspect.signature(_focal_undecorated)
 
 
 def {name}(*args, **kwargs):
-    __calls__.append([list(args), dict(sorted(kwargs.items()))])
+    try:
+        _bound = _focal_signature.bind(*args, **kwargs)
+        _bound.apply_defaults()
+        __calls__.append([list(_bound.arguments.values()), {{}}])
+    except TypeError:
+        __calls__.append([list(args), dict(sorted(kwargs.items()))])
     return _focal_undecorated(*args, **kwargs)
 """
 
@@ -109,7 +141,7 @@ def _execute(workdir: Path, timeout: float) -> tuple[dict[str, Any] | None, str 
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return None, "timeout"
+        return None, TIMEOUT_FAILURE
 
     result_path = workdir / _suite_runner.RESULT_FILENAME
     if result_path.exists():
@@ -184,9 +216,9 @@ def run_generated_suite(inputs: dict[str, Any]) -> TargetOutput:
 
     with tempfile.TemporaryDirectory(prefix="eval-harness-testgen-") as tmp:
         root = Path(tmp)
-        baseline, failure = _run_against(root, "reference", reference, focal_name, suite, timeout)
+        baseline, failure = _run_against(root, _REFERENCE_LABEL, reference, focal_name, suite, timeout)
         if baseline is None:
-            evidence = _empty_evidence(mutants, timed_out=failure == "timeout")
+            evidence = _empty_evidence(mutants, timed_out=failure == TIMEOUT_FAILURE)
             logger.warning("testgen: reference run failed for %s: %s", focal_name, failure)
             return TargetOutput(output=None, error=failure, metadata={EVIDENCE_KEY: evidence})
 
@@ -196,35 +228,85 @@ def run_generated_suite(inputs: dict[str, Any]) -> TargetOutput:
             # so running 40 mutants against a suite that never collected buys nothing.
             return TargetOutput(output=evidence, metadata={EVIDENCE_KEY: evidence})
 
-        called = _called_inputs(baseline)
-        survivors = set(baseline["passed"])
-        killed_ids: list[str] = []
-        covered = 0
-        for mutant in mutants:
-            if mutant.get("equivalent"):
-                continue
-            if _covered(mutant, called, grid):
-                covered += 1
-            result, mutant_failure = _run_against(
-                root, f"mutant-{mutant['id']}", mutant["source"], focal_name, suite, timeout
-            )
-            if mutant_failure == "timeout":
-                evidence["timed_out"] = True
-                continue
-            if result is None:
-                continue
-            # Killed = a test that PASSED on the reference now fails. "Any failure" would
-            # let a suite that is red on correct code claim every mutant it already failed.
-            if survivors & set(result["failed"]):
-                killed_ids.append(mutant["id"])
-
-        evidence["mutants"]["covered"] = covered
-        evidence["mutants"]["killed"] = len(killed_ids)
+        outcome = _run_mutants(
+            root=root,
+            mutants=mutants,
+            focal_name=focal_name,
+            suite=suite,
+            timeout=timeout,
+            called=_called_inputs(baseline),
+            survivors=set(baseline["passed"]),
+            grid=grid,
+        )
+        evidence["mutants"]["covered"] = outcome.covered
+        evidence["mutants"]["killed"] = len(outcome.killed_ids)
+        evidence["mutants"]["errored"] = len(outcome.errors)
+        evidence["mutant_errors"] = outcome.errors
+        evidence["timed_out"] = outcome.timed_out
+        witnessed = set(outcome.killed_ids)
+        # De-duplicated against the declared set: an obligation declared once and witnessed
+        # by two killed mutants must not count twice, which is how recall reached 2.0.
         evidence["obligations_covered"] = sorted(
-            ob["id"] for ob in obligations if ob.get("witness_mutant") in set(killed_ids)
+            {ob["id"] for ob in obligations if ob.get("witness_mutant") in witnessed}
         )
         evidence["obligations_declared"] = [ob["id"] for ob in obligations]
         return TargetOutput(output=evidence, metadata={EVIDENCE_KEY: evidence})
+
+
+@dataclass(frozen=True)
+class _MutantOutcome:
+    """What the mutant sweep observed. A record rather than four parallel locals, so the
+    invariant that binds them — ``killed <= covered`` — is stated in one place."""
+
+    covered: int
+    killed_ids: list[str]
+    errors: list[dict[str, str]]
+    timed_out: bool
+
+
+def _run_mutants(
+    *,
+    root: Path,
+    mutants: list[dict[str, Any]],
+    focal_name: str,
+    suite: str,
+    timeout: float,
+    called: set[tuple[int, ...]],
+    survivors: set[str],
+    grid: list[list[int]],
+) -> _MutantOutcome:
+    """Run the suite against every non-equivalent mutant and tally what happened."""
+    killed_ids: list[str] = []
+    errors: list[dict[str, str]] = []
+    covered = 0
+    timed_out = False
+    for mutant in mutants:
+        if mutant.get("equivalent"):
+            continue
+        result, failure = _run_against(
+            root, f"{_MUTANT_LABEL_PREFIX}{mutant['id']}", mutant["source"], focal_name, suite, timeout
+        )
+        # Killed = a test that PASSED on the reference now fails. "Any failure" would let a
+        # suite that is red on correct code claim every mutant it already failed.
+        killed = result is not None and bool(survivors & set(result["failed"]))
+        if killed:
+            killed_ids.append(mutant["id"])
+        # A killed mutant is covered BY CONSTRUCTION: a suite cannot make a mutant fail
+        # without driving an input at which the mutant differs. Counting it here rather than
+        # trusting `differs_at` alone is what keeps `killed <= covered`, and with it the
+        # normalized denominator inside [0, 1]. A corpus that under-declares `differs_at`
+        # used to produce a score above 1.0 rather than a visible defect.
+        if killed or _covered(mutant, called, grid):
+            covered += 1
+        if failure is not None:
+            # A mutant that never ran cannot be killed, so it depresses BOTH denominators.
+            # Recording it keeps an infrastructure failure legible in the results file
+            # instead of arriving as a low mutation score.
+            logger.warning("testgen: mutant %s failed for %s: %s", mutant["id"], focal_name, failure)
+            if len(errors) < _MAX_RECORDED_MUTANT_ERRORS:
+                errors.append({"id": str(mutant["id"]), "reason": failure})
+            timed_out = timed_out or failure == TIMEOUT_FAILURE
+    return _MutantOutcome(covered=covered, killed_ids=killed_ids, errors=errors, timed_out=timed_out)
 
 
 def _baseline_evidence(baseline: dict[str, Any], mutants: list[dict[str, Any]]) -> dict[str, Any]:
@@ -236,13 +318,20 @@ def _baseline_evidence(baseline: dict[str, Any], mutants: list[dict[str, Any]]) 
         "green_on_correct": {
             "ran": baseline["collected"],
             "failed": len(baseline["failed"]),
+            # The exception behind each false alarm, from the reference run only. A mutant
+            # run's failures are the point of the exercise; a failure against the KNOWN-
+            # CORRECT implementation is a defect in the suite, and this is the only place
+            # a reader can find out what it was.
+            "failures": dict(baseline.get("failures") or {}),
         },
         "mutants": {
             "generated": len(non_equivalent),
             "equivalent_excluded": len(mutants) - len(non_equivalent),
             "covered": 0,
             "killed": 0,
+            "errored": 0,
         },
+        "mutant_errors": [],
         "obligations_covered": [],
         "obligations_declared": [],
         "timed_out": False,
@@ -255,13 +344,15 @@ def _empty_evidence(mutants: list[dict[str, Any]], *, timed_out: bool) -> dict[s
     return {
         "collected": 0,
         "collection_error": "reference run did not complete",
-        "green_on_correct": {"ran": 0, "failed": 0},
+        "green_on_correct": {"ran": 0, "failed": 0, "failures": {}},
         "mutants": {
             "generated": len(non_equivalent),
             "equivalent_excluded": len(mutants) - len(non_equivalent),
             "covered": 0,
             "killed": 0,
+            "errored": 0,
         },
+        "mutant_errors": [],
         "obligations_covered": [],
         "obligations_declared": [],
         "timed_out": timed_out,

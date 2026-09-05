@@ -20,7 +20,7 @@ import pytest
 
 from eval_harness.core.types import EvalItem, RunContext, ScoreResult, TargetOutput
 from eval_harness.plugins import SCORERS, bootstrap
-from eval_harness.scorers.test_generation import NO_EVIDENCE, NOT_EXECUTABLE
+from eval_harness.scorers.test_generation import MALFORMED_EVIDENCE, NO_EVIDENCE, NOT_EXECUTABLE
 from eval_harness.targets.testgen import EVIDENCE_KEY
 
 bootstrap()
@@ -127,6 +127,75 @@ class TestTestgenMutationScore:
         assert score("testgen_mutation_score", payload, {"denominator": "normalized"}).value == pytest.approx(1.0)
         assert score("testgen_mutation_score", payload, {"denominator": "raw"}).value == pytest.approx(0.4)
 
+    # ---- Bounds. Every figure this scorer publishes is a rate, and the gate rules in
+    # `config/testgen_eval.yaml` take the MEAN across items, so one out-of-range value
+    # silently moves the verdict for every other item in the run. Both cases below were
+    # reachable and produced 3.0 and 4.5 respectively; `killed > covered` came out of a
+    # REAL target run at 2.0, not a hand-built payload.
+
+    @pytest.mark.parametrize(
+        ("counts", "params", "expected"),
+        [
+            pytest.param(
+                {"generated": 10, "equivalent_excluded": 0, "covered": 2, "killed": 6},
+                {"denominator": "normalized"},
+                1.0,
+                id="killed-exceeds-covered",
+            ),
+            pytest.param(
+                {"generated": 2, "equivalent_excluded": 0, "covered": 9, "killed": 9},
+                {"denominator": "raw"},
+                1.0,
+                id="killed-exceeds-generated",
+            ),
+            pytest.param(
+                {"generated": 10, "equivalent_excluded": 0, "covered": 10, "killed": -3},
+                {},
+                0.0,
+                id="negative-kill-count",
+            ),
+        ],
+    )
+    def test_m2_edge_an_inconsistent_count_is_clamped_and_flagged(
+        self, counts: dict[str, int], params: dict[str, Any], expected: float
+    ) -> None:
+        """REGRESSION. A rate outside [0, 1] must not reach the mean, nor pass silently."""
+        result = score("testgen_mutation_score", evidence(mutants=counts), params)
+        assert result.value == pytest.approx(expected)
+        assert result.metadata["clamped"] is True, "an anomaly reported as a plausible number is worse"
+
+    def test_m2_edge_a_consistent_payload_is_never_flagged_as_clamped(self) -> None:
+        """The negative control for the case above: the flag has to mean something."""
+        assert score("testgen_mutation_score", evidence()).metadata["clamped"] is False
+
+    def test_m2_edge_wrongly_typed_mutant_counts_degrade_rather_than_raise(self) -> None:
+        """REGRESSION. `read_evidence` type-checked only the TOP level.
+
+        `{"mutants": [1, 2, 3]}` reached `.get` on a list and raised `AttributeError`
+        **out of the scorer**, which under the default item-error policy (ADR 0038) aborts
+        the whole run. This package's docstring promises the opposite, so the guard has to
+        hold at every level a scorer indexes.
+        """
+        result = score("testgen_mutation_score", evidence(mutants=[1, 2, 3]))
+        assert result.passed is None and result.comment == MALFORMED_EVIDENCE
+
+    def test_m2_edge_a_mutant_that_never_ran_is_surfaced_on_the_verdict(self) -> None:
+        """A broken runner and a suite that detects nothing are different outcomes."""
+        result = score(
+            "testgen_mutation_score",
+            evidence(mutants={"generated": 8, "equivalent_excluded": 0, "covered": 8, "killed": 0, "errored": 3}),
+        )
+        assert result.metadata["errored"] == 3
+        assert result.comment is not None and "3 could not be run" in result.comment
+
+    def test_m6_error_the_pass_threshold_is_a_knob_not_a_hidden_zero(self) -> None:
+        """The hard-coded `> 0.0` meant killing 1 of 100 mutants reported `passed=True`
+        while the gate rule in config failed the same run. The sibling
+        `testgen_green_on_correct` already exposed `max_false_alarm_rate`."""
+        payload = evidence(mutants={"generated": 10, "equivalent_excluded": 0, "covered": 10, "killed": 1})
+        assert score("testgen_mutation_score", payload, {}).passed is True
+        assert score("testgen_mutation_score", payload, {"min_score": 0.5}).passed is False
+
 
 class TestTestgenGreenOnCorrect:
     MATRIX_KIND = "scorer"
@@ -147,6 +216,32 @@ class TestTestgenGreenOnCorrect:
         noisy = evidence(green_on_correct={"ran": 4, "failed": 1})
         assert score("testgen_green_on_correct", clean).value != score("testgen_green_on_correct", noisy).value
         assert score("testgen_mutation_score", clean).value == score("testgen_mutation_score", noisy).value
+
+    def test_m1_correctness_the_exception_behind_each_false_alarm_reaches_the_verdict(self) -> None:
+        """`ScoreResult.metadata` IS serialised into results.json; the evidence payload is
+        not. Without this the reader of a failing run sees "1/4 failed" and no artifact
+        anywhere says why — the most useful diagnostic this capability can produce."""
+        result = score(
+            "testgen_green_on_correct",
+            evidence(green_on_correct={"ran": 4, "failed": 1, "failures": {"test_x": "AssertionError: nope"}}),
+        )
+        assert result.metadata["false_alarm_details"] == {"test_x": "AssertionError: nope"}
+
+    def test_m2_edge_more_failures_than_tests_is_clamped_and_flagged(self) -> None:
+        """REGRESSION. `ran=2, failed=7` reported a false-alarm "rate" of 3.5 into a gate
+        that takes the mean."""
+        result = score("testgen_green_on_correct", evidence(green_on_correct={"ran": 2, "failed": 7}))
+        assert result.value == pytest.approx(1.0)
+        assert result.metadata["clamped"] is True
+
+    def test_m2_edge_a_consistent_payload_is_never_flagged_as_clamped(self) -> None:
+        assert score("testgen_green_on_correct", evidence()).metadata["clamped"] is False
+
+    def test_m2_edge_a_wrongly_typed_green_section_degrades_rather_than_raising(self) -> None:
+        """REGRESSION. A nested string reached `.get` and raised out of the scorer, which
+        aborts the run under the default item-error policy (ADR 0038)."""
+        result = score("testgen_green_on_correct", evidence(green_on_correct="nope"))
+        assert result.passed is None and result.comment == MALFORMED_EVIDENCE
 
 
 class TestRequirementObligationRecall:
@@ -178,6 +273,41 @@ class TestRequirementObligationRecall:
         result = score("requirement_obligation_recall", evidence(obligations_declared=[]))
         assert result.passed is None
         assert result.comment == "item declares no gold obligations"
+
+    def test_m2_edge_a_duplicate_witness_cannot_push_recall_above_one(self) -> None:
+        """REGRESSION. `declared=[OB-1], covered=[OB-1, OB-1]` reported recall 2.0 with an
+        EMPTY `uncovered` list — a self-contradictory verdict the gate's mean absorbed. Both
+        sides are de-duplicated against the declared set before the division."""
+        result = score(
+            "requirement_obligation_recall",
+            evidence(obligations_declared=["OB-1"], obligations_covered=["OB-1", "OB-1"]),
+        )
+        assert result.value == pytest.approx(1.0)
+        assert result.metadata["obligations_covered"] == 1
+        assert result.metadata["clamped"] is False
+
+    def test_m2_edge_a_duplicate_declaration_does_not_deflate_recall(self) -> None:
+        """The other side of the same de-duplication: an item declaring OB-1 twice asks for
+        one obligation, so covering it is 1.0 rather than 0.5."""
+        result = score(
+            "requirement_obligation_recall",
+            evidence(obligations_declared=["OB-1", "OB-1"], obligations_covered=["OB-1"]),
+        )
+        assert result.value == pytest.approx(1.0)
+        assert result.metadata["obligations_declared"] == 1
+
+    def test_m2_edge_a_wrongly_typed_obligation_list_degrades_rather_than_raising(self) -> None:
+        """REGRESSION. A string where a list belongs iterated character by character, so
+        `"OB-1"` silently became five declared obligations."""
+        result = score("requirement_obligation_recall", evidence(obligations_declared="OB-1"))
+        assert result.passed is None and result.comment == MALFORMED_EVIDENCE
+
+    def test_m6_error_the_pass_threshold_is_a_knob_not_a_hidden_zero(self) -> None:
+        """Mirrors `testgen_mutation_score`: a hard-coded `> 0.0` disagreed by construction
+        with the gate rule that actually decides the run."""
+        payload = evidence(obligations_declared=["OB-1", "OB-2"], obligations_covered=[])
+        assert score("requirement_obligation_recall", payload, {}).passed is True
+        assert score("requirement_obligation_recall", payload, {"min_recall": 0.5}).passed is False
 
 
 class TestTestgenScorersShared:

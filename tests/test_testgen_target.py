@@ -69,8 +69,15 @@ class TestSuiteExecution:
         payload = evidence_of(result)
         assert payload["collected"] == 1
         assert payload["collection_error"] is None
-        assert payload["green_on_correct"] == {"ran": 1, "failed": 0}
-        assert payload["mutants"] == {"generated": 1, "equivalent_excluded": 0, "covered": 1, "killed": 1}
+        assert payload["green_on_correct"] == {"ran": 1, "failed": 0, "failures": {}}
+        assert payload["mutants"] == {
+            "generated": 1,
+            "equivalent_excluded": 0,
+            "covered": 1,
+            "killed": 1,
+            "errored": 0,
+        }
+        assert payload["mutant_errors"] == []
         assert payload["obligations_covered"] == ["OB-1"]
 
     def test_a_blind_suite_is_neither_covered_nor_killed(self) -> None:
@@ -92,8 +99,21 @@ class TestSuiteExecution:
         """
         always_red = "from focal import add\n\ndef test_wrong():\n    assert add(2, 1) == 999\n"
         payload = evidence_of(testgen.run_generated_suite(item(always_red)))
-        assert payload["green_on_correct"] == {"ran": 1, "failed": 1}
+        assert payload["green_on_correct"]["ran"] == 1
+        assert payload["green_on_correct"]["failed"] == 1
         assert payload["mutants"]["killed"] == 0, "a test already failing on correct code kills nothing"
+
+    def test_a_false_alarm_carries_the_exception_that_caused_it(self) -> None:
+        """`green_on_correct: 1/1 failed` is not a diagnosis; this is what makes it one.
+
+        The first cut recorded only the failing test's NAME, so nothing the harness
+        produced said why a suite was red against a known-correct implementation — the
+        single most useful thing this capability can tell a reader.
+        """
+        always_red = "from focal import add\n\ndef test_wrong():\n    assert add(2, 1) == 999\n"
+        failures = evidence_of(testgen.run_generated_suite(item(always_red)))["green_on_correct"]["failures"]
+        assert set(failures) == {"test_wrong"}
+        assert failures["test_wrong"].startswith("AssertionError")
 
     def test_a_collection_error_is_evidence_not_an_exception(self) -> None:
         broken = "from focal import add\n\nraise RuntimeError('bad suite')\n"
@@ -127,19 +147,47 @@ class TestBoundsAndFailureModes:
         assert result.error is not None and "missing" in result.error
         assert result.output is None
 
-    def test_each_run_gets_its_own_working_directory(self) -> None:
-        """Two runs must not see each other's files; a leaked `focal.py` would silently
-        make the second run score the first run's implementation."""
-        first = evidence_of(testgen.run_generated_suite(item(KILLING_SUITE)))
-        second = evidence_of(testgen.run_generated_suite(item(BLIND_SUITE)))
-        assert first["mutants"]["killed"] == 1
-        assert second["mutants"]["killed"] == 0
+    def test_each_run_gets_its_own_working_directory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The reference and each mutant must not see each other's `focal.py`.
 
-    def test_execution_opens_no_socket(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """The offline property is asserted directly, not inferred from `--offline`.
+        A leaked implementation would silently score one run against another's code — and
+        because the reference runs first, every mutant would then look identical to it and
+        nothing would ever be killed.
 
-        `--offline` selects an in-memory Langfuse client; it is not a network kill-switch.
-        The zero-dependency property has to come from the code, so it is checked here.
+        Asserted against `_run_against`'s own layout choice, with `_execute` stubbed out:
+        the property is where it writes, not what the subprocess then reports. The earlier
+        version made two separate `run_generated_suite` calls and compared their kill
+        counts, which is a property of the per-call `TemporaryDirectory` and holds however
+        the subdirectories inside it are laid out — it passed with `workdir = root`, the
+        exact regression it was named for, and spent four subprocesses to do it.
+        """
+        monkeypatch.setattr(testgen, "_execute", lambda workdir, timeout: ({}, None))
+        labels = ("reference", "mutant-M1", "mutant-M2")
+        for label in labels:
+            testgen._run_against(tmp_path, label, f"# {label}\n" + FOCAL, FOCAL_NAME, KILLING_SUITE, 1.0)
+        written = [
+            path.read_text(encoding="utf-8") for path in sorted(tmp_path.rglob(testgen._suite_runner.FOCAL_FILENAME))
+        ]
+        assert len(written) == len(labels), "a run reused another run's sandbox directory"
+        assert len(set(written)) == len(labels), "one sandbox overwrote another's focal module"
+
+    def test_a_suites_network_use_never_reaches_the_harness_process(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Model-authored code runs OUT OF PROCESS, and this is what proves it.
+
+        The earlier version of this test ran the harmless `KILLING_SUITE` and asserted the
+        parent opened no socket. That could not fail: `run_generated_suite` touches no
+        socket itself, and a monkeypatch in the parent is invisible to a subprocess, so the
+        assertion held no matter what the suite did. It was named
+        `test_execution_opens_no_socket` and its docstring claimed the offline property was
+        "asserted directly" — false assurance on a security-relevant property.
+
+        This version drives a suite that *does* attempt a connection. The parent's socket
+        stays untouched precisely BECAUSE execution is out of process, so moving the runner
+        in-process — the change this seam exists to forbid — turns the assertion red.
+
+        What it does NOT claim: the sandbox itself is not network-isolated. A generated
+        suite can still open sockets in its own interpreter. That gap is recorded in
+        `docs/plans/eval-delivery-sequencing/PLAN.md` rather than papered over here.
         """
         connects: list[Any] = []
         real = socket.socket.connect
@@ -149,8 +197,26 @@ class TestBoundsAndFailureModes:
             return real(self, address)
 
         monkeypatch.setattr(socket.socket, "connect", guarded)
-        testgen.run_generated_suite(item(KILLING_SUITE))
-        assert connects == []
+        dialling = (
+            "import socket\n"
+            "from focal import add\n\n"
+            "def test_dials_out():\n"
+            "    s = socket.socket()\n"
+            "    s.settimeout(0.05)\n"
+            "    try:\n"
+            "        s.connect(('127.0.0.1', 9))\n"
+            "    except OSError:\n"
+            "        pass\n"
+            "    finally:\n"
+            "        s.close()\n"
+            "    assert add(2, 1) == -1\n"
+        )
+        payload = evidence_of(testgen.run_generated_suite(item(dialling)))
+        # The suite really ran and really reached the fault -- without this the test could
+        # pass by the suite never executing, which is how the previous version passed.
+        assert payload["collected"] == 1
+        assert payload["mutants"]["killed"] == 1
+        assert connects == [], "a connect seen here means model-authored code ran in-process"
 
     def test_a_suite_that_prints_is_still_scored_correctly(self) -> None:
         """REGRESSION. A generated test calling `print()` is completely ordinary.
@@ -185,15 +251,70 @@ class TestBoundsAndFailureModes:
         )
         result = testgen.run_generated_suite(item(loud))
         assert result.error is None
-        assert evidence_of(result)["green_on_correct"] == {"ran": 1, "failed": 0}
+        assert evidence_of(result)["green_on_correct"]["ran"] == 1
+        assert evidence_of(result)["green_on_correct"]["failed"] == 0
 
-    def test_a_mutant_without_differs_at_is_not_counted_as_covered(self) -> None:
-        """A corpus that does not publish differing indices cannot support the normalized
-        denominator; counting the mutant anyway would inflate it silently."""
+    def test_a_killed_mutant_is_always_counted_as_covered(self) -> None:
+        """REGRESSION. `killed <= covered` is what keeps the normalized score inside [0, 1].
+
+        This test previously asserted the opposite — that a mutant with no `differs_at`
+        was killed but *not* covered — on the reasoning that crediting coverage the corpus
+        had not declared would inflate the denominator. It deflates it: `killed=1,
+        covered=0` is not a conservative reading, it is an arithmetically impossible one,
+        and the normalized figure computed from it was `1/0`.
+
+        A suite cannot make a mutant fail without driving an input at which the mutant
+        differs. So a kill IS the coverage evidence, whatever the corpus declared, and
+        counting it is a measurement rather than a concession.
+        """
         unmarked = {key: value for key, value in MUTANT.items() if key != "differs_at"}
         payload = evidence_of(testgen.run_generated_suite(item(KILLING_SUITE, mutants=[unmarked])))
-        assert payload["mutants"]["covered"] == 0
-        assert payload["mutants"]["killed"] == 1, "it can still be killed; it just cannot be credited as covered"
+        assert payload["mutants"]["killed"] == 1
+        assert payload["mutants"]["covered"] == 1, "a kill is itself proof the suite reached the fault"
+
+    def test_a_keyword_call_is_credited_as_coverage(self) -> None:
+        """REGRESSION. `add(n=2, k=1)` and `add(2, 1)` must record the same grid point.
+
+        The recorder logged raw `args`, so an entirely idiomatic keyword call looked like a
+        call with no arguments: the mutant it reached was scored uncovered while still
+        being killed. Verified end to end before the fix at a *normalized mutation score of
+        2.0* — a rate above 1.0 flowing straight into a gate that takes the mean.
+
+        The suite here reaches the fault by keyword and does NOT assert on it, so the
+        mutant is covered but not killed. That separation is deliberate: a killing suite
+        would be credited as covered by the kill rule above whether or not the recorder
+        works, which makes a keyword *kill* useless as evidence about the recorder. This
+        shape fails if the binding is removed; a killing one does not.
+        """
+        keyword_suite = "from focal import add\n\ndef test_smoke():\n    add(n=2, k=1)\n"
+        payload = evidence_of(testgen.run_generated_suite(item(keyword_suite)))
+        assert payload["mutants"]["killed"] == 0, "no assertion, so nothing detects the fault"
+        assert payload["mutants"]["covered"] == 1, "the suite reached the differing input"
+
+    def test_a_mutant_that_cannot_be_run_is_recorded_not_silently_dropped(self) -> None:
+        """A mutant whose source will not import depresses both denominators.
+
+        Before this the failure string was discarded at the loop and nothing anywhere
+        distinguished "the suite missed this fault" from "the runner never got to try",
+        which is exactly the infrastructure-failure-as-agent-failure collapse this
+        package's docstring says it exists to prevent.
+        """
+        unrunnable = {**MUTANT, "id": "M-broken", "source": "def add(n, k):\n    (((\n"}
+        payload = evidence_of(testgen.run_generated_suite(item(KILLING_SUITE, mutants=[unrunnable])))
+        assert payload["mutants"]["killed"] == 0
+        assert payload["mutants"]["errored"] == 1
+        assert [entry["id"] for entry in payload["mutant_errors"]] == ["M-broken"]
+        assert payload["mutant_errors"][0]["reason"]
+
+    def test_one_obligation_witnessed_twice_is_counted_once(self) -> None:
+        """REGRESSION. Duplicate witnesses gave recall 2.0 with an empty `uncovered` list.
+
+        Two obligation rows sharing an id and a witness mutant is a corpus-authoring slip,
+        not a suite that covered twice as much as was asked of it.
+        """
+        duplicated = [{"id": "OB-1", "witness_mutant": "M1"}, {"id": "OB-1", "witness_mutant": "M1"}]
+        payload = evidence_of(testgen.run_generated_suite(item(KILLING_SUITE, obligations=duplicated)))
+        assert payload["obligations_covered"] == ["OB-1"]
 
 
 class TestAllowlist:

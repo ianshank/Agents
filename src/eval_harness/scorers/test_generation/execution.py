@@ -11,7 +11,22 @@ from __future__ import annotations
 from ...core.interfaces import Scorer
 from ...core.types import EvalItem, RunContext, ScoreResult, TargetOutput
 from ...plugins import SCORERS
-from . import NO_EVIDENCE, NOT_EXECUTABLE, evidence_metadata, is_executable, not_applicable, read_evidence
+from . import (
+    MALFORMED_EVIDENCE,
+    NO_EVIDENCE,
+    NOT_EXECUTABLE,
+    bounded_ratio,
+    evidence_metadata,
+    is_executable,
+    not_applicable,
+    read_evidence,
+    read_section,
+)
+
+#: How many failing-test explanations to carry onto the verdict. Bounded: this reaches
+#: ``ScoreResult.metadata``, which IS serialised into ``results.json``, and a suite can
+#: fail arbitrarily many tests.
+_MAX_REPORTED_FALSE_ALARMS = 10
 
 
 @SCORERS.register("test_executability")
@@ -78,11 +93,14 @@ class TestgenGreenOnCorrectScorer(Scorer):
         if not is_executable(evidence):
             return not_applicable(self.name, NOT_EXECUTABLE, self.on_missing)
 
-        green = evidence.get("green_on_correct") or {}
+        green = read_section(evidence, "green_on_correct")
+        if green is None:
+            return not_applicable(self.name, MALFORMED_EVIDENCE, self.on_missing)
         ran = int(green.get("ran") or 0)
         failed = int(green.get("failed") or 0)
-        rate = failed / ran if ran else 0.0
+        rate, clamped = bounded_ratio(failed, ran)
         passed = rate <= self.max_false_alarm_rate
+        failures = read_section(green, "failures") or {}
         return ScoreResult(
             self.name,
             value=rate,
@@ -93,5 +111,9 @@ class TestgenGreenOnCorrectScorer(Scorer):
                 false_alarms=failed,
                 tests_run=ran,
                 max_false_alarm_rate=self.max_false_alarm_rate,
+                clamped=clamped,
+                # The reason each false alarm fired. Without it a reader sees "3/4 failed"
+                # and has no artifact anywhere that says why.
+                false_alarm_details=dict(sorted(failures.items())[:_MAX_REPORTED_FALSE_ALARMS]),
             ),
         )

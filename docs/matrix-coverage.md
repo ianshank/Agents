@@ -64,11 +64,11 @@ Aliases (judge):
 | `llm_judge` | 3 | 1 | 1 | 1 | 1 |
 | `policy_violation` | 3 | 2 | 1 | 1 | 1 |
 | `regex_match` | 2 | 1 | 1 | 1 | 1 |
-| `requirement_obligation_recall` | 3 | 4 | 1 | 2 | 4 |
+| `requirement_obligation_recall` | 3 | 7 | 1 | 2 | 5 |
 | `state_transition` | 4 | 3 | 2 | 1 | 1 |
 | `test_executability` | 3 | 4 | 1 | 2 | 4 |
-| `testgen_green_on_correct` | 3 | 4 | 1 | 2 | 4 |
-| `testgen_mutation_score` | 4 | 4 | 1 | 2 | 4 |
+| `testgen_green_on_correct` | 4 | 7 | 1 | 2 | 4 |
+| `testgen_mutation_score` | 4 | 8 | 1 | 2 | 5 |
 | `trajectory_any_order` | 2 | 5 | 1 | 1 | 1 |
 | `trajectory_exact` | 2 | 5 | 1 | 1 | 1 |
 | `trajectory_in_order` | 2 | 5 | 1 | 1 | 1 |
