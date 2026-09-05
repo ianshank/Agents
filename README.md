@@ -419,6 +419,11 @@ src/eval_harness/
     state.py         state_transition, policy_violation read the StateEvaluation the
                      engine attaches when a state_adapter is configured — the latter
                      fails independently of goal success (F-060)
+    test_generation/ test_executability, testgen_mutation_score, testgen_green_on_correct,
+                     requirement_obligation_recall grade an AI-generated test suite. Pure
+                     readers of the evidence targets/testgen.py publishes after running the
+                     suite in a subprocess sandbox against a reference implementation and
+                     each seeded mutant (F-065, ADR 0043 — corpus at corpora/testgen/v1/)
   datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
   targets/           echo, callable (dynamic import — gated by
                      EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST; see "Config files are

@@ -29,17 +29,21 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
-- [`changes/prove-m8-execution/`](changes/prove-m8-execution/) — *partially implemented.*
-  Tasks 1-3 and 5 have landed (execution ledger, egress guard, per-pipeline vacuity refusal,
-  and the two network-judge `client=` seams — F-063); task 4, breadth to the 19 test-only
-  components, is outstanding. The M8
-  (Composability) matrix dimension credits a component for appearing in a validated pipeline
-  config, not for executing — one credited cell is provably invoked zero times. Replaces
-  config-presence credit with an execution ledger, adds the two network judges' missing
-  `client=` seams, and widens M8 honestly across the 41 registered components once the
-  mechanism means something. Motivated by `docs/plans/eval-evidence-integrity/REVIEW.md`.
+- [`changes/prove-m8-execution/`](changes/prove-m8-execution/) — *implemented, pending archive.*
+  All tasks have landed: the execution ledger, the egress guard, per-pipeline vacuity refusal,
+  the two network-judge `client=` seams (F-063), and task 4's breadth — **M8 now credits 39 of
+  the 41 registered components, with the two uncredited being exactly the two waived.** The M8
+  (Composability) dimension *had* credited a component for appearing in a validated pipeline
+  config rather than for executing, and one credited cell was provably invoked zero times.
+  Replaced config-presence credit with an execution ledger, added the two network judges'
+  missing `client=` seams, and widened M8 honestly across the registered components once the
+  mechanism meant something. Motivated by `docs/plans/eval-evidence-integrity/REVIEW.md`.
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
-  *proposed.* The system has strong internal validation and no external evidence. Replaces the
+  *partially implemented.* **WS-0 (the blocking hygiene gate) landed as F-048** — credential scrub,
+  `.gitleaks.toml`, and the fail-closed secret scan at `quality-gates.yml`. WS-1 through WS-5 are
+  open, and its `tasks.md` checkbox ledger still reads 0-done, which is why
+  `docs/plans/eval-delivery-sequencing/REVIEW.md` R1 says not to size this change from it.
+  The system has strong internal validation and no external evidence. Replaces the
   rejected "add-business-readiness-wedge" (which would have pulled a public
   `merge_gate_report` CLI into the harness) with a measurement wedge that does not widen the
   public surface.
@@ -54,14 +58,17 @@ before that guard existed.
   **blocked.** Ingesting production traces back into the golden dataset. Blocked on a
   CHARTER §3 ratified amendment plus its own ADR — §3 lists "a general observability
   platform" as a non-goal — and on the three changes above.
-- [`changes/add-gate-decision-provenance/`](changes/add-gate-decision-provenance/) — *proposed.*
-  The quality gate's decision is never recorded: sinks fire in `EvalEngine.run()` before
+- [`changes/add-gate-decision-provenance/`](changes/add-gate-decision-provenance/) — *implemented,
+  pending archive.* Landed as **F-062** (ADR 0042); its implementation record is in `review.md`.
+  The quality gate's decision was never recorded: sinks fire in `EvalEngine.run()` before
   `evaluate_gate` runs in the CLI, so no exported artifact carries a verdict and a soak cannot be
   diffed. Persists the decision on `RunResult`, and adds per-rule `report_only` so an uncalibrated
-  scorer can be measured inside a gate that stays live for everything else. Needs its own ADR —
-  ADR 0031 covers agent evaluation only. Prerequisite for the three below. Motivated by
-  `docs/plans/scenario-eval-matrices/REVIEW.md`.
-- [`changes/add-testgen-eval-matrix/`](changes/add-testgen-eval-matrix/) — *proposed.* Four
+  scorer can be measured inside a gate that stays live for everything else. It needed its own ADR —
+  ADR 0031 covers agent evaluation only — and got one: ADR 0042. Prerequisite for the three below,
+  now satisfied. Motivated by `docs/plans/scenario-eval-matrices/REVIEW.md`.
+- [`changes/add-testgen-eval-matrix/`](changes/add-testgen-eval-matrix/) — *implemented,
+  pending archive.* Landed as **F-065** (ADR 0043); the soak's starting distribution is in
+  `review.md`. Four
   deterministic scorers over AI-generated test suites (executability, mutation score in both
   denominators, false alarms on correct code, obligation recall), executed by an allowlisted
   callable target with scorers as pure readers of its evidence. Synthetic generated corpus; no

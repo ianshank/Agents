@@ -18,7 +18,9 @@ from __future__ import annotations
 import copy
 import json
 import re
+import statistics
 import sys
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, ClassVar
@@ -42,10 +44,12 @@ from eval_harness.core.types import (
 )
 from eval_harness.engine import EvalEngine
 from eval_harness.gating import evaluate_gate
+from eval_harness.langfuse_client import NullLangfuseClient
 from eval_harness.plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS, bootstrap
 from tests import _trajectory_helpers as traj
 from tests._m8_probe import ExecutionLedger, probe
-from tests._matrix_coverage import format_vacuous, pipeline_vacuous
+from tests._matrix_coverage import PipelineConfig, format_vacuous, pipeline_vacuous
+from tests.test_matrix_testgen_scorers import TESTGEN_SCORERS
 
 bootstrap()
 
@@ -1508,7 +1512,48 @@ _OFFLINE_ANTHROPIC_SCORE = 0.37
 #: against the fixture rather than a bare literal appearing twice.
 _OFFLINE_OPENAI_SCORE = 0.42
 
-PIPELINES: dict[str, dict] = {
+
+class _OfflineAnthropicModelClient:
+    """A recording stand-in for ``anthropic.Anthropic``, for the M8 `model` TARGET cell.
+
+    Distinct from ``_OfflineAnthropicClient`` above, which serves the anthropic *judge*:
+    the judge parses a JSON verdict out of the text, the target returns the text itself.
+    Sharing one fake would mean the target cell asserting a JSON blob it never parses.
+
+    ``ModelTarget._complete_anthropic`` imports nothing, so an injected client keeps the
+    SDK out of the process at construction AND at call time.
+    """
+
+    def __init__(self, reply: str) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self._reply = reply
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kwargs: Any) -> SimpleNamespace:
+        self.calls.append(kwargs)
+        return SimpleNamespace(content=[_TextBlock(self._reply)])
+
+
+#: What the offline model target replies. Distinctive, so the cell cannot pass on an echo.
+_MODEL_REPLY = "offline-model-reply"
+
+#: The panel cell's three member scores. Deliberately distinct: with equal members every
+#: strategy returns the same number and the cell would prove nothing about which one ran.
+#: The expected verdict is COMPUTED from these below rather than written beside them --
+#: a literal appearing on both sides of the assertion cannot detect a change to itself,
+#: which a negative control on an earlier cut of this cell demonstrated.
+_PANEL_MEMBER_SCORES: tuple[float, ...] = (0.9, 0.8, 0.6)
+
+#: What the `median` strategy must reduce those to. `mean` would give 0.766..., so this
+#: value discriminates the strategy rather than merely restating one member.
+_PANEL_MEDIAN = statistics.median(_PANEL_MEMBER_SCORES)
+
+#: The payload the three text scorers grade. A JSON object so `json_keys` has real keys to
+#: find and `regex_match` a real substring to match; identical to `expected` so
+#: `autoevals`' Levenshtein distance is 0.
+_JSON_PAYLOAD = '{"a": 1, "b": 2}'
+
+PIPELINES: dict[str, PipelineConfig] = {
     "echo_exact_match": {
         "schema_version": "1.0",
         "run": {"name": "matrix-test", "seed": 42},
@@ -1597,6 +1642,317 @@ PIPELINES: dict[str, dict] = {
             "type": "anthropic",
             "params": {"model": "offline-fixture", "client": _OfflineAnthropicClient(_OFFLINE_ANTHROPIC_SCORE)},
         },
+        "sinks": [{"type": "console"}],
+    },
+    # ---------------------------------------------------------------- WS-2: breadth.
+    # Every cell below closes a component that was registered, tested in isolation, and
+    # never once composed through the engine. They are ordered as the plan orders them:
+    # the three accounting moves first (components that already execute elsewhere in the
+    # suite, so crediting them costs no new test construction), then the rest.
+    # --- accounting moves: these already run in the suite, just not in a PIPELINES cell.
+    "csv_dataset": {
+        "schema_version": "1.0",
+        "run": {"name": "csv-dataset-test", "seed": 1},
+        # `path`/`input_columns` are filled in by TMP_FIXTURE_PARAMS, which writes the file.
+        "dataset": {"type": "csv", "params": {}},
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "sinks": [{"type": "console"}],
+    },
+    "parquet_dataset": {
+        "schema_version": "1.0",
+        "run": {"name": "parquet-dataset-test", "seed": 1},
+        "dataset": {"type": "parquet", "params": {}},
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "sinks": [{"type": "console"}],
+    },
+    "langfuse_sink": {
+        "schema_version": "1.0",
+        "run": {"name": "langfuse-sink-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "l1", "inputs": {"q": "hello"}, "expected": "hello"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        # No params: the client arrives through the engine's attach_client loop, not here.
+        "sinks": [{"type": "langfuse", "params": {}}],
+    },
+    # --- new cells, zero-config offline stand-ins.
+    "jsonl_dataset": {
+        "schema_version": "1.0",
+        "run": {"name": "jsonl-dataset-test", "seed": 1},
+        "dataset": {"type": "jsonl", "params": {}},
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "sinks": [{"type": "console"}],
+    },
+    "langfuse_dataset": {
+        "schema_version": "1.0",
+        "run": {"name": "langfuse-dataset-test", "seed": 1},
+        # Seeded under this exact name by `_null_langfuse_client_for`, so the cell fails if
+        # the name stops being plumbed through to the client.
+        "dataset": {"type": "langfuse", "params": {"dataset_name": "golden"}},
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "sinks": [{"type": "console"}],
+    },
+    "braintrust_dataset": {
+        "schema_version": "1.0",
+        "run": {"name": "braintrust-dataset-test", "seed": 1},
+        # Offline through the `fake_braintrust` conftest fixture, which the test method
+        # requests: the SDK is absent from CI's install line, and BrainTrustDataset has
+        # neither a `client=` param nor `attach_client`, so faking the module is the only
+        # seam. Deliberately NOT an importorskip -- that is the anti-pattern F-053 removed.
+        "dataset": {"type": "braintrust", "params": {"project_name": "proj", "name": "ds"}},
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "sinks": [{"type": "console"}],
+    },
+    "html_file_sink": {
+        "schema_version": "1.0",
+        "run": {"name": "html-sink-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "h1", "inputs": {"q": "hello"}, "expected": "hello"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "sinks": [{"type": "html_file", "params": {}}],
+        # A gate so the rendered report carries a verdict table (F-062), which is the part
+        # of this sink a console cell could never exercise.
+        "gate": {"rules": [{"score": "em", "metric": "mean", "min": 0.9}]},
+    },
+    "phoenix_sink": {
+        "schema_version": "1.0",
+        "run": {"name": "phoenix-sink-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "p1", "inputs": {"q": "hello"}, "expected": "hello"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        # `enabled` defaults False, so the sink builds a NullPhoenixScoreClient itself and
+        # opens no socket. Offline by construction, not by a fixture.
+        "sinks": [{"type": "phoenix", "params": {}}],
+    },
+    "braintrust_sink": {
+        "schema_version": "1.0",
+        "run": {"name": "braintrust-sink-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "b1", "inputs": {"q": "hello"}, "expected": "hello"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        # Same shape as phoenix: `enabled` defaults False -> NullBrainTrustClient, no SDK.
+        "sinks": [{"type": "braintrust", "params": {}}],
+    },
+    "panel_judge": {
+        "schema_version": "1.0",
+        "run": {"name": "panel-judge-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "pj1", "inputs": {"q": "test"}, "expected": "test"}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "llm_judge", "params": {"name": "quality"}}],
+        # Three distinct member scores so the median is a real reduction: with equal members
+        # any strategy returns the same number and the cell would prove nothing about which
+        # one ran. The probe credits the members too -- it hooks Registry.create, and
+        # PanelJudge builds its members through JUDGES.create.
+        "judge": {
+            "type": "panel",
+            "params": {
+                "members": [{"type": "mock", "params": {"default_score": s}} for s in _PANEL_MEMBER_SCORES],
+                "strategy": "median",
+            },
+        },
+        "sinks": [{"type": "console"}],
+    },
+    "model_target": {
+        "schema_version": "1.0",
+        "run": {"name": "model-target-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "mt1", "inputs": {"q": "test"}, "expected": _MODEL_REPLY}]},
+        },
+        # The `anthropic` provider is chosen deliberately: `_complete_anthropic` imports
+        # nothing, so with an injected client this target touches its SDK at neither
+        # construction nor call time. The openai path would still `import openai`.
+        "target": {
+            "type": "model",
+            "params": {
+                "provider": "anthropic",
+                "model": "offline-fixture",
+                "prompt_template": "{q}",
+                "client": _OfflineAnthropicModelClient(_MODEL_REPLY),
+            },
+        },
+        "scorers": [{"type": "exact_match", "params": {"name": "em"}}],
+        "sinks": [{"type": "console"}],
+    },
+    # --- scorers. One pipeline covers the three text scorers because they read the same
+    # output; splitting them would triple the engine runs to prove the same composition.
+    "text_scorers": {
+        "schema_version": "1.0",
+        "run": {"name": "text-scorers-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {"items": [{"id": "ts1", "inputs": {"q": _JSON_PAYLOAD}, "expected": _JSON_PAYLOAD}]},
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [
+            # A pattern that can actually fail: `.*` is the default and passes on anything,
+            # which is the vacuous credit the ledger exists to refuse.
+            {"type": "regex_match", "params": {"name": "rx", "pattern": r'"a"'}},
+            # A non-empty `required`: an empty list short-circuits to a pass.
+            {"type": "json_keys", "params": {"name": "jk", "required": ["a", "b"]}},
+            {"type": "autoevals", "params": {"name": "ae", "scorer": "Levenshtein"}},
+        ],
+        "sinks": [{"type": "console"}],
+    },
+    # --- state adapters. Each declares the state scorers so the adapter's EVIDENCE is
+    # read, not merely its lifecycle driven -- the existing in_memory cell credits the
+    # adapter without any scorer looking at what it found.
+    "state_sqlite": {
+        "schema_version": "1.0",
+        "run": {"name": "state-sqlite-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "sq1",
+                        "inputs": {"q": "hello"},
+                        "expected": "hello",
+                        # Rows come back as tuples ordered by the first column, so the
+                        # expectation is the seeded table verbatim.
+                        "metadata": {"state_expectation": {"accounts": [[1, "alice", 100]]}},
+                    }
+                ]
+            },
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [
+            {"type": "state_transition", "params": {"name": "st"}},
+            {"type": "policy_violation", "params": {"name": "pv"}},
+        ],
+        "state_adapter": {
+            "type": "sqlite",
+            "params": {
+                "schema_sql": "CREATE TABLE accounts (id INTEGER PRIMARY KEY, name TEXT, balance INTEGER);",
+                "seed_sql": "INSERT INTO accounts VALUES (1, 'alice', 100);",
+            },
+        },
+        "sinks": [{"type": "console"}],
+    },
+    "state_mock_http": {
+        "schema_version": "1.0",
+        "run": {"name": "state-mock-http-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "mh1",
+                        "inputs": {"q": "hello"},
+                        "expected": "hello",
+                        "metadata": {
+                            "state_expectation": {"/config": "locked"},
+                            "state_forbidden_keys": ["/secrets"],
+                        },
+                    }
+                ]
+            },
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [
+            {"type": "state_transition", "params": {"name": "st"}},
+            {"type": "policy_violation", "params": {"name": "pv"}},
+        ],
+        "state_adapter": {
+            "type": "mock_http",
+            "params": {"initial_resources": {"/config": "locked", "/secrets": "hidden"}},
+        },
+        "sinks": [{"type": "console"}],
+    },
+    "state_filesystem": {
+        "schema_version": "1.0",
+        "run": {"name": "state-filesystem-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "fs1",
+                        "inputs": {"q": "hello"},
+                        "expected": "hello",
+                        # Only `policy_violation` is asserted for this adapter, and the
+                        # forbidden key is why. `reset()` wipes the root, and no shipped
+                        # target writes into it, so `after` is empty and no
+                        # `state_expectation` over file hashes can be satisfied. A
+                        # forbidden key that stays absent IS real evidence read from the
+                        # adapter's own snapshots, which is the honest thing available here.
+                        "metadata": {"state_forbidden_keys": ["audit.log"]},
+                    }
+                ]
+            },
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [{"type": "policy_violation", "params": {"name": "pv"}}],
+        # `root` is filled in by TMP_FIXTURE_PARAMS; left to its default the adapter
+        # mkdtemps outside tmp_path and leaks a directory per run.
+        "state_adapter": {"type": "filesystem", "params": {}},
+        "sinks": [{"type": "console"}],
+    },
+    # The four test-generation scorers over the suite-execution target. Inline rather than
+    # corpus-backed so the cell stays fast (one mutant = two sandbox subprocesses) and has
+    # no dependency on a committed data file. The suite drives the exact input at which the
+    # mutant diverges, so a green run here means the sandbox really executed both.
+    "testgen_scorers": {
+        "schema_version": "1.0",
+        "run": {"name": "testgen-scorers-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "tg1",
+                        "inputs": {
+                            "focal_name": "add",
+                            "reference": "def add(n, k):\n    if n < 2:\n        return n + k\n    return k - n\n",
+                            "suite": "from focal import add\n\ndef test_boundary():\n    assert add(2, 1) == -1\n",
+                            "mutants": [
+                                {
+                                    "id": "M1",
+                                    "kind": "relational",
+                                    "equivalent": False,
+                                    "source": (
+                                        "def add(n, k):\n    if n <= 2:\n        return n + k\n    return k - n\n"
+                                    ),
+                                    "differs_at": [1],
+                                }
+                            ],
+                            "obligations": [{"id": "OB-1", "witness_mutant": "M1"}],
+                            "grid": [[0, 0], [2, 1]],
+                        },
+                        "expected": None,
+                    }
+                ]
+            },
+        },
+        "target": {
+            "type": "callable",
+            "params": {"path": "eval_harness.targets.testgen:run_generated_suite"},
+        },
+        "scorers": [
+            {"type": "test_executability"},
+            {"type": "testgen_mutation_score"},
+            {"type": "testgen_green_on_correct"},
+            {"type": "requirement_obligation_recall"},
+        ],
         "sinks": [{"type": "console"}],
     },
     "weighted": {
@@ -1730,6 +2086,161 @@ PIPELINES: dict[str, dict] = {
 _SWALLOW_MARKER = "scorer error: "
 
 
+#: Params a pipeline cannot state at module import because they need a per-test `tmp_path`.
+#: Keyed by ``(kind, registered type)`` and never by type alone: `braintrust` and `langfuse`
+#: are each registered as BOTH a dataset and a sink, so a type-only table would collide.
+#: The value builds the param overrides from the tmp root and the pipeline's own name, so
+#: two pipelines using the same component never share a file.
+#:
+#: This replaces `_run`'s hardcoded `json_file`-only branch. Adding a file-backed component
+#: to a pipeline now means adding a row here, not editing the runner.
+TmpPathParams = Callable[[Path, str], dict[str, Any]]
+
+#: Components that WRITE an artifact. Their path is what `_run` hands back as "the file
+#: this pipeline produced".
+TMP_PATH_PARAMS: dict[tuple[str, str], TmpPathParams] = {
+    ("sink", "json_file"): lambda root, name: {"path": str(root / f"{name}.json")},
+    ("sink", "html_file"): lambda root, name: {"path": str(root / f"{name}.html")},
+}
+
+#: Components that READ an input the test must first materialise, plus the roots an adapter
+#: needs. Same shape, separate table rather than one table with a role flag: an input
+#: fixture is never "the artifact this pipeline produced", and conflating the two is how
+#: `_run`'s single return value would start meaning two things.
+#:
+#: The builders WRITE as well as return params — a `csv` dataset needs a real file on disk
+#: before `EvalConfig` is even validated, and there is nowhere else in the run to put that.
+TMP_FIXTURE_PARAMS: dict[tuple[str, str], TmpPathParams] = {
+    ("dataset", "jsonl"): lambda root, name: _write_jsonl_fixture(root / f"{name}.jsonl"),
+    ("dataset", "csv"): lambda root, name: _write_csv_fixture(root / f"{name}.csv"),
+    ("dataset", "parquet"): lambda root, name: _write_parquet_fixture(root / f"{name}.parquet"),
+    ("state_adapter", "filesystem"): lambda root, name: {"root": str(root / f"{name}-state")},
+}
+
+
+def _apply_tmp_path_params(config_dict: dict, *, name: str, tmp_path: Path | None) -> Path | None:
+    """Fill in every param that can only be known at test time. Returns the artifact written.
+
+    At most one artifact-producing component per pipeline, asserted rather than assumed: the
+    return type is a single path because every caller wants "the artifact this pipeline
+    produced", and a pipeline with two would make that question ambiguous. Splitting such a
+    pipeline in two is the intended fix, and the assertion says so. Input fixtures are
+    unlimited — a pipeline reads one dataset and may seed several adapters.
+    """
+    artifacts: list[Path] = []
+    for table, collect in ((TMP_PATH_PARAMS, artifacts), (TMP_FIXTURE_PARAMS, None)):
+        for kind, entry in _iter_components(config_dict):
+            _resolve_tmp_params(entry, kind, table=table, name=name, tmp_path=tmp_path, collect=collect)
+
+    assert len(artifacts) <= 1, (
+        f"pipeline {name!r} produces {len(artifacts)} file artifacts ({artifacts}); "
+        "`_run` returns a single artifact path, so split this into two pipelines"
+    )
+    return artifacts[0] if artifacts else None
+
+
+def _iter_components(config_dict: dict) -> Iterator[tuple[str, dict]]:
+    """``(kind, component block)`` for every component in a config, list-valued or not.
+
+    Kind names match the registry kinds the tmp-path tables are keyed by, so a caller never
+    has to know which config fields hold a list.
+    """
+    for field, kind in (("sinks", "sink"), ("scorers", "scorer")):
+        for entry in config_dict.get(field, []):
+            if isinstance(entry, dict):
+                yield kind, entry
+    for kind in ("dataset", "target", "judge", "state_adapter"):
+        entry = config_dict.get(kind)
+        if isinstance(entry, dict):
+            yield kind, entry
+
+
+def _resolve_tmp_params(
+    entry: dict,
+    kind: str,
+    *,
+    table: dict[tuple[str, str], TmpPathParams],
+    name: str,
+    tmp_path: Path | None,
+    collect: list[Path] | None,
+) -> None:
+    """Apply one component's row from *table*, if it has one."""
+    builder = table.get((kind, entry.get("type", "")))
+    if builder is None:
+        return
+    assert tmp_path is not None, f"pipeline {name!r} needs a tmp path for {kind}/{entry['type']}; pass tmp_path"
+    params = builder(tmp_path, name)
+    entry.setdefault("params", {}).update(params)
+    if collect is not None:
+        collect.extend(Path(v) for v in params.values() if isinstance(v, str) and Path(v).suffix)
+
+
+#: The one record every file-backed dataset fixture serves, in each format's own shape.
+#: Single-sourced so the three writers below cannot drift into testing different data, and
+#: so a cell's assertion can name the expected value instead of restating a literal.
+FIXTURE_ITEM_ID = "f1"
+FIXTURE_QUESTION = "hello"
+
+
+def _write_jsonl_fixture(path: Path) -> dict[str, Any]:
+    path.write_text(
+        json.dumps({"id": FIXTURE_ITEM_ID, "inputs": {"q": FIXTURE_QUESTION}, "expected": FIXTURE_QUESTION}) + "\n",
+        encoding="utf-8",
+    )
+    return {"path": str(path)}
+
+
+def _write_csv_fixture(path: Path) -> dict[str, Any]:
+    path.write_text(
+        f"id,q,expected\n{FIXTURE_ITEM_ID},{FIXTURE_QUESTION},{FIXTURE_QUESTION}\n",
+        encoding="utf-8",
+    )
+    return {"path": str(path), "input_columns": ["q"]}
+
+
+def _write_parquet_fixture(path: Path) -> dict[str, Any]:
+    # pyarrow ships in the `dev` extra (pyproject.toml), so this is a hard import rather
+    # than an importorskip: a silently skipped M8 cell is the vacuous credit F-053 removed.
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    pq.write_table(
+        pa.table(
+            {
+                "id": [FIXTURE_ITEM_ID],
+                "q": [FIXTURE_QUESTION],
+                "expected": [FIXTURE_QUESTION],
+            }
+        ),
+        path,
+    )
+    return {"path": str(path), "input_columns": ["q"]}
+
+
+def _null_langfuse_client_for(config_dict: dict) -> NullLangfuseClient | None:
+    """A Null client seeded for this pipeline's langfuse dataset, or ``None`` if it has none.
+
+    Returns ``None`` rather than an unconditional client so the engine's `attach_client`
+    loop is exercised only by pipelines that declare a langfuse component — an always-on
+    client would make the *absence* of one untestable, and a langfuse cell would pass
+    without ever proving the seam is wired.
+
+    The dataset is seeded under whatever `dataset_name` the pipeline declares, so the cell
+    proves the name is plumbed through rather than ignored.
+    """
+    langfuse = [(kind, entry) for kind, entry in _iter_components(config_dict) if entry.get("type") == "langfuse"]
+    if not langfuse:
+        return None
+    items: dict[str, list[dict]] = {
+        entry["params"]["dataset_name"]: [
+            {"id": FIXTURE_ITEM_ID, "inputs": {"q": FIXTURE_QUESTION}, "expected": FIXTURE_QUESTION}
+        ]
+        for kind, entry in langfuse
+        if kind == "dataset"
+    }
+    return NullLangfuseClient(dataset_items=items)
+
+
 def _assert_declared_components_ran(name: str, config_dict: dict, ledger: ExecutionLedger) -> None:
     """Fail if this pipeline declared a component whose protocol method never ran.
 
@@ -1778,15 +2289,18 @@ class TestM8Composability:
         self, name: str, tmp_path: Path | None = None
     ) -> tuple[EvalConfig, RunResult, Path | None, ExecutionLedger]:
         config_dict = copy.deepcopy(PIPELINES[name])
-        out_path: Path | None = None
-        for sink in config_dict.get("sinks", []):
-            if sink.get("type") == "json_file":
-                assert tmp_path is not None, f"pipeline {name!r} writes a file; pass tmp_path"
-                out_path = tmp_path / f"{name}.json"
-                sink.setdefault("params", {})["path"] = str(out_path)
+        out_path = _apply_tmp_path_params(config_dict, name=name, tmp_path=tmp_path)
         config = EvalConfig.model_validate(config_dict)
+        # The langfuse dataset and sink take their client through `attach_client`, which the
+        # engine drives from `from_config`'s parameter -- there is no `params` seam for it,
+        # unlike the network judges' `client=`. Built from the config's own declarations so
+        # a pipeline that names neither never gets a client it did not ask for.
+        client = _null_langfuse_client_for(config_dict)
+        # Stashed rather than returned: the 4-tuple is unpacked at every existing call
+        # site, and only the two langfuse cells need to inspect what the client recorded.
+        self.langfuse_client = client
         with probe() as ledger:
-            result = EvalEngine.from_config(config).run()
+            result = EvalEngine.from_config(config, langfuse_client=client).run()
         _assert_no_swallowed_errors(result)
         _assert_declared_components_ran(name, config_dict, ledger)
         return config, result, out_path, ledger
@@ -1845,6 +2359,162 @@ class TestM8Composability:
         assert ledger.invoked("judge", "anthropic"), "the anthropic judge was declared but never invoked"
         assert config.judge is not None
         assert config.judge.params["client"].calls, "the injected client was never called"
+
+    # ---------------------------------------------------------------- WS-2 breadth cells
+
+    def test_m8_csv_dataset_pipeline(self, tmp_path: Path) -> None:
+        """The `csv` dataset composes through the engine, reading a file written per test."""
+        _, result, _, ledger = self._run("csv_dataset", tmp_path)
+        assert [i.item.id for i in result.items] == [FIXTURE_ITEM_ID]
+        assert result.aggregate["em"].mean == 1.0
+        assert ledger.invoked("dataset", "csv")
+
+    def test_m8_parquet_dataset_pipeline(self, tmp_path: Path) -> None:
+        """`parquet`, with pyarrow from the `dev` extra -- a hard import, never a skip."""
+        _, result, _, ledger = self._run("parquet_dataset", tmp_path)
+        assert [i.item.id for i in result.items] == [FIXTURE_ITEM_ID]
+        assert result.aggregate["em"].mean == 1.0
+        assert ledger.invoked("dataset", "parquet")
+
+    def test_m8_jsonl_dataset_pipeline(self, tmp_path: Path) -> None:
+        _, result, _, ledger = self._run("jsonl_dataset", tmp_path)
+        assert [i.item.id for i in result.items] == [FIXTURE_ITEM_ID]
+        assert result.aggregate["em"].mean == 1.0
+        assert ledger.invoked("dataset", "jsonl")
+
+    def test_m8_langfuse_dataset_pipeline(self) -> None:
+        """The dataset arrives through `attach_client`, not through `params`.
+
+        Asserts the item came from the seeded client, so the cell fails if `dataset_name`
+        stops being plumbed through rather than passing on an empty run.
+        """
+        _, result, _, ledger = self._run("langfuse_dataset")
+        assert [i.item.id for i in result.items] == [FIXTURE_ITEM_ID]
+        assert result.aggregate["em"].mean == 1.0
+        assert ledger.invoked("dataset", "langfuse")
+
+    def test_m8_langfuse_sink_pipeline(self) -> None:
+        """The sink's scores reach the injected client, and it is flushed."""
+        _, _result, _, ledger = self._run("langfuse_sink")
+        assert ledger.invoked("sink", "langfuse")
+        client = self.langfuse_client
+        assert client is not None
+        assert client.scores, "the sink emitted nothing to the client"
+        assert client.flushed is True
+
+    def test_m8_braintrust_dataset_pipeline(self, fake_braintrust: Any) -> None:
+        """`braintrust` has no client seam at all, so the SDK module itself is faked.
+
+        Deliberately not an `importorskip`: a cell that silently skips is the vacuous
+        credit F-053 had to remove for exactly this component.
+        """
+        fake_braintrust(
+            init_dataset_records=[
+                {"id": FIXTURE_ITEM_ID, "input": {"q": FIXTURE_QUESTION}, "expected": FIXTURE_QUESTION}
+            ]
+        )
+        _, result, _, ledger = self._run("braintrust_dataset")
+        assert [i.item.id for i in result.items] == [FIXTURE_ITEM_ID]
+        assert ledger.invoked("dataset", "braintrust")
+
+    def test_m8_html_file_sink_pipeline(self, tmp_path: Path) -> None:
+        """The report is written, and carries the gate verdict F-062 added."""
+        _, result, out_html, ledger = self._run("html_file_sink", tmp_path)
+        assert ledger.invoked("sink", "html_file")
+        assert out_html is not None and out_html.exists()
+        rendered = out_html.read_text(encoding="utf-8")
+        assert result.gate is not None and result.gate.passed is True
+        assert "Quality gate" in rendered, "the sink must render the persisted gate decision"
+
+    def test_m8_phoenix_sink_pipeline(self) -> None:
+        """Offline by construction: `enabled` defaults False, so no SDK and no socket."""
+        _, _result, _, ledger = self._run("phoenix_sink")
+        assert ledger.invoked("sink", "phoenix")
+
+    def test_m8_braintrust_sink_pipeline(self) -> None:
+        """Same shape as phoenix -- the Null client is the default, not a fixture."""
+        _, _result, _, ledger = self._run("braintrust_sink")
+        assert ledger.invoked("sink", "braintrust")
+
+    def test_m8_panel_judge_pipeline(self) -> None:
+        """The panel reduces three DIFFERENT member scores, and its members are credited.
+
+        `_PANEL_MEDIAN` is reachable only if the median strategy actually ran over all
+        three members: mean would give 0.766..., and any single member would give its own
+        score. The probe hooks `Registry.create`, and `PanelJudge` builds members through
+        `JUDGES.create`, so `judge/mock` is credited without extra instrumentation.
+        """
+        _, result, _, ledger = self._run("panel_judge")
+        assert result.aggregate["quality"].mean == _PANEL_MEDIAN
+        assert ledger.invoked("judge", "panel")
+        assert ledger.invoked("judge", "mock"), "the panel's member judges must be credited too"
+
+    def test_m8_model_target_pipeline(self) -> None:
+        """The `model` target composes offline through its `client=` seam.
+
+        The `anthropic` provider is what makes this offline at call time as well as at
+        construction: its completion path imports nothing.
+        """
+        config, result, _, ledger = self._run("model_target")
+        assert result.items[0].output.error is None
+        assert result.aggregate["em"].mean == 1.0, "the target must return the injected client's reply"
+        assert ledger.invoked("target", "model")
+        assert config.target.params["client"].calls, "the injected client was never called"
+
+    def test_m8_text_scorers_pipeline(self) -> None:
+        """`regex_match`, `json_keys` and `autoevals` grade one output together.
+
+        Each is configured so it CAN fail: a real pattern rather than `.*`, a non-empty
+        `required` rather than `[]`. `autoevals` is asserted on its value because its own
+        error path returns a tidy 0.0 with an `autoevals error: ` comment, which the
+        runner's swallowed-error guard does not match.
+        """
+        _, result, _, ledger = self._run("text_scorers")
+        assert result.aggregate["rx"].mean == 1.0
+        assert result.aggregate["jk"].mean == 1.0
+        assert result.aggregate["ae"].mean == 1.0
+        for component in ("regex_match", "json_keys", "autoevals"):
+            assert ledger.invoked("scorer", component), component
+
+    def test_m8_sqlite_state_adapter_pipeline(self) -> None:
+        """The adapter's EVIDENCE is scored, not merely its lifecycle driven.
+
+        `pass_rate`, not `mean`: a state scorer with no adapter returns `passed=None`, the
+        aggregate drops None verdicts, and `pass_rate` comes back as None -- so asserting
+        the mean would pass on a run where nothing was measured.
+        """
+        _, result, _, ledger = self._run("state_sqlite")
+        assert result.aggregate["st"].pass_rate == 1.0
+        assert result.aggregate["pv"].pass_rate == 1.0
+        assert ledger.invoked("state_adapter", "sqlite")
+
+    def test_m8_mock_http_state_adapter_pipeline(self) -> None:
+        _, result, _, ledger = self._run("state_mock_http")
+        assert result.aggregate["st"].pass_rate == 1.0
+        assert result.aggregate["pv"].pass_rate == 1.0
+        assert ledger.invoked("state_adapter", "mock_http")
+
+    def test_m8_filesystem_state_adapter_pipeline(self, tmp_path: Path) -> None:
+        """Only `policy_violation` is asserted, and the pipeline comment says why."""
+        _, result, _, ledger = self._run("state_filesystem", tmp_path)
+        assert result.aggregate["pv"].pass_rate == 1.0
+        assert ledger.invoked("state_adapter", "filesystem")
+
+    def test_m8_testgen_scorers_pipeline(self) -> None:
+        """The four test-generation scorers, over a suite the sandbox really executed.
+
+        Asserts the verdicts and not merely that the run completed: the mutation score can
+        only be 1.0 if the sandbox ran the suite against the mutant and observed the kill,
+        and the recall can only be 1.0 if the witness mutant was the one killed.
+        """
+        _, result, _, ledger = self._run("testgen_scorers")
+        assert result.aggregate["test_executability"].pass_rate == 1.0
+        assert result.aggregate["testgen_mutation_score"].mean == 1.0
+        assert result.aggregate["testgen_green_on_correct"].mean == 0.0
+        assert result.aggregate["requirement_obligation_recall"].mean == 1.0
+        for component in TESTGEN_SCORERS:
+            assert ledger.invoked("scorer", component), component
+        assert ledger.invoked("target", "callable")
 
     def test_m8_pipeline_with_composite_scorer(self) -> None:
         """Composite scorer composes children inside the engine pipeline."""
@@ -2577,3 +3247,58 @@ class TestSinksShared:
                 recorded = sink._client.items  # type: ignore[attr-defined]
             assert recorded == []
             assert sink._client.flushed is True  # type: ignore[attr-defined]
+
+
+# ============================================================================
+# WS-2: the tmp-path parameter table that replaced `_run`'s json_file-only branch
+# ============================================================================
+
+
+class TestTmpPathParams:
+    """`_apply_tmp_path_params` — negative controls for the table `_run` depends on.
+
+    Not an M8 suite (no `MATRIX_KIND`): these test the runner, not a component. A silent
+    failure here would let a file-backed cell run against an unwritten path and still
+    report green, which is the vacuity the execution ledger exists to refuse.
+    """
+
+    def test_a_component_with_no_row_is_left_alone(self) -> None:
+        config = {"sinks": [{"type": "console"}]}
+        assert _apply_tmp_path_params(config, name="p", tmp_path=None) is None
+        assert config == {"sinks": [{"type": "console"}]}, "an untabled component must not be edited"
+
+    def test_a_tabled_component_gets_its_path_and_the_path_is_returned(self, tmp_path: Path) -> None:
+        config: dict = {"sinks": [{"type": "json_file"}]}
+        written = _apply_tmp_path_params(config, name="mypipe", tmp_path=tmp_path)
+        assert written is not None and written.name == "mypipe.json"
+        assert config["sinks"][0]["params"]["path"] == str(written)
+
+    def test_the_path_is_named_for_the_pipeline_so_two_cells_never_collide(self, tmp_path: Path) -> None:
+        first = _apply_tmp_path_params({"sinks": [{"type": "json_file"}]}, name="a", tmp_path=tmp_path)
+        second = _apply_tmp_path_params({"sinks": [{"type": "json_file"}]}, name="b", tmp_path=tmp_path)
+        assert first != second
+
+    def test_a_missing_tmp_path_fails_loudly_rather_than_writing_somewhere(self) -> None:
+        with pytest.raises(AssertionError, match="needs a tmp path"):
+            _apply_tmp_path_params({"sinks": [{"type": "json_file"}]}, name="p", tmp_path=None)
+
+    def test_two_file_components_in_one_pipeline_are_refused(self, tmp_path: Path) -> None:
+        """`_run` returns ONE artifact path, so two would make "the artifact" ambiguous."""
+        config = {"sinks": [{"type": "json_file"}, {"type": "json_file"}]}
+        with pytest.raises(AssertionError, match="split this into two pipelines"):
+            _apply_tmp_path_params(config, name="p", tmp_path=tmp_path)
+
+    def test_the_table_is_keyed_by_kind_and_type_not_type_alone(self) -> None:
+        """`braintrust` and `langfuse` are each registered as BOTH a dataset and a sink.
+
+        A type-only table would apply a sink's row to a dataset of the same name. Asserted
+        against the live census rather than a restated list.
+        """
+        from tests._matrix_coverage import census_names, registry_census
+
+        census = registry_census()
+        both = set(census_names(census, "dataset")) & set(census_names(census, "sink"))
+        assert both, "precondition: at least one name is registered under two kinds"
+        assert all(isinstance(key, tuple) and len(key) == 2 for key in TMP_PATH_PARAMS), (
+            f"every TMP_PATH_PARAMS key must be (kind, type); ambiguous names today: {sorted(both)}"
+        )

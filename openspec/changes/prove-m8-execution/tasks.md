@@ -1,8 +1,10 @@
 # Tasks: prove-m8-execution
 
-**Status: tasks 1-3 and 5 implemented; task 4 (breadth) outstanding.** Tasks 1-2 landed
-earlier on this change (`f118b07` and predecessors). Task 5 and the F-ID land as **F-063**;
-`python scripts/validations/F_063.py` is the executable proof.
+**Status: all tasks implemented.** Tasks 1-2 landed earlier on this change (`f118b07` and
+predecessors). Task 5 and its F-ID landed as **F-063**; `python scripts/validations/F_063.py`
+is the executable proof. Task 4 (breadth) landed 2026-09-05: **M8 now credits 39 of the 41
+registered components, and the two uncredited are exactly the two waived.** The change is
+ready for archive once the `spec-guardian` and `peer-reviewer` passes run.
 
 `[P]` = protected path; needs `eval-change-approved` + CODEOWNERS review.
 Coverage floor: **96%** (root `eval_harness`).
@@ -46,25 +48,49 @@ Coverage floor: **96%** (root `eval_harness`).
       pipeline declaring a component it never invokes is rejected by the execution census
       (an executable regression test for task 2's `echo_exact_match` finding).
 
-## 4. Breadth: the 19 test-only components — PR 6/7
+## 4. Breadth: the 19 test-only components — PR 6/7 — **DONE**
 
-- [ ] `[P]` Generalise `_run`'s tmp-path override (`tests/test_matrix_eval_tools.py:1602-1612`,
-      currently `json_file`-only) into a table keyed by `(kind, type)`.
-- [ ] `[P]` `PIPELINES` values become zero-arg factories. **Before this task**: confirm no AST
-      path reads `PIPELINES` as a literal dict (the extractor supports single-file constant
-      folding only) — grep `scripts/extract_registries.py` and `tests/_matrix_coverage.py`
-      for any reference.
-- [ ] `[P]` Add pipelines, cheapest first: `phoenix`/`braintrust` sinks through
+- [x] `[P]` Generalise `_run`'s tmp-path override into a table keyed by `(kind, type)`.
+      Shipped as TWO tables, not one: `TMP_PATH_PARAMS` for components that WRITE an
+      artifact and `TMP_FIXTURE_PARAMS` for inputs a test must materialise first (a `csv`
+      dataset needs a real file on disk before `EvalConfig` is even validated). Conflating
+      them would make `_run`'s single return value mean two things. Keyed by `(kind, type)`
+      and not type alone, because `braintrust` and `langfuse` are each registered under two
+      kinds — asserted by a test against the live census.
+- [x] `[P]` `PIPELINES` values become zero-arg factories. **Not done, and deliberately: the
+      conversion turned out to be unnecessary.** The AST precondition was discharged first
+      (`extract_registries.py` never references `test_matrix_eval_tools`; every consumer reads
+      `PIPELINES` at runtime), and then all nineteen cells were built without a single factory.
+      A deep copy per run already isolates a literal, including the live recording clients the
+      judge and model-target cells inject; a path that must be built per test comes from the
+      tables above; a client injected at engine construction comes from a `_run` parameter; and
+      a cell needing `sys.modules` faked has its TEST METHOD request the `fake_braintrust`
+      fixture. A hybrid literal/factory seam was built, proved to have zero consumers, and
+      removed — an unused mechanism guarded by tests is the same declared-but-never-invoked
+      shape this change exists to refuse.
+- [x] `[P]` Add pipelines, cheapest first: `phoenix`/`braintrust` sinks through
       `NullPhoenixScoreClient.scores`/`NullBrainTrustClient.items` (zero config,
       `enabled=False` default); `panel` over `{"type": "mock"}` members;
       `langfuse`/`braintrust` datasets via `NullLangfuseClient(dataset_items=...)` and the
       existing `fake_braintrust` fixture (`tests/conftest.py:79-119`); `sqlite`
       (`:memory:`); `filesystem` (tmp root); `mock_http`; `html_file`; `jsonl`.
-- [ ] `[P]` Credit `csv`, `parquet`, and the `langfuse` sink by adding them to `PIPELINES`
+- [x] `[P]` Credit `csv`, `parquet`, and the `langfuse` sink by adding them to `PIPELINES`
       (they already run in `tests/integration/test_pipeline_e2e.py` and `tests/test_engine.py`
       respectively; this task makes the matrix's own accounting agree, keeping the ledger
       single-sourced rather than counted from outside tests).
-- [ ] `[P]` Regenerate `docs/matrix-coverage.md`.
+- [x] `[P]` Regenerate `docs/matrix-coverage.md`. **M8 now credits 39 of 41 components; the
+      two uncredited are exactly the two waived (`bedrock`, `phoenix_evals`).**
+- [x] `[P]` **CI follow-up, found by the regression gate rather than by review.** The
+      `text_scorers` cell constructs the `autoevals` scorer unconditionally, and
+      `AutoevalsScorer` raises at construction when the package is absent. Every autoevals
+      test before it used `importorskip`, so the two jobs that run the ROOT suite without
+      that extra — `quality-gates.yml` and `calibrated-merge-gate.yml` — could skip them
+      silently; an M8 pipeline is a dict and cannot. Both install lines now carry
+      `autoevals`. Reproduced first by blocking the import and observing exactly one
+      failing test, which also confirmed no other cell has the same gap.
+      **Structural gap left open:** `_EXTRA_PROVIDES` models which extra provides which
+      component, and nothing cross-checks it against the install lines of the jobs that run
+      the suite. A guard for that is its own change.
 
 ## 5. Judge DI seams — PR (own protected PR, cannot split unprotected-first)
 

@@ -156,8 +156,14 @@ is the schedule's dominant term, not the coding.
 
 ### Sprint 1 → unlocks Deck B
 
-- Finish `prove-m8-execution` **task 4** (breadth to the 19 test-only components). Small, unblocks
-  nothing else, but leaves the matrix honest before 13 scorers arrive.
+- Finish `prove-m8-execution` **task 4** (breadth to the 19 test-only components). Unblocks nothing
+  else, but leaves the matrix honest before 13 scorers arrive.
+  **Correction (2026-09-05): this was called "Small" here and it is not.** The 19 cells need
+  `PIPELINES` converted from literal dicts to zero-arg factories, which breaks five call sites,
+  two of them protected validation scripts. Sized in
+  [`plans/eval-delivery-sequencing/PLAN.md`](../eval-delivery-sequencing/PLAN.md) WS-2, which also
+  discharges the change's stated AST precondition. Treat it as the sprint's dominant engineering
+  item, not a warm-up.
 - Implement `add-testgen-eval-matrix`: the corpus generator (control-flow templates, seeded
   non-equivalent mutants, gold obligations), the allowlisted execution target, four pure-reader
   scorers, 20 matrix cells, advisory gate rules only.

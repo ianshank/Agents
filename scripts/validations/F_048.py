@@ -5,10 +5,12 @@ Asserts the three parts of the hygiene gate stay in place:
     1. ``.gitleaks.toml`` exists, extends the default ruleset, and stores no secret
        literal of its own (a config that embedded the scrubbed key would reintroduce the
        very string the working-tree gate exists to catch).
-    2. ``quality-gates.yml`` wires gitleaks with the documented asymmetry: the working-tree
+    2. ``secret-scan.yml`` wires gitleaks with the documented asymmetry: the working-tree
        scan (``--no-git``) is FAIL-CLOSED, while the history scan is report-only
        (``--exit-code 0``) because the known finding is deliberately not rewritten out of
-       history (ADR 0027).
+       history (ADR 0027). It also runs on EVERY pull request: a ``paths:`` filter is
+       evaluated per workflow, so while this job lived in ``quality-gates.yml`` a
+       docs-only pull request skipped it while a stub reported its context green.
     3. No Langfuse key literal survives in the scrubbed files. The check is written as a
        prefix scan over all tracked markdown rather than a fixed list, so a key
        reintroduced in a NEW file fails too.
@@ -44,7 +46,13 @@ from _common import configure_logging, report
 logger = logging.getLogger(__name__)
 
 _CONFIG = ".gitleaks.toml"
-_WORKFLOW = os.path.join(".github", "workflows", "quality-gates.yml")
+#: The scan's own workflow. It used to be a job inside ``quality-gates.yml``, whose
+#: ``paths:`` filter is evaluated per WORKFLOW — so a pull request touching only docs,
+#: demos, skills or a corpus never started it, and the companion stub in
+#: ``required-check-stubs.yml`` reported the context green anyway. A credential can be
+#: committed in any file, so the scan now runs unfiltered from a file of its own, and this
+#: validator follows it there rather than continuing to assert about its old home.
+_WORKFLOW = os.path.join(".github", "workflows", "secret-scan.yml")
 _ADR = os.path.join("docs", "decisions", "0027-no-history-rewrite.md")
 
 # The three files the 2026-07-03 Phase 0 named. Kept explicit so a silent revert of any
@@ -99,19 +107,35 @@ def _check_workflow(errors: list[str]) -> None:
         return
     _check(True, f"{_WORKFLOW} exists", errors)
     workflow = _read(_WORKFLOW)
-    _check("gitleaks" in workflow, "quality-gates.yml runs gitleaks", errors)
+    _check("gitleaks" in workflow, f"{_WORKFLOW} runs gitleaks", errors)
     _check(
         "--no-git" in workflow and "--exit-code 0" in workflow,
-        "quality-gates.yml runs BOTH scans (working tree + history)",
+        f"{_WORKFLOW} runs BOTH scans (working tree + history)",
         errors,
     )
     # Asserted per-line, not by whole-file substring: the report-only history flag must not
     # be able to satisfy a check about the working-tree line.
     worktree_lines = [ln for ln in workflow.splitlines() if "--no-git" in ln]
-    _check(bool(worktree_lines), "quality-gates.yml has a --no-git working-tree scan", errors)
+    _check(bool(worktree_lines), f"{_WORKFLOW} has a --no-git working-tree scan", errors)
     _check(
         all("--exit-code 0" not in ln for ln in worktree_lines),
         "the working-tree scan is FAIL-CLOSED (no --exit-code 0 on the --no-git line)",
+        errors,
+    )
+    # Unfiltered, and asserted here rather than only in the test suite: a `paths:` filter
+    # on this workflow is the defect that made the scan skippable, and it is invisible in
+    # a diff that only adds four lines to a trigger block.
+    import yaml
+
+    document = yaml.safe_load(workflow) or {}
+    # YAML 1.1 resolves the bare key `on:` to the boolean True, not the string "on" — the
+    # long-standing "Norway problem" in GitHub Actions files. Accept either so this does
+    # not depend on the loader's resolver version.
+    triggers = document.get("on", document.get(True)) or {}
+    pull_request = triggers.get("pull_request") or {}
+    _check(
+        "paths" not in pull_request and "paths-ignore" not in pull_request,
+        "the scan runs on EVERY pull request (a credential can be committed in any file)",
         errors,
     )
 

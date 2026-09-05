@@ -104,6 +104,22 @@ class AgentTrajectory:
         return tuple(s.tool_call for s in self.steps if s.kind == "tool_call" and s.tool_call is not None)
 
 
+#: Key under which the suite-execution target publishes its evidence on
+#: ``TargetOutput.metadata``, and under which the ``test_generation`` scorers read it.
+#:
+#: Lives in ``core`` rather than beside either party because it is the *contract between*
+#: them. Defining it in ``targets/testgen.py`` and importing it from the scorers created a
+#: real ``scorers -> targets`` component edge, which the architecture drift guard caught —
+#: the change's design.md had predicted the subpackage would add no edge and was right
+#: about the package mapping while missing this import. Both components already depend on
+#: ``core``, so the neutral home costs nothing.
+#:
+#: Not added to ``eval_harness.core.__all__``: the public surface is frozen by exact
+#: equality (F-039), and this is an internal contract between two first-party components,
+#: not something a downstream user composes against.
+TESTGEN_EVIDENCE_KEY = "testgen_evidence"
+
+
 @dataclass
 class TargetOutput:
     """The result of running the system-under-test against one item.

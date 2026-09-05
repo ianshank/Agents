@@ -889,9 +889,9 @@ features:
       - "stats CLI --soak-target adds a reserved '_soak' block (no domain-name collision, matching the _unparsed convention); absent the flag, the stats JSON is byte-identical to the prior contract"
       - "store.py stays at 100% branch coverage under the agent-core 95 floor; ruff (incl. C901<15) + ruff format + strict mypy clean; store_sync stays under the 500-line file budget"
     validation_command: "python scripts/validations/F_040.py"
-    implemented_in: "0f19ecaa81639f8afbf66fcad54869186b02f5c4"
+    implemented_in: "3e26747a7be62eb91c1ebac6985d916b32ab7cdc"
     depends_on: ["F-032"]
-    notes: "Extends the existing store_sync package (F-032 / ADR 0018): soak_progress lives beside store_stats in store.py, the CLI flag beside the stats subparser. `target` is a caller-supplied counter, not a claim about the real activation bar (~380 near-perfect audited records per domain, per NEXT_STEPS.md's corrected soak framing and openspec/changes/archive/eval-proxy-and-estimator/review.md) -- N>=20 is a publish threshold only. Soak enablement itself stays time-gated (real bar reached + >=1 human verdict + weekly audits per ADR 0005) — this feature only makes progress observable. F-036 (real-transcript corpus bridge) remains deferred."
+    notes: "Repointed 2026-09-05 by F-064's ancestry guard, which found this entry recording 0f19ecaa81 -- a commit on the pre-rebase branch feat/F-040-soak-stats that never landed. The work merged via PR #113 from feat/F-040-soak-stats-rebased; 3e26747a7b is the commit on main. The old ref resolved perfectly under the resolution-only check (CI clones with fetch-depth: 0, which fetches every branch), so the entry looked healthy for six weeks. status: done was and is correct -- only the pointer was wrong. Extends the existing store_sync package (F-032 / ADR 0018): soak_progress lives beside store_stats in store.py, the CLI flag beside the stats subparser. `target` is a caller-supplied counter, not a claim about the real activation bar (~380 near-perfect audited records per domain, per NEXT_STEPS.md's corrected soak framing and openspec/changes/archive/eval-proxy-and-estimator/review.md) -- N>=20 is a publish threshold only. Soak enablement itself stays time-gated (real bar reached + >=1 human verdict + weekly audits per ADR 0005) — this feature only makes progress observable. F-036 (real-transcript corpus bridge) remains deferred."
 
   - id: "F-050"
     epic: "Skills Framework"
@@ -1259,3 +1259,104 @@ features:
       testable but evaluate() still needs the SDK and network, and the pragma is about the
       latter. Remaining prove-m8-execution work is task 4 (breadth to the 19 test-only
       components), deliberately not attempted here.
+
+  - id: "F-064"
+    epic: "Quality Gate"
+    name: "Ledger provenance: implemented_in must be reachable, not merely resolvable"
+    description: >-
+      validate.py --strict-git verified that each implemented_in SHA was A COMMIT, never that
+      the commit was in this history. The two come apart because CI clones with fetch-depth: 0,
+      which fetches every branch: a commit on a branch that never merged resolves perfectly and
+      the ledger reports clean. F-040 carried exactly that for six weeks -- its ref lived only on
+      the pre-rebase feat/F-040-soak-stats while the work had landed via PR #113 from the rebased
+      branch (3e26747a7b). The repository's only defence was a convention in a YAML comment
+      (quality-gates.yml: "keep merge commits"), and a convention is not a guard. This adds
+      `git merge-base --is-ancestor <ref> HEAD` beside the existing resolution check. HEAD rather
+      than origin/main is load-bearing: a pull request that stamps its own feature's SHA records a
+      commit on its own branch, so origin/main would fail that legitimate case and the guard would
+      need an exemption list for refs the current diff introduces; against HEAD both cases fall out
+      with no exemptions. The implementation moved to scripts/_provenance.py because the addition
+      pushed validate.py past the 500-line hard budget -- the house answer to that gate (ADR 0036,
+      ADR 0019) is to move a cohesive concern to its own owner, not to trim documentation to fit.
+      Every pre-split name (_run_git, _is_shallow_clone, _check_git_refs) is re-bound in validate.py,
+      and _check_git_refs resolves _is_shallow_clone from its own globals at call time so the
+      existing monkeypatch seam keeps working.
+    category: "validation"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "a ref that RESOLVES but sits on a branch that never merged is refused -- established by building a two-branch repository and running the real check inside it, never by inspecting source; the ref is proved to resolve first so the check cannot pass for the trivial reason (scripts/validations/F_064.py, tests/test_provenance.py::test_an_unmerged_branch_ref_resolves_and_is_still_a_problem)"
+      - "the same ref is ACCEPTED from its own branch and refused from the default branch, which is what lets a pull request stamp its own in-flight SHA with no exemption list (tests/test_provenance.py::test_an_in_flight_ref_passes_on_its_own_branch)"
+      - "the ancestry target is a real parameter, not a baked-in literal: the same ref answers differently against two revisions (tests/test_provenance.py::test_ancestry_ref_is_a_parameter_not_a_baked_in_literal)"
+      - "an absent object is still reported as 'does not resolve' and not as unlanded -- two defects with two different fixes must not collapse into one message (tests/test_provenance.py::test_an_absent_ref_is_reported_as_unresolvable_not_as_unlanded)"
+      - "an undecidable ancestry (git exits neither 0 nor 1) is reported rather than swallowed, because passing a check that measured nothing is the failure this validator exists to prevent (tests/test_provenance.py::test_an_undecidable_ancestry_is_reported_not_swallowed)"
+      - "strict posture is unchanged: findings are errors under --strict-git and warnings without it, and a shallow clone downgrades because reachability is unanswerable on grafted history (tests/test_provenance.py::test_shallow_clone_downgrades_strict_to_warnings)"
+      - "one git probe per DISTINCT ref, not per feature -- five features share one landing commit today -- while every feature sharing a bad ref is still named individually (tests/test_provenance.py::test_one_probe_per_distinct_ref_not_per_feature, ::test_every_feature_sharing_a_bad_ref_is_named)"
+      - "every implemented_in ref in the live features.yaml is reachable from HEAD (tests/test_provenance.py::test_the_live_ledger_has_no_unlanded_provenance, scripts/validations/F_064.py)"
+      - "the guard is falsifiable, verified by execution against this checkout: neutralising the ancestry half back to resolution-only makes F_064.py fail 3 checks and exit 1"
+      - "CI runs it -- quality-gates.yml invokes validate.py --tier fast --strict-git, asserted through _common.ci_enforces so the check does not pin one wiring (scripts/validations/F_064.py)"
+    validation_command: "python scripts/validations/F_064.py"
+    implemented_in: "3cae4e46f17c774cdc827b74c2649895f085a856"
+    depends_on: ["F-031", "F-058"]
+    notes: >-
+      Implements docs/plans/eval-delivery-sequencing/PLAN.md WS-1, whose REVIEW.md R6 records that
+      this is NOT the same failure mode as F-063's orphaned SHA: that object was unreachable from
+      any branch, so the pre-existing resolution check would have caught it in a fresh CI clone.
+      The gap this closes is specifically "reachable but never landed". No ADR: the check applies an
+      existing gate more correctly rather than deciding anything new, and the module split copies
+      ADR 0036/0019's already-decided pattern -- the same reasoning F-063 recorded for its seam.
+      tests/_gitrepo.py is new shared fixture infrastructure (throwaway repositories, the underscore
+      support-module convention this directory already uses); three sibling test modules carry their
+      own private _git helpers predating it and should migrate in a separate change.
+
+  - id: "F-065"
+    epic: "Eval Harness"
+    name: "Test-generation evaluation: the target executes, the scorers read"
+    description: >-
+      The harness scored an agent's answer, its path (F-051) and its effect on the world (F-060),
+      and had nothing that scored an agent's TEST SUITE. Adds a suite-execution callable target and
+      four deterministic scorers over its evidence: test_executability, testgen_mutation_score,
+      testgen_green_on_correct, requirement_obligation_recall. The seam is ADR 0043's -- the target
+      runs the suite in a subprocess sandbox against the known-correct implementation and each
+      seeded mutant, publishes a payload on TargetOutput.metadata, and every scorer is a pure
+      function of it, performing no execution, no filesystem mutation and no network access. That
+      keeps the scorers deterministic under repetitions > 1, offline in the zero-dependency suite,
+      and cheap to matrix-cover. Execution runs in a subprocess because a wall-clock limit is
+      unenforceable in-process; it is gated by the deny-by-default callable allowlist (ADR 0039)
+      with the module prefix, not the whole harness package; and a timeout is recorded as evidence
+      rather than raised, because a raise aborts the run under ADR 0038's default policy. Corpus at
+      corpora/testgen/v1/ -- 60 generated focal methods across five control-flow strata, mutant
+      equivalence DECIDED against a bounded input grid rather than declared, obligations derived as
+      equivalence classes of inputs under which mutants detect them, each with a witness mutant so
+      coverage is decidable by execution and never inferred from the suite being scored.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "an unlisted suite-execution target is refused by the callable allowlist BEFORE any generated code runs, established by running it under a foreign allowlist (scripts/validations/F_065.py, tests/test_testgen_target.py::TestAllowlist)"
+      - "the sandbox really executes: a suite driving the input at which a mutant diverges covers AND kills it, and a suite driving only an agreeing input does neither -- so 'covered' is measured from the inputs the suite drove, never assumed (scripts/validations/F_065.py, tests/test_testgen_target.py::test_a_blind_suite_is_neither_covered_nor_killed)"
+      - "a suite red on correct code kills nothing: 'killed' requires a test that PASSED on the reference to fail on the mutant, or a false-alarm defect would read as perfect fault detection (scripts/validations/F_065.py, tests/test_testgen_target.py::test_a_suite_red_on_correct_code_cannot_claim_the_kill)"
+      - "absent evidence yields passed=None for all four scorers, and a non-executable suite makes the other three not-applicable -- a missing payload, an unrunnable suite and a total agent failure stay three distinguishable outcomes (scripts/validations/F_065.py, tests/test_matrix_testgen_scorers.py)"
+      - "both mutation denominators are emitted on every verdict, each labelled with the count it was computed from, and equivalent mutants are excluded from both with the exclusion count recorded (scripts/validations/F_065.py, tests/test_matrix_testgen_scorers.py::TestTestgenMutationScore)"
+      - "the scorers are pure: identical verdicts over one payload, and zero socket connects and zero subprocess spawns across all four, asserted at socket.connect and subprocess.run rather than inferred (scripts/validations/F_065.py)"
+      - "every shipped gate rule for this capability is advisory (report_only), so no uncalibrated threshold blocks a run; the four bounds are soak starting points in config/testgen_eval.yaml and none appears in the spec delta (scripts/validations/F_065.py)"
+      - "the committed corpus regenerates byte-identically, its equivalence marks are re-derived from the committed sources rather than trusted, and every obligation's witness is a real non-equivalent mutant (python scripts/gen_testgen_corpus.py --check, tests/test_testgen_corpus.py)"
+      - "the four scorers discriminate on independent axes, measured on the held-out split: the false-alarm suite moves only testgen_green_on_correct (0.35 vs 0.00) and the weak suite moves only mutation score and recall (0.59 vs 1.00) -- recorded in openspec/changes/add-testgen-eval-matrix/review.md"
+      - "20 matrix cells across the scorer floor M1/M2/M3/M5/M6, plus an M8 pipeline running all four over the real suite-execution target, so M8 reads 43 of 45 components rather than regressing to 39 of 45 (tests/test_matrix_testgen_scorers.py, tests/test_matrix_eval_tools.py::test_m8_testgen_scorers_pipeline)"
+    validation_command: "python scripts/validations/F_065.py"
+    implemented_in: "d0c761d25ba3df72063cfd73d78bee7ca6cb473f"
+    depends_on: ["F-051", "F-056", "F-060", "F-062", "F-063"]
+    notes: >-
+      ADR 0043 records the seam and the subprocess decision. src/eval_harness/ now spawns
+      subprocesses for the first time, confined to targets/_suite_runner.py, reachable only through
+      an allowlisted config entry. TESTGEN_EVIDENCE_KEY lives in core/types.py, not beside either
+      party: defining it in targets/testgen.py and importing it from the scorers created a real
+      scorers -> targets component edge that the architecture drift guard caught -- the change's
+      design.md had predicted no new edge and was right about the package mapping while missing
+      this import. Deliberately NOT shipped: testgen_flake_rate (a scorer sees one attempt;
+      repetitions: 5 + pass_power_k on test_executability already expresses it, F-056),
+      coverage-delta (needs a second instrumented run per item), and any judge-backed scorer (which
+      would queue behind calibration). public_surface_baseline.json is unchanged and correctly so:
+      the scorers subpackage declares no __all__, following state.py and trajectory.py.
