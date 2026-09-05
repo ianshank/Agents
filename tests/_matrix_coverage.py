@@ -1007,7 +1007,8 @@ def m8_waiver_problems(m8: Mapping[str, set[str]]) -> list[str]:
         if known is None:
             problems.append(f"M8 waiver names unknown kind {kind!r}")
             continue
-        if component not in set(known["names"]) | set(census_aliases(census, kind)):
+        registered = set(census_names(census, kind)) | set(census_aliases(census, kind))
+        if component not in registered:
             problems.append(f"M8 waiver names unregistered {kind} {component!r} (renamed or removed?)")
             continue
         if component in m8.get(kind, set()):

@@ -37,6 +37,8 @@ import logging
 import os
 import socket
 import sys
+from collections.abc import Callable
+from typing import Any
 from unittest import mock
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -74,23 +76,28 @@ def _check_seam_declared(errors: list[str]) -> None:
 def _check_injection_bypasses_sdk(errors: list[str]) -> None:
     from eval_harness.judges import AnthropicJudge, OpenAIJudge
 
-    for cls, module, kwargs in (
-        (OpenAIJudge, "openai", {"model": "m"}),
-        (AnthropicJudge, "anthropic", {}),
-    ):
+    # Unrolled rather than looped over (class, kwargs) pairs: the two constructors
+    # take different required arguments, and a loop erases that into **kwargs that
+    # mypy cannot check against either signature.
+    def _bypasses(module: str, build: Callable[[object], Any]) -> bool:
         sentinel = object()
         saved = sys.modules.pop(module, None)
         try:
-            judge = cls(client=sentinel, **kwargs)
-            bypassed = judge.client is sentinel and module not in sys.modules
+            return build(sentinel).client is sentinel and module not in sys.modules
         finally:
             if saved is not None:
                 sys.modules[module] = saved
-        _check(
-            bypassed,
-            f"{cls.__name__} with an injected client never imports {module}",
-            errors,
-        )
+
+    _check(
+        _bypasses("openai", lambda c: OpenAIJudge(model="m", client=c)),
+        "OpenAIJudge with an injected client never imports openai",
+        errors,
+    )
+    _check(
+        _bypasses("anthropic", lambda c: AnthropicJudge(client=c)),
+        "AnthropicJudge with an injected client never imports anthropic",
+        errors,
+    )
 
 
 def _check_no_egress_at_construction(errors: list[str]) -> None:

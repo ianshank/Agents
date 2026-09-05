@@ -29,7 +29,10 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
-- [`changes/prove-m8-execution/`](changes/prove-m8-execution/) — *proposed.* The M8
+- [`changes/prove-m8-execution/`](changes/prove-m8-execution/) — *partially implemented.*
+  Tasks 1-3 and 5 have landed (execution ledger, egress guard, per-pipeline vacuity refusal,
+  and the two network-judge `client=` seams — F-063); task 4, breadth to the 19 test-only
+  components, is outstanding. The M8
   (Composability) matrix dimension credits a component for appearing in a validated pipeline
   config, not for executing — one credited cell is provably invoked zero times. Replaces
   config-presence credit with an execution ledger, adds the two network judges' missing
