@@ -133,6 +133,8 @@ FROZEN_ALIAS_MAP: dict[str, dict[str, str]] = {
         "trajectory-precision-recall": "trajectory_precision_recall",
         "trajectory-recovery": "trajectory_recovery",
         "trajectory-step-efficiency": "trajectory_step_efficiency",
+        "rca-ac-at-k": "rca_ac_at_k",
+        "rca-component-match": "rca_component_match",
     },
     "sink": {"html": "html_file", "json": "json_file"},
     "state_adapter": {},

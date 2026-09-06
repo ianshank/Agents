@@ -50,6 +50,7 @@ from tests import _trajectory_helpers as traj
 from tests._m8_probe import ExecutionLedger, probe
 from tests._matrix_coverage import PipelineConfig, format_vacuous, pipeline_vacuous
 from tests.test_matrix_testgen_scorers import TESTGEN_SCORERS
+from tests.test_matrix_rca_scorers import RCA_RANKING_SCORERS
 
 bootstrap()
 
@@ -1969,6 +1970,32 @@ PIPELINES: dict[str, PipelineConfig] = {
         ],
         "sinks": [{"type": "console"}],
     },
+    # Ranking RCA scorers over an echo'd diagnosis (prototype; no telemetry target yet).
+    "rca_ranking_scorers": {
+        "schema_version": "1.0",
+        "run": {"name": "rca-ranking-scorers-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "rca1",
+                        "inputs": {
+                            "q": ["cand_0_0", "cand_0_1", "cand_0_2", "cand_0_3"],
+                            "solution_space": ["cand_0_0", "cand_0_1", "cand_0_2", "cand_0_3"],
+                        },
+                        "expected": ["cand_0_0"],
+                    }
+                ]
+            },
+        },
+        "target": {"type": "echo", "params": {"output_key": "q"}},
+        "scorers": [
+            {"type": "rca_ac_at_k"},
+            {"type": "rca_component_match"},
+        ],
+        "sinks": [{"type": "console"}],
+    },
     "weighted": {
         "schema_version": "1.0",
         "run": {"name": "composite-test", "seed": 1},
@@ -2529,6 +2556,16 @@ class TestM8Composability:
         for component in TESTGEN_SCORERS:
             assert ledger.invoked("scorer", component), component
         assert ledger.invoked("target", "callable")
+
+
+    def test_m8_rca_ranking_scorers_pipeline(self) -> None:
+        """Prototype RCA ranking scorers over an echoed sdlc-shaped diagnosis."""
+        _, result, _, ledger = self._run("rca_ranking_scorers")
+        assert result.aggregate["rca_ac_at_k"].mean == 1.0
+        assert result.aggregate["rca_component_match"].pass_rate == 1.0
+        for component in RCA_RANKING_SCORERS:
+            assert ledger.invoked("scorer", component), component
+        assert ledger.invoked("target", "echo")
 
     def test_m8_pipeline_with_composite_scorer(self) -> None:
         """Composite scorer composes children inside the engine pipeline."""

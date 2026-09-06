@@ -7,13 +7,13 @@ Coverage floor: root `eval_harness` **96%** (`coverage-floors.yaml`).
 
 ## 1. Prototype against the existing suite
 
-- [ ] 1.1 Build `rca_ac_at_k` and `rca_component_match` against
+- [x] 1.1 Build `rca_ac_at_k` and `rca_component_match` against
       `flow-corpus/data/suites/sdlc.jsonl`'s `solution_space` / `correct` shape **before** the new
       corpus exists. Read it as a fixture copy, not by reaching into `flow-corpus/` at run time —
       F-011 makes `flow_protocol` the only shared surface, and the point is to reuse the *shape*,
-      not to create a dependency.
-- [ ] 1.2 Confirm the scorers behave on 200 rows of known difficulty and noise. Record the observed
-      distribution in `review.md`; it is the first honest baseline this capability has.
+      not to create a dependency. — **landed: `scorers/rca/`, fixture at `tests/fixtures/rca/`.**
+- [x] 1.2 Confirm the scorers behave on 200 rows of known difficulty and noise. Record the observed
+      distribution in `review.md`; it is the first honest baseline this capability has. — **see review.md §Prototype distribution (2026-09-06).**
 
 ## 2. Corpus
 
@@ -39,22 +39,22 @@ Coverage floor: root `eval_harness` **96%** (`coverage-floors.yaml`).
 
 ## 4. Scorers
 
-- [ ] 4.1 **[P]** `rca_ac_at_k` at k of 1, 3, 5, each labelled with its k. No unlabelled
-      "accuracy" anywhere in the aggregate.
-- [ ] 4.2 **[P]** Report strict and partial figures side by side, both labelled. Partial runs
-      ~1.5–2× strict in this task family; an unlabelled number is not comparable to anything.
-- [ ] 4.3 **[P]** `rca_component_match` — top-1 against the confirmed cause; an answer outside the
-      declared candidate set is recorded as such, distinguishably from a wrong in-set choice.
+- [x] 4.1 **[P]** `rca_ac_at_k` at k of 1, 3, 5, each labelled with its k. No unlabelled
+      "accuracy" anywhere in the aggregate. — **prototype landed.**
+- [x] 4.2 **[P]** Report strict and partial figures side by side, both labelled. Partial runs
+      ~1.5–2× strict in this task family; an unlabelled number is not comparable to anything. — **prototype landed.**
+- [x] 4.3 **[P]** `rca_component_match` — top-1 against the confirmed cause; an answer outside the
+      declared candidate set is recorded as such, distinguishably from a wrong in-set choice. — **prototype landed.**
 - [ ] 4.4 **[P]** `rca_onset_within_tolerance` — normalise both instants to one timezone before
       comparing. Test the timezone-shifted case explicitly: a wall-clock match in the wrong zone
       must score as outside tolerance. Tolerance is a config field, not a literal.
 - [ ] 4.5 **[P]** `rca_abstention_correctness` — correct only when the agent declines on an
       unanswerable item; declining on an answerable item is incorrect.
 - [ ] 4.6 **[P]** `rca_false_accusation_rate` — counts a named cause on an unanswerable item.
-- [ ] 4.7 **[P]** On an unanswerable item, `rca_ac_at_k` reports "not applicable" (`passed=None`),
-      not zero — the `state.py` precedent.
-- [ ] 4.8 **[P]** Split across `scorers/rca/{__init__,ranking,abstention}.py`; each file under
-      `MAX_FILE_LINES = 500`.
+- [x] 4.7 **[P]** On an unanswerable item, `rca_ac_at_k` reports "not applicable" (`passed=None`),
+      not zero — the `state.py` precedent. — **prototype landed.**
+- [~] 4.8 **[P]** Split across `scorers/rca/{__init__,ranking,abstention}.py`; each file under
+      `MAX_FILE_LINES = 500`. — **`__init__` + `ranking` landed; `abstention.py` deferred with tasks 4.5–4.6.**
 
 ## 5. Matrix, surface and registry
 
