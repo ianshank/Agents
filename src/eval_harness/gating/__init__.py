@@ -20,8 +20,14 @@ logger = logging.getLogger(__name__)
 _RELIABILITY_METRICS = ("pass_at_k", "pass_power_k")
 
 
-def require_calibration_for_judge_gating(config: EvalConfig, scorers: Iterable[Scorer]) -> None:
-    """Raise if a gate rule targets a judge-backed scorer with no named calibration.
+def require_calibration_for_judge_gating(
+    config: EvalConfig,
+    scorers: Iterable[Scorer],
+    *,
+    report: object | None = None,
+    load_report: Callable[[str], object] | None = None,
+) -> None:
+    """Raise unless blocking judge-backed gate rules are authorised by a real report.
 
     ``spec.md`` "Gating requires a named calibration artifact": a config that marks
     a judge as gating — one of ``config.gate.rules`` names a scorer whose real,
@@ -30,6 +36,11 @@ def require_calibration_for_judge_gating(config: EvalConfig, scorers: Iterable[S
     ``.name``/``.uses_judge()``), not guessed from raw config, so a scorer's own
     name-resolution/default-name logic never needs duplicating here. Call once the
     engine's scorers are built (``EvalEngine.from_config``), before ``evaluate_gate``.
+
+    F-066: an opaque ``calibration_artifact_id`` alone is not enough. Resolve a
+    ``JudgeCalibrationReport`` via ``report=``, ``load_report(artifact_id)``, or
+    ``judge_calibration.report_path``, then delegate to
+    :func:`eval_harness.agent_core_adapter.require_report_to_gate`.
     """
     if config.gate is None or not config.gate.rules:
         return
@@ -42,12 +53,50 @@ def require_calibration_for_judge_gating(config: EvalConfig, scorers: Iterable[S
     # as strict for every rule that can block.
     gated_names = {rule.score for rule in config.gate.rules if not rule.report_only}
     targeted = judge_backed_names & gated_names
-    if targeted and config.judge_calibration is None:
+    if not targeted:
+        return
+    if config.judge_calibration is None:
         raise ValueError(
             f"judge_calibration.calibration_artifact_id is required to gate on "
             f"{sorted(targeted)!r}: a judge's participation in gating must be traceable "
             "to the calibration run that authorised it"
         )
+
+    artifact_id = config.judge_calibration.calibration_artifact_id
+    resolved = report
+    if resolved is None and load_report is not None:
+        logger.info(
+            "loading judge calibration report via injected loader for artifact_id=%s",
+            artifact_id,
+        )
+        resolved = load_report(artifact_id)
+    if resolved is None:
+        report_path = config.judge_calibration.report_path
+        if report_path:
+            from agent_core import load_judge_calibration_report
+
+            logger.info(
+                "loading judge calibration report path=%s artifact_id=%s",
+                report_path,
+                artifact_id,
+            )
+            resolved = load_judge_calibration_report(report_path)
+    if resolved is None:
+        raise ValueError(
+            f"judge_calibration.calibration_artifact_id {artifact_id!r} is set for "
+            f"gating on {sorted(targeted)!r}, but no JudgeCalibrationReport was "
+            "resolved: pass report=, load_report=, or judge_calibration.report_path "
+            "(opaque IDs alone no longer authorise gating; see F-066)"
+        )
+
+    from eval_harness.agent_core_adapter import require_report_to_gate
+
+    require_report_to_gate(resolved, artifact_id)  # type: ignore[arg-type]
+    logger.debug(
+        "judge calibration authorised gating artifact_id=%s targets=%s",
+        artifact_id,
+        sorted(targeted),
+    )
 
 
 @dataclass

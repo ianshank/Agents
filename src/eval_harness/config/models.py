@@ -198,13 +198,21 @@ class JudgeCalibrationGateConfig(BaseModel):
     is traceable to the calibration run that authorised it, not to "a judge that
     was validated at some point" (design.md "Gating"). The ID is an opaque
     provenance string, like ``ab_campaign.campaign_id`` — this harness does not
-    itself resolve it to a live ``agent_core.JudgeCalibrationReport``; no
-    artifact-registry/lookup precedent exists in this codebase (see design.md).
+    itself resolve the ID alone. F-066 requires a resolvable report via ``report_path``, or ``report=`` / ``load_report=`` on ``require_calibration_for_judge_gating`` — an opaque ID no longer authorises gating.
     """
 
     calibration_artifact_id: str = Field(
         min_length=1,
         description="Identifies the JudgeCalibrationReport run that authorised this judge to gate.",
+    )
+    report_path: str | None = Field(
+        default=None,
+        description=(
+            "Optional filesystem path to a JSON JudgeCalibrationReport. When set, "
+            "require_calibration_for_judge_gating loads it and delegates to "
+            "require_report_to_gate. Relative paths resolve from the process cwd "
+            "unless a caller supplies load_report=."
+        ),
     )
 
 

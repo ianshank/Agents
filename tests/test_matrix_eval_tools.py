@@ -1284,8 +1284,23 @@ class TestJudgeCalibrationGating:
         with pytest.raises(ValueError, match="judge_calibration"):
             require_calibration_for_judge_gating(config, scorers)
 
-    def test_passes_when_a_calibration_artifact_is_named(self) -> None:
+    def test_opaque_calibration_artifact_id_alone_is_refused(self) -> None:
+        """F-066: naming an ID without a resolvable report must not authorise gating."""
         from eval_harness.gating import require_calibration_for_judge_gating
+
+        config = self._config(
+            judge={"type": "mock", "params": {}},
+            judge_calibration={"calibration_artifact_id": "anything"},
+            gate={"rules": [{"score": "quality", "metric": "mean", "min": 0.5}]},
+        )
+        scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+        with pytest.raises(ValueError, match="no JudgeCalibrationReport was resolved"):
+            require_calibration_for_judge_gating(config, scorers)
+
+    def test_passes_when_a_calibration_report_authorises_gating(self) -> None:
+        from eval_harness.gating import require_calibration_for_judge_gating
+
+        from tests.test_agent_core_adapter import _calibration_report
 
         config = self._config(
             judge={"type": "mock", "params": {}},
@@ -1293,7 +1308,9 @@ class TestJudgeCalibrationGating:
             gate={"rules": [{"score": "quality", "metric": "mean", "min": 0.5}]},
         )
         scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
-        require_calibration_for_judge_gating(config, scorers)  # must not raise
+        require_calibration_for_judge_gating(
+            config, scorers, report=_calibration_report(artifact_id="run-123")
+        )
 
     def test_no_artifact_needed_when_the_gate_does_not_target_the_judge_scorer(self) -> None:
         from eval_harness.gating import require_calibration_for_judge_gating

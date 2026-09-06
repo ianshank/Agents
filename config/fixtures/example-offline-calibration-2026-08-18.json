@@ -1,0 +1,37 @@
+{
+  "abstention_rate": null,
+  "agreement_may_gate": true,
+  "artifact_id": "example-offline-calibration-2026-08-18",
+  "canary_pass_rate": 1.0,
+  "directional_only": false,
+  "judge_id": "example-offline",
+  "kappa": 0.9,
+  "member_families": [],
+  "n_codeterminate": 90,
+  "n_total": 100,
+  "order_flip": {
+    "ci_high": 0.1,
+    "ci_low": 0.0,
+    "degenerate": null,
+    "flip_rate": 0.0,
+    "flips": 0,
+    "n": 40,
+    "passes": true
+  },
+  "pairwise_member_kappa": [],
+  "percent_agreement": 0.95,
+  "schema_version": "1.1.0",
+  "self_preference": null,
+  "verbosity": {
+    "ci_high": 0.7,
+    "ci_low": 0.3,
+    "concise_wins": 20,
+    "degenerate": null,
+    "expanded_win_rate": 0.5,
+    "expanded_wins": 20,
+    "n": 40,
+    "passes": true,
+    "preference_delta": 0.0,
+    "ties": 0
+  }
+}

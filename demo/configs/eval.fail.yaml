@@ -58,6 +58,8 @@ judge:
 # they share is the same one.
 judge_calibration:
   calibration_artifact_id: "demo-mock-judge-calibration-0000"
+  # F-066: opaque ID alone is insufficient; load the authorizing report.
+  report_path: "demo/fixtures/demo-mock-judge-calibration-0000.json"
 
 sinks:
   - type: console

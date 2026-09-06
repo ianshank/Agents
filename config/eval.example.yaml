@@ -42,6 +42,8 @@ judge:
 # to gate, not a value this harness resolves itself (see JudgeCalibrationGateConfig).
 judge_calibration:
   calibration_artifact_id: "example-offline-calibration-2026-08-18"
+  # F-066: opaque ID alone is insufficient; load the authorizing report.
+  report_path: "config/fixtures/example-offline-calibration-2026-08-18.json"
 
 sinks:
   - type: console

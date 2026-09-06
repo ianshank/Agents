@@ -23,8 +23,9 @@ Checks:
     6.  ``JudgeCalibrationGateConfig.calibration_artifact_id`` is required and
         non-empty.
     7.  ``require_calibration_for_judge_gating`` rejects a gate rule that targets
-        a judge-backed scorer with no named calibration artifact, and allows it
-        once one is named; a gate rule that does not target the judge needs none.
+        a judge-backed scorer with no named calibration artifact; refuses an opaque
+        artifact_id alone (F-066); and allows it once a resolvable report authorises
+        gating. A gate rule that does not target the judge needs none.
     8.  ``require_report_to_gate`` rejects an artifact-ID mismatch and a report
         that does not authorise gating (naming the failing check), and allows a
         matching, authorising report through.
@@ -372,8 +373,58 @@ def _check_gating_config(errors: list[str]) -> None:
     named_config = EvalConfig.model_validate(
         {**gated_config.model_dump(mode="json"), "judge_calibration": {"calibration_artifact_id": "run-1"}}
     )
-    require_calibration_for_judge_gating(named_config, [SCORERS.create("llm_judge", {"name": "quality"})])
-    _check(True, "require_calibration_for_judge_gating allows a gated judge once an artifact is named", errors)
+    try:
+        require_calibration_for_judge_gating(
+            named_config, [SCORERS.create("llm_judge", {"name": "quality"})]
+        )
+        _check(False, "require_calibration_for_judge_gating refuses an opaque artifact_id alone (F-066)", errors)
+    except ValueError as exc:
+        _check(
+            "no JudgeCalibrationReport was resolved" in str(exc),
+            "require_calibration_for_judge_gating refuses an opaque artifact_id alone (F-066)",
+            errors,
+        )
+
+    from agent_core.judge_calibration import OrderProbeResult, VerbosityProbeResult
+    from agent_core.judge_calibration_report import JudgeCalibrationReport, REPORT_SCHEMA_VERSION
+
+    authorising = JudgeCalibrationReport(
+        schema_version=REPORT_SCHEMA_VERSION,
+        judge_id="j1",
+        artifact_id="run-1",
+        n_total=100,
+        n_codeterminate=90,
+        percent_agreement=0.9,
+        kappa=0.85,
+        directional_only=False,
+        agreement_may_gate=True,
+        order_flip=OrderProbeResult(
+            n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True
+        ),
+        verbosity=VerbosityProbeResult(
+            n=10,
+            ties=0,
+            concise_wins=5,
+            expanded_wins=5,
+            expanded_win_rate=0.5,
+            preference_delta=0.0,
+            ci_low=0.2,
+            ci_high=0.8,
+            passes=True,
+        ),
+        self_preference=None,
+        canary_pass_rate=1.0,
+    )
+    require_calibration_for_judge_gating(
+        named_config,
+        [SCORERS.create("llm_judge", {"name": "quality"})],
+        report=authorising,
+    )
+    _check(
+        True,
+        "require_calibration_for_judge_gating allows a gated judge once a report authorises it",
+        errors,
+    )
 
     untargeted_config = EvalConfig.model_validate(
         {

@@ -1360,3 +1360,33 @@ features:
       coverage-delta (needs a second instrumented run per item), and any judge-backed scorer (which
       would queue behind calibration). public_surface_baseline.json is unchanged and correctly so:
       the scorers subpackage declares no __all__, following state.py and trajectory.py.
+
+  - id: "F-066"
+    epic: "Eval Harness"
+    name: "Enforce judge-gate authorisation via real calibration reports"
+    description: >-
+      Closing the highest integrity gap from docs/plans/eval-evidence-integrity
+      Phase 6: require_report_to_gate was exported and tested but never called
+      from the production path, and require_calibration_for_judge_gating treated
+      an opaque calibration_artifact_id as sufficient authorisation. Blocking
+      judge-backed gates now resolve a JudgeCalibrationReport via report=,
+      load_report=, or judge_calibration.report_path, then delegate to
+      require_report_to_gate (matching artifact_id and may_gate). Opaque IDs
+      alone are refused. agent_core gains load/dump JSON round-trip helpers;
+      demo and example configs ship fixtures and report_path.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "require_calibration_for_judge_gating refuses an opaque calibration_artifact_id alone (scripts/validations/F_066.py, tests/test_judge_gate_authorization.py::test_opaque_artifact_id_alone_is_refused)"
+      - "report= / load_report= / report_path each authorise a matching may_gate=True report and refuse may_gate=False or artifact_id mismatch (scripts/validations/F_066.py, tests/test_judge_gate_authorization.py)"
+      - "JSON load/dump round-trip preserves artifact_id and may_gate (scripts/validations/F_066.py, tests/test_judge_gate_authorization.py::test_json_round_trip_preserves_may_gate)"
+      - "demo and example configs that gate on a judge name a repo-root-relative report_path whose fixture exists (scripts/validations/F_066.py)"
+    validation_command: "python scripts/validations/F_066.py"
+    implemented_in: "PENDING"
+    depends_on: ["F-057"]
+    notes: >-
+      Plan Phase 6 of docs/plans/eval-evidence-integrity/PLAN.md. Does not
+      change SCHEMA_VERSION. Additive JudgeCalibrationGateConfig.report_path.
+      Agent-in-the-loop OpenSpec remains owner-gated and is out of scope here.

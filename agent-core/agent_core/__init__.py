@@ -61,6 +61,10 @@ from .judge_calibration_report import (
     REPORT_SCHEMA_VERSION,
     JudgeCalibrationReport,
     build_judge_calibration_report,
+    load_judge_calibration_report,
+    dump_judge_calibration_report,
+    judge_calibration_report_to_dict,
+    judge_calibration_report_from_dict,
 )
 from .logging_util import configure_logging, debug_span, get_logger
 from .loop import LoopController, RunResult
@@ -195,6 +199,10 @@ __all__ = [
     "brier_decomposition",
     "brier_score",
     "build_judge_calibration_report",
+    "judge_calibration_report_from_dict",
+    "judge_calibration_report_to_dict",
+    "dump_judge_calibration_report",
+    "load_judge_calibration_report",
     "build_sanitized_claims",
     "calibrator_from_dict",
     "calibrator_to_dict",
