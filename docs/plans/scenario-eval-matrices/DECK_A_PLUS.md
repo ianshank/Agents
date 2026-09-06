@@ -22,11 +22,11 @@ The shipped test-generation config can score **1.000 on every axis** today. That
 **Do not say:** "agent performance results" or "we measured our agents at test generation."
 
 ### Slide 2 — We catch our own false greens (4 → 8)
-**Line:** "This cycle we caught **eight** defects in our own measurement story — four named in the plan, then four more when delivery was adversarially re-checked."
+**Line:** "This cycle we caught **eight** defects in our own measurement story — four named earlier, then four more when delivery was adversarially re-checked."
 
 **Say:**
 - Four earlier integrity defects (including gate-decision provenance and M8 execution vacuity fixes).
-- Then delivery revision 2 found five more defects in our own VP wording (D1–D5); the instance count moves **4 → 8**, which strengthens the slide: we doubled what we were willing to catch on ourselves.
+- Delivery revision 2 then found **five** issues in our own VP wording (D1–D5): four content defects (D1–D4) plus D5, which is an **arithmetic correction** (the true self-caught count is 4→8, not 3→7). On the slide, count D5 with the second wave as the fourth added beat — do not say "five more" in the spoken line.
 - Hygiene audit found **20** issues; an automated review afterwards found **4** more. Do **not** say "the audit found 24."
 
 **Citation discipline:** "20 from the hygiene audit, 4 from an automated review afterwards."
