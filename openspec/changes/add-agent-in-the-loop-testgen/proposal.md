@@ -35,6 +35,8 @@ Without a generation step upstream of `eval_harness.targets.testgen:run_generate
 
 This package **proposes (a)**; owner confirmation is the gate before implementation estimates.
 
+**Owner confirmation (2026-09-06):** option **(a)** and the evaluation-design answers are recorded in [`OWNER_DEFAULTS.md`](./OWNER_DEFAULTS.md) (board proceed). Eng may estimate and implement from those defaults.
+
 ## Evaluation-design questions (owner before estimate)
 
 1. Prompt held constant across the held-out split, or tuned per item?

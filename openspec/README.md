@@ -38,7 +38,7 @@ before that guard existed.
   Replaced config-presence credit with an execution ledger, added the two network judges'
   missing `client=` seams, and widened M8 honestly across the registered components once the
   mechanism meant something. Motivated by `docs/plans/eval-evidence-integrity/REVIEW.md`.
-- [`changes/add-agent-in-the-loop-testgen/`](changes/add-agent-in-the-loop-testgen/) — *proposed.*
+- [`changes/add-agent-in-the-loop-testgen/`](changes/add-agent-in-the-loop-testgen/) — *proposed; owner defaults recorded 2026-09-06 in `OWNER_DEFAULTS.md`.*
   Deck B unlock: sequential pipeline target (generator → existing F-065 suite execution).
   Docs-only until owner confirms option (a) and evaluation-design questions in `proposal.md`.
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
@@ -77,7 +77,7 @@ before that guard existed.
   callable target with scorers as pure readers of its evidence. Synthetic generated corpus; no
   judge, so it does not queue behind calibration. Depends on `add-gate-decision-provenance` and
   `prove-m8-execution`.
-- [`changes/add-rca-eval-matrix/`](changes/add-rca-eval-matrix/) — *proposed (synthetic scope).*
+- [`changes/add-rca-eval-matrix/`](changes/add-rca-eval-matrix/) — *proposed (synthetic scope); ranking scorers prototype (tasks 1.1–1.2) in progress.*
   Ranked root-cause diagnosis over a finite candidate set — AC@k, component match, timezone-pinned
   onset tolerance, and abstention as a first-class outcome — with a trivial `max-|Z|` baseline
   shipped as a target so no agent result is reported without its floor. The real-incident corpus is

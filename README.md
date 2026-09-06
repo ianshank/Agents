@@ -424,6 +424,9 @@ src/eval_harness/
                      readers of the evidence targets/testgen.py publishes after running the
                      suite in a subprocess sandbox against a reference implementation and
                      each seeded mutant (F-065, ADR 0043 — corpus at corpora/testgen/v1/)
+    rca/             rca_ac_at_k, rca_component_match score a ranked diagnosis against a
+                     finite candidate set (sdlc solution_space/correct shape; synthetic RCA
+                     prototype — F-ID claimed at full land)
   datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
   targets/           echo, callable (dynamic import — gated by
                      EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST; see "Config files are

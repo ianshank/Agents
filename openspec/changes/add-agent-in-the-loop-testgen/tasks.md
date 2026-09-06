@@ -1,12 +1,12 @@
 # Tasks: add-agent-in-the-loop-testgen
 
-**Status: proposed (docs only in the introducing PR).** Implementation tasks below are the checklist for the later engineering PR. F-ID claimed at land.
+**Status: proposed (docs only in the introducing PR).** Owner §0 defaults recorded 2026-09-06 in `OWNER_DEFAULTS.md`. Implementation tasks below are the checklist for the later engineering PR. F-ID claimed at land.
 
 ## 0. Owner decisions (hard-stop before coding)
 
-- [ ] 0.1 Confirm option (a) sequential pipeline target, or record a different choice with rationale.
-- [ ] 0.2 Answer proposal.md evaluation-design questions (prompt policy, attempts, held-out enforcement, egress, baseline).
-- [ ] 0.3 Name whether Deck B CI is offline-only or gains a credential-gated live workflow.
+- [x] 0.1 Confirm option (a) sequential pipeline target, or record a different choice with rationale. — **recorded 2026-09-06 in OWNER_DEFAULTS.md (board proceed).**
+- [x] 0.2 Answer proposal.md evaluation-design questions (prompt policy, attempts, held-out enforcement, egress, baseline). — **see OWNER_DEFAULTS.md.**
+- [x] 0.3 Name whether Deck B CI is offline-only or gains a credential-gated live workflow. — **offline-only CI default; live model only credential-gated.**
 
 ## 1. Spec + ADR
 

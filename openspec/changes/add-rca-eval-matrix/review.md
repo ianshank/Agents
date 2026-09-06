@@ -120,3 +120,26 @@ The disposition is unchanged: start synthetic. The reasoning had to be rebuilt.
    ranking corpus. If the generator produces telemetry the baseline solves at 90%, the corpus is too
    easy and the baseline stops being informative. Settle the difficulty calibration before 2.4
    freezes.
+
+
+## Prototype distribution (2026-09-06) — task 1.2
+
+Fixture: `tests/fixtures/rca/sdlc_shape.jsonl` (byte-copy of
+`flow-corpus/data/suites/sdlc.jsonl`'s 200 rows) plus
+`tests/fixtures/rca/sdlc_eval_items.jsonl` (EvalItem-shaped projection). Scorers never
+import `flow-corpus/` at runtime.
+
+| Probe | Result on n=200 |
+|---|---|
+| Shape | Every row has `solution_space` len=4, `correct` len=1; difficulty ∈ [0.0, 0.8]; noise=0.0 throughout |
+| Oracle ranking (correct first) | `rca_ac_at_k` strict AC@1 mean = **1.0**; `rca_component_match` mean = **1.0** |
+| Gold ranked third | strict AC@1 = 0.0 and AC@3 = 1.0 on every row |
+| In-set wrong top-1 | `rca_component_match` = 0.0 with `disposition=in_set_wrong` |
+| Outside-set top-1 | `disposition=outside_candidate_set` (distinct metadata) |
+| Unanswerable (`correct=[]`) | `rca_ac_at_k` → `passed=None` (not zero) |
+
+This is the **oracle ceiling** on the sdlc shape, not an agent floor. The max-|Z|
+baseline (task 3.x) and the telemetry corpus (task 2.x) are what turn this into a
+credibility-preserving comparison. Abstention scorers are not in this slice.
+
+Covered by `tests/test_rca_ranking_scorers.py::test_oracle_on_sdlc_fixture_is_perfect_and_records_distribution`.

@@ -1,3 +1,7 @@
+## Owner defaults (recorded)
+
+Locked 2026-09-06 in [`OWNER_DEFAULTS.md`](./OWNER_DEFAULTS.md) (board proceed): option **(a)**, prompt held constant, `repetitions: 5`, held-out via manifest/config allowlist + CI test, offline-only CI with credential-gated live model, weak corpus + empty/null baseline, Deck B CI advisory `report_only`, testgen-only outer allowlisted runner.
+
 # Design: add-agent-in-the-loop-testgen
 
 ## Recommended composition (option a)
