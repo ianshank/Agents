@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 import check_branch_protection as chk
@@ -41,7 +42,7 @@ def test_contexts_from_protection_payload_unions_both_shapes() -> None:
 
 
 def test_probe_404_is_unprotected_not_an_error() -> None:
-    def runner(args: object) -> subprocess.CompletedProcess[str]:
+    def runner(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(args, 1, stdout="", stderr="gh: Not Found (HTTP 404)")
 
     protected, live, err = chk.probe_protection("acme", "widgets", runner=runner)
@@ -51,7 +52,7 @@ def test_probe_404_is_unprotected_not_an_error() -> None:
 def test_strict_fails_when_unprotected(capsys: pytest.CaptureFixture[str]) -> None:
     root = Path(__file__).resolve().parent.parent
 
-    def runner(args: object) -> subprocess.CompletedProcess[str]:
+    def runner(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(args, 1, stdout="", stderr="Not Found")
 
     report = chk.build_report(

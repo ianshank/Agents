@@ -21,7 +21,11 @@ inventing human labels or flipping GitHub admin settings.
   sample-size note). The weekly audit workflow prints it after store pull.
 - **G4/G5 residue:** TIMEOUT_CLEAN logs that it does not feed `tau`; a second
   `record_verdict` HUMAN_AUDIT row logs a warning (library stays non-idempotent;
-  `scripts/record_audit_verdict.py` remains the SHA-validated wrapper).
+  `scripts/record_audit_verdict.py` remains the SHA-validated wrapper). The four
+  CLIs named in the 2026-07-24 gap analysis now call `configure_from_config`.
+- **Merge-gate policy flags** are argparse string literals so F-049's AST scan
+  can see `--n-bins` / `--wilson-floor` / …; a loop over `OPERATOR_FIELDS` that
+  built `"--" + name` at runtime was invisible to that gate.
 - **`scripts/check_branch_protection.py`** derives the ADR 0037 candidate check
   set from `required-check-stubs.yml` (never a restated name list). Default exit
   0; `--strict` is opt-in. Enablement runbook:

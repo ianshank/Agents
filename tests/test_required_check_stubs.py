@@ -25,7 +25,6 @@ meta-gate).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 from required_check_names import (
@@ -39,26 +38,9 @@ from required_check_names import (
 
 WORKFLOW_DIR = Path(__file__).resolve().parent.parent / ".github" / "workflows"
 STUB_WORKFLOW = WORKFLOW_DIR / "required-check-stubs.yml"
-
-
-def _load(path: Path) -> dict[str, Any]:
-    return load_workflow(path)
-
-
-def _rendered_job_names(workflow: dict[str, Any]) -> set[str]:
-    return rendered_job_names(workflow)
-
-
-def _gate_workflow_map() -> dict[str, Path]:
-    """The gate job's ``key -> workflow file`` mapping, read from its own source."""
-    return gate_workflow_map(STUB_WORKFLOW.read_text(encoding="utf-8"), WORKFLOW_DIR)
-
-
-def _stub_names_by_key() -> dict[str, set[str]]:
-    return stub_names_by_key(_load(STUB_WORKFLOW))
-
-
-GATE_MAP = _gate_workflow_map()
+STUB_DOC = load_workflow(STUB_WORKFLOW)
+GATE_MAP = gate_workflow_map(STUB_WORKFLOW.read_text(encoding="utf-8"), WORKFLOW_DIR)
+STUB_NAMES = stub_names_by_key(STUB_DOC)
 
 
 def test_every_mapped_workflow_exists() -> None:
@@ -74,8 +56,8 @@ def test_stub_names_match_the_real_workflow_exactly(key: str) -> None:
     request. An extra stub posts a context nothing requires, which is the
     duplicate-context hazard ADR 0040's namespacing exists to remove.
     """
-    real = _rendered_job_names(_load(GATE_MAP[key]))
-    stubs = _stub_names_by_key().get(key, set())
+    real = rendered_job_names(load_workflow(GATE_MAP[key]))
+    stubs = STUB_NAMES.get(key, set())
 
     assert stubs == real, (
         f"stub/real check-name drift for {key!r} ({GATE_MAP[key].name}): "
@@ -84,13 +66,13 @@ def test_stub_names_match_the_real_workflow_exactly(key: str) -> None:
 
 
 def test_no_stub_is_orphaned_from_the_gate_map() -> None:
-    assert set(_stub_names_by_key()) <= set(GATE_MAP)
+    assert set(STUB_NAMES) <= set(GATE_MAP)
 
 
 def test_stub_workflow_runs_on_every_pull_request() -> None:
     """The gate cannot decide for a workflow run that never starts, so the stub
     workflow itself must carry no ``paths:`` filter."""
-    workflow = _load(STUB_WORKFLOW)
+    workflow = STUB_DOC
     # YAML 1.1 resolves the bare key `on:` to the boolean True, not the string
     # "on" -- the long-standing "Norway problem" in GitHub Actions files. Accept
     # either so this does not depend on the loader's resolver version.
@@ -116,22 +98,22 @@ def test_the_secret_scan_carries_no_paths_filter_and_needs_no_stub() -> None:
     and therefore has no stub (a second job posting the same context would be the
     duplicate-green hazard this workflow's own header warns about).
     """
-    workflow = _load(WORKFLOW_DIR / "secret-scan.yml")
+    workflow = load_workflow(WORKFLOW_DIR / "secret-scan.yml")
     triggers = workflow.get("on", workflow.get(True))  # type: ignore[call-overload]
     assert triggers is not None, "secret-scan workflow declares no triggers"
     trigger = triggers["pull_request"]
     assert "paths" not in trigger, "a credential can be committed in any file"
     assert "paths-ignore" not in trigger
 
-    names = _rendered_job_names(workflow)
+    names = rendered_job_names(workflow)
     assert "secret scan (gitleaks)" in names, "the required check context must not be renamed"
-    stubbed = {name for names_ in _stub_names_by_key().values() for name in names_}
+    stubbed = {name for names_ in STUB_NAMES.values() for name in names_}
     assert not (names & stubbed), "an unfiltered job must not also be stubbed"
 
 
 def test_stub_jobs_do_no_work() -> None:
     """A stub reports a context; it must never be mistaken for having run a suite."""
-    for job_id, job in _load(STUB_WORKFLOW)["jobs"].items():
+    for job_id, job in STUB_DOC["jobs"].items():
         if job_id == "gate":
             continue
         steps = job["steps"]
@@ -157,7 +139,7 @@ def test_matrix_expansion_tolerates_reformatted_whitespace() -> None:
         }
     }
 
-    assert _rendered_job_names(spaced) == _rendered_job_names(tight) == {"pkg py3.12"}
+    assert rendered_job_names(spaced) == rendered_job_names(tight) == {"pkg py3.12"}
 
 
 def test_an_unrenderable_expression_fails_loudly() -> None:
@@ -165,10 +147,10 @@ def test_an_unrenderable_expression_fails_loudly() -> None:
     workflow = {"jobs": {"a": {"name": "pkg ${{ matrix.os }}", "strategy": {"matrix": {"python-version": ["3.12"]}}}}}
 
     with pytest.raises(CheckNameError, match="cannot render"):
-        _rendered_job_names(workflow)
+        rendered_job_names(workflow)
 
 
 def test_candidate_required_contexts_are_the_stub_union() -> None:
     """The ADR 0037 checker must derive the same names this pairing already gates."""
-    stubbed = {name for names_ in _stub_names_by_key().values() for name in names_}
+    stubbed = {name for names_ in STUB_NAMES.values() for name in names_}
     assert set(candidate_required_contexts()) == stubbed

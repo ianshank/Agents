@@ -22,6 +22,12 @@ labels; CHARTER not amended; branch protection remains an admin action).
   activation; second maintainer recommended; flywheel CHARTER amendment deferred.
 - Golden corpus README is empty on purpose (`docs/golden-corpus/README.md`).
 
+CI follow-up on the same branch: F-049 now sees literal `--n-bins` etc. in
+`merge_gate_ci._add_policy_args`; root mypy wrappers that returned `Any` were
+inlined; five archived OpenSpec markdown links in scenario-eval-matrices
+PLAN/REVIEW retarget `openspec/changes/archive/`; gap-analysis G4/G5 marked
+closed for observability.
+
 Protected paths touched (`tests/**`, `agent-core/tests/**`, `.github/**`): this
 PR needs the `eval-change-approved` label. The checker cannot apply that label.
 

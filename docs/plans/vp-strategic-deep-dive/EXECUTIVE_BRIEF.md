@@ -55,9 +55,9 @@ The codebase is **feature-complete** (64/66 shipped); value delivery now depends
 
 1. **Enable branch protection** on `main` (admin, ~1 hour)
 2. **Establish weekly audit triage** (human, ongoing)
-3. **Archive 5 completed OpenSpec changes** (engineering, needs label)
-4. **Close G4/G5 observability gaps** (engineering, ~2 days)
-5. **Begin golden corpus labeling** (human, parallel)
+3. **Archive 5 completed OpenSpec changes** — engineering done (`openspec/changes/archive/`); merge still needs `eval-change-approved`
+4. **Close G4/G5 observability gaps** — engineering done (`configure_from_config` on the four CLIs; TIMEOUT_CLEAN INFO; duplicate-audit WARNING). G7 remains out of scope.
+5. **Begin golden corpus labeling** (human, parallel; infrastructure shipped, 0 items on purpose)
 
 ---
 

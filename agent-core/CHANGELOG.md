@@ -37,6 +37,9 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 - **TIMEOUT_CLEAN** now logs that the label is optimistic and does not feed
   `tau`. A second `record_verdict` HUMAN_AUDIT for the same `change_id` logs a
   warning; the append remains non-idempotent by design.
+- **`merge_gate_ci` policy flags** are argparse string literals (F-049). Help
+  text still quotes `GatePolicyConfig` defaults; flag `default=None` is unchanged
+  so an omitted flag cannot mask env / `--policy-file`.
 - **`format_propensity` could render a valid propensity into an unusable one.** Fixed-point
   (`.6f`) turned `1e-7` into `"0.000000"`, which parses back to `0.0` and is rejected by
   `is_valid_propensity`. That output is not decoration — it is pasted into the `gh workflow

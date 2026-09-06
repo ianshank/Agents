@@ -149,11 +149,13 @@ Agent versions:
 - **What:** Move 5 "implemented, pending archive" changes to archive
 - **Who:** Engineering (requires `eval-change-approved` label)
 - **Changes:** prove-m8-execution, extend-judge-calibration, add-repeat-reliability-metrics, add-gate-decision-provenance, add-testgen-eval-matrix
+- **Status:** Done on this branch (`openspec/changes/archive/…`). Merge still needs the protected-path label.
 
 #### Action 4: Close G4/G5 Observability Gaps
-- **What:** Add `configure_logging` calls to 4 CLI entry points
+- **What:** Add `configure_logging` / `configure_from_config` calls to 4 CLI entry points; log TIMEOUT_CLEAN's weak-positive nature; warn on a second library `HUMAN_AUDIT`
 - **Who:** Engineering
 - **Impact:** Audit trail completeness before merge-gate activation
+- **Status:** Done. Library `record_verdict` stays non-idempotent by design. G7 (four `configure_logging` copies) is out of scope.
 
 ### 3.2 Medium-Term Actions (30-90 days)
 
@@ -231,10 +233,10 @@ Agent versions:
 ## 5. Success Metrics
 
 ### 5.1 30-Day Targets
-- [ ] Branch protection enabled on `main`
-- [ ] G4/G5 observability gaps closed
-- [ ] Weekly audit triage cadence established
-- [ ] First HUMAN_AUDIT records in store
+- [ ] Branch protection enabled on `main` (admin settings; runbook shipped)
+- [x] G4/G5 observability gaps closed (engineering; library `record_verdict` remains non-idempotent by design)
+- [ ] Weekly audit triage cadence established (human process; runbook shipped)
+- [ ] First HUMAN_AUDIT records in store (human labels; do not invent)
 
 ### 5.2 90-Day Targets
 - [ ] Golden corpus: ≥50 labeled items

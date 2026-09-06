@@ -73,25 +73,71 @@ def _add_policy_args(ap: argparse.ArgumentParser, policy: GatePolicyConfig) -> N
     actually passing 0.02). Help text still quotes the dataclass default so
     ``--help`` cannot drift from :class:`GatePolicyConfig`.
 
-    ``--protected-auto-merge`` is deliberately absent -- see ``GatePolicyConfig``.
+    Flag *strings* are argparse literals, not built from ``OPERATOR_FIELDS``.
+    F-049 AST-walks ``add_argument`` ``Constant`` args; a runtime ``"--" + name``
+    loop is invisible to that gate. ``--protected-auto-merge`` is deliberately
+    absent -- see ``GatePolicyConfig``.
     """
     g = ap.add_argument_group("gate policy (see GatePolicyConfig / ADR 0005)")
     g.add_argument(
         "--policy-file",
         help="JSON object of GatePolicyConfig operator fields (unknown keys refused)",
     )
-    flag_types: dict[str, type] = {
-        "min_calibration_n": int,
-        "n_bins": int,
-    }
-    for name in OPERATOR_FIELDS:
-        flag = "--" + name.replace("_", "-")
-        g.add_argument(
-            flag,
-            type=flag_types.get(name, float),
-            default=None,
-            help=f"default {getattr(policy, name)!r} when unset (env/file/dataclass)",
-        )
+    unset = "when unset (env/file/dataclass)"
+    g.add_argument(
+        "--risk-target",
+        type=float,
+        default=None,
+        help=f"default {policy.risk_target!r} {unset}",
+    )
+    g.add_argument(
+        "--risk-ci-z",
+        type=float,
+        default=None,
+        help=f"default {policy.risk_ci_z!r} {unset}",
+    )
+    g.add_argument(
+        "--min-calibration-n",
+        type=int,
+        default=None,
+        help=f"default {policy.min_calibration_n!r} {unset}",
+    )
+    g.add_argument(
+        "--max-ece",
+        type=float,
+        default=None,
+        help=f"default {policy.max_ece!r} {unset}",
+    )
+    g.add_argument(
+        "--min-auroc",
+        type=float,
+        default=None,
+        help=f"default {policy.min_auroc!r} {unset}",
+    )
+    g.add_argument(
+        "--max-bin-ci-width",
+        type=float,
+        default=None,
+        help=f"default {policy.max_bin_ci_width!r} {unset}",
+    )
+    g.add_argument(
+        "--n-bins",
+        type=int,
+        default=None,
+        help=f"default {policy.n_bins!r} {unset}",
+    )
+    g.add_argument(
+        "--wilson-floor",
+        type=float,
+        default=None,
+        help=f"default {policy.wilson_floor!r} {unset}",
+    )
+    g.add_argument(
+        "--wilson-z",
+        type=float,
+        default=None,
+        help=f"default {policy.wilson_z!r} {unset}",
+    )
 
 
 def _policy_from_args(
