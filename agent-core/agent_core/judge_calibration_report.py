@@ -208,10 +208,16 @@ def _require_int(value: object, name: str) -> int:
 
 
 def _require_float(value: object, name: str) -> float:
-    """Accept JSON numbers; reject bools and non-numeric types."""
-    if type(value) is bool or type(value) not in (int, float):
-        raise TypeError(f"{name} must be a JSON number, got {type(value).__name__}: {value!r}")
-    return float(value)
+    """Accept JSON numbers; reject bools and non-numeric types.
+
+    Uses ``type(value) is`` (not ``isinstance``) so ``True``/``False`` are never
+    accepted as numbers. Branches are split so mypy narrows before ``float()``.
+    """
+    if type(value) is float:
+        return value
+    if type(value) is int:
+        return float(value)
+    raise TypeError(f"{name} must be a JSON number, got {type(value).__name__}: {value!r}")
 
 
 def _require_str(value: object, name: str) -> str:
