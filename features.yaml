@@ -1384,7 +1384,7 @@ features:
       - "JSON load/dump round-trip preserves artifact_id and may_gate (scripts/validations/F_066.py, tests/test_judge_gate_authorization.py::test_json_round_trip_preserves_may_gate)"
       - "demo and example configs that gate on a judge name a repo-root-relative report_path whose fixture exists (scripts/validations/F_066.py)"
     validation_command: "python scripts/validations/F_066.py"
-    implemented_in: "PENDING"
+    implemented_in: "e7c5fdc2dc444f410a6adf38b7a7aa80e6117ce2"
     depends_on: ["F-057"]
     notes: >-
       Plan Phase 6 of docs/plans/eval-evidence-integrity/PLAN.md. Does not
