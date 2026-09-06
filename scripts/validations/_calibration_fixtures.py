@@ -21,13 +21,9 @@ PASSING_VERBOSITY = VerbosityProbeResult(
     passes=True,
 )
 
-PASSING_ORDER = OrderProbeResult(
-    n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True
-)
+PASSING_ORDER = OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True)
 
-FAILING_ORDER = OrderProbeResult(
-    n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False
-)
+FAILING_ORDER = OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False)
 
 
 def mk_report(

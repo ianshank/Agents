@@ -341,12 +341,22 @@ def judge_calibration_report_from_dict(data: dict[str, Any]) -> JudgeCalibration
     pairwise_raw = data.get("pairwise_member_kappa") or ()
     if not isinstance(pairwise_raw, (list, tuple)):
         raise TypeError("pairwise_member_kappa must be an array")
-    pairwise: tuple[tuple[str, str, float], ...] = tuple(
-        (_require_str(a, "pairwise_member_kappa[0]"),
-         _require_str(b, "pairwise_member_kappa[1]"),
-         _require_float(k, "pairwise_member_kappa[2]"))
-        for a, b, k in pairwise_raw
-    )
+    pairwise_rows: list[tuple[str, str, float]] = []
+    for i, row in enumerate(pairwise_raw):
+        if not isinstance(row, (list, tuple)) or len(row) != 3:
+            raise TypeError(
+                f"pairwise_member_kappa[{i}] must be a 3-item [member_a, member_b, kappa] array, "
+                f"got {type(row).__name__}: {row!r}"
+            )
+        a, b, k = row
+        pairwise_rows.append(
+            (
+                _require_str(a, f"pairwise_member_kappa[{i}][0]"),
+                _require_str(b, f"pairwise_member_kappa[{i}][1]"),
+                _require_float(k, f"pairwise_member_kappa[{i}][2]"),
+            )
+        )
+    pairwise: tuple[tuple[str, str, float], ...] = tuple(pairwise_rows)
     families_raw = data.get("member_families") or ()
     if not isinstance(families_raw, (list, tuple)):
         raise TypeError("member_families must be an array")
@@ -356,8 +366,7 @@ def judge_calibration_report_from_dict(data: dict[str, Any]) -> JudgeCalibration
     kappa = None if kappa_raw is None else _require_float(kappa_raw, "kappa")
     abstention_raw = data.get("abstention_rate")
     abstention = (
-        None if abstention_raw is None
-        else _require_float(abstention_raw, "abstention_rate")
+        None if abstention_raw is None else _require_float(abstention_raw, "abstention_rate")
     )
 
     return JudgeCalibrationReport(
@@ -378,7 +387,6 @@ def judge_calibration_report_from_dict(data: dict[str, Any]) -> JudgeCalibration
         abstention_rate=abstention,
         member_families=families,
     )
-
 
 
 def load_judge_calibration_report(path: str | Path) -> JudgeCalibrationReport:

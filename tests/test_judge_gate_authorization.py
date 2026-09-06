@@ -155,3 +155,11 @@ def test_missing_report_path_raises_value_error() -> None:
     with pytest.raises(ValueError, match=r"does not exist|could not be resolved"):
         require_calibration_for_judge_gating(config, scorers)
 
+
+def test_pairwise_member_kappa_bad_row_shape_is_rejected() -> None:
+    from agent_core import judge_calibration_report_from_dict, judge_calibration_report_to_dict
+
+    payload = judge_calibration_report_to_dict(_calibration_report(artifact_id="run-123"))
+    payload["pairwise_member_kappa"] = [["only-two", 0.5]]
+    with pytest.raises(TypeError, match=r"pairwise_member_kappa\[0\]"):
+        judge_calibration_report_from_dict(payload)

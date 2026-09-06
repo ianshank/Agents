@@ -50,8 +50,6 @@ def _schema_version() -> str:
     return SCHEMA_VERSION
 
 
-
-
 def main() -> int:
     configure_logging()
     errors: list[str] = []
