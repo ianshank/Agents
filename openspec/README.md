@@ -30,6 +30,10 @@ archived one may — asserted by the *OpenSpec change index* guard in
 before that guard existed.
 
 - [`changes/prove-m8-execution/`](changes/prove-m8-execution/) — *implemented, pending archive.*
+- [`changes/add-agent-in-the-loop-testgen/`](changes/add-agent-in-the-loop-testgen/) — *proposed.*
+  Deck B unlock: sequential pipeline target (generator → existing F-065 suite execution).
+  Docs-only until owner confirms option (a) and evaluation-design questions in `proposal.md`.
+
   All tasks have landed: the execution ledger, the egress guard, per-pipeline vacuity refusal,
   the two network-judge `client=` seams (F-063), and task 4's breadth — **M8 now credits 39 of
   the 41 registered components, with the two uncredited being exactly the two waived.** The M8
