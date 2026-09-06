@@ -708,6 +708,71 @@ def test_a_content_change_still_makes_the_artifact_stale(tmp_path: Path) -> None
     assert not fresh, "a status flip must be reported as stale"
 
 
+def test_duration_drift_alone_does_not_make_the_artifact_stale(tmp_path: Path) -> None:
+    """Duration (ms) is machine speed, not suite content: no rerun reproduces it.
+
+    Gating it would leave the freshness check red on every environment but the one that
+    generated the artifact -- the always-red defect the Provenance exemption exists to
+    prevent. The column stays visible in the committed artifact; it is masked only in the
+    comparison.
+    """
+    _write_report(tmp_path, [_record("suite:root", tier="A"), _record("cli:bregress")])
+    em.write_artifacts(em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE), tmp_path / "out")
+
+    slower = [_record("suite:root", tier="A"), _record("cli:bregress")]
+    for record in slower:
+        record["duration_ms"] = 999999
+    _write_report(tmp_path, slower)
+    fresh, rendered = em.artifact_is_fresh(em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE), tmp_path / "out")
+    assert fresh, "only durations changed; the artifact is not stale"
+    assert "999999" in rendered, "masking must not remove durations from the render itself"
+
+
+def test_duration_masking_does_not_swallow_a_status_change(tmp_path: Path) -> None:
+    """The volatile-column mask must blank durations and nothing else."""
+    _write_report(tmp_path, [_record("suite:root", tier="A"), _record("cli:bregress")])
+    em.write_artifacts(em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE), tmp_path / "out")
+
+    changed = [_record("suite:root", tier="A", status="FAIL"), _record("cli:bregress")]
+    for record in changed:
+        record["duration_ms"] = 999999
+    _write_report(tmp_path, changed)
+    fresh, _ = em.artifact_is_fresh(em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE), tmp_path / "out")
+    assert not fresh, "a status flip must stay stale even when durations also differ"
+
+
+def test_duration_masking_tolerates_escaped_pipes_in_cells(tmp_path: Path) -> None:
+    """A cell carrying a literal ``\\|`` must not shift the column the mask blanks."""
+    _write_report(
+        tmp_path,
+        [_record("suite:root", tier="A", detail="pipes | inside detail"), _record("cli:bregress")],
+    )
+    em.write_artifacts(em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE), tmp_path / "out")
+
+    slower = [_record("suite:root", tier="A", detail="pipes | inside detail"), _record("cli:bregress")]
+    for record in slower:
+        record["duration_ms"] = 424242
+    _write_report(tmp_path, slower)
+    fresh, _ = em.artifact_is_fresh(em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE), tmp_path / "out")
+    assert fresh, "an escaped pipe in Detail must not misalign the Duration mask"
+
+
+def test_csv_mirror_ignores_duration_drift(tmp_path: Path) -> None:
+    """The CSV mirror carries the same volatile column and needs the same exemption."""
+    _write_report(tmp_path, [_record("suite:root", tier="A"), _record("cli:bregress")])
+    sheets = em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE)
+    em.write_artifacts(sheets, tmp_path / "out")
+
+    slower = [_record("suite:root", tier="A"), _record("cli:bregress")]
+    for record in slower:
+        record["duration_ms"] = 7
+    _write_report(tmp_path, slower)
+    regenerated = em.build_sheets(tmp_path, provenance=FIXED_PROVENANCE)
+    assert em.stale_csv_mirrors(regenerated, tmp_path / "out") == []
+    fresh, _ = em.artifact_is_fresh(regenerated, tmp_path / "out")
+    assert fresh
+
+
 def test_freshness_diff_is_bounded(tmp_path: Path) -> None:
     """A stale artifact must say *why*, without pasting an unbounded diff into CI output."""
     sheet = em.Sheet(name="S", columns=("A",), rows=tuple((str(n),) for n in range(200)))
@@ -1136,7 +1201,9 @@ def _provenance(sha: str | None = None, stamp: str | None = None) -> em.Provenan
         generated_at=_to_utc_iso(stamp or _git("log", "-1", "--format=%cI")),
         host=platform.platform(),
         python_version=platform.python_version(),
-        runner_invocation="pwsh -NoProfile -File scripts/run_all_e2e.ps1 -Tiers all -HypothesisProfile ci",
+        # Canonical generation environment is the POSIX driver on Linux (the nightly
+        # freshness job runs it); the .ps1 remains the Windows driver.
+        runner_invocation="bash scripts/run_all_e2e.sh --tiers all --hypothesis-profile ci",
     )
 
 
