@@ -44,7 +44,8 @@ import json
 import sys
 
 from ..audit_sampler import AuditConfig
-from ..logging_util import configure_logging
+from ..config import SoakConfig
+from ..logging_util import configure_from_config
 
 # The ``X as X`` redundant-alias form marks these as explicit re-exports (mypy
 # no_implicit_reexport): the CLI resolves ``_run`` at call time, tests monkeypatch
@@ -98,6 +99,7 @@ __all__ = [
     "SyncResult",
     "SyncStatus",
     "canonical_key",
+    "effective_soak_target",
     "main",
     "merge_opaque",
     "merge_records",
@@ -131,14 +133,36 @@ def _config_from_args(args: argparse.Namespace) -> StoreSyncConfig:
     )
 
 
-def _emit_stats(store_path: str, soak_target: int | None, audit_floor: int) -> None:
-    """Print per-domain stats as JSON. ``--soak-target`` adds a reserved ``_soak``
-    block; absent, the output stays byte-identical to the historical stats contract."""
+def effective_soak_target(
+    soak_target: int | None,
+    soak_progress_flag: bool,
+    cfg: SoakConfig | None = None,
+) -> int | None:
+    """``--soak-target N`` wins; else ``--soak-progress`` uses :class:`SoakConfig`."""
+    if soak_target is not None:
+        return soak_target
+    if soak_progress_flag:
+        return (cfg or SoakConfig()).target_per_domain
+    return None
+
+
+def _emit_stats(
+    store_path: str,
+    soak_target: int | None,
+    audit_floor: int,
+    *,
+    soak_progress_flag: bool = False,
+    soak_cfg: SoakConfig | None = None,
+) -> None:
+    """Print per-domain stats as JSON. ``--soak-target`` / ``--soak-progress`` add a
+    reserved ``_soak`` block; absent, the output stays byte-identical to the
+    historical stats contract."""
     records, opaque = read_store_lines(store_path)
     out: dict[str, object] = {}
     out.update(store_stats(records, opaque))
-    if soak_target is not None:
-        out["_soak"] = soak_progress(records, soak_target, audit_floor=audit_floor)
+    target = effective_soak_target(soak_target, soak_progress_flag, soak_cfg)
+    if target is not None:
+        out["_soak"] = soak_progress(records, target, audit_floor=audit_floor)
     print(json.dumps(out, sort_keys=True))
 
 
@@ -171,6 +195,14 @@ def main(argv: list[str] | None = None) -> int:
         help="if set, add a reserved '_soak' progress block toward N target records",
     )
     p_stats.add_argument(
+        "--soak-progress",
+        action="store_true",
+        help=(
+            "like --soak-target using SoakConfig.target_per_domain (ADR 0005 sample-size "
+            "note). --soak-target N wins when both are passed"
+        ),
+    )
+    p_stats.add_argument(
         "--audit-floor",
         type=int,
         default=AuditConfig.per_domain_floor,
@@ -184,10 +216,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
 
-    configure_logging(level="INFO")
+    configure_from_config()
     try:
         if args.cmd == "stats":
-            _emit_stats(args.store, args.soak_target, args.audit_floor)
+            _emit_stats(
+                args.store,
+                args.soak_target,
+                args.audit_floor,
+                soak_progress_flag=args.soak_progress,
+            )
             return EXIT_OK
         cfg = _config_from_args(args)
         # Resolve the runner at call time (module attribute) so the seam stays

@@ -31,6 +31,7 @@ jobs:
     env:
       # Same repo-variable seam the acting gate job honors (I-4).
       STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
+      AGENT_CORE_LOG_LEVEL: ${{ vars.AGENT_CORE_LOG_LEVEL }}
     timeout-minutes: 15
     steps:
       # Credentials persist so store_sync can FETCH the data branch on a
@@ -45,6 +46,22 @@ jobs:
       - run: pip install -e "./agent-core"
       - name: Sync store (pull — selecting from a stale store wastes the week)
         run: python -m agent_core.store_sync pull --store "$STORE" --repo-dir .
+      - name: Soak progress toward activation bar
+        env:
+          SOAK_TARGET: ${{ vars.MERGE_GATE_SOAK_TARGET }}
+          AUDIT_FLOOR: ${{ vars.MERGE_GATE_AUDIT_FLOOR }}
+        run: |
+          # Optional flags as a bash array (F-047): empty vars vanish, nothing is
+          # word-split. --soak-progress uses SoakConfig.target_per_domain when
+          # MERGE_GATE_SOAK_TARGET is unset.
+          ARGS=(stats --store "$STORE" --soak-progress)
+          if [ -n "${SOAK_TARGET}" ]; then
+            ARGS+=(--soak-target "${SOAK_TARGET}")
+          fi
+          if [ -n "${AUDIT_FLOOR}" ]; then
+            ARGS+=(--audit-floor "${AUDIT_FLOOR}")
+          fi
+          python -m agent_core.store_sync "${ARGS[@]}"
       - name: Select records for audit (unbiased sample; knobs via repo vars)
         run: |
           # --with-propensity appends the inclusion probability each change was

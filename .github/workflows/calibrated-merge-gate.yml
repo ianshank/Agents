@@ -27,6 +27,22 @@ jobs:
     if: ${{ vars.ENABLE_CALIBRATED_AUTOMERGE == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Empty GitHub `vars` stay inert: overlay_from_environ skips blank values
+      # so dataclass defaults remain until a human sets a repo variable (I-4).
+      MERGE_GATE_RISK_TARGET: ${{ vars.MERGE_GATE_RISK_TARGET }}
+      MERGE_GATE_RISK_CI_Z: ${{ vars.MERGE_GATE_RISK_CI_Z }}
+      MERGE_GATE_MIN_CALIBRATION_N: ${{ vars.MERGE_GATE_MIN_CALIBRATION_N }}
+      MERGE_GATE_MAX_ECE: ${{ vars.MERGE_GATE_MAX_ECE }}
+      MERGE_GATE_MIN_AUROC: ${{ vars.MERGE_GATE_MIN_AUROC }}
+      MERGE_GATE_MAX_BIN_CI_WIDTH: ${{ vars.MERGE_GATE_MAX_BIN_CI_WIDTH }}
+      MERGE_GATE_N_BINS: ${{ vars.MERGE_GATE_N_BINS }}
+      MERGE_GATE_WILSON_FLOOR: ${{ vars.MERGE_GATE_WILSON_FLOOR }}
+      MERGE_GATE_WILSON_Z: ${{ vars.MERGE_GATE_WILSON_Z }}
+      # Paths in MERGE_GATE_POLICY_FILE are cwd-relative. This job's defaults
+      # set working-directory to agent-core; the shadow job below uses repo root.
+      MERGE_GATE_POLICY_FILE: ${{ vars.MERGE_GATE_POLICY_FILE }}
+      AGENT_CORE_LOG_LEVEL: ${{ vars.AGENT_CORE_LOG_LEVEL }}
     defaults:
       run:
         working-directory: agent-core
@@ -79,6 +95,17 @@ jobs:
     env:
       # Same repo-variable seam the acting gate job honors (I-4).
       STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
+      MERGE_GATE_RISK_TARGET: ${{ vars.MERGE_GATE_RISK_TARGET }}
+      MERGE_GATE_RISK_CI_Z: ${{ vars.MERGE_GATE_RISK_CI_Z }}
+      MERGE_GATE_MIN_CALIBRATION_N: ${{ vars.MERGE_GATE_MIN_CALIBRATION_N }}
+      MERGE_GATE_MAX_ECE: ${{ vars.MERGE_GATE_MAX_ECE }}
+      MERGE_GATE_MIN_AUROC: ${{ vars.MERGE_GATE_MIN_AUROC }}
+      MERGE_GATE_MAX_BIN_CI_WIDTH: ${{ vars.MERGE_GATE_MAX_BIN_CI_WIDTH }}
+      MERGE_GATE_N_BINS: ${{ vars.MERGE_GATE_N_BINS }}
+      MERGE_GATE_WILSON_FLOOR: ${{ vars.MERGE_GATE_WILSON_FLOOR }}
+      MERGE_GATE_WILSON_Z: ${{ vars.MERGE_GATE_WILSON_Z }}
+      MERGE_GATE_POLICY_FILE: ${{ vars.MERGE_GATE_POLICY_FILE }}
+      AGENT_CORE_LOG_LEVEL: ${{ vars.AGENT_CORE_LOG_LEVEL }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -182,6 +209,6 @@ jobs:
             echo '```'
             echo "### Store record counts (per domain, per label source)"
             echo '```json'
-            python -m agent_core.store_sync stats --store "$STORE" || echo '{}'
+            python -m agent_core.store_sync stats --store "$STORE" --soak-progress || echo '{}'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

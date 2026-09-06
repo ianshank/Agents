@@ -10,14 +10,17 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 
-_DEFAULT_FORMAT = "%(asctime)s %(levelname)-7s %(name)s :: %(message)s"
+from .config import LoggingConfig
+
+_DEFAULT_FORMAT = LoggingConfig.fmt  # keep the historical kwarg default in lockstep
 
 
 def configure_logging(
-    level: str = "INFO",
+    level: str = LoggingConfig.level,
     fmt: str = _DEFAULT_FORMAT,
     *,
     force: bool = False,
@@ -27,6 +30,24 @@ def configure_logging(
     if not isinstance(numeric, int):  # unknown level name
         raise ValueError(f"unknown log level: {level!r}")
     logging.basicConfig(level=numeric, format=fmt, force=force)
+
+
+def configure_from_config(
+    config: LoggingConfig | None = None,
+    *,
+    environ: Mapping[str, str] | None = None,
+    force: bool = False,
+) -> None:
+    """Apply :class:`LoggingConfig`, overlaying ``config.level_env_var`` when set.
+
+    Empty env values are ignored so a GitHub ``vars`` pass-through of an unset
+    variable cannot blank the configured level. Call-site ``configure_logging(level=...)``
+    remains byte-compatible for tests and scripts that pin a level explicitly.
+    """
+    cfg = config or LoggingConfig()
+    env = os.environ if environ is None else environ
+    overlay = env.get(cfg.level_env_var, "").strip()
+    configure_logging(level=overlay or cfg.level, fmt=cfg.fmt, force=force)
 
 
 def get_logger(name: str, level: str | None = None) -> logging.Logger:

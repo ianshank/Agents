@@ -10,12 +10,23 @@ from typing import Any
 import pytest
 
 from agent_core import merge_gate_ci
+from agent_core.gate_policy_io import OPERATOR_FIELDS, GatePolicyIOConfig, env_name
 from agent_core.merge_gate import ChangeContext, GateDecision, GatePolicyConfig
 from agent_core.merge_gate_ci import main, run
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore, _fold
 from agent_core.protocols import FixedClock
 
 CFG = GatePolicyConfig()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_merge_gate_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """main() reads os.environ; an operator's exported MERGE_GATE_* must not flake tests."""
+    io = GatePolicyIOConfig()
+    for name in OPERATOR_FIELDS:
+        monkeypatch.delenv(env_name(name, io), raising=False)
+    monkeypatch.delenv(io.policy_file_env_var, raising=False)
+    monkeypatch.delenv(env_name("protected_auto_merge", io), raising=False)
 
 
 def _healthy_store(path) -> OutcomeStore:

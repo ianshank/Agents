@@ -24,87 +24,38 @@ meta-gate).
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
+from required_check_names import (
+    CheckNameError,
+    candidate_required_contexts,
+    gate_workflow_map,
+    load_workflow,
+    rendered_job_names,
+    stub_names_by_key,
+)
 
 WORKFLOW_DIR = Path(__file__).resolve().parent.parent / ".github" / "workflows"
 STUB_WORKFLOW = WORKFLOW_DIR / "required-check-stubs.yml"
 
-#: How a stub job declares which real workflow it stands in for.
-_GATE_CONDITION = re.compile(r"needs\.gate\.outputs\.(?P<key>\w+)\s*==\s*'false'")
-
-#: The matrix expression to expand when rendering a job name into a check
-#: context. Matched as a pattern, not a literal substring: GitHub treats
-#: whitespace inside ``${{ ... }}`` as insignificant, so ``${{matrix.python-version}}``
-#: renders identically. A literal ``.replace`` would silently miss a reformatted
-#: expression on one side of the stub/real comparison and report drift that
-#: is not there -- or, worse, agree because both sides failed to render.
-_PYTHON_VERSION_EXPR = re.compile(r"\$\{\{\s*matrix\.python-version\s*\}\}")
-
-#: The gate job's own ``--workflow KEY=PATH`` arguments to
-#: ``scripts/workflow_paths.py``. Read from the workflow rather than restated
-#: here, so this test cannot pass against a stale copy of the list it checks.
-_WORKFLOWS_ENTRY = re.compile(r"--workflow\s+(?P<key>\w+)=(?P<path>\.github/workflows/[\w.-]+\.yml)")
-
 
 def _load(path: Path) -> dict[str, Any]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    assert isinstance(data, dict), f"{path} is not a YAML mapping"
-    return data
+    return load_workflow(path)
 
 
 def _rendered_job_names(workflow: dict[str, Any]) -> set[str]:
-    """Every check context *workflow* can post.
-
-    A matrix job's ``name:`` expands once per matrix value, which is what makes
-    it a distinct check context. Only ``python-version`` is expanded: it is the
-    single matrix axis in use across this repository, and a silent wrong answer
-    would be worse than an explicit failure, so anything else raises.
-    """
-    names: set[str] = set()
-    for job_id, job in workflow.get("jobs", {}).items():
-        name = job.get("name", job_id)
-        matrix = job.get("strategy", {}).get("matrix", {})
-        axes = {k: v for k, v in matrix.items() if k != "fail-fast"}
-        if not axes:
-            assert "${{" not in name, f"job {job_id!r} interpolates {name!r} with no matrix to expand"
-            names.add(name)
-            continue
-        assert set(axes) == {"python-version"}, f"job {job_id!r} has an unsupported matrix axis: {sorted(axes)}"
-        for version in axes["python-version"]:
-            rendered = _PYTHON_VERSION_EXPR.sub(str(version), name)
-            # Substitution must be total. Comparing a half-rendered name against
-            # another half-rendered one would agree for the wrong reason, and this
-            # test's entire job is to catch names that disagree.
-            assert "${{" not in rendered, f"job {job_id!r} has an expression this test cannot render: {name!r}"
-            names.add(rendered)
-    return names
+    return rendered_job_names(workflow)
 
 
 def _gate_workflow_map() -> dict[str, Path]:
     """The gate job's ``key -> workflow file`` mapping, read from its own source."""
-    text = STUB_WORKFLOW.read_text(encoding="utf-8")
-    mapping = {m.group("key"): WORKFLOW_DIR.parent.parent / m.group("path") for m in _WORKFLOWS_ENTRY.finditer(text)}
-    assert mapping, "could not parse the gate job's --workflow arguments"
-    return mapping
+    return gate_workflow_map(STUB_WORKFLOW.read_text(encoding="utf-8"), WORKFLOW_DIR)
 
 
 def _stub_names_by_key() -> dict[str, set[str]]:
-    """Rendered stub names, grouped by the gate output each is conditioned on."""
-    stubs = _load(STUB_WORKFLOW)
-    grouped: dict[str, set[str]] = {}
-    for job_id, job in stubs["jobs"].items():
-        condition = str(job.get("if", ""))
-        match = _GATE_CONDITION.search(condition)
-        if not match:
-            continue  # the gate job itself, which is machinery rather than a stub
-        single = {"jobs": {job_id: job}}
-        grouped.setdefault(match.group("key"), set()).update(_rendered_job_names(single))
-    return grouped
+    return stub_names_by_key(_load(STUB_WORKFLOW))
 
 
 GATE_MAP = _gate_workflow_map()
@@ -213,5 +164,11 @@ def test_an_unrenderable_expression_fails_loudly() -> None:
     """Half-rendered names could agree for the wrong reason, so refuse to compare them."""
     workflow = {"jobs": {"a": {"name": "pkg ${{ matrix.os }}", "strategy": {"matrix": {"python-version": ["3.12"]}}}}}
 
-    with pytest.raises(AssertionError, match="cannot render"):
+    with pytest.raises(CheckNameError, match="cannot render"):
         _rendered_job_names(workflow)
+
+
+def test_candidate_required_contexts_are_the_stub_union() -> None:
+    """The ADR 0037 checker must derive the same names this pairing already gates."""
+    stubbed = {name for names_ in _stub_names_by_key().values() for name in names_}
+    assert set(candidate_required_contexts()) == stubbed

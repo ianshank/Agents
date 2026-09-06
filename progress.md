@@ -1,6 +1,37 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 016 — 2026-09-06
+
+### Changes
+
+VP strategic roadmap implementation (engineering half; no fabricated HUMAN_AUDIT
+labels; CHARTER not amended; branch protection remains an admin action).
+
+- `agent_core.gate_policy_io`: file → env → CLI overlay for `GatePolicyConfig`.
+- `SoakConfig` + `store_sync stats --soak-progress` remaining-by-domain.
+- `corpus_provenance` / `labeling_protocol` / `judge_baseline` CLIs.
+- G4/G5: `configure_from_config` (`AGENT_CORE_LOG_LEVEL`); TIMEOUT_CLEAN why-log;
+  duplicate HUMAN_AUDIT warning.
+- `scripts/check_branch_protection.py` (advisory) +
+  `docs/runbooks/branch-protection-enablement.md`.
+- `scripts/openspec_archive.py`; archived five implemented OpenSpec changes.
+- Workflows: `MERGE_GATE_*` env on calibrated-merge-gate; soak-progress on
+  merge-gate-audit.
+- `docs/plans/vp-strategic-deep-dive/DECISIONS.md`: staged per-domain
+  activation; second maintainer recommended; flywheel CHARTER amendment deferred.
+- Golden corpus README is empty on purpose (`docs/golden-corpus/README.md`).
+
+Protected paths touched (`tests/**`, `agent-core/tests/**`, `.github/**`): this
+PR needs the `eval-change-approved` label. The checker cannot apply that label.
+
+### Validation evidence
+
+- agent-core + scripts tests for the new modules (see this session's pytest run).
+- `python scripts/check_protected_changes.py` will flag the protected set until
+  labeled.
+
+---
 ## Session 015 — 2026-09-02
 
 ### Peer review

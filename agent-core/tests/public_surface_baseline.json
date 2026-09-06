@@ -161,6 +161,7 @@
       "SyncStatus",
       "UNPARSED_STATS_KEY",
       "canonical_key",
+      "effective_soak_target",
       "main",
       "merge_opaque",
       "merge_records",

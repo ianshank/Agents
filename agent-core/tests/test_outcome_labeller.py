@@ -52,10 +52,13 @@ def test_failure_labels_incorrect(tmp_path):
     assert out[0].label_source == LabelSource.CI_FAILURE.value
 
 
-def test_timeout_clean_labels_correct(tmp_path):
+def test_timeout_clean_labels_correct(tmp_path, caplog):
     store = _store(tmp_path, _pending("c1", "2026-05-01T00:00:00+00:00"))  # >7 days old
-    out = label_matured(store, _Reverts(set()), _Failures(set()), CFG, clock=CLOCK)
+    with caplog.at_level("INFO"):
+        out = label_matured(store, _Reverts(set()), _Failures(set()), CFG, clock=CLOCK)
     assert out[0].label is True and out[0].label_source == LabelSource.TIMEOUT_CLEAN.value
+    assert "TIMEOUT_CLEAN" in caplog.text
+    assert "does not feed tau" in caplog.text
 
 
 def test_not_yet_matured_is_skipped(tmp_path):

@@ -29,15 +29,6 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
-- [`changes/prove-m8-execution/`](changes/prove-m8-execution/) — *implemented, pending archive.*
-  All tasks have landed: the execution ledger, the egress guard, per-pipeline vacuity refusal,
-  the two network-judge `client=` seams (F-063), and task 4's breadth — **M8 now credits 39 of
-  the 41 registered components, with the two uncredited being exactly the two waived.** The M8
-  (Composability) dimension *had* credited a component for appearing in a validated pipeline
-  config rather than for executing, and one credited cell was provably invoked zero times.
-  Replaced config-presence credit with an execution ledger, added the two network judges'
-  missing `client=` seams, and widened M8 honestly across the registered components once the
-  mechanism meant something. Motivated by `docs/plans/eval-evidence-integrity/REVIEW.md`.
 - [`changes/add-agent-in-the-loop-testgen/`](changes/add-agent-in-the-loop-testgen/) — *proposed; owner defaults recorded 2026-09-06 in `OWNER_DEFAULTS.md`.*
   Deck B unlock: sequential pipeline target (generator → existing F-065 suite execution).
   Docs-only until owner confirms option (a) and evaluation-design questions in `proposal.md`.
@@ -50,33 +41,11 @@ before that guard existed.
   rejected "add-business-readiness-wedge" (which would have pulled a public
   `merge_gate_report` CLI into the harness) with a measurement wedge that does not widen the
   public surface.
-- [`changes/extend-judge-calibration/`](changes/extend-judge-calibration/) — *implemented,
-  pending archive.* Answers the external analysis's "judge calibration: Not Covered" grade,
-  which is refuted — Cohen's κ with a statistical-power floor already ships — and scopes what
-  is genuinely missing on top of it. Claims F-057.
-- [`changes/add-repeat-reliability-metrics/`](changes/add-repeat-reliability-metrics/) —
-  *implemented, pending archive.* `pass^k` over k independent attempts per item. Depends on
-  `add-agent-trajectory-evaluation` (landed); authorised by ADR 0031. Claims F-056.
 - [`changes/add-production-eval-flywheel/`](changes/add-production-eval-flywheel/) —
   **blocked.** Ingesting production traces back into the golden dataset. Blocked on a
   CHARTER §3 ratified amendment plus its own ADR — §3 lists "a general observability
-  platform" as a non-goal — and on the three changes above.
-- [`changes/add-gate-decision-provenance/`](changes/add-gate-decision-provenance/) — *implemented,
-  pending archive.* Landed as **F-062** (ADR 0042); its implementation record is in `review.md`.
-  The quality gate's decision was never recorded: sinks fire in `EvalEngine.run()` before
-  `evaluate_gate` runs in the CLI, so no exported artifact carries a verdict and a soak cannot be
-  diffed. Persists the decision on `RunResult`, and adds per-rule `report_only` so an uncalibrated
-  scorer can be measured inside a gate that stays live for everything else. It needed its own ADR —
-  ADR 0031 covers agent evaluation only — and got one: ADR 0042. Prerequisite for the three below,
-  now satisfied. Motivated by `docs/plans/scenario-eval-matrices/REVIEW.md`.
-- [`changes/add-testgen-eval-matrix/`](changes/add-testgen-eval-matrix/) — *implemented,
-  pending archive.* Landed as **F-065** (ADR 0043); the soak's starting distribution is in
-  `review.md`. Four
-  deterministic scorers over AI-generated test suites (executability, mutation score in both
-  denominators, false alarms on correct code, obligation recall), executed by an allowlisted
-  callable target with scorers as pure readers of its evidence. Synthetic generated corpus; no
-  judge, so it does not queue behind calibration. Depends on `add-gate-decision-provenance` and
-  `prove-m8-execution`.
+  platform" as a non-goal. Calibration packages it originally queued behind are archived;
+  remaining in-flight dependency is add-measurement-harness-wedge.
 - [`changes/add-rca-eval-matrix/`](changes/add-rca-eval-matrix/) — *proposed (synthetic scope); ranking scorers prototype (tasks 1.1–1.2) in progress.*
   Ranked root-cause diagnosis over a finite candidate set — AC@k, component match, timezone-pinned
   onset tolerance, and abstention as a first-class outcome — with a trivial `max-|Z|` baseline
@@ -87,7 +56,8 @@ before that guard existed.
   *proposed.* Provenance capture that actually reproduces (revision-scoped export, unpinnable
   sources recorded as unpinnable) plus four deterministic scorers including an offline,
   temperature-qualified diversity floor. Ships no judge-backed scorer: which requirement attributes
-  a judge may score is an empirical question for `extend-judge-calibration`, not a literature claim.
+  a judge may score is an empirical question for the archived extend-judge-calibration change,
+  not a literature claim.
 
 ## Archived changes
 
@@ -102,11 +72,16 @@ Landed; kept for provenance. Each carries its F-ID and the commit it landed in.
 | [`changes/archive/add-eval-matrix-completeness/`](changes/archive/add-eval-matrix-completeness/) | F-053 | `bc0ae2c494` |
 | [`changes/archive/harden-quality-gate-integrity/`](changes/archive/harden-quality-gate-integrity/) | F-054 | `711564123e` |
 | [`changes/archive/pin-lockstep-tool-versions/`](changes/archive/pin-lockstep-tool-versions/) | F-055 | `86eeb5cf1d` |
+| [`changes/archive/add-repeat-reliability-metrics/`](changes/archive/add-repeat-reliability-metrics/) | F-056 | `c77aade048` |
+| [`changes/archive/extend-judge-calibration/`](changes/archive/extend-judge-calibration/) | F-057 | `1cfc342f7a` |
 | [`changes/archive/test-skill-validator-library/`](changes/archive/test-skill-validator-library/) | — | `8a8e25c` |
 | [`changes/archive/add-openspec-implementation-review/`](changes/archive/add-openspec-implementation-review/) | — | `3f6bd6c` |
 | [`changes/archive/add-foundation-reviewer-charters/`](changes/archive/add-foundation-reviewer-charters/) | — | `537d1f2` |
 | [`changes/archive/add-panel-judge/`](changes/archive/add-panel-judge/) | F-059 | `955bc9c919` |
 | [`changes/archive/add-stateful-outcome-evaluation/`](changes/archive/add-stateful-outcome-evaluation/) | F-060 | `b709ae1903` |
+| [`changes/archive/add-gate-decision-provenance/`](changes/archive/add-gate-decision-provenance/) | F-062 | `14b0101dfb` |
+| [`changes/archive/prove-m8-execution/`](changes/archive/prove-m8-execution/) | F-063 | `7800a3fec5` |
+| [`changes/archive/add-testgen-eval-matrix/`](changes/archive/add-testgen-eval-matrix/) | F-065 | `d0c761d25b` |
 
 ## Removing this spike
 

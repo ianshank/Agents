@@ -78,8 +78,38 @@ class CalibrationConfig:
 
 @dataclass(frozen=True)
 class LoggingConfig:
+    """Process-wide logging. CLIs call :func:`agent_core.logging_util.configure_from_config`.
+
+    ``level_env_var`` is the overlay seam: an operator can raise verbosity without
+    editing source or flags. Empty/unset env keeps ``level``.
+    """
+
     level: str = "INFO"
     fmt: str = "%(asctime)s %(levelname)-7s %(name)s :: %(message)s"
+    level_env_var: str = "AGENT_CORE_LOG_LEVEL"
+
+    def __post_init__(self) -> None:
+        if not self.level_env_var.strip():
+            raise ConfigError("logging.level_env_var must be non-empty")
+
+
+@dataclass(frozen=True)
+class SoakConfig:
+    """Activation-bar progress reporting for the merge-gate outcome store.
+
+    ``target_per_domain`` is the near-perfect HUMAN_AUDIT count per domain that
+    ADR 0005's sample-size note cites as the activation bar (~several hundred
+    in the operating band at ``risk_target = 0.02``). Used by
+    ``store_sync stats --soak-progress``; never by ``may_gate``.
+    """
+
+    target_per_domain: int = 380
+
+    def __post_init__(self) -> None:
+        if self.target_per_domain < 1:
+            raise ConfigError(
+                f"soak.target_per_domain must be >= 1 (got {self.target_per_domain!r})"
+            )
 
 
 @dataclass(frozen=True)

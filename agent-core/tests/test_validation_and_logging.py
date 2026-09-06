@@ -14,6 +14,8 @@ from agent_core import (
     get_logger,
     reliability_bins,
 )
+from agent_core.config import LoggingConfig
+from agent_core.logging_util import configure_from_config
 
 
 # --- calibration input validation -------------------------------------------
@@ -85,3 +87,17 @@ def test_debug_span_executes_block():
     with debug_span(logger, "unit", k=1):
         ran.append(True)
     assert ran == [True]
+
+
+def test_configure_from_config_overlays_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(LoggingConfig.level_env_var, "ERROR")
+    configure_from_config(LoggingConfig(), force=True)
+    assert logging.getLogger().level == logging.ERROR
+    configure_logging(level="WARNING", force=True)
+
+
+def test_configure_from_config_ignores_empty_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(LoggingConfig.level_env_var, "   ")
+    configure_from_config(LoggingConfig(level="WARNING"), force=True)
+    assert logging.getLogger().level == logging.WARNING
+    configure_logging(level="WARNING", force=True)

@@ -114,12 +114,19 @@ def soak_progress(
     total = len(records)
     shortfall = max(0, target - total)
     velocity = _velocity_per_day(records)
+    domains = sorted({r.domain for r in records} | set(audits_by_domain))
+    human_audit_by_domain = {d: audits_by_domain.get(d, 0) for d in domains}
+    remaining_by_domain = {
+        d: max(0, target - human_audit_by_domain[d]) for d in domains
+    }
     return {
         "total": total,
         "pending": total - labeled,
         "labeled": labeled,
         "human_audit": len(human),
         "per_domain_cold_start": cold_start,
+        "human_audit_by_domain": human_audit_by_domain,
+        "remaining_by_domain": remaining_by_domain,
         "n_vs_target": {"n": total, "target": target, "shortfall": shortfall},
         "velocity_per_day": velocity,
         "days_to_target": None if not velocity else shortfall / velocity,

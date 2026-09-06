@@ -1,6 +1,6 @@
 # Change: prove-m8-execution
 
-**Status:** proposed · **Date:** 2026-09-02 · **Author track:** `claude/` agent lane
+**Status:** implemented (archived; landed `7800a3fec5`) · **Date:** 2026-09-02 · **Author track:** `claude/` agent lane
 **Motivated by:** `docs/plans/eval-evidence-integrity/REVIEW.md` — peer review of an
 eval-tool test-matrix readiness brief. Its own headline recommendation (widen M8
 composability to all 41 registered components) is withdrawn in that review (Pass 2, A2): the

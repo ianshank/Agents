@@ -22,11 +22,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from .config import ConfigError
-from .logging_util import configure_logging, get_logger
+from .gate_policy_io import (
+    OPERATOR_FIELDS,
+    GatePolicyIOConfig,
+    load_policy_file,
+    resolve_policy,
+)
+from .logging_util import configure_from_config, get_logger
 from .merge_gate import ChangeContext, GateDecision, GatePolicyConfig, decide
 from .merge_seed import seed_pending
 from .outcome_store import LabelSource, OutcomeStore, build_domain_models
@@ -59,40 +66,53 @@ def _load_context(args: argparse.Namespace) -> ChangeContext:
 
 
 def _add_policy_args(ap: argparse.ArgumentParser, policy: GatePolicyConfig) -> None:
-    """Expose every gate tunable as a flag, defaulted from the dataclass itself.
+    """Expose every operator tunable as a flag.
 
-    Defaults are read off ``policy`` rather than re-typed, so ``--help`` cannot drift from
-    the documented field defaults. ADR 0005 SS3 calls tuning ``risk_target`` /
-    ``min_calibration_n`` "a human decision"; until now there was no seam through which a
-    human could make it without editing library source.
+    Defaults are ``None`` so an omitted flag does not mask env / ``--policy-file``
+    overlays (a typed default of 0.02 would be indistinguishable from the operator
+    actually passing 0.02). Help text still quotes the dataclass default so
+    ``--help`` cannot drift from :class:`GatePolicyConfig`.
 
     ``--protected-auto-merge`` is deliberately absent -- see ``GatePolicyConfig``.
     """
     g = ap.add_argument_group("gate policy (see GatePolicyConfig / ADR 0005)")
-    g.add_argument("--risk-target", type=float, default=policy.risk_target)
-    g.add_argument("--risk-ci-z", type=float, default=policy.risk_ci_z)
-    g.add_argument("--min-calibration-n", type=int, default=policy.min_calibration_n)
-    g.add_argument("--max-ece", type=float, default=policy.max_ece)
-    g.add_argument("--min-auroc", type=float, default=policy.min_auroc)
-    g.add_argument("--max-bin-ci-width", type=float, default=policy.max_bin_ci_width)
-    g.add_argument("--n-bins", type=int, default=policy.n_bins)
-    g.add_argument("--wilson-floor", type=float, default=policy.wilson_floor)
-    g.add_argument("--wilson-z", type=float, default=policy.wilson_z)
-
-
-def _policy_from_args(args: argparse.Namespace) -> GatePolicyConfig:
-    """Map parsed flags onto the frozen policy. Raises ``ConfigError`` on a bad value."""
-    return GatePolicyConfig(
-        risk_target=args.risk_target,
-        risk_ci_z=args.risk_ci_z,
-        min_calibration_n=args.min_calibration_n,
-        max_ece=args.max_ece,
-        min_auroc=args.min_auroc,
-        max_bin_ci_width=args.max_bin_ci_width,
-        n_bins=args.n_bins,
-        wilson_floor=args.wilson_floor,
-        wilson_z=args.wilson_z,
+    g.add_argument(
+        "--policy-file",
+        help="JSON object of GatePolicyConfig operator fields (unknown keys refused)",
     )
+    flag_types: dict[str, type] = {
+        "min_calibration_n": int,
+        "n_bins": int,
+    }
+    for name in OPERATOR_FIELDS:
+        flag = "--" + name.replace("_", "-")
+        g.add_argument(
+            flag,
+            type=flag_types.get(name, float),
+            default=None,
+            help=f"default {getattr(policy, name)!r} when unset (env/file/dataclass)",
+        )
+
+
+def _policy_from_args(
+    args: argparse.Namespace,
+    *,
+    environ: dict[str, str] | None = None,
+) -> GatePolicyConfig:
+    """Map parsed flags + env + optional file onto the frozen policy.
+
+    ``environ`` defaults to empty (not ``os.environ``) so unit tests of flag
+    mapping cannot flake on a developer's exported ``MERGE_GATE_*`` overlay.
+    ``main`` passes ``os.environ`` explicitly.
+    """
+    io = GatePolicyIOConfig()
+    env = environ if environ is not None else {}
+    file_values = None
+    path = getattr(args, "policy_file", None) or env.get(io.policy_file_env_var, "").strip()
+    if path:
+        file_values = load_policy_file(path)
+    cli = {name: getattr(args, name, None) for name in OPERATOR_FIELDS}
+    return resolve_policy(cli=cli, environ=env, file_values=file_values)
 
 
 def run(ctx: ChangeContext, store: OutcomeStore, cfg: GatePolicyConfig) -> tuple[GateDecision, str]:
@@ -181,14 +201,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.set_defaults(mech_pass=False, touches_protected=False)
     args = ap.parse_args(argv)
 
-    configure_logging(level="INFO")
+    configure_from_config()
     try:
         try:
             # Built BEFORE the outer handler can see it: an out-of-range policy is the
             # operator's error, so it must exit 2 (usage), never 1 (internal) and never 0
             # (which CI reads as proceed-to-merge). argparse's `type=float` accepts "nan"
             # and "inf" happily -- GatePolicyConfig's isfinite guards are what stop them.
-            cfg = _policy_from_args(args)
+            cfg = _policy_from_args(args, environ=dict(os.environ))
         except ConfigError as exc:
             print(f"merge-gate invalid policy: {exc!s}", file=sys.stderr)
             return 2
