@@ -207,11 +207,12 @@ class JudgeCalibrationGateConfig(BaseModel):
     )
     report_path: str | None = Field(
         default=None,
+        min_length=1,
         description=(
             "Optional filesystem path to a JSON JudgeCalibrationReport. When set, "
-            "require_calibration_for_judge_gating loads it and delegates to "
-            "require_report_to_gate. Relative paths resolve from the process cwd "
-            "unless a caller supplies load_report=."
+            "require_calibration_for_judge_gating loads it (via resolve_confined_path "
+            "under DATA_ROOT) and delegates to require_report_to_gate. Empty string "
+            "is rejected; omit the field or pass null when unused."
         ),
     )
 

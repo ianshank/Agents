@@ -108,3 +108,50 @@ def test_json_round_trip_preserves_may_gate(tmp_path: Path) -> None:
     assert loaded.artifact_id == "round-trip"
     assert loaded.may_gate is True
     assert loaded.failing_checks == ()
+
+
+def test_string_false_agreement_may_gate_is_rejected() -> None:
+    """Copilot: bool("false") must not authorise gating."""
+    from agent_core import judge_calibration_report_from_dict, judge_calibration_report_to_dict
+
+    payload = judge_calibration_report_to_dict(_calibration_report(artifact_id="run-123"))
+    payload["agreement_may_gate"] = "false"
+    with pytest.raises(TypeError, match=r"agreement_may_gate"):
+        judge_calibration_report_from_dict(payload)
+
+
+def test_string_false_probe_passes_is_rejected() -> None:
+    from agent_core import judge_calibration_report_from_dict, judge_calibration_report_to_dict
+
+    payload = judge_calibration_report_to_dict(_calibration_report(artifact_id="run-123"))
+    payload["order_flip"]["passes"] = "false"
+    with pytest.raises(TypeError, match=r"order_flip\.passes"):
+        judge_calibration_report_from_dict(payload)
+
+
+def test_empty_report_path_is_rejected_by_config() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _gated_judge_config(calibration_artifact_id="run-1", report_path="")
+
+
+def test_report_path_traversal_is_refused(tmp_path: Path) -> None:
+    config = _gated_judge_config(
+        calibration_artifact_id="run-path-1",
+        report_path="../secrets/cal.json",
+    )
+    scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+    with pytest.raises(ValueError, match=r"Path traversal|does not exist|judge calibration"):
+        require_calibration_for_judge_gating(config, scorers)
+
+
+def test_missing_report_path_raises_value_error() -> None:
+    config = _gated_judge_config(
+        calibration_artifact_id="run-path-1",
+        report_path="no/such/calibration-report.json",
+    )
+    scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+    with pytest.raises(ValueError, match=r"does not exist|could not be resolved"):
+        require_calibration_for_judge_gating(config, scorers)
+

@@ -37,6 +37,7 @@ for _p in (_HERE, _SCRIPTS, os.path.join(_ROOT, "src"), os.path.join(_ROOT, "age
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from _calibration_fixtures import authorising_report
 from _common import check as _check
 from _common import configure_logging, report
 
@@ -49,39 +50,6 @@ def _schema_version() -> str:
     return SCHEMA_VERSION
 
 
-def _authorising_report(*, artifact_id: str = "run-1"):
-    from agent_core import (
-        REPORT_SCHEMA_VERSION,
-        JudgeCalibrationReport,
-        OrderProbeResult,
-        VerbosityProbeResult,
-    )
-
-    return JudgeCalibrationReport(
-        schema_version=REPORT_SCHEMA_VERSION,
-        judge_id="j1",
-        artifact_id=artifact_id,
-        n_total=100,
-        n_codeterminate=90,
-        percent_agreement=0.9,
-        kappa=0.85,
-        directional_only=False,
-        agreement_may_gate=True,
-        order_flip=OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
-        verbosity=VerbosityProbeResult(
-            n=10,
-            ties=0,
-            concise_wins=5,
-            expanded_wins=5,
-            expanded_win_rate=0.5,
-            preference_delta=0.0,
-            ci_low=0.2,
-            ci_high=0.8,
-            passes=True,
-        ),
-        self_preference=None,
-        canary_pass_rate=1.0,
-    )
 
 
 def main() -> int:
@@ -127,12 +95,12 @@ def main() -> int:
             errors,
         )
 
-    require_calibration_for_judge_gating(gated, scorers, report=_authorising_report(artifact_id="run-1"))
+    require_calibration_for_judge_gating(gated, scorers, report=authorising_report(artifact_id="run-1"))
     _check(True, "report= with matching authorising report succeeds", errors)
 
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "cal.json"
-        dump_judge_calibration_report(_authorising_report(artifact_id="run-1"), path)
+        dump_judge_calibration_report(authorising_report(artifact_id="run-1"), path)
         with_path = EvalConfig.model_validate(
             {
                 **gated.model_dump(mode="json"),
@@ -145,7 +113,7 @@ def main() -> int:
         require_calibration_for_judge_gating(with_path, scorers)
         _check(True, "report_path load authorises matching report", errors)
 
-        failing = replace(_authorising_report(artifact_id="run-1"), agreement_may_gate=False)
+        failing = replace(authorising_report(artifact_id="run-1"), agreement_may_gate=False)
         dump_judge_calibration_report(failing, path)
         try:
             require_calibration_for_judge_gating(with_path, scorers)
@@ -158,7 +126,7 @@ def main() -> int:
                 errors,
             )
 
-        dump_judge_calibration_report(_authorising_report(artifact_id="round"), path)
+        dump_judge_calibration_report(authorising_report(artifact_id="round"), path)
         loaded = load_judge_calibration_report(path)
         _check(
             loaded.artifact_id == "round" and loaded.may_gate is True,

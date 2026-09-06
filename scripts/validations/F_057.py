@@ -56,22 +56,13 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 for rel in ("agent-core", "flow-protocol", "flow-corpus", "behavioral-regression"):
     sys.path.insert(0, os.path.join(PROJECT_ROOT, rel))
 
-from agent_core import PairwiseItem
-from agent_core.judge_calibration import VerbosityProbeResult
-
-# Shared fixtures: every check below that needs a passing verbosity probe or a
-# canary item wants the same shape, varying at most a couple of fields.
-_PASSING_VERBOSITY = VerbosityProbeResult(
-    n=10,
-    ties=0,
-    concise_wins=5,
-    expanded_wins=5,
-    expanded_win_rate=0.5,
-    preference_delta=0.0,
-    ci_low=0.2,
-    ci_high=0.8,
-    passes=True,
+from _calibration_fixtures import (
+    FAILING_ORDER,
+    PASSING_ORDER,
+    PASSING_VERBOSITY,
+    mk_report,
 )
+from agent_core import PairwiseItem
 
 
 def _canary(item_id: str, expected: str, canary_kind: str) -> PairwiseItem:
@@ -171,8 +162,6 @@ def _check_probe_math(errors: list[str]) -> None:
 def _check_corpus_and_report(errors: list[str]) -> None:
     from agent_core import PairwiseSet
     from agent_core import build_judge_calibration_report as agent_core_build_report
-    from agent_core.judge_calibration import OrderProbeResult
-    from agent_core.judge_calibration_report import JudgeCalibrationReport
 
     try:
         _canary("x", expected="a", canary_kind="known_equal")  # inconsistent: known_equal implies 'tie'
@@ -187,38 +176,18 @@ def _check_corpus_and_report(errors: list[str]) -> None:
     except Exception:
         _check(True, "PairwiseSet rejects duplicate item_ids", errors)
 
-    passing_order = OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True)
-    failing_order = OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False)
-
-    def _mkreport(order_flip: OrderProbeResult, agreement_may_gate: bool) -> JudgeCalibrationReport:
-        return JudgeCalibrationReport(
-            schema_version="1.0.0",
-            judge_id="j",
-            artifact_id="a",
-            n_total=100,
-            n_codeterminate=90,
-            percent_agreement=0.9,
-            kappa=0.85,
-            directional_only=False,
-            agreement_may_gate=agreement_may_gate,
-            order_flip=order_flip,
-            verbosity=_PASSING_VERBOSITY,
-            self_preference=None,
-            canary_pass_rate=1.0,
-        )
-
     _check(
-        _mkreport(failing_order, True).may_gate is False,
+        mk_report(FAILING_ORDER, agreement_may_gate=True).may_gate is False,
         "may_gate is False when a bias check fails despite acceptable agreement",
         errors,
     )
     _check(
-        _mkreport(failing_order, True).failing_checks == ("order_flip",),
+        mk_report(FAILING_ORDER, agreement_may_gate=True).failing_checks == ("order_flip",),
         "failing_checks names the specific failing bias check",
         errors,
     )
     _check(
-        set(_mkreport(failing_order, False).failing_checks) == {"agreement_or_power", "order_flip"},
+        set(mk_report(FAILING_ORDER, agreement_may_gate=False).failing_checks) == {"agreement_or_power", "order_flip"},
         "failing_checks names every failing check, not just the first",
         errors,
     )
@@ -236,8 +205,8 @@ def _check_corpus_and_report(errors: list[str]) -> None:
         kappa=1.0,
         directional_only=False,
         agreement_may_gate=True,
-        order_flip=passing_order,
-        verbosity=_PASSING_VERBOSITY,
+        order_flip=PASSING_ORDER,
+        verbosity=PASSING_VERBOSITY,
         self_preference=None,
         canaries=canaries,
         canary_verdicts=["tie", "b"],
@@ -253,8 +222,8 @@ def _check_corpus_and_report(errors: list[str]) -> None:
             kappa=1.0,
             directional_only=False,
             agreement_may_gate=True,
-            order_flip=passing_order,
-            verbosity=_PASSING_VERBOSITY,
+            order_flip=PASSING_ORDER,
+            verbosity=PASSING_VERBOSITY,
             self_preference=None,
             canaries=[],
             canary_verdicts=[],
@@ -383,38 +352,12 @@ def _check_gating_config(errors: list[str]) -> None:
             errors,
         )
 
-    from agent_core.judge_calibration import OrderProbeResult, VerbosityProbeResult
-    from agent_core.judge_calibration_report import REPORT_SCHEMA_VERSION, JudgeCalibrationReport
+    from _calibration_fixtures import authorising_report
 
-    authorising = JudgeCalibrationReport(
-        schema_version=REPORT_SCHEMA_VERSION,
-        judge_id="j1",
-        artifact_id="run-1",
-        n_total=100,
-        n_codeterminate=90,
-        percent_agreement=0.9,
-        kappa=0.85,
-        directional_only=False,
-        agreement_may_gate=True,
-        order_flip=OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
-        verbosity=VerbosityProbeResult(
-            n=10,
-            ties=0,
-            concise_wins=5,
-            expanded_wins=5,
-            expanded_win_rate=0.5,
-            preference_delta=0.0,
-            ci_low=0.2,
-            ci_high=0.8,
-            passes=True,
-        ),
-        self_preference=None,
-        canary_pass_rate=1.0,
-    )
     require_calibration_for_judge_gating(
         named_config,
         [SCORERS.create("llm_judge", {"name": "quality"})],
-        report=authorising,
+        report=authorising_report(artifact_id="run-1"),
     )
     _check(
         True,
@@ -438,34 +381,15 @@ def _check_gating_config(errors: list[str]) -> None:
     _check(True, "require_calibration_for_judge_gating needs nothing when the gate doesn't target the judge", errors)
 
     from agent_core import ProbeConfig, order_flip_rate
-    from agent_core.judge_calibration import OrderProbeResult
-    from agent_core.judge_calibration_report import JudgeCalibrationReport
 
-    def _mkreport(order_flip: OrderProbeResult) -> JudgeCalibrationReport:
-        return JudgeCalibrationReport(
-            schema_version="1.0.0",
-            judge_id="j",
-            artifact_id="a",
-            n_total=100,
-            n_codeterminate=90,
-            percent_agreement=0.9,
-            kappa=0.85,
-            directional_only=False,
-            agreement_may_gate=True,
-            order_flip=order_flip,
-            verbosity=_PASSING_VERBOSITY,
-            self_preference=None,
-            canary_pass_rate=1.0,
-        )
-
-    ok_report = _mkreport(OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True))
+    ok_report = mk_report(PASSING_ORDER)
     try:
         require_report_to_gate(ok_report, "wrong-id")
         _check(False, "require_report_to_gate rejects an artifact_id mismatch", errors)
     except ValueError:
         _check(True, "require_report_to_gate rejects an artifact_id mismatch", errors)
 
-    biased_report = _mkreport(OrderProbeResult(n=10, flips=8, flip_rate=0.8, ci_low=0.5, ci_high=0.9, passes=False))
+    biased_report = mk_report(FAILING_ORDER)
     try:
         require_report_to_gate(biased_report, "a")
         _check(False, "require_report_to_gate rejects a report that does not authorise gating", errors)
@@ -476,7 +400,7 @@ def _check_gating_config(errors: list[str]) -> None:
     # reach the raised message itself, not just a bare check name -- Product and Architect
     # independently found this gap by reading require_report_to_gate directly.
     undersized_probe = order_flip_rate(["a"], ["b"], ProbeConfig(min_pairs=30))
-    undersized_report = _mkreport(undersized_probe)
+    undersized_report = mk_report(undersized_probe)
     try:
         require_report_to_gate(undersized_report, "a")
         _check(False, "require_report_to_gate rejects an undersized-probe report", errors)
@@ -495,7 +419,6 @@ def _check_gating_config(errors: list[str]) -> None:
 
 def _check_behavioral_regression(errors: list[str]) -> None:
     from agent_core import percent_agreement
-    from agent_core.judge_calibration import OrderProbeResult
     from behavioral_regression import BRConfig
     from behavioral_regression import build_judge_calibration_report as br_build_report
     from behavioral_regression.judge import JVerdict
@@ -509,8 +432,8 @@ def _check_behavioral_regression(errors: list[str]) -> None:
         br_verdicts,
         labels,
         br_cfg,
-        order_flip=OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
-        verbosity=_PASSING_VERBOSITY,
+        order_flip=PASSING_ORDER,
+        verbosity=PASSING_VERBOSITY,
         self_preference=None,
         canaries=[_canary("c1", expected="tie", canary_kind="known_equal")],
         canary_verdicts=["tie"],

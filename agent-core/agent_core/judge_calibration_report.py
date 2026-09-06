@@ -193,10 +193,100 @@ def judge_calibration_report_to_dict(report: JudgeCalibrationReport) -> dict[str
     return payload
 
 
+def _require_bool(value: object, name: str) -> bool:
+    """Accept only JSON booleans (reject strings and 0/1 ints)."""
+    if type(value) is not bool:
+        raise TypeError(f"{name} must be a JSON boolean, got {type(value).__name__}: {value!r}")
+    return value
+
+
+def _require_int(value: object, name: str) -> int:
+    """Accept only JSON integers (bool is a subclass of int — reject it)."""
+    if type(value) is not int:
+        raise TypeError(f"{name} must be a JSON integer, got {type(value).__name__}: {value!r}")
+    return value
+
+
+def _require_float(value: object, name: str) -> float:
+    """Accept JSON numbers; reject bools and non-numeric types."""
+    if type(value) is bool or type(value) not in (int, float):
+        raise TypeError(f"{name} must be a JSON number, got {type(value).__name__}: {value!r}")
+    return float(value)
+
+
+def _require_str(value: object, name: str) -> str:
+    if type(value) is not str:
+        raise TypeError(f"{name} must be a JSON string, got {type(value).__name__}: {value!r}")
+    return value
+
+
+def _optional_str(value: object, name: str) -> str | None:
+    if value is None:
+        return None
+    return _require_str(value, name)
+
+
+def _order_probe_from_dict(data: dict[str, Any]) -> OrderProbeResult:
+    return OrderProbeResult(
+        n=_require_int(data["n"], "order_flip.n"),
+        flips=_require_int(data["flips"], "order_flip.flips"),
+        flip_rate=_require_float(data["flip_rate"], "order_flip.flip_rate"),
+        ci_low=_require_float(data["ci_low"], "order_flip.ci_low"),
+        ci_high=_require_float(data["ci_high"], "order_flip.ci_high"),
+        passes=_require_bool(data["passes"], "order_flip.passes"),
+        degenerate=_optional_str(data.get("degenerate"), "order_flip.degenerate"),
+    )
+
+
+def _verbosity_probe_from_dict(data: dict[str, Any]) -> VerbosityProbeResult:
+    return VerbosityProbeResult(
+        n=_require_int(data["n"], "verbosity.n"),
+        ties=_require_int(data["ties"], "verbosity.ties"),
+        concise_wins=_require_int(data["concise_wins"], "verbosity.concise_wins"),
+        expanded_wins=_require_int(data["expanded_wins"], "verbosity.expanded_wins"),
+        expanded_win_rate=_require_float(data["expanded_win_rate"], "verbosity.expanded_win_rate"),
+        preference_delta=_require_float(data["preference_delta"], "verbosity.preference_delta"),
+        ci_low=_require_float(data["ci_low"], "verbosity.ci_low"),
+        ci_high=_require_float(data["ci_high"], "verbosity.ci_high"),
+        passes=_require_bool(data["passes"], "verbosity.passes"),
+        degenerate=_optional_str(data.get("degenerate"), "verbosity.degenerate"),
+    )
+
+
+def _self_preference_from_dict(data: dict[str, Any]) -> SelfPreferenceResult:
+    return SelfPreferenceResult(
+        judge_family=_require_str(data["judge_family"], "self_preference.judge_family"),
+        same_family_n=_require_int(data["same_family_n"], "self_preference.same_family_n"),
+        same_family_win_rate=_require_float(
+            data["same_family_win_rate"], "self_preference.same_family_win_rate"
+        ),
+        same_family_ci_low=_require_float(
+            data["same_family_ci_low"], "self_preference.same_family_ci_low"
+        ),
+        same_family_ci_high=_require_float(
+            data["same_family_ci_high"], "self_preference.same_family_ci_high"
+        ),
+        other_family_n=_require_int(data["other_family_n"], "self_preference.other_family_n"),
+        other_family_win_rate=_require_float(
+            data["other_family_win_rate"], "self_preference.other_family_win_rate"
+        ),
+        other_family_ci_low=_require_float(
+            data["other_family_ci_low"], "self_preference.other_family_ci_low"
+        ),
+        other_family_ci_high=_require_float(
+            data["other_family_ci_high"], "self_preference.other_family_ci_high"
+        ),
+        delta=_require_float(data["delta"], "self_preference.delta"),
+        passes=_require_bool(data["passes"], "self_preference.passes"),
+        degenerate=_optional_str(data.get("degenerate"), "self_preference.degenerate"),
+    )
+
+
 def judge_calibration_report_from_dict(data: dict[str, Any]) -> JudgeCalibrationReport:
     """Build a :class:`JudgeCalibrationReport` from :func:`judge_calibration_report_to_dict` output.
 
     Fail-closed: missing required keys or wrong types raise ``ValueError`` / ``TypeError``.
+    JSON strings like ``"false"`` are never coerced to booleans.
     """
     if not isinstance(data, dict):
         raise TypeError(f"calibration report payload must be a dict, got {type(data)!r}")
@@ -221,37 +311,74 @@ def judge_calibration_report_from_dict(data: dict[str, Any]) -> JudgeCalibration
     verbosity = data["verbosity"]
     if not isinstance(order, dict) or not isinstance(verbosity, dict):
         raise TypeError("order_flip and verbosity must be objects")
+    for key in ("n", "flips", "flip_rate", "ci_low", "ci_high", "passes"):
+        if key not in order:
+            raise ValueError(f"order_flip missing required key: {key!r}")
+    for key in (
+        "n",
+        "ties",
+        "concise_wins",
+        "expanded_wins",
+        "expanded_win_rate",
+        "preference_delta",
+        "ci_low",
+        "ci_high",
+        "passes",
+    ):
+        if key not in verbosity:
+            raise ValueError(f"verbosity missing required key: {key!r}")
 
     self_pref_raw = data.get("self_preference")
-    self_pref = SelfPreferenceResult(**self_pref_raw) if isinstance(self_pref_raw, dict) else None
+    if self_pref_raw is None:
+        self_pref = None
+    elif isinstance(self_pref_raw, dict):
+        self_pref = _self_preference_from_dict(self_pref_raw)
+    else:
+        raise TypeError(
+            f"self_preference must be an object or null, got {type(self_pref_raw).__name__}"
+        )
 
     pairwise_raw = data.get("pairwise_member_kappa") or ()
+    if not isinstance(pairwise_raw, (list, tuple)):
+        raise TypeError("pairwise_member_kappa must be an array")
     pairwise: tuple[tuple[str, str, float], ...] = tuple(
-        (str(a), str(b), float(k)) for a, b, k in pairwise_raw
+        (_require_str(a, "pairwise_member_kappa[0]"),
+         _require_str(b, "pairwise_member_kappa[1]"),
+         _require_float(k, "pairwise_member_kappa[2]"))
+        for a, b, k in pairwise_raw
     )
     families_raw = data.get("member_families") or ()
-    families = tuple(str(x) for x in families_raw)
+    if not isinstance(families_raw, (list, tuple)):
+        raise TypeError("member_families must be an array")
+    families = tuple(_require_str(x, "member_families[]") for x in families_raw)
+
+    kappa_raw = data.get("kappa")
+    kappa = None if kappa_raw is None else _require_float(kappa_raw, "kappa")
+    abstention_raw = data.get("abstention_rate")
+    abstention = (
+        None if abstention_raw is None
+        else _require_float(abstention_raw, "abstention_rate")
+    )
 
     return JudgeCalibrationReport(
-        schema_version=str(data["schema_version"]),
-        judge_id=str(data["judge_id"]),
-        artifact_id=str(data["artifact_id"]),
-        n_total=int(data["n_total"]),
-        n_codeterminate=int(data["n_codeterminate"]),
-        percent_agreement=float(data["percent_agreement"]),
-        kappa=(None if data.get("kappa") is None else float(data["kappa"])),
-        directional_only=bool(data["directional_only"]),
-        agreement_may_gate=bool(data["agreement_may_gate"]),
-        order_flip=OrderProbeResult(**order),
-        verbosity=VerbosityProbeResult(**verbosity),
+        schema_version=_require_str(data["schema_version"], "schema_version"),
+        judge_id=_require_str(data["judge_id"], "judge_id"),
+        artifact_id=_require_str(data["artifact_id"], "artifact_id"),
+        n_total=_require_int(data["n_total"], "n_total"),
+        n_codeterminate=_require_int(data["n_codeterminate"], "n_codeterminate"),
+        percent_agreement=_require_float(data["percent_agreement"], "percent_agreement"),
+        kappa=kappa,
+        directional_only=_require_bool(data["directional_only"], "directional_only"),
+        agreement_may_gate=_require_bool(data["agreement_may_gate"], "agreement_may_gate"),
+        order_flip=_order_probe_from_dict(order),
+        verbosity=_verbosity_probe_from_dict(verbosity),
         self_preference=self_pref,
-        canary_pass_rate=float(data["canary_pass_rate"]),
+        canary_pass_rate=_require_float(data["canary_pass_rate"], "canary_pass_rate"),
         pairwise_member_kappa=pairwise,
-        abstention_rate=(
-            None if data.get("abstention_rate") is None else float(data["abstention_rate"])
-        ),
+        abstention_rate=abstention,
         member_families=families,
     )
+
 
 
 def load_judge_calibration_report(path: str | Path) -> JudgeCalibrationReport:

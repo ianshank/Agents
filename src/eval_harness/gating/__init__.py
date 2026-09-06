@@ -74,13 +74,20 @@ def require_calibration_for_judge_gating(
         report_path = config.judge_calibration.report_path
         if report_path:
             from eval_harness.agent_core_adapter import load_judge_calibration_report
+            from eval_harness.core._paths import DATA_ROOT_ENV, resolve_confined_path
 
+            confined = resolve_confined_path(
+                report_path,
+                root_env_var=DATA_ROOT_ENV,
+                description="judge calibration report path",
+                must_exist=True,
+            )
             logger.info(
                 "loading judge calibration report path=%s artifact_id=%s",
-                report_path,
+                confined,
                 artifact_id,
             )
-            resolved = load_judge_calibration_report(report_path)
+            resolved = load_judge_calibration_report(confined)
     if resolved is None:
         raise ValueError(
             f"judge_calibration.calibration_artifact_id {artifact_id!r} is set for "
