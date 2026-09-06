@@ -109,6 +109,7 @@ before this index existed:
 | orbital-drift-alignment | [PLAN](plans/orbital-drift-alignment/PLAN.md) |
 | real-data-activation | [PLAN](plans/real-data-activation/PLAN.md) · [REVIEW](plans/real-data-activation/REVIEW.md) |
 | scenario-eval-matrices | [PLAN](plans/scenario-eval-matrices/PLAN.md) · [REVIEW](plans/scenario-eval-matrices/REVIEW.md) · [DELIVERY](plans/scenario-eval-matrices/DELIVERY.md) · [DECK_A_PLUS](plans/scenario-eval-matrices/DECK_A_PLUS.md) |
+| vp-strategic-deep-dive | [EXECUTIVE_BRIEF](plans/vp-strategic-deep-dive/EXECUTIVE_BRIEF.md) · [ANALYSIS](plans/vp-strategic-deep-dive/ANALYSIS.md) |
 
 ## Per-package docs
 
