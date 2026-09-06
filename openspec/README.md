@@ -38,6 +38,9 @@ before that guard existed.
   Replaced config-presence credit with an execution ledger, added the two network judges'
   missing `client=` seams, and widened M8 honestly across the registered components once the
   mechanism meant something. Motivated by `docs/plans/eval-evidence-integrity/REVIEW.md`.
+- [`changes/add-agent-in-the-loop-testgen/`](changes/add-agent-in-the-loop-testgen/) — *proposed.*
+  Deck B unlock: sequential pipeline target (generator → existing F-065 suite execution).
+  Docs-only until owner confirms option (a) and evaluation-design questions in `proposal.md`.
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
   *partially implemented.* **WS-0 (the blocking hygiene gate) landed as F-048** — credential scrub,
   `.gitleaks.toml`, and the fail-closed secret scan at `quality-gates.yml`. WS-1 through WS-5 are

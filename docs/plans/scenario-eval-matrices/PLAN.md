@@ -156,6 +156,10 @@ in from the source material.
 | "raw + normalized mutation score per Inozemtseva" | Only the *normalized* denominator is hers; the focal-method form is a 2026 adaptation | cite both papers, and keep "non-equivalent" in both denominators |
 | any κ / ECE / Brier / AUROC figure | Nothing to compute over until labelling happens | "calibration is instrumented; the corpus is the next dependency" |
 | "200 paired labels gives a κ CI width of 0.10" | Wrong by 4–6×; that is a ±0.10 **half**-width | "±0.10 half-width needs ~200–350; width 0.10 needs ~800–1,200" |
+| "n=300" for any testgen figure | 5 identical repetitions of 60 deterministic items (DELIVERY D1) | **"n=60"** |
+| "we measured our agents at test generation" | Nothing generates a suite from an agent; nothing chains targets | "scorers, corpus and execution sandbox are done; agent-in-the-loop is next" |
+| "63/63" as a coverage ratio | `validate.py` runs exactly the `done` set (F-008/F-036 deferred) | "63 runnable proofs; 2 deferred and named" |
+| "the audit found 24 issues" | Hygiene audit found 20; automated review found 4 more (DELIVERY D4) | "20 from the audit, 4 from an automated review afterwards" |
 
 ---
 
@@ -166,14 +170,7 @@ is the schedule's dominant term, not the coding.
 
 ### Sprint 1 → unlocks Deck B
 
-- Finish `prove-m8-execution` **task 4** (breadth to the 19 test-only components). Unblocks nothing
-  else, but leaves the matrix honest before 13 scorers arrive.
-  **Correction (2026-09-05): this was called "Small" here and it is not.** The 19 cells need
-  `PIPELINES` converted from literal dicts to zero-arg factories, which breaks five call sites,
-  two of them protected validation scripts. Sized in
-  [`plans/eval-delivery-sequencing/PLAN.md`](../eval-delivery-sequencing/PLAN.md) WS-2, which also
-  discharges the change's stated AST precondition. Treat it as the sprint's dominant engineering
-  item, not a warm-up.
+- ~~Finish `prove-m8-execution` task 4 (breadth)~~ — **DONE on tip** (M8 credits 39/41; bedrock/phoenix_evals waived). Do not re-open as Sprint 1 work.
 - Implement `add-testgen-eval-matrix`: the corpus generator (control-flow templates, seeded
   non-equivalent mutants, gold obligations), the allowlisted execution target, four pure-reader
   scorers, 20 matrix cells, advisory gate rules only.
@@ -202,7 +199,7 @@ is the schedule's dominant term, not the coding.
 | B1 | **CHARTER §4 invariant 7** — "nothing host-specific is committed". Real incident telemetry is host-specific by construction | RCA stays synthetic-only. Survivable, but decide it deliberately rather than by drift |
 | B2 | **Zero `HUMAN_AUDIT` labels.** Someone must produce ~200–350 paired labels per judged scorer | Every judge-gated metric stays advisory forever; Deck C loses its calibration slide |
 | B3 | **Protected-path review latency.** Every change needs a label plus CODEOWNER review under single-maintainer branch protection (ADR 0037) | A three-sprint plan is a hope, not a schedule |
-| B4 | `prove-m8-execution` task 4 outstanding | 13 new scorers land on a partially-honest matrix |
+| B4 | ~~`prove-m8-execution` task 4 outstanding~~ **closed on tip** | Replaced by B5 in DELIVERY: agent-in-the-loop / target chaining |
 
 ---
 
@@ -240,7 +237,9 @@ A deck that ends in "support" gets support and no decisions. End on these:
 
 - [`./REVIEW.md`](./REVIEW.md) — the two-pass peer review, including Part E's five retractions
 - [`../../../openspec/changes/add-gate-decision-provenance/`](../../../openspec/changes/add-gate-decision-provenance/) — F-062, landed
-- [`../../../openspec/changes/prove-m8-execution/`](../../../openspec/changes/prove-m8-execution/) — F-063, task 4 outstanding
+- [`../../../openspec/changes/prove-m8-execution/`](../../../openspec/changes/prove-m8-execution/) — F-063, implemented (pending archive; judge `client=` ADR checkbox optional)
+- [`../../../openspec/changes/add-agent-in-the-loop-testgen/`](../../../openspec/changes/add-agent-in-the-loop-testgen/) — Deck B unlock (proposed)
+- [`./DECK_A_PLUS.md`](./DECK_A_PLUS.md) — corrected Deck A / A+ speaker notes
 - [`../../../openspec/changes/add-testgen-eval-matrix/`](../../../openspec/changes/add-testgen-eval-matrix/) — Sprint 1
 - [`../../../openspec/changes/add-rca-eval-matrix/`](../../../openspec/changes/add-rca-eval-matrix/) — Sprint 2
 - [`../../../openspec/changes/add-requirements-gen-eval-matrix/`](../../../openspec/changes/add-requirements-gen-eval-matrix/) — Sprint 3

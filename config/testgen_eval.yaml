@@ -23,6 +23,12 @@ run:
   # Five independent attempts so `pass^k` over `test_executability` measures whether the
   # suite runs EVERY time, not whether it ran once. This is why no `testgen_flake_rate`
   # scorer exists: a scorer sees one attempt and cannot observe variation across them.
+  #
+  # VP / Deck A+ note (DELIVERY D1): against the deterministic callable target + fixed
+  # corpus suites, repetitions>1 multiply the denominator without adding information
+  # (n=300 was a 5x inflation of n=60). Keep 5 only as the flake-measurement shape for a
+  # future stochastic / agent-generated target; quote discrimination tables at n=60 until
+  # then. See docs/plans/scenario-eval-matrices/DECK_A_PLUS.md.
   repetitions: 5
 
 dataset:
