@@ -182,7 +182,7 @@ def _check_corpus_and_report(errors: list[str]) -> None:
 
     item1 = PairwiseItem(item_id="p1", prompt="p", answer_a="a", answer_b="b", family_a="gpt", family_b="claude")
     try:
-        PairwiseSet([item1, item1])
+        PairwiseSet((item1, item1))
         _check(False, "PairwiseSet rejects duplicate item_ids", errors)
     except Exception:
         _check(True, "PairwiseSet rejects duplicate item_ids", errors)
@@ -374,9 +374,7 @@ def _check_gating_config(errors: list[str]) -> None:
         {**gated_config.model_dump(mode="json"), "judge_calibration": {"calibration_artifact_id": "run-1"}}
     )
     try:
-        require_calibration_for_judge_gating(
-            named_config, [SCORERS.create("llm_judge", {"name": "quality"})]
-        )
+        require_calibration_for_judge_gating(named_config, [SCORERS.create("llm_judge", {"name": "quality"})])
         _check(False, "require_calibration_for_judge_gating refuses an opaque artifact_id alone (F-066)", errors)
     except ValueError as exc:
         _check(
@@ -386,7 +384,7 @@ def _check_gating_config(errors: list[str]) -> None:
         )
 
     from agent_core.judge_calibration import OrderProbeResult, VerbosityProbeResult
-    from agent_core.judge_calibration_report import JudgeCalibrationReport, REPORT_SCHEMA_VERSION
+    from agent_core.judge_calibration_report import REPORT_SCHEMA_VERSION, JudgeCalibrationReport
 
     authorising = JudgeCalibrationReport(
         schema_version=REPORT_SCHEMA_VERSION,
@@ -398,9 +396,7 @@ def _check_gating_config(errors: list[str]) -> None:
         kappa=0.85,
         directional_only=False,
         agreement_may_gate=True,
-        order_flip=OrderProbeResult(
-            n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True
-        ),
+        order_flip=OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
         verbosity=VerbosityProbeResult(
             n=10,
             ties=0,
@@ -485,6 +481,7 @@ def _check_gating_config(errors: list[str]) -> None:
         require_report_to_gate(undersized_report, "a")
         _check(False, "require_report_to_gate rejects an undersized-probe report", errors)
     except ValueError as exc:
+        assert undersized_probe.degenerate is not None
         _check(
             undersized_probe.degenerate in str(exc),
             "require_report_to_gate's error names an undersized probe's degenerate reason, "

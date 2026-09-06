@@ -9,7 +9,6 @@ import pytest
 from eval_harness.config.models import EvalConfig
 from eval_harness.gating import require_calibration_for_judge_gating
 from eval_harness.plugins import SCORERS
-
 from tests.test_agent_core_adapter import _calibration_report
 
 
@@ -43,9 +42,7 @@ def test_opaque_artifact_id_alone_is_refused() -> None:
 def test_report_kwarg_authorises_gating() -> None:
     config = _gated_judge_config(calibration_artifact_id="run-123")
     scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
-    require_calibration_for_judge_gating(
-        config, scorers, report=_calibration_report(artifact_id="run-123")
-    )
+    require_calibration_for_judge_gating(config, scorers, report=_calibration_report(artifact_id="run-123"))
 
 
 def test_load_report_injection_authorises_gating() -> None:
@@ -90,7 +87,7 @@ def test_report_path_id_mismatch_is_refused(tmp_path: Path) -> None:
 def test_may_gate_false_is_refused() -> None:
     config = _gated_judge_config(calibration_artifact_id="run-123")
     scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
-    with pytest.raises(ValueError, match="may_gate|failing|agreement"):
+    with pytest.raises(ValueError, match=r"agreement_or_power"):
         require_calibration_for_judge_gating(
             config,
             scorers,

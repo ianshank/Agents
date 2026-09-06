@@ -1299,7 +1299,6 @@ class TestJudgeCalibrationGating:
 
     def test_passes_when_a_calibration_report_authorises_gating(self) -> None:
         from eval_harness.gating import require_calibration_for_judge_gating
-
         from tests.test_agent_core_adapter import _calibration_report
 
         config = self._config(
@@ -1308,9 +1307,7 @@ class TestJudgeCalibrationGating:
             gate={"rules": [{"score": "quality", "metric": "mean", "min": 0.5}]},
         )
         scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
-        require_calibration_for_judge_gating(
-            config, scorers, report=_calibration_report(artifact_id="run-123")
-        )
+        require_calibration_for_judge_gating(config, scorers, report=_calibration_report(artifact_id="run-123"))
 
     def test_no_artifact_needed_when_the_gate_does_not_target_the_judge_scorer(self) -> None:
         from eval_harness.gating import require_calibration_for_judge_gating

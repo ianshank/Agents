@@ -73,7 +73,7 @@ def require_calibration_for_judge_gating(
     if resolved is None:
         report_path = config.judge_calibration.report_path
         if report_path:
-            from agent_core import load_judge_calibration_report
+            from eval_harness.agent_core_adapter import load_judge_calibration_report
 
             logger.info(
                 "loading judge calibration report path=%s artifact_id=%s",

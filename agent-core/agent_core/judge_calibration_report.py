@@ -19,11 +19,10 @@ report's shape and its gating verdict, never how agreement was computed.
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
-
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from .judge_calibration import OrderProbeResult, SelfPreferenceResult, VerbosityProbeResult
 from .pairwise import PairwiseItem
@@ -164,7 +163,7 @@ def _probe_to_dict(probe: object) -> dict[str, Any]:
 
     if probe is None:
         return None  # type: ignore[return-value]
-    if not is_dataclass(probe):
+    if not is_dataclass(probe) or isinstance(probe, type):
         raise TypeError(f"probe must be a dataclass instance, got {type(probe)!r}")
     return asdict(probe)
 
@@ -183,7 +182,9 @@ def judge_calibration_report_to_dict(report: JudgeCalibrationReport) -> dict[str
         "agreement_may_gate": report.agreement_may_gate,
         "order_flip": _probe_to_dict(report.order_flip),
         "verbosity": _probe_to_dict(report.verbosity),
-        "self_preference": _probe_to_dict(report.self_preference) if report.self_preference is not None else None,
+        "self_preference": (
+            _probe_to_dict(report.self_preference) if report.self_preference is not None else None
+        ),
         "canary_pass_rate": report.canary_pass_rate,
         "pairwise_member_kappa": [list(row) for row in report.pairwise_member_kappa],
         "abstention_rate": report.abstention_rate,

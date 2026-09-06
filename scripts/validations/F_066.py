@@ -67,9 +67,7 @@ def _authorising_report(*, artifact_id: str = "run-1"):
         kappa=0.85,
         directional_only=False,
         agreement_may_gate=True,
-        order_flip=OrderProbeResult(
-            n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True
-        ),
+        order_flip=OrderProbeResult(n=10, flips=0, flip_rate=0.0, ci_low=0.0, ci_high=0.1, passes=True),
         verbosity=VerbosityProbeResult(
             n=10,
             ties=0,
@@ -91,6 +89,7 @@ def main() -> int:
     errors: list[str] = []
 
     from agent_core import dump_judge_calibration_report, load_judge_calibration_report
+
     from eval_harness.config.models import EvalConfig, JudgeCalibrationGateConfig
     from eval_harness.gating import require_calibration_for_judge_gating
     from eval_harness.plugins import SCORERS, bootstrap
@@ -128,9 +127,7 @@ def main() -> int:
             errors,
         )
 
-    require_calibration_for_judge_gating(
-        gated, scorers, report=_authorising_report(artifact_id="run-1")
-    )
+    require_calibration_for_judge_gating(gated, scorers, report=_authorising_report(artifact_id="run-1"))
     _check(True, "report= with matching authorising report succeeds", errors)
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -148,9 +145,7 @@ def main() -> int:
         require_calibration_for_judge_gating(with_path, scorers)
         _check(True, "report_path load authorises matching report", errors)
 
-        failing = replace(
-            _authorising_report(artifact_id="run-1"), agreement_may_gate=False
-        )
+        failing = replace(_authorising_report(artifact_id="run-1"), agreement_may_gate=False)
         dump_judge_calibration_report(failing, path)
         try:
             require_calibration_for_judge_gating(with_path, scorers)
