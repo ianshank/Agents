@@ -1,7 +1,7 @@
 """Root-cause diagnosis scorers (synthetic scope).
 
-Implements the ranking half of ``openspec/changes/add-rca-eval-matrix`` tasks 1.1–1.2
-and 4.1–4.3: pure, deterministic scorers over a finite candidate set. No judge, no I/O,
+Implements the ranking half of ``openspec/changes/add-rca-eval-matrix`` tasks 1.1-1.2
+and 4.1-4.3: pure, deterministic scorers over a finite candidate set. No judge, no I/O,
 no network.
 
 **Shape reuse, not a package dependency.** The prototype fixture copies the

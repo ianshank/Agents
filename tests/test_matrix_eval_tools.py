@@ -49,8 +49,8 @@ from eval_harness.plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS, boot
 from tests import _trajectory_helpers as traj
 from tests._m8_probe import ExecutionLedger, probe
 from tests._matrix_coverage import PipelineConfig, format_vacuous, pipeline_vacuous
-from tests.test_matrix_testgen_scorers import TESTGEN_SCORERS
 from tests.test_matrix_rca_scorers import RCA_RANKING_SCORERS
+from tests.test_matrix_testgen_scorers import TESTGEN_SCORERS
 
 bootstrap()
 
@@ -2556,7 +2556,6 @@ class TestM8Composability:
         for component in TESTGEN_SCORERS:
             assert ledger.invoked("scorer", component), component
         assert ledger.invoked("target", "callable")
-
 
     def test_m8_rca_ranking_scorers_pipeline(self) -> None:
         """Prototype RCA ranking scorers over an echoed sdlc-shaped diagnosis."""

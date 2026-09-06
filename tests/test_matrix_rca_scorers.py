@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Matrix rows for rca_ac_at_k and rca_component_match (M1, M2, M3, M5, M6).
 
-Prototype slice of ``add-rca-eval-matrix``: two ranking scorers × scorer floor = 10
+Prototype slice of ``add-rca-eval-matrix``: two ranking scorers x scorer floor = 10
 cells. Abstention scorers and the max-|Z| target land in later tasks.
 """
 

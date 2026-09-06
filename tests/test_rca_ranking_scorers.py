@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioural tests for rca_ac_at_k and rca_component_match (tasks 1.1–1.2).
+"""Behavioural tests for rca_ac_at_k and rca_component_match (tasks 1.1-1.2).
 
 Prototyped against the sdlc ``solution_space`` / ``correct`` shape via the fixture
 copy under ``tests/fixtures/rca/`` — never by importing ``flow-corpus/`` at runtime.
@@ -193,7 +193,7 @@ def test_oracle_on_sdlc_fixture_is_perfect_and_records_distribution() -> None:
         space = list(row["solution_space"])
         gold = row["correct"][0]
         others = [c for c in space if c != gold]
-        third = others[:2] + [gold] + others[2:]
+        third = [*others[:2], gold, *others[2:]]
         ac_third = ac.score(it, TargetOutput(output=third), CTX)
         assert ac_third.metadata["strict_ac_at_k"]["1"] == 0.0
         assert ac_third.metadata["strict_ac_at_k"]["3"] == 1.0
