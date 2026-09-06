@@ -8,12 +8,13 @@ lazily so the package installs and tests run with zero external dependencies.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from collections.abc import Callable
+from typing import Any, overload
 
 
 class LangfuseClient(ABC):
     @abstractmethod
-    def get_dataset_items(self, dataset_name: str) -> list[dict]: ...
+    def get_dataset_items(self, dataset_name: str) -> list[dict[str, Any]]: ...
 
     @abstractmethod
     def log_score(
@@ -52,15 +53,15 @@ class LangfuseClient(ABC):
 class NullLangfuseClient(LangfuseClient):
     """In-memory no-op client. Useful for offline runs and as a test double."""
 
-    def __init__(self, dataset_items: dict[str, list[dict]] | None = None) -> None:
+    def __init__(self, dataset_items: dict[str, list[dict[str, Any]]] | None = None) -> None:
         self._datasets = dataset_items or {}
-        self.scores: list[dict] = []
+        self.scores: list[dict[str, Any]] = []
         self.flushed = False
 
-    def get_dataset_items(self, dataset_name: str) -> list[dict]:
+    def get_dataset_items(self, dataset_name: str) -> list[dict[str, Any]]:
         return list(self._datasets.get(dataset_name, []))
 
-    def log_score(self, *, run_id, item_id, name, value, comment=None) -> None:
+    def log_score(self, *, run_id: str, item_id: str, name: str, value: float, comment: str | None = None) -> None:
         self.scores.append(
             {
                 "run_id": run_id,
@@ -112,7 +113,7 @@ class SDKLangfuseClient(LangfuseClient):
 
         self._lf = Langfuse(**client_kwargs)
 
-    def get_dataset_items(self, dataset_name: str) -> list[dict]:
+    def get_dataset_items(self, dataset_name: str) -> list[dict[str, Any]]:
         dataset = self._lf.get_dataset(dataset_name)
         items = []
         for it in dataset.items:
@@ -126,7 +127,7 @@ class SDKLangfuseClient(LangfuseClient):
             )
         return items
 
-    def log_score(self, *, run_id, item_id, name, value, comment=None) -> None:
+    def log_score(self, *, run_id: str, item_id: str, name: str, value: float, comment: str | None = None) -> None:
         self._lf.create_score(
             name=name,
             value=value,
@@ -180,10 +181,20 @@ class SDKLangfuseClient(LangfuseClient):
             return None
 
 
+@overload
+def observe(func: Callable[..., Any], /) -> Callable[..., Any]: ...
+
+
+@overload
+def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
+
+
 def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
     """Graceful wrapper around langfuse.decorators.observe.
 
     If the langfuse SDK is not installed, it acts as a transparent no-op decorator.
+    The overloads keep decorated functions typed under ``mypy --strict`` (an
+    ``Any``-returning decorator silently untypes every function it touches).
     """
     try:
         from langfuse.decorators import observe as lf_observe

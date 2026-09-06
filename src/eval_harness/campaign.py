@@ -29,6 +29,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from ._formatting import _fmt
 from .config.models import ABCampaignConfig, EvalConfig, ModelSpec
@@ -169,7 +170,7 @@ class CampaignResult:
     decision: Decision
     min_sample: int
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "campaign_id": self.campaign_id,
             "score": self.score,
@@ -183,7 +184,7 @@ class CampaignResult:
         return _render_html(self, title or f"A/B campaign: {self.campaign_id}")
 
 
-def _arm_dict(a: ArmStats) -> dict:
+def _arm_dict(a: ArmStats) -> dict[str, Any]:
     return {
         "successes": a.successes,
         "n": a.n,

@@ -694,32 +694,18 @@
   that runs on `ubuntu-latest`; until then, do not re-add a step that cannot pass.
 - [x] **BedrockJudge Tests** — Add mocked boto3 tests (similar to OpenAIJudge
   pattern) to close the last coverage gap.
-- [ ] **Decide the root package's typing policy, then raise it to `mypy --strict`** —
-  the root `eval_harness` package is the only one in the monorepo not held to
-  `strict = true`; all five siblings are, and are clean. It ships `py.typed`, so
-  downstream consumers type-check against it. `python3 -m mypy --strict src/eval_harness`
-  currently reports **37 errors in 13 files**, and they split into two very different
-  groups:
-
-  - **28 are mechanical and safe**: 22 `[type-arg]` (bare `dict` needing parameters) and
-    6 `[no-untyped-def]`. These can be fixed without any design decision.
-  - **9 are not**: 5 `[unused-ignore]`, 3 `[untyped-decorator]`, 1 `[attr-defined]`. Every
-    one sits on an **SDK-optional seam**, and their result depends on *which extras are
-    installed*. `judges/__init__.py:226` is the clearest case: its
-    `# type: ignore[import-not-found]` is required when `langfuse` is absent, reads as
-    *unused* when it is present, and strict's `no_implicit_reexport` then raises a second,
-    different error on the same line. The `[untyped-decorator]` errors are `@observe()`
-    on `EvalEngine.run`/`_run_one`, i.e. the same seam.
-
-  Flipping the flag without settling this first would produce a gate that passes in one
-  install configuration and fails in another. `pyproject.toml` already documents two
-  existing limitations of exactly this shape (the `phoenix-evals`/numpy-stub case and the
-  transitive-opentelemetry case), so this is a known property of the package, not a
-  surprise. **Deliberately deferred out of the 2026-09-04 peer-review PR** rather than
-  bundled into a security/correctness change: it needs a decision about how the optional
-  seams are typed (a typed `observe` shim? per-module strict overrides? a second mypy
-  invocation per extras profile?), and that decision deserves its own PR and probably an
-  ADR. The 28 mechanical fixes could land first and independently.
+- [x] **Decide the root package's typing policy, then raise it to `mypy --strict`** —
+  decided and landed as ADR 0044: the canonical typing profile is the
+  eval-harness-ci install set; `eval_harness.*` carries the strict flag bundle via
+  an enumerated `[[tool.mypy.overrides]]` section (a per-module `strict = true` key
+  leaks globally under the pinned mypy — verified); `warn_redundant_casts` and
+  `implicit_reexport = false` are deliberately absent (mypy rejects the former
+  per-module; the latter is already pinned by F-039's explicit `__all__` guard and
+  would force export-list churn in protected modules). All 37 strict errors were
+  resolved: 28 mechanical annotations, 5 unused-ignore removals, 2 seam typings
+  (`observe` overloads, the `migration` decorator factory), 1 ignore recoded to
+  the error its line actually raises, 1 bare-dict return. `scripts/` and `tests/`
+  strictness remains follow-up work.
 - [ ] **Adopt `uv` with a committed lockfile** — dependencies are declared as open floors
   (`pydantic>=2`, `langfuse>=2`) and installed with `pip install -e`, with no lockfile
   anywhere in the repo, so two CI runs a week apart are not guaranteed to resolve the same

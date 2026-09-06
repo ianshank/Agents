@@ -36,7 +36,7 @@ class MockJudge(Judge):
     substring is found in the prompt wins, else ``default_score`` is returned.
     """
 
-    def __init__(self, default_score: float = 1.0, rules: list[dict] | None = None):
+    def __init__(self, default_score: float = 1.0, rules: list[dict[str, Any]] | None = None):
         self.default_score = float(default_score)
         self.rules = rules or []
 
@@ -63,7 +63,7 @@ class BedrockJudge(Judge):  # pragma: no cover - requires boto3 + network
         score_field: str = "score",
     ):
         try:
-            import boto3  # type: ignore[import-untyped]
+            import boto3
         except ImportError as exc:
             raise RuntimeError(
                 "BedrockJudge requires boto3. Install with: pip install 'langfuse-eval-harness[bedrock]'"
@@ -246,7 +246,7 @@ class OpenAIJudge(Judge):
 
         if isinstance(client, SDKLangfuseClient):
             try:
-                from langfuse.openai import OpenAI as LFOpenAI  # type: ignore[import-not-found]
+                from langfuse.openai import OpenAI as LFOpenAI
 
                 self.client = LFOpenAI(
                     base_url=str(self.client.base_url) if self.client.base_url else None, api_key=self.client.api_key
@@ -367,7 +367,7 @@ class PhoenixEvalJudge(Judge):
         choices: dict[str, float] | None = None,
     ):
         try:
-            from phoenix.evals import LLM, ClassificationEvaluator  # type: ignore[import-not-found]
+            from phoenix.evals import LLM, ClassificationEvaluator
         except ImportError as exc:
             raise RuntimeError(
                 "PhoenixEvalJudge requires arize-phoenix-evals. "

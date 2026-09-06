@@ -47,7 +47,7 @@ class PanelJudge(Judge):
 
     def __init__(
         self,
-        members: list[dict],
+        members: list[dict[str, Any]],
         strategy: str = "median",
         member_pass_threshold: float = 0.5,
         disagreement_threshold: float | None = None,

@@ -103,7 +103,7 @@ class ModelStats:
     ci_high: float | None
     interval: str  # "wilson" | "none"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "value": self.value,
             "successes": self.successes,
@@ -129,7 +129,7 @@ class MetricComparison:
     confident_ranking: list[list[str]] = field(default_factory=list)  # tiers, best first
     min_sample: int = 0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "score": self.score,
             "metric": self.metric,
@@ -154,7 +154,7 @@ class ComparisonResult:
     overall_verdict: RankVerdict = RankVerdict.CANT_TELL
     overall_confident_ranking: list[list[str]] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "rank_by": self.rank_by,
             "rank_metric": self.rank_metric,

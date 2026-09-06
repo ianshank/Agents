@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Changed — root `eval_harness` package is strict-typed (ADR 0044)
+
+- `eval_harness.*` now carries the strict mypy flag bundle via an enumerated
+  `[[tool.mypy.overrides]]` section (a per-module `strict = true` key leaks
+  globally under the pinned mypy). All 37 strict errors were resolved: 28
+  mechanical annotations (`dict[str, Any]` / `Match[str]` / parameter and return
+  types), 5 unused-ignore removals, 2 seam typings (`observe` gained `overload`s
+  so decorated engine methods stay typed; the `migration` decorator factory is
+  typed), and the `langfuse.openai` ignore recoded then removed as the canonical
+  CI install profile no longer raises there. `warn_redundant_casts` and
+  `implicit_reexport = false` are deliberately absent from the bundle — mypy
+  rejects the former per-module, and F-039's explicit `__all__` guard already
+  covers the latter. `scripts/` and `tests/` strictness remains follow-up work.
+
 ### Hardening — operational activation (merge gate, OpenSpec, branch protection)
 
 Engineering half of the VP strategic roadmap: make existing gates operable without

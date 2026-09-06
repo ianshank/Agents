@@ -98,7 +98,7 @@ def require_calibration_for_judge_gating(
 
     from eval_harness.agent_core_adapter import require_report_to_gate
 
-    require_report_to_gate(resolved, artifact_id)  # type: ignore[arg-type]
+    require_report_to_gate(resolved, artifact_id)
     logger.debug(
         "judge calibration authorised gating artifact_id=%s targets=%s",
         artifact_id,
