@@ -9,7 +9,7 @@
 
 This document provides a deep technical analysis for VP-level decision-making on the langfuse-eval-harness monorepo. The codebase has reached a **strategic inflection point**: 64 of 66 features shipped, 96%+ test coverage, and mature architecture — but the binding constraint for value delivery is now **operational activation**, not more features.
 
-**Key Finding:** The merge-gate store contains **165 records with zero HUMAN_AUDIT labels**. The system needs ~380 audited records per domain for activation. At current velocity (~2.4 records/day), this represents ~131 days per domain — but this estimate carries high uncertainty given single-maintainer operations.
+**Key Finding:** The merge-gate store contains **165 records with zero HUMAN_AUDIT labels**. Activation needs ~380 *human-audited* records per domain (`SoakConfig.target_per_domain`). Store growth over 2026-07-03..2026-09-06 is ~2.4 records/day — that is **merge velocity**, not audit throughput. With HUMAN_AUDIT at 0, audit rate is unmeasured and days-to-activation **cannot be estimated**. Dividing 380 by 2.4 to get "~131 days" treats every merge as an immediate human audit; do not use that figure as a forecast.
 
 ---
 
@@ -58,19 +58,18 @@ Agent versions:
   claude-code: 49
 ```
 
-**Implication:** The merge-gate decision logic is complete and running in shadow mode, but cannot activate because zero human-audited records exist. The ~380 records per domain requirement means:
+**Implication:** The merge-gate decision logic is complete and running in shadow mode, but cannot activate because zero human-audited records exist. The ~380 HUMAN_AUDIT-per-domain bar means:
 
-- At 2.4 records/day velocity, ~131 days per domain
-- With 15 domains, sequential activation would take years
-- Parallel accumulation requires sustained human audit triage
+- Store growth (~2.4 records/day) is only a merge-velocity ceiling. It is not a proxy for time-to-activation while audit throughput is 0/day.
+- Existing domain counts (32, 20, …) are unlabeled/passive *candidates*, not progress toward the bar. Remaining HUMAN_AUDIT to 380 is 380 in every domain.
+- Parallel accumulation requires a weekly human triage cadence; `store_sync stats --soak-progress` reports remaining-by-domain once labels exist.
 
 ### 1.3 OpenSpec Change Pipeline
 
 | Status | Count | Changes |
 |--------|-------|---------|
-| **Implemented, pending archive** | 5 | prove-m8-execution, extend-judge-calibration, add-repeat-reliability-metrics, add-gate-decision-provenance, add-testgen-eval-matrix |
-| **Proposed, in progress** | 3 | add-agent-in-the-loop-testgen, add-rca-eval-matrix, add-requirements-gen-eval-matrix |
-| **Partially implemented** | 1 | add-measurement-harness-wedge (WS-0 done as F-048) |
+| **Archived (this change)** | 5 | prove-m8-execution, extend-judge-calibration, add-repeat-reliability-metrics, add-gate-decision-provenance, add-testgen-eval-matrix |
+| **In flight** | 4 | add-agent-in-the-loop-testgen, add-rca-eval-matrix, add-requirements-gen-eval-matrix, add-measurement-harness-wedge (WS-0 done as F-048) |
 | **Blocked** | 1 | add-production-eval-flywheel (requires CHARTER §3 amendment) |
 | **Archived (complete)** | 12 | F-047 through F-060, plus non-feature changes |
 
@@ -149,7 +148,7 @@ Agent versions:
 - **What:** Move 5 "implemented, pending archive" changes to archive
 - **Who:** Engineering (requires `eval-change-approved` label)
 - **Changes:** prove-m8-execution, extend-judge-calibration, add-repeat-reliability-metrics, add-gate-decision-provenance, add-testgen-eval-matrix
-- **Status:** Done on this branch (`openspec/changes/archive/…`). Merge still needs the protected-path label.
+- **Status:** Done on this branch (`openspec/changes/archive/…`). `eval-change-approved` is on PR #191.
 
 #### Action 4: Close G4/G5 Observability Gaps
 - **What:** Add `configure_logging` / `configure_from_config` calls to 4 CLI entry points; log TIMEOUT_CLEAN's weak-positive nature; warn on a second library `HUMAN_AUDIT`
@@ -184,7 +183,7 @@ Agent versions:
 **Options:**
 | Option | Description | Pros | Cons |
 |--------|-------------|------|------|
-| A | Wait for full soak (~380 audits/domain) | Maximum statistical confidence | ~131+ days per domain |
+| A | Wait for full soak (~380 audits/domain) | Maximum statistical confidence | Calendar unknown until HUMAN_AUDIT velocity exists (store-growth ÷ 380 is not that) |
 | B | Advisory mode first | Faster feedback loop | Less confidence in decisions |
 | C | Per-domain staged activation | Incrementally earn trust | Operational complexity |
 
@@ -251,21 +250,21 @@ Agent versions:
 
 ---
 
-## 6. Appendix: Domain-Specific Activation Timeline
+## 6. Appendix: Domain record backlog (not a timeline)
 
-Assuming current velocity continues (~2.4 records/day) and parallel accumulation across domains:
+These counts are **all** store records (PENDING + PASSIVE). HUMAN_AUDIT is 0 in every domain, so none of this is progress toward `SoakConfig.target_per_domain` (380). Days-to-activation cannot be estimated until `audit_sampler` issues are closed with verdicts and a HUMAN_AUDIT rate exists.
 
-| Domain | Current Records | Estimated Days to 380 |
-|--------|-----------------|----------------------|
-| agent-core | 32 | ~145 |
-| eval-harness | 20 | ~150 |
-| human/agent-core | 18 | ~151 |
-| human/tooling | 14 | ~152 |
-| tooling | 14 | ~152 |
-| human/eval-harness | 12 | ~153 |
-| (others) | <10 each | ~155+ |
+| Domain | Store records (candidates) | HUMAN_AUDIT | Remaining HUMAN_AUDIT to 380 |
+|--------|----------------------------|-------------|------------------------------|
+| agent-core | 32 | 0 | 380 |
+| eval-harness | 20 | 0 | 380 |
+| human/agent-core | 18 | 0 | 380 |
+| human/tooling | 14 | 0 | 380 |
+| tooling | 14 | 0 | 380 |
+| human/eval-harness | 12 | 0 | 380 |
+| (others) | <10 each | 0 | 380 |
 
-**Caveat:** These estimates assume constant velocity and parallel audit accumulation. Real-world factors (vacations, context switches, domain expertise availability) will extend these timelines significantly.
+`store_sync stats --soak-progress` is the mechanical remaining-by-domain view once labels land.
 
 ---
 

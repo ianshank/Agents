@@ -26,6 +26,9 @@ inventing human labels or flipping GitHub admin settings.
 - **Merge-gate policy flags** are argparse string literals so F-049's AST scan
   can see `--n-bins` / `--wilson-floor` / …; a loop over `OPERATOR_FIELDS` that
   built `"--" + name` at runtime was invisible to that gate.
+- **VP brief activation timelines** no longer treat store-growth (~2.4
+  records/day) as HUMAN_AUDIT velocity. With zero human audits, days-to-380 is
+  unmeasurable; the domain table is a candidate backlog, not a forecast.
 - **`scripts/check_branch_protection.py`** derives the ADR 0037 candidate check
   set from `required-check-stubs.yml` (never a restated name list). Default exit
   0; `--strict` is opt-in. Enablement runbook:
