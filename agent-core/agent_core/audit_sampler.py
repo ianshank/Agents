@@ -20,7 +20,7 @@ import random
 import sys
 from dataclasses import dataclass
 
-from .logging_util import configure_logging, get_logger
+from .logging_util import configure_from_config, get_logger
 from .outcome_store import LabelSource, OutcomeRecord, OutcomeStore
 from .protocols import Clock, SystemClock
 
@@ -216,6 +216,17 @@ def record_verdict(
     src = store.resolved().get(change_id)
     if src is None:
         raise KeyError(f"unknown change_id: {change_id}")
+    if src.label_source == LabelSource.HUMAN_AUDIT.value:
+        # Library CLI is non-idempotent by design (gap-analysis G5 residue): the
+        # SHA-validation no-op lives in scripts/record_audit_verdict.py. Log the
+        # overwrite so an operator using this CLI cannot do it silently.
+        logger.warning(
+            "audit sampler: change_id=%s already has HUMAN_AUDIT label=%s; "
+            "appending another HUMAN_AUDIT row (use scripts/record_audit_verdict.py "
+            "for the idempotent wrapper)",
+            change_id,
+            src.label,
+        )
     rec = OutcomeRecord(
         change_id=change_id,
         domain=src.domain,
@@ -263,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--correct", dest="correct", action="store_true")
     g.add_argument("--incorrect", dest="correct", action="store_false")
     args = ap.parse_args(argv)
-    configure_logging(level="INFO")
+    configure_from_config()
 
     store = OutcomeStore(args.store)
     if args.cmd == "select":

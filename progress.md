@@ -1,6 +1,50 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 016 — 2026-09-06
+
+### Changes
+
+VP strategic roadmap implementation (engineering half; no fabricated HUMAN_AUDIT
+labels; CHARTER not amended; branch protection remains an admin action).
+
+- `agent_core.gate_policy_io`: file → env → CLI overlay for `GatePolicyConfig`.
+- `SoakConfig` + `store_sync stats --soak-progress` remaining-by-domain.
+- `corpus_provenance` / `labeling_protocol` / `judge_baseline` CLIs.
+- G4/G5: `configure_from_config` (`AGENT_CORE_LOG_LEVEL`); TIMEOUT_CLEAN why-log;
+  duplicate HUMAN_AUDIT warning.
+- `scripts/check_branch_protection.py` (advisory) +
+  `docs/runbooks/branch-protection-enablement.md`.
+- `scripts/openspec_archive.py`; archived five implemented OpenSpec changes.
+- Workflows: `MERGE_GATE_*` env on calibrated-merge-gate; soak-progress on
+  merge-gate-audit.
+- `docs/plans/vp-strategic-deep-dive/DECISIONS.md`: staged per-domain
+  activation; second maintainer recommended; flywheel CHARTER amendment deferred.
+- Golden corpus README is empty on purpose (`docs/golden-corpus/README.md`).
+
+CI follow-up on the same branch: F-049 now sees literal `--n-bins` etc. in
+`merge_gate_ci._add_policy_args`; root mypy wrappers that returned `Any` were
+inlined; five archived OpenSpec markdown links in scenario-eval-matrices
+PLAN/REVIEW retarget `openspec/changes/archive/`; gap-analysis G4/G5 marked
+closed for observability.
+
+Protected paths touched (`tests/**`, `agent-core/tests/**`, `.github/**`): this
+PR needs the `eval-change-approved` label. The checker cannot apply that label.
+
+### Validation evidence
+
+- `python3 -m pytest` on the new/touched agent-core modules plus
+  `tests/test_{check_branch_protection,openspec_archive,required_check_stubs}.py`: pass.
+- `cd agent-core && python3 -m pytest tests --cov=agent_core --cov-fail-under=95`:
+  915 passed, 2 xfailed, **97.19%**.
+- `python3 -m mypy agent_core` (from `agent-core/`) plus mypy on the three new
+  `scripts/*.py` files: clean.
+- `python3 -m ruff check` / `ruff format --check` on `agent-core/` and the new scripts: clean.
+- OpenSpec index guard reproduced locally: 5 in flight, 17 archived.
+- `python scripts/check_protected_changes.py` will flag the protected set until
+  labeled (`tests/**`, `agent-core/tests/**`, `.github/**`).
+
+---
 ## Session 015 — 2026-09-02
 
 ### Peer review

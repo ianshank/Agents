@@ -1,6 +1,6 @@
 # Change: add-gate-decision-provenance
 
-**Status:** proposed · **Date:** 2026-09-05 · **Author track:** `claude/` agent lane
+**Status:** implemented (archived; landed `14b0101dfb`) · **Date:** 2026-09-05 · **Author track:** `claude/` agent lane
 **Motivated by:** `docs/plans/scenario-eval-matrices/REVIEW.md` §A6 (as corrected in Part E)
 **Compiles down to:** `docs/plans/scenario-eval-matrices/PLAN.md` + F-IDs (claimed at land) + a design ADR.
 

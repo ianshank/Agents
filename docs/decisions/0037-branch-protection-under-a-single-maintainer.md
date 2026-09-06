@@ -92,10 +92,15 @@ since 2026-06-30.
 
 ## Compliance
 
-`scripts/check_guard_reachability.py` (or a sibling assertion, tracked as part of
-`docs/plans/eval-evidence-integrity/PLAN.md` Phase 1) should eventually assert that every
-protected pattern's guard job appears in the required-checks list, not merely that it fires
-on the relevant `pull_request.paths` filter — today it proves only the latter. Until that
-lands, compliance with this ADR is verified manually against GitHub's branch-protection
-settings UI or `gh api repos/{owner}/{repo}/branches/main/protection`, not from repository
-contents.
+`scripts/check_branch_protection.py` derives the candidate required-check set from
+`.github/workflows/required-check-stubs.yml` (the ADR 0040 stub/real pairing) and,
+with `--probe`, compares it to `gh api repos/{owner}/{repo}/branches/main/protection`.
+Default exit is 0 (advisory): this ADR's settings change is out-of-band and a red
+checker cannot enable protection. `--strict` is for an operator who wants the
+comparison to fail CI after protection is on.
+
+`scripts/check_guard_reachability.py` still asserts the complementary fact: every
+protected pattern's guard job appears in the workflow `paths:` filter. Until
+protection is enabled, compliance with *this* ADR is verified against GitHub's
+branch-protection UI or the `--probe` output, not from repository contents alone.
+The enablement runbook is `docs/runbooks/branch-protection-enablement.md`.

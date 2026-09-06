@@ -53,6 +53,14 @@ Active engineering epics and architectural roadmap live in [roadmap/](roadmap/RE
   run (markdown, CSV and workbook renderings of one run report). See
   [e2e-matrix/ERRATA.md](e2e-matrix/ERRATA.md) for a known provenance defect in the
   committed artifact.
+- [runbooks/branch-protection-enablement.md](runbooks/branch-protection-enablement.md) —
+  ADR 0037 admin steps; `scripts/check_branch_protection.py` derives the check names.
+- [runbooks/merge-gate-audit-triage.md](runbooks/merge-gate-audit-triage.md) — weekly
+  HUMAN_AUDIT cadence and soak-progress against the activation bar.
+- [runbooks/labeling-protocol.md](runbooks/labeling-protocol.md) — adjudication / kappa
+  floors (`LabelingProtocolConfig`).
+- [golden-corpus/README.md](golden-corpus/README.md) — human-label contract (corpus is
+  empty until a human writes rows; no synthetic stand-ins).
 
 ## Change proposals
 
@@ -109,6 +117,7 @@ before this index existed:
 | orbital-drift-alignment | [PLAN](plans/orbital-drift-alignment/PLAN.md) |
 | real-data-activation | [PLAN](plans/real-data-activation/PLAN.md) · [REVIEW](plans/real-data-activation/REVIEW.md) |
 | scenario-eval-matrices | [PLAN](plans/scenario-eval-matrices/PLAN.md) · [REVIEW](plans/scenario-eval-matrices/REVIEW.md) · [DELIVERY](plans/scenario-eval-matrices/DELIVERY.md) · [DECK_A_PLUS](plans/scenario-eval-matrices/DECK_A_PLUS.md) |
+| vp-strategic-deep-dive | [EXECUTIVE_BRIEF](plans/vp-strategic-deep-dive/EXECUTIVE_BRIEF.md) · [ANALYSIS](plans/vp-strategic-deep-dive/ANALYSIS.md) · [DECISIONS](plans/vp-strategic-deep-dive/DECISIONS.md) |
 
 ## Per-package docs
 

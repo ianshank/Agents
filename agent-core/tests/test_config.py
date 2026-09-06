@@ -10,6 +10,7 @@ from agent_core import (
     LoopConfig,
     ProbeConfig,
 )
+from agent_core.config import LoggingConfig, SoakConfig
 
 
 def test_defaults_and_derived_values():
@@ -47,6 +48,8 @@ def test_round_trip_to_from_dict():
         lambda: ProbeConfig(verbosity_delta_tolerance=-0.1),
         lambda: ProbeConfig(self_preference_tolerance=1.1),
         lambda: ProbeConfig(min_pairs=0),
+        lambda: LoggingConfig(level_env_var=""),
+        lambda: SoakConfig(target_per_domain=0),
     ],
 )
 def test_invalid_values_raise(factory):
@@ -86,6 +89,21 @@ def test_calibration_config_predating_guards_still_loads():
 def test_unknown_key_rejected():
     with pytest.raises(ConfigError):
         FrameworkConfig.from_dict({"budget": {}, "mystery": 1})
+
+
+def test_logging_section_without_level_env_var_still_loads() -> None:
+    """Persisted configs that predate LoggingConfig.level_env_var keep the field default."""
+    cfg = FrameworkConfig.from_dict({"logging": {"level": "DEBUG", "fmt": "%(message)s"}})
+    assert cfg.logging.level == "DEBUG"
+    assert cfg.logging.level_env_var == LoggingConfig.level_env_var
+    restored = FrameworkConfig.from_dict(cfg.to_dict())
+    assert restored.logging == cfg.logging
+
+
+def test_soak_config_is_not_a_framework_section():
+    """SoakConfig is a CLI/store-sync knob, not a persisted FrameworkConfig section."""
+    with pytest.raises(ConfigError, match="unknown"):
+        FrameworkConfig.from_dict({"soak": {"target_per_domain": 10}})
 
 
 def test_partial_override_uses_defaults_elsewhere():

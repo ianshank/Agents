@@ -675,3 +675,42 @@ def test_cli_stats_audit_floor_overrides_the_config_default(tmp_path, capsys):
     assert json.loads(capsys.readouterr().out.strip())["_soak"]["per_domain_cold_start"] == {
         "human/x": False
     }
+
+
+def test_cli_stats_soak_progress_uses_soak_config_default(tmp_path, capsys):
+    from agent_core.config import SoakConfig
+    from agent_core.store_sync import effective_soak_target
+
+    store = tmp_path / "s.jsonl"
+    write_store(store, [_rec()])
+    assert effective_soak_target(None, True) == SoakConfig.target_per_domain
+    assert effective_soak_target(20, True) == 20  # explicit target wins
+    assert effective_soak_target(None, False) is None
+    assert main(["stats", "--store", str(store), "--soak-progress"]) == EXIT_OK
+    out = json.loads(capsys.readouterr().out.strip())
+    assert out["_soak"]["n_vs_target"]["target"] == SoakConfig.target_per_domain
+    assert out["_soak"]["remaining_by_domain"]["human/agent-core"] == SoakConfig.target_per_domain
+    assert out["_soak"]["human_audit_by_domain"]["human/agent-core"] == 0
+
+
+def test_soak_progress_remaining_by_domain_counts_human_audit_only():
+    recs = [
+        _rec(change_id="c1", domain="d1"),
+        _rec(
+            change_id="c2",
+            domain="d1",
+            label=True,
+            label_source="human_audit",
+            labeled_at="2026-01-02T00:00:00+00:00",
+        ),
+        _rec(
+            change_id="c3",
+            domain="d2",
+            label=True,
+            label_source="timeout_clean",
+            labeled_at="2026-01-02T00:00:00+00:00",
+        ),
+    ]
+    p = soak_progress(recs, target=5)
+    assert p["human_audit_by_domain"] == {"d1": 1, "d2": 0}
+    assert p["remaining_by_domain"] == {"d1": 4, "d2": 5}

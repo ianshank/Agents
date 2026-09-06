@@ -169,28 +169,32 @@ rationale, including why a sentinel-only fix was rejected as insufficient, in
 
 ## 4. Open findings, highest severity first
 
-### G4 — Four CLI summaries can never be emitted (MEDIUM) — widened, still open
+G4 and G5 (observability) closed 2026-09-06; remaining open items start at G6.
 
-`calibration_report` and `merge_seed` log their only structured run record at INFO but never
-call `configure_logging`, so at the root logger's default WARNING the lines are discarded.
-`merge_gate_ci` and `store_sync` do configure it. **Re-verification widened this finding**:
-`outcome_labeller` and `audit_sampler` gained real logging since this report was written (see
-G5), but neither calls `configure_logging` either — so the same defect now applies to 4 CLIs,
-not 2. None of the four can change a gate decision.
+### G4 — Four CLI summaries can never be emitted (MEDIUM) — CLOSED 2026-09-06
 
-### G5 — `outcome_labeller` and `audit_sampler` have no logging at all (MEDIUM) — headline claim REFUTED; one sub-claim still open
+`calibration_report`, `merge_seed`, `outcome_labeller`, and `audit_sampler` now call
+`configure_from_config()` (honors `LoggingConfig.level_env_var` = `AGENT_CORE_LOG_LEVEL`).
+`merge_gate_ci` and `store_sync` already configured logging. Structured INFO summaries are
+no longer discarded at the root logger's default WARNING. None of these logs change a gate
+decision. G7 (duplicate `configure_logging` implementations / formats) remains open and is
+out of scope for operational activation.
+
+### G5 — `outcome_labeller` and `audit_sampler` have no logging at all (MEDIUM) — CLOSED 2026-09-06 (observability residue); library non-idempotence is by design
 
 ~~Both write labels — `audit_sampler.record_verdict` writes the *authoritative* `HUMAN_AUDIT`
 label — using `print` only.~~ **Refuted by re-verification**: both modules gained real
-`logger.debug`/`.info`/`.error` calls since this report was written. The residue is folded
-into G4 above.
+`logger.debug`/`.info`/`.error` calls since this report was written.
 
 `outcome_labeller` writes a weak optimistic positive (`TIMEOUT_CLEAN, True`) whenever its
-fail-safe detectors report no signal, with no record of why. `record_verdict` is also
-non-idempotent; the SHA validation and already-audited no-op live in the
-`scripts/record_audit_verdict.py` wrapper, which the library CLI bypasses. **This sub-claim
-is confirmed accurate and remains open** — the library docstring states the split is
-deliberate, so a fix is contested rather than merely deferred.
+fail-safe detectors report no signal. **Closed for observability:** that assignment now logs
+at INFO that the label is optimistic and **does not feed `tau`**.
+
+`record_verdict` is still non-idempotent; the SHA validation and already-audited no-op live
+in the `scripts/record_audit_verdict.py` wrapper, which the library CLI bypasses. A second
+library `HUMAN_AUDIT` for the same `change_id` now logs WARNING. The library docstring
+states the split is deliberate — this is not a remaining engineering defect in G5; do not
+make `record_verdict` silently drop a second write.
 
 ### G6 — `scripts/_config.py::load_yaml_mapping` returns bare `dict` (MEDIUM)
 

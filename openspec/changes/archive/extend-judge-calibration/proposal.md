@@ -1,6 +1,6 @@
 # Change: extend-judge-calibration
 
-**Status:** proposed · **Date:** 2026-08-05 · **Author track:** `claude/` agent lane
+**Status:** implemented (archived; landed `1cfc342f7a`) · **Date:** 2026-08-05 · **Author track:** `claude/` agent lane
 **Motivated by:** `docs/plans/agent-eval-coverage/REVIEW.md`
 **Compiles down to:** `docs/plans/agent-eval-coverage/PLAN.md` + F-IDs (claimed at land).
 
@@ -42,7 +42,7 @@ with F-012's forced-mismatch negative test, and `architecture.yaml` itself is pr
 that edge changes get human review.
 
 The externally proposed instruction to "extend those mechanisms" therefore had no legal
-implementation. The resolution ([ADR 0031](../../../docs/decisions/0031-additive-core-model-extension-for-agent-evaluation.md)):
+implementation. The resolution ([ADR 0031](../../../../docs/decisions/0031-additive-core-model-extension-for-agent-evaluation.md)):
 **shared probe math goes in `agent_core`** — dependency-free and already importable by both sides —
 and `eval_harness` consumes it through the existing declared edge
 `agent_core_adapter: [agent_core, config, core]`. No new component edge, no manifest edit, one

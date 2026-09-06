@@ -76,6 +76,16 @@ def test_record_verdict_writes_human_audit(tmp_path):
     assert store.resolved()["c1"].label_source == LabelSource.HUMAN_AUDIT.value
 
 
+def test_record_verdict_warns_on_second_human_audit(tmp_path, caplog):
+    store = _store(tmp_path, _pending("c1"))
+    record_verdict(store, "c1", correct=True)
+    with caplog.at_level("WARNING"):
+        record_verdict(store, "c1", correct=False)
+    assert "already has HUMAN_AUDIT" in caplog.text
+    audits = [r for r in store.all() if r.label_source == LabelSource.HUMAN_AUDIT.value]
+    assert len(audits) == 2  # library stays non-idempotent; the wrapper is elsewhere
+
+
 def test_record_verdict_uses_injected_clock(tmp_path):
     """A broken `clock or SystemClock()` fallback (e.g. ignoring `clock` entirely)
     would go undetected without this: every other record_verdict test exercises

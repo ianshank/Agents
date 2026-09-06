@@ -1,6 +1,6 @@
 # Change: add-testgen-eval-matrix
 
-**Status:** proposed · **Date:** 2026-09-05 · **Author track:** `claude/` agent lane
+**Status:** implemented (archived; landed `d0c761d25b`) · **Date:** 2026-09-05 · **Author track:** `claude/` agent lane
 **Motivated by:** `docs/plans/scenario-eval-matrices/REVIEW.md` (peer review of an externally
 supplied four-package plan)
 **Depends on:** `add-gate-decision-provenance` (a new scorer has no calibrated threshold on day one),

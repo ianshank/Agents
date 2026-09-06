@@ -24,6 +24,9 @@ run in CI and locally. They carry their own quality gate: `ruff` + `mypy scripts
 | `check_protected_changes.py` | CI guard: flags protected changes lacking the approval label (`F-007`) |
 | `check_skill_script_drift.py` | CI guard: vendored skill scripts == canonical copy |
 | `check_charter_drift.py` | CI guard: `docs/CHARTER.md` scope/invariants haven't silently drifted |
+| `check_branch_protection.py` | Advisory ADR 0037 checker: derives required-check names from the stub workflow; `--probe` talks to GitHub; default exit 0 |
+| `required_check_names.py` | Shared derivation of stub/real check-context names (imported by the checker and `tests/test_required_check_stubs.py`) |
+| `openspec_archive.py` | `git mv` an OpenSpec change into `changes/archive/` and rewrite outbound relative markdown links |
 | `check_size_budget.py` | structural size-budget gate — file length ≤ 500 lines, etc. (ADR 0019; `.py` only) |
 | `merge_gate_context.py`, `agent_confidence.py`, `_config.py` | calibrated merge-gate seeding (`F-042, F-061`) |
 | `record_audit_verdict.py`, `audit_issue_sync.py` | merge-gate human-audit surface |

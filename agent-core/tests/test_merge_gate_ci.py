@@ -3,19 +3,32 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from agent_core import merge_gate_ci
+from agent_core.gate_policy_io import OPERATOR_FIELDS, GatePolicyIOConfig, env_name
 from agent_core.merge_gate import ChangeContext, GateDecision, GatePolicyConfig
 from agent_core.merge_gate_ci import main, run
 from agent_core.outcome_store import LabelSource, OutcomeRecord, OutcomeStore, _fold
 from agent_core.protocols import FixedClock
 
 CFG = GatePolicyConfig()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_merge_gate_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """main() reads os.environ; an operator's exported MERGE_GATE_* must not flake tests."""
+    io = GatePolicyIOConfig()
+    for name in OPERATOR_FIELDS:
+        monkeypatch.delenv(env_name(name, io), raising=False)
+    monkeypatch.delenv(io.policy_file_env_var, raising=False)
+    monkeypatch.delenv(env_name("protected_auto_merge", io), raising=False)
 
 
 def _healthy_store(path) -> OutcomeStore:
@@ -406,6 +419,26 @@ def test_no_protected_auto_merge_flag(tmp_path) -> None:
             ["--store", str(store.path), "--context", _ctx_file(tmp_path), "--protected-auto-merge"]
         )
     assert exc.value.code == 2
+
+
+def test_policy_flag_strings_are_argparse_literals() -> None:
+    """F-049 AST-walks ``add_argument`` Constant strings; a dest loop is invisible.
+
+    ``_policy_from_args`` still maps via ``OPERATOR_FIELDS``; this pins the *flag
+    text* that the validator can see, including the withheld protected-path flag.
+    """
+    src = Path(merge_gate_ci.__file__).read_text(encoding="utf-8")
+    registered: set[str] = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr != "add_argument":
+                continue
+            for arg in node.args:
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    registered.add(arg.value)
+    expected = {"--" + name.replace("_", "-") for name in OPERATOR_FIELDS}
+    assert expected <= registered
+    assert "--protected-auto-merge" not in registered
 
 
 def test_protected_auto_merge_is_logged_when_enabled(tmp_path, caplog) -> None:

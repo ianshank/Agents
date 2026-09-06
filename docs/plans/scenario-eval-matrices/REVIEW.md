@@ -1208,8 +1208,8 @@ numbers into specs, which is the worst possible place for them.
    `plugin_registry_baseline.json` regeneration; scorers as packages, not single modules.
 
    **Done.** The four rewritten packages are in the tree:
-   [`add-gate-decision-provenance`](../../../openspec/changes/add-gate-decision-provenance/),
-   [`add-testgen-eval-matrix`](../../../openspec/changes/add-testgen-eval-matrix/),
+   [`add-gate-decision-provenance`](../../../openspec/changes/archive/add-gate-decision-provenance/),
+   [`add-testgen-eval-matrix`](../../../openspec/changes/archive/add-testgen-eval-matrix/),
    [`add-rca-eval-matrix`](../../../openspec/changes/add-rca-eval-matrix/),
    [`add-requirements-gen-eval-matrix`](../../../openspec/changes/add-requirements-gen-eval-matrix/).
    Scorer count is cut from 35 to 13; every gate rule ships advisory; every corpus starts synthetic;

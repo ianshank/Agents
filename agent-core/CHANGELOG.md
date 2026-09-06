@@ -6,6 +6,22 @@ All notable changes to `agent-core` are documented here. The format loosely foll
 ## [Unreleased]
 
 ### Added
+- **Operator overlay for `GatePolicyConfig`** (`gate_policy_io.resolve_policy`):
+  dataclass defaults → JSON `--policy-file` / `MERGE_GATE_POLICY_FILE` →
+  `MERGE_GATE_*` env → explicit CLI. Empty env is ignored. `protected_auto_merge`
+  is refused from every operator seam. `merge_gate_ci` flags default to `None`
+  so an omitted flag cannot mask an env overlay.
+- **`SoakConfig.target_per_domain`** (default 380) and
+  `store_sync stats --soak-progress`. `_soak.remaining_by_domain` counts
+  HUMAN_AUDIT rows toward that bar. `--soak-target N` still wins when both are
+  passed. Default stats JSON stays byte-identical when neither flag is set.
+- **Corpus provenance and labeling protocol** (`corpus_provenance`,
+  `labeling_protocol`) plus **`judge_baseline`** so a `JudgeCalibrationReport`
+  that `may_gate` on probes still cannot authorise a blocking gate without a
+  human-labeled corpus at the protocol floors. No synthetic labels ship.
+- **`LoggingConfig.level_env_var`** (`AGENT_CORE_LOG_LEVEL`) overlaid by
+  `configure_from_config`. CLIs that called `configure_logging(level="INFO")`
+  now go through that helper.
 - **The audit-propensity contract is single-sourced** as `audit_sampler.is_valid_propensity`
   / `format_propensity` (with `PROPENSITY_PRECISION` / `PROPENSITY_UNKNOWN`). Three layers
   previously restated `0.0 < p <= 1.0` independently, and they had already drifted: only
@@ -16,6 +32,14 @@ All notable changes to `agent-core` are documented here. The format loosely foll
   silently changes the value.
 
 ### Fixed
+- **`store_sync` CLI** called `configure_logging` after importing only
+  `configure_from_config` (NameError on `stats`/`pull`/`push`).
+- **TIMEOUT_CLEAN** now logs that the label is optimistic and does not feed
+  `tau`. A second `record_verdict` HUMAN_AUDIT for the same `change_id` logs a
+  warning; the append remains non-idempotent by design.
+- **`merge_gate_ci` policy flags** are argparse string literals (F-049). Help
+  text still quotes `GatePolicyConfig` defaults; flag `default=None` is unchanged
+  so an omitted flag cannot mask env / `--policy-file`.
 - **`format_propensity` could render a valid propensity into an unusable one.** Fixed-point
   (`.6f`) turned `1e-7` into `"0.000000"`, which parses back to `0.0` and is rejected by
   `is_valid_propensity`. That output is not decoration — it is pasted into the `gh workflow

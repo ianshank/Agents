@@ -6,6 +6,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Hardening — operational activation (merge gate, OpenSpec, branch protection)
+
+Engineering half of the VP strategic roadmap: make existing gates operable without
+inventing human labels or flipping GitHub admin settings.
+
+- **`GatePolicyConfig` overlays** from `MERGE_GATE_*` environment variables,
+  `MERGE_GATE_POLICY_FILE` / `--policy-file` JSON, then explicit CLI flags.
+  Empty values are ignored so an unset GitHub `vars.*` pass-through cannot zero a
+  floor. `protected_auto_merge` is refused from every operator seam (ADR 0005).
+  Wired into `.github/workflows/calibrated-merge-gate.yml` as job env.
+- **Soak progress** (`store_sync stats --soak-progress`) reports remaining
+  HUMAN_AUDIT counts per domain toward `SoakConfig.target_per_domain` (ADR 0005
+  sample-size note). The weekly audit workflow prints it after store pull.
+- **G4/G5 residue:** TIMEOUT_CLEAN logs that it does not feed `tau`; a second
+  `record_verdict` HUMAN_AUDIT row logs a warning (library stays non-idempotent;
+  `scripts/record_audit_verdict.py` remains the SHA-validated wrapper). The four
+  CLIs named in the 2026-07-24 gap analysis now call `configure_from_config`.
+- **Merge-gate policy flags** are argparse string literals so F-049's AST scan
+  can see `--n-bins` / `--wilson-floor` / …; a loop over `OPERATOR_FIELDS` that
+  built `"--" + name` at runtime was invisible to that gate.
+- **VP brief activation timelines** no longer treat store-growth (~2.4
+  records/day) as HUMAN_AUDIT velocity. With zero human audits, days-to-380 is
+  unmeasurable; the domain table is a candidate backlog, not a forecast.
+- **`scripts/check_branch_protection.py`** derives the ADR 0037 candidate check
+  set from `required-check-stubs.yml` (never a restated name list). Default exit
+  0; `--strict` is opt-in. Enablement runbook:
+  `docs/runbooks/branch-protection-enablement.md`.
+- **`scripts/openspec_archive.py`** `git mv`s a change into `changes/archive/`
+  and recomputes outbound relative markdown links (blind `../` is one segment
+  short for nested `specs/` files). Five implemented-pending-archive packages
+  moved: prove-m8-execution, extend-judge-calibration,
+  add-repeat-reliability-metrics, add-gate-decision-provenance,
+  add-testgen-eval-matrix.
+- **Golden corpus is empty on purpose.** `CorpusProvenanceConfig` /
+  `python -m agent_core.corpus_provenance` refuse synthetic or unlabeled rows.
+  Leadership record: `docs/plans/vp-strategic-deep-dive/DECISIONS.md` (staged
+  per-domain activation; second maintainer recommended; CHARTER flywheel
+  deferred — CHARTER is not amended).
+
+### Added — labeling protocol and judge baseline
+
+- `LabelingProtocolConfig` / `adjudicate` / `agreement_report` (kappa reused from
+  `agent_core.golden`).
+- `python -m agent_core.judge_baseline` composes `may_gate` + human-corpus
+  obligation + kappa / `n_codeterminate` floors.
+
 ### Changed — judge gating requires a real calibration report (F-066)
 
 **Breaking for configs that gated on a judge with only ``calibration_artifact_id``.**
