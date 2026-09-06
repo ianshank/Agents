@@ -6,9 +6,6 @@ config, never as literals in the OpenSpec delta.
 
 from __future__ import annotations
 
-import logging
-from typing import Any
-
 from ...core.interfaces import Scorer
 from ...core.types import EvalItem, RunContext, ScoreResult, TargetOutput
 from ...plugins import SCORERS
@@ -24,8 +21,6 @@ from . import (
     read_correct,
     read_ranking,
 )
-
-logger = logging.getLogger(__name__)
 
 
 def _ac_at_k_strict(ranking: list[str], correct: list[str], k: int) -> float:
@@ -47,7 +42,6 @@ def _ac_at_k_partial(ranking: list[str], correct: list[str], k: int) -> float:
     top = set(ranking[:k])
     hits = sum(1 for c in correct if c in top)
     return hits / len(correct)
-
 
 
 def _labelled_ac_tables(
@@ -135,11 +129,11 @@ class RcaAcAtKScorer(Scorer):
                 "ranking": list(ranking),
                 "correct": list(correct),
                 "candidate_count": len(candidates),
-                "outside_candidate_set": outside,
+                "outside_candidate_set": bool(outside),
+                "outside_candidate_ids": outside,
                 "outside_candidate_set_count": len(outside),
             },
         )
-
 
 
 def _top1_disposition(top1: str, candidates: list[str], correct: list[str]) -> tuple[bool, str, bool, bool]:
