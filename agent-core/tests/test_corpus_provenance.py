@@ -25,6 +25,12 @@ def _item(i: int, provenance: str | None = "human") -> GoldenItem:
 def test_config_rejects_identical_tokens() -> None:
     with pytest.raises(ConfigError):
         CorpusProvenanceConfig(human_value="x", synthetic_value="x")
+    with pytest.raises(ConfigError):
+        CorpusProvenanceConfig(meta_key="   ")
+    with pytest.raises(ConfigError):
+        CorpusProvenanceConfig(human_value="")
+    with pytest.raises(ConfigError):
+        CorpusProvenanceConfig(min_items=0)
 
 
 def test_item_provenance_empty_when_unset() -> None:
@@ -34,10 +40,10 @@ def test_item_provenance_empty_when_unset() -> None:
 
 
 def test_undersized_and_synthetic_and_missing_are_problems() -> None:
-    cfg = CorpusProvenanceConfig(min_items=3)
+    cfg = CorpusProvenanceConfig(min_items=4)
     gs = GoldenSet((_item(0, "human"), _item(1, "synthetic"), _item(2, None)))
     problems = corpus_problems(gs, cfg)
-    assert any("need >= 3" in p for p in problems)
+    assert any("need >= 4" in p for p in problems)
     assert any("synthetic" in p for p in problems)
     assert any("missing" in p for p in problems)
     with pytest.raises(ConfigError):

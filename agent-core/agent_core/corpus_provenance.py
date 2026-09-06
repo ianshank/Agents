@@ -36,9 +36,7 @@ class CorpusProvenanceConfig:
         if self.human_value == self.synthetic_value:
             raise ConfigError("corpus_provenance human_value and synthetic_value must differ")
         if self.min_items < 1:
-            raise ConfigError(
-                f"corpus_provenance.min_items must be >= 1 (got {self.min_items!r})"
-            )
+            raise ConfigError(f"corpus_provenance.min_items must be >= 1 (got {self.min_items!r})")
 
 
 def item_provenance(meta: dict[str, str], cfg: CorpusProvenanceConfig | None = None) -> str:
@@ -47,9 +45,7 @@ def item_provenance(meta: dict[str, str], cfg: CorpusProvenanceConfig | None = N
     return str(meta.get(key, "")).strip()
 
 
-def corpus_problems(
-    gs: GoldenSet, cfg: CorpusProvenanceConfig | None = None
-) -> tuple[str, ...]:
+def corpus_problems(gs: GoldenSet, cfg: CorpusProvenanceConfig | None = None) -> tuple[str, ...]:
     """Human-readable problems; empty means the corpus may underwrite a gate."""
     conf = cfg or CorpusProvenanceConfig()
     problems: list[str] = []

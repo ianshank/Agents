@@ -27,9 +27,16 @@ PR needs the `eval-change-approved` label. The checker cannot apply that label.
 
 ### Validation evidence
 
-- agent-core + scripts tests for the new modules (see this session's pytest run).
+- `python3 -m pytest` on the new/touched agent-core modules plus
+  `tests/test_{check_branch_protection,openspec_archive,required_check_stubs}.py`: pass.
+- `cd agent-core && python3 -m pytest tests --cov=agent_core --cov-fail-under=95`:
+  915 passed, 2 xfailed, **97.19%**.
+- `python3 -m mypy agent_core` (from `agent-core/`) plus mypy on the three new
+  `scripts/*.py` files: clean.
+- `python3 -m ruff check` / `ruff format --check` on `agent-core/` and the new scripts: clean.
+- OpenSpec index guard reproduced locally: 5 in flight, 17 archived.
 - `python scripts/check_protected_changes.py` will flag the protected set until
-  labeled.
+  labeled (`tests/**`, `agent-core/tests/**`, `.github/**`).
 
 ---
 ## Session 015 — 2026-09-02

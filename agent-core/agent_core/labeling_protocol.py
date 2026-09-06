@@ -35,7 +35,9 @@ class LabelingProtocolConfig:
 
     def __post_init__(self) -> None:
         if self.n_annotators < 2:
-            raise ConfigError("labeling.n_annotators must be >= 2 (a single annotator cannot kappa)")
+            raise ConfigError(
+                "labeling.n_annotators must be >= 2 (a single annotator cannot kappa)"
+            )
         if not 0.0 <= self.min_kappa <= 1.0:
             raise ConfigError("labeling.min_kappa must be in [0, 1]")
         if not 0.0 <= self.min_percent_agreement <= 1.0:

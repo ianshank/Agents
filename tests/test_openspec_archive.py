@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 import openspec_archive as arch
+import pytest
 
 
 def _mv(_repo: Path, src: Path, dst: Path) -> None:
@@ -19,19 +18,18 @@ def test_rewrite_outbound_gains_one_segment_nested_specs_gain_two() -> None:
     new_file = Path("/repo/openspec/changes/archive/foo/proposal.md")
     old_file = old_root / "proposal.md"
     text = "See [charter](../../../docs/CHARTER.md) and [self](./design.md).\n"
-    out = arch.rewrite_outbound_links(
-        text, old_file=old_file, new_file=new_file, moved_root=old_root
-    )
-    assert "../../../docs/CHARTER.md" not in out
-    assert "../../../../docs/CHARTER.md" in out
+    out = arch.rewrite_outbound_links(text, old_file=old_file, new_file=new_file, moved_root=old_root)
+    # Anchor on the markdown destination, not a path substring: four `../`
+    # segments contain three as a suffix (`../../../../docs` includes
+    # `../../../docs`).
+    assert "](../../../../docs/CHARTER.md)" in out
+    assert "](../../../docs/CHARTER.md)" not in out
     assert "](./design.md)" in out  # intra-tree unchanged
 
     spec_old = old_root / "specs" / "cap" / "spec.md"
     spec_new = Path("/repo/openspec/changes/archive/foo/specs/cap/spec.md")
     spec_text = "See [adr](../../../../docs/decisions/0005-calibrated-merge-gate.md).\n"
-    spec_out = arch.rewrite_outbound_links(
-        spec_text, old_file=spec_old, new_file=spec_new, moved_root=old_root
-    )
+    spec_out = arch.rewrite_outbound_links(spec_text, old_file=spec_old, new_file=spec_new, moved_root=old_root)
     assert "](../../../../../docs/decisions/0005-calibrated-merge-gate.md)" in spec_out
     assert "](../../../../docs/decisions/0005-calibrated-merge-gate.md)" not in spec_out
 

@@ -172,3 +172,13 @@ def test_cli_round_trip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> N
 def test_invalid_min_codeterminate() -> None:
     with pytest.raises(ConfigError):
         JudgeBaselineConfig(min_codeterminate=0)
+    with pytest.raises(ConfigError):
+        JudgeBaselineConfig(min_kappa=1.5)
+
+
+def test_cli_missing_report_is_usage_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    missing = tmp_path / "absent.json"
+    assert main(["--report", str(missing)]) == 2
+    assert "FAIL" in capsys.readouterr().err

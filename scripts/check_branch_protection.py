@@ -169,14 +169,10 @@ def build_report(
     if probe:
         parsed = parse_owner_repo(owner_repo, conf, environ)
         if parsed is None:
-            probe_error = (
-                f"need owner/repo via --repository or ${conf.repository_env_var}"
-            )
+            probe_error = f"need owner/repo via --repository or ${conf.repository_env_var}"
         else:
             owner, name = parsed
-            protected, live, probe_error = probe_protection(
-                owner, name, conf, runner=runner
-            )
+            protected, live, probe_error = probe_protection(owner, name, conf, runner=runner)
     missing: tuple[str, ...] = ()
     extra: tuple[str, ...] = ()
     if live is not None:

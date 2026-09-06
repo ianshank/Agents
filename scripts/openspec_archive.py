@@ -86,9 +86,7 @@ def should_rewrite(url: str) -> bool:
         return False
     if url.startswith("//") or _SCHEME.match(url):
         return False
-    if url.startswith("/"):
-        return False
-    return True
+    return not url.startswith("/")
 
 
 def _is_within(path: Path, root: Path) -> bool:

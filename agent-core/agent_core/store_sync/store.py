@@ -116,9 +116,7 @@ def soak_progress(
     velocity = _velocity_per_day(records)
     domains = sorted({r.domain for r in records} | set(audits_by_domain))
     human_audit_by_domain = {d: audits_by_domain.get(d, 0) for d in domains}
-    remaining_by_domain = {
-        d: max(0, target - human_audit_by_domain[d]) for d in domains
-    }
+    remaining_by_domain = {d: max(0, target - human_audit_by_domain[d]) for d in domains}
     return {
         "total": total,
         "pending": total - labeled,

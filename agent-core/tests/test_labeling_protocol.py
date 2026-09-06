@@ -16,6 +16,14 @@ from agent_core.labeling_protocol import (
 def test_config_rejects_single_annotator() -> None:
     with pytest.raises(ConfigError, match="n_annotators"):
         LabelingProtocolConfig(n_annotators=1)
+    with pytest.raises(ConfigError, match="min_kappa"):
+        LabelingProtocolConfig(min_kappa=1.1)
+    with pytest.raises(ConfigError, match="min_percent_agreement"):
+        LabelingProtocolConfig(min_percent_agreement=-0.1)
+    with pytest.raises(ConfigError, match="min_pairs"):
+        LabelingProtocolConfig(min_pairs=0)
+    with pytest.raises(ConfigError, match="tie_policy"):
+        LabelingProtocolConfig(tie_policy="average")
 
 
 def test_adjudicate_majority_and_tie_and_empty() -> None:

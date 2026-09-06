@@ -21,9 +21,7 @@ DEFAULT_STUB_WORKFLOW = ".github/workflows/required-check-stubs.yml"
 
 _GATE_CONDITION = re.compile(r"needs\.gate\.outputs\.(?P<key>\w+)\s*==\s*'false'")
 _PYTHON_VERSION_EXPR = re.compile(r"\$\{\{\s*matrix\.python-version\s*\}\}")
-_WORKFLOWS_ENTRY = re.compile(
-    r"--workflow\s+(?P<key>\w+)=(?P<path>\.github/workflows/[\w.-]+\.yml)"
-)
+_WORKFLOWS_ENTRY = re.compile(r"--workflow\s+(?P<key>\w+)=(?P<path>\.github/workflows/[\w.-]+\.yml)")
 
 
 class CheckNameError(ValueError):
@@ -49,34 +47,24 @@ def rendered_job_names(workflow: dict[str, Any]) -> set[str]:
         if not isinstance(job, dict):
             raise CheckNameError(f"job {job_id!r} is not a mapping")
         name = str(job.get("name", job_id))
-        matrix = (
-            job.get("strategy", {}).get("matrix", {})
-            if isinstance(job.get("strategy"), dict)
-            else {}
-        )
+        matrix = job.get("strategy", {}).get("matrix", {}) if isinstance(job.get("strategy"), dict) else {}
         if not isinstance(matrix, dict):
             matrix = {}
         axes = {k: v for k, v in matrix.items() if k != "fail-fast"}
         if not axes:
             if "${{" in name:
-                raise CheckNameError(
-                    f"job {job_id!r} interpolates {name!r} with no matrix to expand"
-                )
+                raise CheckNameError(f"job {job_id!r} interpolates {name!r} with no matrix to expand")
             names.add(name)
             continue
         if set(axes) != {"python-version"}:
-            raise CheckNameError(
-                f"job {job_id!r} has an unsupported matrix axis: {sorted(axes)}"
-            )
+            raise CheckNameError(f"job {job_id!r} has an unsupported matrix axis: {sorted(axes)}")
         versions = axes["python-version"]
         if not isinstance(versions, list):
             raise CheckNameError(f"job {job_id!r} python-version matrix is not a list")
         for version in versions:
             rendered = _PYTHON_VERSION_EXPR.sub(str(version), name)
             if "${{" in rendered:
-                raise CheckNameError(
-                    f"job {job_id!r} has an expression this cannot render: {name!r}"
-                )
+                raise CheckNameError(f"job {job_id!r} has an expression this cannot render: {name!r}")
             names.add(rendered)
     return names
 
@@ -84,8 +72,7 @@ def rendered_job_names(workflow: dict[str, Any]) -> set[str]:
 def gate_workflow_map(stub_text: str, workflow_dir: Path) -> dict[str, Path]:
     """The gate job's ``key -> workflow file`` mapping, read from its own source."""
     mapping = {
-        m.group("key"): workflow_dir.parent.parent / m.group("path")
-        for m in _WORKFLOWS_ENTRY.finditer(stub_text)
+        m.group("key"): workflow_dir.parent.parent / m.group("path") for m in _WORKFLOWS_ENTRY.finditer(stub_text)
     }
     if not mapping:
         raise CheckNameError("could not parse the gate job's --workflow arguments")

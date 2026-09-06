@@ -119,6 +119,22 @@ def test_file_invalid_json_is_config_error(tmp_path: Path) -> None:
         load_policy_file(path)
 
 
+def test_file_int_field_accepts_whole_float(tmp_path: Path) -> None:
+    path = tmp_path / "p.json"
+    path.write_text(json.dumps({"min_calibration_n": 200.0}), encoding="utf-8")
+    assert load_policy_file(path)["min_calibration_n"] == 200
+
+
+def test_file_bad_int_and_float_are_config_errors(tmp_path: Path) -> None:
+    path = tmp_path / "p.json"
+    path.write_text(json.dumps({"min_calibration_n": "nope"}), encoding="utf-8")
+    with pytest.raises(ConfigError, match="must be an int"):
+        load_policy_file(path)
+    path.write_text(json.dumps({"risk_target": "nope"}), encoding="utf-8")
+    with pytest.raises(ConfigError, match="must be a float"):
+        load_policy_file(path)
+
+
 def test_file_must_be_a_json_object(tmp_path: Path) -> None:
     path = tmp_path / "p.json"
     path.write_text("[1, 2]", encoding="utf-8")

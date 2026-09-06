@@ -64,9 +64,7 @@ def evaluate_against_baseline(
         if conf.require_may_gate and not report.may_gate:
             problems.append(f"report.may_gate is False (failing_checks={report.failing_checks})")
         if report.kappa is None or report.kappa < conf.min_kappa:
-            problems.append(
-                f"kappa {report.kappa!r} is below min_kappa={conf.min_kappa}"
-            )
+            problems.append(f"kappa {report.kappa!r} is below min_kappa={conf.min_kappa}")
         if report.n_codeterminate < conf.min_codeterminate:
             problems.append(
                 f"n_codeterminate={report.n_codeterminate} < min_codeterminate="

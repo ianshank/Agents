@@ -11,7 +11,6 @@ the CLI flag being absent.
 from __future__ import annotations
 
 import json
-import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -61,9 +60,7 @@ def _parse_field(name: str, raw: object) -> float | int:
             # bool is an int subclass; refuse it. JSON numbers without a fraction
             # arrive as int; CLI strings are parsed by argparse before we get here.
             try:
-                if isinstance(raw, str):
-                    raw = int(raw)
-                elif isinstance(raw, float) and raw.is_integer():
+                if isinstance(raw, str) or (isinstance(raw, float) and raw.is_integer()):
                     raw = int(raw)
                 else:
                     raise TypeError
@@ -148,9 +145,7 @@ def resolve_policy(
             current.update(env_overlay)
             logger.info("merge-gate policy overlay from env: %s", sorted(env_overlay))
         if cli:
-            explicit = {
-                k: v for k, v in cli.items() if k in OPERATOR_FIELDS and v is not None
-            }
+            explicit = {k: v for k, v in cli.items() if k in OPERATOR_FIELDS and v is not None}
             if explicit:
                 parsed = {k: _parse_field(k, v) for k, v in explicit.items()}
                 current.update(parsed)
