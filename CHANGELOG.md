@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Changed — ADR 0021 adoption completed (CI gate delegation)
+
+- `claude-foundation-ci.yml` delegates to `make -C claude-foundation check`; each
+  per-skill job in `skills-ci.yml` runs that skill's generated
+  `scripts/quality-gate.sh` through the `run-quality-gate` composite action.
+  Skills are not pip-installable, so the action invokes the gate script directly
+  (ADR 0021's direct-script allowance); no skill carries a Makefile.
+- `gen_gate.py` learned `--typechecker`/`--typecheck-config` (skills type-check
+  against the repo root's mypy config), `--coverage-source`/`--cov-fail-under`
+  (skills install pytest-cov in CI rather than declaring it), and
+  `--coverage-config` (derived from pyproject presence; explicit override remains).
+  Existing package gates render byte-identically — their `--check` freshness gates
+  stay green. Ignored flags never appear in a gate's embedded provenance line.
+- `nightly-e2e.yml`'s invariant step now also runs the size-budget,
+  guard-reachability, coverage-floor, marketplace, and architecture-drift checks.
+
 ### Added — POSIX e2e driver and CI-restored matrix freshness
 
 - **`scripts/run_all_e2e.sh`** mirrors the PowerShell whole-repo driver: same five
