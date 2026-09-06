@@ -44,6 +44,7 @@ from typing import Any
 
 from ..core.types import TESTGEN_EVIDENCE_KEY, TargetOutput
 from . import _suite_runner
+from ._sandbox import SandboxLimits, sandbox_child_env
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ def _write_sandbox(workdir: Path, implementation: str, focal_name: str, suite: s
     (workdir / _suite_runner.SUITE_FILENAME).write_text(suite, encoding="utf-8")
 
 
-def _execute(workdir: Path, timeout: float) -> tuple[dict[str, Any] | None, str | None]:
+def _execute(workdir: Path, timeout: float, limits: SandboxLimits) -> tuple[dict[str, Any] | None, str | None]:
     """Run the sandbox, returning ``(payload, failure)`` with exactly one of them set.
 
     The sandbox's own stdout and stderr are DISCARDED, and the verdict is read from a file
@@ -135,6 +136,9 @@ def _execute(workdir: Path, timeout: float) -> tuple[dict[str, Any] | None, str 
 
     And a suite printing in a loop would otherwise be buffered into the harness's address
     space by ``capture_output=True``, with no bound. ``DEVNULL`` removes that path.
+
+    The child runs with a scrubbed environment (``sandbox_child_env``) so generated code
+    cannot read this process's credentials.
     """
     runner = Path(_suite_runner.__file__)
     try:
@@ -144,6 +148,7 @@ def _execute(workdir: Path, timeout: float) -> tuple[dict[str, Any] | None, str 
             stderr=subprocess.DEVNULL,
             timeout=timeout,
             cwd=str(workdir),
+            env=sandbox_child_env(limits, timeout),
             check=False,
         )
     except subprocess.TimeoutExpired:
@@ -171,7 +176,13 @@ def _runner_error(workdir: Path) -> str:
 
 
 def _run_against(
-    root: Path, label: str, implementation: str, focal_name: str, suite: str, timeout: float
+    root: Path,
+    label: str,
+    implementation: str,
+    focal_name: str,
+    suite: str,
+    timeout: float,
+    limits: SandboxLimits,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """One sandboxed execution in its own subdirectory, so runs cannot see each other.
 
@@ -186,7 +197,7 @@ def _run_against(
         raise ValueError(f"sandbox label {label!r} escapes the execution root")
     workdir.mkdir(parents=True, exist_ok=True)
     _write_sandbox(workdir, implementation, focal_name, suite)
-    return _execute(workdir, timeout)
+    return _execute(workdir, timeout, limits)
 
 
 def _sandbox_label(index: int, mutant_id: Any) -> str:
@@ -295,7 +306,8 @@ def run_generated_suite(inputs: dict[str, Any]) -> TargetOutput:
 
     with tempfile.TemporaryDirectory(prefix="eval-harness-testgen-") as tmp:
         root = Path(tmp)
-        baseline, failure = _run_against(root, _REFERENCE_LABEL, reference, focal_name, suite, timeout)
+        limits = SandboxLimits()
+        baseline, failure = _run_against(root, _REFERENCE_LABEL, reference, focal_name, suite, timeout, limits)
         if baseline is None:
             evidence = _empty_evidence(mutants, timed_out=failure == TIMEOUT_FAILURE)
             logger.warning("testgen: reference run failed for %s: %s", focal_name, failure)
@@ -308,6 +320,7 @@ def run_generated_suite(inputs: dict[str, Any]) -> TargetOutput:
             return TargetOutput(output=evidence, metadata={EVIDENCE_KEY: evidence})
 
         outcome = _run_mutants(
+            limits=limits,
             root=root,
             mutants=mutants,
             focal_name=focal_name,
@@ -345,6 +358,7 @@ class _MutantOutcome:
 
 def _run_mutants(
     *,
+    limits: SandboxLimits,
     root: Path,
     mutants: list[dict[str, Any]],
     focal_name: str,
@@ -363,7 +377,13 @@ def _run_mutants(
         if mutant.get("equivalent"):
             continue
         result, failure = _run_against(
-            root, _sandbox_label(index, mutant.get("id")), mutant["source"], focal_name, suite, timeout
+            root,
+            _sandbox_label(index, mutant.get("id")),
+            mutant["source"],
+            focal_name,
+            suite,
+            timeout,
+            limits,
         )
         # Killed = a test that PASSED on the reference now fails. "Any failure" would let a
         # suite that is red on correct code claim every mutant it already failed.

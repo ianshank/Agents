@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Security — testgen sandbox: default-deny environment + POSIX resource limits (ADR 0045)
+
+The suite-execution sandbox previously confined the working directory and wall-clock
+but inherited the harness process's whole environment, so generated (or corpus) test
+code running in a credential-bearing job could read `OPENAI_API_KEY` / `LANGFUSE_*` /
+`AWS_*`. The child interpreter now inherits only an allowlisted plumbing set
+(`targets/_sandbox.py`, deliberately not config-driven) and self-applies POSIX
+resource limits (CPU derived from the execution timeout, address space, no
+fork/threads, file-size and fd caps) carried through that environment —
+`preexec_fn` was rejected as unsafe under the engine's threaded execution. Windows
+degrades to the timeout-only posture with a logged note. OS-level network isolation
+is deferred behind a recorded trigger (first non-synthetic corpus or credential-gated
+live generation). Unblocks `add-agent-in-the-loop-testgen` on the security dimension.
+
 ### Changed — root `eval_harness` package is strict-typed (ADR 0044)
 
 - `eval_harness.*` now carries the strict mypy flag bundle via an enumerated
