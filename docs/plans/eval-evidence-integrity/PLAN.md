@@ -157,6 +157,8 @@ the e2e matrix picks the steps up with no schema change.
 
 ## Phase 6 — Close the judge-gating authorisation hole
 
+**Status (F-066):** production path now resolves a `JudgeCalibrationReport` via `report=` / `load_report=` / `judge_calibration.report_path` and calls `require_report_to_gate`. Opaque `calibration_artifact_id` alone is refused.
+
 Change `require_calibration_for_judge_gating` (`gating/__init__.py:19`) to load the
 referenced report and delegate to `require_report_to_gate`, and wire it at `cli.py:84`.
 Regression test: `calibration_artifact_id: "anything"` must now be refused.

@@ -120,6 +120,14 @@
   after a post-landing four-lens review, each undersized probe's `degenerate` reason
   alongside the bare check name. `ProbeConfig.min_pairs` is enforced in all three probes (a
   post-landing correction from an automated PR review). Landed as PR #160 (merged 2026-08-18).
+- [x] **Enforce judge-gate authorisation via real reports (F-066)** —
+  **implemented on `feat/enforce-judge-gate-authorization` (PR #188).** Opaque
+  `calibration_artifact_id` alone no longer authorises blocking judge-backed gates;
+  `require_calibration_for_judge_gating` resolves a `JudgeCalibrationReport` via
+  `report=` / `load_report=` / `judge_calibration.report_path` and delegates to
+  `require_report_to_gate`. Report load goes through `agent_core_adapter` (new
+  `gating -> agent_core_adapter` edge only). agent_core exports JSON load/dump helpers;
+  demo/example configs ship fixtures; `F_066` registered in F-058's validator list.
 - [ ] **Production eval flywheel (`openspec/changes/add-production-eval-flywheel/`)** —
   **blocked** pending a CHARTER §3 Ratified Amendment: a production ingestion pipeline is a
   scope expansion, not merely a change.

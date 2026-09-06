@@ -185,7 +185,7 @@ class TestHarnessJudgeRunner:
         return HarnessJudgeRunner(judge, _store(), cfg)
 
     def _state(self, *ids: str) -> CycleState:
-        return agent_core.CycleState(cycle_index=1, unresolved=tuple(ids))
+        return agent_core.CycleState(cycle_index=1, unresolved=tuple(ids))  # type: ignore[no-any-return]
 
     def test_resolves_all_claims_above_threshold(self) -> None:
         runner = self._runner(_FixedJudge(0.9))
@@ -283,7 +283,7 @@ class TestFixedCostEstimator:
         return FixedCostEstimator(_config(tokens_per_claim=tokens, per_token_rate=rate))
 
     def _state(self, *ids: str) -> CycleState:
-        return agent_core.CycleState(unresolved=tuple(ids))
+        return agent_core.CycleState(unresolved=tuple(ids))  # type: ignore[no-any-return]
 
     def test_projects_n_unresolved_times_rate(self) -> None:
         est = self._est(tokens=500, rate=0.002)

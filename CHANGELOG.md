@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Changed — judge gating requires a real calibration report (F-066)
+
+**Breaking for configs that gated on a judge with only ``calibration_artifact_id``.**
+An opaque ID no longer authorises blocking judge-backed gates. Set
+``judge_calibration.report_path`` (or pass ``report=`` / ``load_report=`` in
+process) so ``require_calibration_for_judge_gating`` can load a
+``JudgeCalibrationReport`` and call ``require_report_to_gate``. Demo and
+example configs ship fixtures. agent_core exports load/dump JSON helpers.
+
+
 ### Fixed — two findings from GitHub review, on the merged PR that added this code
 
 Neither predates this dev cycle; both are in code this same series of changes introduced,

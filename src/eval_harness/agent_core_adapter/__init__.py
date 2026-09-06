@@ -41,6 +41,8 @@ def _is_agent_core_import_error(exc: ImportError) -> bool:
 
 
 try:
+    from agent_core import load_judge_calibration_report
+
     from .bridge import FixedCostEstimator, HarnessJudgeRunner, ItemStore
     from .gate_authorization import require_report_to_gate
 except ImportError as _exc:  # pragma: no cover -- see test_is_agent_core_import_error for the branch logic
@@ -63,6 +65,7 @@ __all__ = [
     "HarnessJudgeRunner",
     "ItemStore",
     "build_budgeted_judge",
+    "load_judge_calibration_report",
     "pairwise_member_kappa",
     "require_report_to_gate",
 ]

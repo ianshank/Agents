@@ -61,6 +61,10 @@ from .judge_calibration_report import (
     REPORT_SCHEMA_VERSION,
     JudgeCalibrationReport,
     build_judge_calibration_report,
+    dump_judge_calibration_report,
+    judge_calibration_report_from_dict,
+    judge_calibration_report_to_dict,
+    load_judge_calibration_report,
 )
 from .logging_util import configure_logging, debug_span, get_logger
 from .loop import LoopController, RunResult
@@ -203,12 +207,16 @@ __all__ = [
     "cycle_state_from_dict",
     "cycle_state_to_dict",
     "debug_span",
+    "dump_judge_calibration_report",
     "ece",
     "effective_n_multiplier",
     "evaluate_calibration",
     "evaluate_on_split",
     "expected_calibration_error",
     "get_logger",
+    "judge_calibration_report_from_dict",
+    "judge_calibration_report_to_dict",
+    "load_judge_calibration_report",
     "load_run",
     "make_calibrator",
     "maximum_calibration_error",
