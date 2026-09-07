@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — acting merge gate was armed-but-broken behind its flag
+
+The `gate` job in `calibrated-merge-gate.yml` decided on argparse defaults
+(`mech_pass=False`, `touches_protected=False`, `--domain` from a repo variable),
+so flipping `ENABLE_CALIBRATED_AUTOMERGE` would have REJECTed every PR regardless
+of store contents. The job is now wired to parity with shadow: read-only store
+pull, changed-files detection, regression-gate `mech_pass`, context composition
+via `scripts/merge_gate_context.py` (domain classification + protected-path
+feed), `--context` decision, and the decision audit log uploaded as an artifact.
+The enablement flag, the stricter `0 | 10) exit 0` exit map, and the no-push
+invariant are unchanged (F-035 pins); the auto-merge step remains a placeholder —
+the real `gh pr merge` seam needs `contents: write` and belongs to the dedicated
+human-authored activation change (ADR 0005 checklist).
+
 ### Added — RCA evaluation matrix, synthetic scope (F-067, ADR 0046)
 
 - **Frozen synthetic corpus** at `corpora/rca/v1/` (96 generated items: 4
