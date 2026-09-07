@@ -92,6 +92,9 @@ Active engineering epics and architectural roadmap live in [roadmap/](roadmap/RE
 - [gap-analysis-2026-07-py-typed-mypy.md](gap-analysis-2026-07-py-typed-mypy.md) — typing/`py.typed` follow-up.
 - [gap-analysis-merge-gate-2026-07-24.md](gap-analysis-merge-gate-2026-07-24.md) — merge-gate /
   calibration subsystem: three fixed defects and ten open findings, each with its reproduction.
+- [gap-analysis-requirements-eval-2026-09-07.md](gap-analysis-requirements-eval-2026-09-07.md) —
+  peer review of the F-068 branch: why every gate was green while the shipped config did not
+  run, the coverage floor that did not bind, and the config-journey loop that now closes it.
 
 ## Templates & conventions
 

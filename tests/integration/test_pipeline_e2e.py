@@ -26,6 +26,88 @@ VENV_PYTHON = sys.executable
 
 
 # ---------------------------------------------------------------------------
+# Shipped-config journeys
+# ---------------------------------------------------------------------------
+
+#: Every config in `config/` that a reader is told to run offline, with the environment
+#: its own documentation says it needs.
+#:
+#: WHY THIS TABLE EXISTS. Nothing else runs a shipped config. Unit tests construct
+#: components directly, so a config can name a component that does not exist, a dataset
+#: path that moved, or an empty evidence store, and stay green — which is exactly what
+#: happened: `requirements_eval.yaml` shipped a `store_contents: {}` against a corpus
+#: whose every item declares two evidence sources, so the command in `config/README.md`
+#: raised `KeyError` on its first item and no test noticed.
+#:
+#: Entries are `(filename, extra environment)`. `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST`
+#: appears where the config uses the `callable` target, which denies by default (ADR
+#: 0039) — the allowlist is the operator's act, so a journey that needs one must say so
+#: rather than the test quietly granting it globally.
+OFFLINE_CONFIG_JOURNEYS: tuple[tuple[str, dict[str, str]], ...] = (
+    ("eval.example.yaml", {}),
+    ("requirements_eval.yaml", {}),
+    ("trajectory_eval.yaml", {"EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST": "tests", "PYTHONPATH": str(PROJECT_ROOT)}),
+)
+
+#: Deliberately NOT in the table: `testgen_eval.yaml` runs generated suites in
+#: subprocesses and takes ~50s, which is a poor fit for a smoke; `F_065` already runs it.
+#: `e2e_nemotron.yaml`, `nemotron_eval.yaml`, `lm_studio_eval.yaml` and `model_target.yaml`
+#: need a live provider, and `legacy.v0_9.yaml` exists to exercise the migration chain.
+_NOT_OFFLINE_JOURNEYS = frozenset(
+    {
+        "agent-authors.yaml",
+        "agent-confidence.yaml",
+        "e2e_nemotron.yaml",
+        "legacy.v0_9.yaml",
+        "lm_studio_eval.yaml",
+        "merge-gate-domains.yaml",
+        "model_target.yaml",
+        "nemotron_eval.yaml",
+        "testgen_eval.yaml",
+    }
+)
+
+
+def test_every_shipped_config_is_either_journeyed_or_explicitly_excluded() -> None:
+    """A new config must be classified, not silently left unrun.
+
+    Without this the table above rots the moment someone adds a config — the same
+    "declared but never invoked" shape the M8 execution ledger refuses.
+    """
+    shipped = {path.name for path in CONFIG_DIR.glob("*.yaml")}
+    classified = {name for name, _env in OFFLINE_CONFIG_JOURNEYS} | _NOT_OFFLINE_JOURNEYS
+    assert shipped - classified == set(), "unclassified config: add a journey row or an exclusion"
+    assert classified - shipped == set(), "classified config no longer exists"
+
+
+@pytest.mark.parametrize(
+    ("config_name", "extra_env"), OFFLINE_CONFIG_JOURNEYS, ids=lambda v: v if isinstance(v, str) else ""
+)
+def test_a_shipped_offline_config_runs_end_to_end(
+    config_name: str, extra_env: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The documented command completes and scores something.
+
+    Asserting "no exception" alone would pass on a run that scored every item as not
+    applicable, so the item count and at least one recorded score are checked too.
+    """
+    from eval_harness.langfuse_client import NullLangfuseClient
+
+    monkeypatch.chdir(PROJECT_ROOT)  # configs name their datasets relative to the root
+    for key, value in extra_env.items():
+        monkeypatch.setenv(key, value)
+        if key == "PYTHONPATH":
+            monkeypatch.syspath_prepend(value)
+
+    config = load_config(str(CONFIG_DIR / config_name))
+    result = EvalEngine.from_config(config, langfuse_client=NullLangfuseClient()).run()
+
+    assert result.items, f"{config_name} produced no items"
+    assert [r.item.id for r in result.items if r.output.error] == [], f"{config_name} had target errors"
+    assert any(r.scores for r in result.items), f"{config_name} recorded no scores"
+
+
+# ---------------------------------------------------------------------------
 # Engine-level E2E
 # ---------------------------------------------------------------------------
 
