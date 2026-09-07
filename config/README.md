@@ -15,6 +15,7 @@ these files can alter what the evaluation measures.
 | `agent-authors.yaml` | Agent identification for merge-gate seed routing (ADR 0023, F-042) — head-ref prefixes → `agent_version`. | `scripts/merge_gate_context.py`, `scripts/agent_confidence.py` |
 | `agent-confidence.yaml` | Parameters for the deterministic agent-confidence proxy (F-042, F-061). | `scripts/agent_confidence.py` |
 | `testgen_eval.yaml` | Test-generation evaluation over the shipped corpus (F-065, ADR 0043). Every gate rule is advisory. | `eval-harness run` with `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=eval_harness.targets.testgen` |
+| `requirements_eval.yaml` | Requirements-generation evaluation over the shipped corpus (F-068, ADR 0047). Every gate rule is advisory. | `eval-harness run --config config/requirements_eval.yaml` |
 | `trajectory_eval.yaml` | Agent-trajectory evaluation example (F-051, ADR 0031). | `eval-harness run` with `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=tests` |
 | `legacy.v0_9.yaml` | A legacy (v0.9) config kept to exercise the migration chain. | config migration tests |
 

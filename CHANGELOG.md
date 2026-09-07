@@ -45,6 +45,31 @@ inventing human labels or flipping GitHub admin settings.
   per-domain activation; second maintainer recommended; CHARTER flywheel
   deferred — CHARTER is not amended).
 
+### Added — requirements-generation evaluation (F-068, ADR 0047)
+
+Deterministic, offline-safe evaluation of generated requirements against declared
+gold acceptance criteria and recorded retrieval evidence. No judge, no numpy, no
+network.
+
+- **`provenance_recorder` target wrapper** records one evidence record per retrieved
+  source on `TargetOutput.metadata`. Revision-scoped references carry
+  `content_sha256` over the bytes they returned; unpinnable sources omit the key
+  entirely. `verify_provenance` re-fetches and reports a mismatch as a provenance
+  failure, distinct from a scoring failure. Live fetchers sit behind the
+  `EvidenceStore` protocol; the offline path uses `MappingEvidenceStore`.
+- **Four scorers:** `req_ac_recall` (covered / declared gold, never inferred from
+  the output), `req_scope_hallucination` (unsupported by the *recorded* evidence;
+  contradictions reported, not resolved), `req_traceability_closure` (structured
+  links only; prose is not a link), `req_semantic_diversity` (pure-Python
+  distinct-1 + pairwise token Jaccard; a score without a generation temperature
+  is uninterpretable).
+- **Frozen synthetic corpus** at `corpora/requirements/v1/` (25 epics, authored
+  gold AC sets, contradictory / stale / mutated negative controls). Regenerated
+  by `scripts/gen_requirements_corpus.py`; `--check` gates drift.
+- **Advisory-only gate rules** in `config/requirements_eval.yaml`. A sub-floor
+  diversity score escalates through the advisory channel rather than failing the
+  run (F-062).
+
 ### Added — labeling protocol and judge baseline
 
 - `LabelingProtocolConfig` / `adjudicate` / `agreement_report` (kappa reused from

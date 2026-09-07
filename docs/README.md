@@ -29,6 +29,8 @@ agents share one source of navigation. Prose docs also render as a site — see
   grid (components × dims, waivers, alias freezes, follow-on obligations;
   regenerate with `python tests/test_matrix_coverage.py --update` — freshness-gated
   in CI, never hand-edit).
+- [`../corpora/README.md`](../corpora/README.md) — frozen harness-loaded corpora
+  (`testgen/v1`, `requirements/v1`). Verify with `make corpus-check`.
 
 ## Decisions (ADRs)
 

@@ -58,10 +58,10 @@ C4Container
     }
 
     Container_Boundary(components, "Pluggable Components (Tested completely offline via deterministic mocks)") {
-        Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, weighted, llm_judge, autoevals; trajectory_{exact,in_order,any_order,precision_recall,step_efficiency,loop_detection,recovery} (F-051)")
-        Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible), anthropic, phoenix_evals")
+        Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, weighted, llm_judge, autoevals; trajectory_{exact,in_order,any_order,precision_recall,step_efficiency,loop_detection,recovery} (F-051); state_transition, policy_violation (F-060); test_executability, testgen_mutation_score, testgen_green_on_correct, requirement_obligation_recall (F-065); rca_{ac_at_k,component_match} (ranking prototype); req_{ac_recall,scope_hallucination,semantic_diversity,traceability_closure} (F-068)")
+        Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible), anthropic, phoenix_evals, panel (F-059)")
         Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust — file-backed sources resolve through core/_paths.py, confined to DATA_ROOT when set")
-        Container(targets, "Targets", "Python", "echo, callable (dynamic import, gated by core/_imports.py's EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST — unset denies, ADR 0039)")
+        Container(targets, "Targets", "Python", "echo, callable (dynamic import, gated by core/_imports.py's EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST — unset denies, ADR 0039), model (alias llm), provenance_recorder (F-068)")
         Container(sinks, "Sinks", "Python", "console, json_file, html_file, langfuse, phoenix, braintrust — file-backed sinks resolve through core/_paths.py, confined to OUTPUT_ROOT when set")
         Container(state_adapters, "State Adapters", "Python", "in_memory, filesystem, sqlite, mock_http — local, deterministic; the engine brackets target.run with reset/snapshot/evaluate when configured, detecting an agent that reports success without changing anything (F-060)")
         Container(gating, "Quality Gate", "Python", "Config-driven pass/fail for CI, including pass_at_k/pass_power_k reliability metrics (F-056), judge-calibration-artifact enforcement (F-057), and a refusal to pass over item-execution failures unless gate.allow_item_errors=true (ADR 0038)")
@@ -405,7 +405,7 @@ flowchart LR
     C --> D[Dataset.load]
     D --> E[Sample Items]
     E --> F[Target.run]
-    F --> G[Scorer.score]
+    F -->|TargetOutput.metadata: testgen_evidence / requirements_evidence| G[Scorer.score]
     G --> H{Judge needed?}
     H -->|Yes| I[Judge.evaluate]
     I --> J[Aggregate]

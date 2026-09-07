@@ -1,0 +1,44 @@
+{
+  "classes": {
+    "contradictory": 3,
+    "mutated": 3,
+    "ordinary": 16,
+    "stale": 3
+  },
+  "generator": "scripts/gen_requirements_corpus.py",
+  "generator_seed": 20260906,
+  "holdout_fraction": 0.24,
+  "item_count": 25,
+  "items": {
+    "req-00": "167842b50b445c210485da73b82873d15ba53dc6fbea652f73d7310eb5098ad5",
+    "req-01": "678d13ddfaec542b239e81c1ce60c9aae7e3397b5eea6d4033e10b4e3f4ad971",
+    "req-02": "2cfead32e31a54a982174e9c3f46e0a1d77f22a63ab7e9640fe4bf64ac07efb6",
+    "req-03": "b3c451f577e0c312a4a60e3966c2700ded0300aa01bc4e529d4282eda7e28e89",
+    "req-04": "c1dd06417e25d0c40b2651d1b90afbbd5b81405bbafc31cdc983af7c3c84e903",
+    "req-05": "fbf253c501718c449f825db53121a586f180e15705f6c45eba640a152ede278c",
+    "req-06": "b74b3a18975703971f7b2d8c5453b455e2cf67dbe335214713c73accda1cc6ee",
+    "req-07": "3a2b15e37dee40697a8cb68374dd713c42a3f6c4b9d551e53ff7d1d796a40d3b",
+    "req-08": "b9ac750620fb9aaa90d52e91ac5eb6c93b4b5359153be669cce8f7a4877c0e8c",
+    "req-09": "1466ee20bb662d874dbbc2efee0d90f58667f457aea6797d1caeaff13c274174",
+    "req-10": "cb7d0a4c3c2ffc443ab09a17a49b9d9157195fcf26b200435ec0627154abd375",
+    "req-11": "f5bfd121cc57463a33328202bd96a56c00b4c0fb838f5747e5f3a795a1fa23a7",
+    "req-12": "fdfede2bc3e278160630061651aed82d9cb05041d52bd5a3bcec058bb00330ff",
+    "req-13": "9260df7efbb489fdeba35343f77054726c407a0c3cca94a440433ccc91c3a56b",
+    "req-14": "290f3ccebe204f15c5fdcb4bf6693ba5c44806faa49c24b1247d1f76dbfdaf8f",
+    "req-15": "7653ca8cf4cdbd0907798324bd908fd1be6689518f6d9d029825bb67dcebdffd",
+    "req-16": "d063ffd358bc504e154dee32d7e77c0e3ea76339c09627b7aa487df3414b79a4",
+    "req-17": "ce6d787deb77940601c6253c1d6f34a6c49c3586b947d82814d62b2378101b3b",
+    "req-18": "bc2b20f4aae71f6eb36a400a0109a3aa01d14ced1596cd528b05a592ca68b4b5",
+    "req-19": "b01ec8c3bdf5cf6af611477c4ae365f084969cb2a0f26b4f1b66d5514bffdb23",
+    "req-20": "d9a2e19c8d6c46d6f075171646455ee3da27cd44f60faf57ba510f42e5616233",
+    "req-21": "f1880286f11bf734edf944d86b061cfd5f3c74b92010e9e8b90199ab6d7890e8",
+    "req-22": "689236b5435841233ec522f403672b7fd050e4de4be846b5c3f7d13f295153d9",
+    "req-23": "efc2f9fe4597006c37069e20619c3b84dfb168f966f9fe208a4cf3fadc765639",
+    "req-24": "b0c577945506cb3f77592b10540fb0b5e4f67e257a11a35e98c95a17e01e8351"
+  },
+  "schema_version": "1.0",
+  "splits": {
+    "holdout": 5,
+    "train": 20
+  }
+}

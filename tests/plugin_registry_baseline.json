@@ -38,6 +38,14 @@
     "rca_component_match",
     "regex",
     "regex_match",
+    "req-ac-recall",
+    "req-scope-hallucination",
+    "req-semantic-diversity",
+    "req-traceability-closure",
+    "req_ac_recall",
+    "req_scope_hallucination",
+    "req_semantic_diversity",
+    "req_traceability_closure",
     "requirement_obligation_recall",
     "schema_keys",
     "state_transition",
@@ -81,6 +89,8 @@
     "echo",
     "llm",
     "model",
+    "provenance-recorder",
+    "provenance_recorder",
     "python"
   ]
 }

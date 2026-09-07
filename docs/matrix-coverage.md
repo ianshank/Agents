@@ -66,6 +66,10 @@ Aliases (judge):
 | `rca_ac_at_k` | 2 | 2 | 1 | 1 | 1 |
 | `rca_component_match` | 2 | 1 | 1 | 1 | 1 |
 | `regex_match` | 2 | 1 | 1 | 1 | 1 |
+| `req_ac_recall` | 1 | 1 | 1 | 1 | 1 |
+| `req_scope_hallucination` | 1 | 1 | 1 | 1 | 1 |
+| `req_semantic_diversity` | 1 | 1 | 1 | 1 | 1 |
+| `req_traceability_closure` | 1 | 1 | 1 | 1 | 1 |
 | `requirement_obligation_recall` | 3 | 7 | 1 | 2 | 5 |
 | `state_transition` | 4 | 3 | 2 | 1 | 1 |
 | `test_executability` | 3 | 4 | 1 | 2 | 4 |
@@ -92,6 +96,10 @@ Aliases (scorer):
 | `rca-ac-at-k` | `rca_ac_at_k` |
 | `rca-component-match` | `rca_component_match` |
 | `regex` | `regex_match` |
+| `req-ac-recall` | `req_ac_recall` |
+| `req-scope-hallucination` | `req_scope_hallucination` |
+| `req-semantic-diversity` | `req_semantic_diversity` |
+| `req-traceability-closure` | `req_traceability_closure` |
 | `schema_keys` | `json_keys` |
 | `trajectory-any-order` | `trajectory_any_order` |
 | `trajectory-exact` | `trajectory_exact` |
@@ -137,6 +145,7 @@ Aliases (sink):
 | `callable` | 1 | 1 | 1 | — | 1 |
 | `echo` | 2 | 1 | 1 | 1 | waived |
 | `model` | 1 | 1 | 1 | — | 2 |
+| `provenance_recorder` | 1 | 1 | 1 | — | 1 |
 
 - `echo` M6 waived: no failure modes by design (pure dict access)
 
@@ -145,13 +154,14 @@ Aliases (target):
 | alias | canonical |
 |---|---|
 | `llm` | `model` |
+| `provenance-recorder` | `provenance_recorder` |
 | `python` | `callable` |
 
 ## Extra suites (non-registry rows)
 
 | suite | floor | dims covered (method counts) |
 |---|---|---|
-| engine | M8 | M8×25 |
+| engine | M8 | M8×26 |
 | gating | M1, M2, M6 | M1×2, M2×2, M6×4 |
 
 ## M8 pipelines — kinds exercised
@@ -167,10 +177,10 @@ invoked it, which is the vacuous credit the ledger exists to refuse.
 |---|---|
 | dataset | `braintrust`, `csv`, `inline`, `jsonl`, `langfuse`, `parquet` |
 | judge | `anthropic`, `mock`, `openai`, `panel` |
-| scorer | `autoevals`, `contains`, `exact_match`, `json_keys`, `llm_judge`, `policy_violation`, `rca_ac_at_k`, `rca_component_match`, `regex_match`, `requirement_obligation_recall`, `state_transition`, `test_executability`, `testgen_green_on_correct`, `testgen_mutation_score`, `trajectory_any_order`, `trajectory_exact`, `trajectory_in_order`, `trajectory_loop_detection`, `trajectory_precision_recall`, `trajectory_recovery`, `trajectory_step_efficiency`, `weighted` |
+| scorer | `autoevals`, `contains`, `exact_match`, `json_keys`, `llm_judge`, `policy_violation`, `rca_ac_at_k`, `rca_component_match`, `regex_match`, `req_ac_recall`, `req_scope_hallucination`, `req_semantic_diversity`, `req_traceability_closure`, `requirement_obligation_recall`, `state_transition`, `test_executability`, `testgen_green_on_correct`, `testgen_mutation_score`, `trajectory_any_order`, `trajectory_exact`, `trajectory_in_order`, `trajectory_loop_detection`, `trajectory_precision_recall`, `trajectory_recovery`, `trajectory_step_efficiency`, `weighted` |
 | sink | `braintrust`, `console`, `html_file`, `json_file`, `langfuse`, `phoenix` |
 | state_adapter | `filesystem`, `in_memory`, `mock_http`, `sqlite` |
-| target | `callable`, `echo`, `model` |
+| target | `callable`, `echo`, `model`, `provenance_recorder` |
 
 Waived M8 cells — infeasible in the matrix CI job, with the reason. Named here
 rather than left absent: a component missing from the table above with no

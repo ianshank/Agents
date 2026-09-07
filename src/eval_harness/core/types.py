@@ -119,6 +119,12 @@ class AgentTrajectory:
 #: not something a downstream user composes against.
 TESTGEN_EVIDENCE_KEY = "testgen_evidence"
 
+#: Key under which the provenance-recording target wrapper publishes the retrieval
+#: evidence on ``TargetOutput.metadata``, and under which the ``requirements`` scorers
+#: read it. Same contract-between-parties reasoning as ``TESTGEN_EVIDENCE_KEY`` above
+#: (and likewise absent from ``core.__all__`` — F-039).
+REQUIREMENTS_EVIDENCE_KEY = "requirements_evidence"
+
 
 @dataclass
 class TargetOutput:

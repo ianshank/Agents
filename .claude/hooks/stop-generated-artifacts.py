@@ -59,6 +59,11 @@ _CHECKERS: tuple[tuple[str, tuple[str, ...], str], ...] = (
         ("scripts/gen_testgen_corpus.py", "--check"),
         "python scripts/gen_testgen_corpus.py --write",
     ),
+    (
+        "corpora/requirements/v1/",
+        ("scripts/gen_requirements_corpus.py", "--check"),
+        "python scripts/gen_requirements_corpus.py --write",
+    ),
 )
 
 #: Deliberately NOT here: `tests/test_public_surface.py`. It has an `--update` flag but no

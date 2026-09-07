@@ -427,11 +427,17 @@ src/eval_harness/
     rca/             rca_ac_at_k, rca_component_match score a ranked diagnosis against a
                      finite candidate set (sdlc solution_space/correct shape; synthetic RCA
                      prototype — F-ID claimed at full land)
+    requirements/    req_ac_recall, req_scope_hallucination, req_semantic_diversity,
+                     req_traceability_closure grade generated requirements against declared
+                     gold acceptance criteria and recorded evidence sources (F-068, ADR 0047;
+                     corpus at corpora/requirements/v1/)
   datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
   targets/           echo, callable (dynamic import — gated by
                      EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST; see "Config files are
                      executable input" below), model (alias llm; calls an
-                     OpenAI-compatible / LM Studio / Nemotron endpoint)
+                     OpenAI-compatible / LM Studio / Nemotron endpoint),
+                     provenance_recorder (wraps an inner target and records
+                     retrieval-evidence records; F-068)
   sinks/             console, json_file, html_file, langfuse, phoenix, braintrust
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
                      phoenix_evals, panel (aggregates N member judges — median/mean/

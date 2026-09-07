@@ -1390,3 +1390,50 @@ features:
       Plan Phase 6 of docs/plans/eval-evidence-integrity/PLAN.md. Does not
       change SCHEMA_VERSION. Additive JudgeCalibrationGateConfig.report_path.
       Agent-in-the-loop OpenSpec remains owner-gated and is out of scope here.
+
+  - id: "F-068"
+    epic: "Eval Harness"
+    name: "Requirements-generation evaluation (synthetic scope): provenance, grounding, diversity, traceability"
+    description: >-
+      Deterministic evaluation of generated requirements against declared gold
+      acceptance criteria and their recorded retrieval evidence. Ships the
+      provenance_recorder target wrapper (records one evidence record per
+      retrieved source on TargetOutput.metadata; revision-scoped references carry
+      a hash over the bytes they returned, unpinnable sources carry NO
+      content_sha256 key at all), the verify_provenance re-fetch pass (a mismatch
+      is a provenance failure, distinct from a scoring failure), the frozen
+      synthetic corpus at corpora/requirements/v1/ (25 epics with authored gold
+      AC sets plus contradictory-source, stale-source, and mutated-evidence
+      negative controls), and four scorers: req_ac_recall (covered / declared
+      gold, never inferred from the output), req_scope_hallucination (unsupported
+      by the RECORDED evidence; contradictions reported, not resolved),
+      req_traceability_closure (structured links only; prose is not a link), and
+      req_semantic_diversity (pure-Python distinct-1 + pairwise token Jaccard;
+      the generation temperature is recorded alongside every score and a score
+      without one is uninterpretable). No judge, no numpy, no network.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "an unpinnable source carries no content hash key at all, and a revision-scoped reference carries a hash over the bytes it returned (scripts/validations/F_068.py, tests/test_provenance_target.py)"
+      - "a mutated source is detected by the re-fetch verification pass and reported as a provenance failure, distinct from a scoring failure (scripts/validations/F_068.py, tests/test_provenance_target.py::test_verification_detects_drift_as_a_provenance_failure)"
+      - "recall is the covered fraction of the DECLARED gold set (8 declared, 6 covered -> 0.75), never inferred from the generated output (scripts/validations/F_068.py, tests/test_requirements_scorers.py::TestAcRecall)"
+      - "a diversity score without a generation temperature is reported uninterpretable, never compared to the floor (scripts/validations/F_068.py, tests/test_requirements_scorers.py::TestSemanticDiversity)"
+      - "an asserted (prose) link to an undeclared test breaks the traceability chain (scripts/validations/F_068.py, tests/test_requirements_scorers.py::TestTraceabilityClosure)"
+      - "the committed corpus regenerates byte-identically, carries the contradictory/stale/mutated negative controls, and holds out a sequestered split (python scripts/gen_requirements_corpus.py --check, tests/test_requirements_corpus.py)"
+      - "every shipped gate rule for this capability is advisory (report_only); a sub-floor diversity score escalates through the advisory channel rather than failing the run (scripts/validations/F_068.py)"
+      - "20 matrix cells across the scorer floor M1/M2/M3/M5/M6 plus the provenance_recorder target row (M1/M2/M3/M6), and an M8 pipeline running the wrapper under all four scorers with ledger invocation asserted (tests/test_matrix_requirements_scorers.py, tests/test_matrix_eval_tools.py::test_m8_requirements_pipeline)"
+    validation_command: "python scripts/validations/F_068.py"
+    implemented_in: "PENDING"
+    depends_on: ["F-062", "F-063"]
+    notes: >-
+      ADR 0047 records the revision-scoped-export decision, the
+      unpinnable-source category, the offline-lexical diversity measure with its
+      temperature obligation, and the refusal to encode an attribute partition
+      ahead of calibration. Live fetchers (Drive Revision.exportLinks, Context7)
+      are SDK-optional adapters behind the EvidenceStore protocol; the offline
+      path and synthetic corpus use the in-memory store. implemented_in is
+      "PENDING" at land per the ledger convention; a post-merge chore stamps the
+      SHA (F-064). public_surface_baseline.json is unchanged: the scorers
+      subpackage declares no __all__.
