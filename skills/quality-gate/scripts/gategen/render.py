@@ -198,7 +198,10 @@ def _coverage_command(facts: GateFacts) -> list[str]:
     so the evasion stays closed without the explicit flag.
     """
     cov = " ".join(f"--cov={_quoted((src,))}" for src in facts.coverage_source)
-    config = f" --cov-config={_sh_escape(facts.coverage_config)}" if facts.coverage_config else ""
+    # Quoted like the sibling --cov= flag, not bare: _sh_escape alone protects a
+    # double-quoted context, so outside quotes a value carrying a space (reachable via
+    # --coverage-config) word-splits into two arguments and the gate silently mis-runs.
+    config = f" --cov-config={_quoted((facts.coverage_config,))}" if facts.coverage_config else ""
     return [
         _ignored_override_notice("COVERAGE_SOURCE"),
         _ignored_override_notice("COV_FAIL_UNDER"),

@@ -77,13 +77,66 @@ def test_bash_driver_mirrors_the_python_skip_code() -> None:
     assert match.group(1) == "78"
 
 
-def test_bash_driver_is_syntax_clean() -> None:
-    """`bash -n` catches the parse errors that only surface mid-run otherwise."""
+def _bash_works() -> tuple[str | None, bool]:
+    """The bash on PATH, and whether it can actually run a script at a native path.
+
+    On Windows ``shutil.which("bash")`` finds the WSL shim, which answers
+    ``bash -c`` but cannot open a Windows-native path (exit 127) — so a
+    ``which(...) is not None`` gate turns into a false failure rather than a skip.
+    Probing with a real temp script is the repo-wide convention (AGENTS.md; the
+    quality-gate and deploy skill suites carry the same probe).
+    """
     import shutil
     import subprocess
+    import tempfile
 
     bash = shutil.which("bash")
     if bash is None:
-        pytest.skip("bash not on PATH")
+        return None, False
+    script: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".sh", delete=False, mode="w") as handle:
+            handle.write("#!/usr/bin/env bash\necho ok\n")
+            script = handle.name
+        proc = subprocess.run([bash, script], capture_output=True, text=True, check=False)
+        return bash, proc.returncode == 0
+    except OSError:
+        return bash, False
+    finally:
+        if script is not None:
+            Path(script).unlink(missing_ok=True)
+
+
+def test_bash_driver_is_syntax_clean() -> None:
+    """`bash -n` catches the parse errors that only surface mid-run otherwise."""
+    import subprocess
+
+    bash, works = _bash_works()
+    if not works:
+        pytest.skip("no bash that can read a native path (WSL shim or bash absent)")
+    assert bash is not None
     proc = subprocess.run([bash, "-n", str(BASH_DRIVER)], capture_output=True, text=True, check=False)
     assert proc.returncode == 0, proc.stderr
+
+
+def test_step_helpers_capture_the_real_exit_code() -> None:
+    """`cmd || true` then `rc=$?` reads the status of `true`, so rc is always 0.
+
+    Under that idiom every failing step recorded PASS: `invoke_cmd_step` matched the
+    0-is-a-pass-code branch unconditionally, and `invoke_pytest_step` passed whenever
+    a junit file existed at all — including a run whose tests failed. The report is
+    the artifact the nightly freshness job publishes, so a false PASS there is worse
+    than no report. `run_py` already uses the correct form.
+    """
+    text = BASH_DRIVER.read_text(encoding="utf-8")
+    assert not re.search(r"\|\|\s*true\s*\n\s*rc=\$\?", text), (
+        "a step helper is discarding run_py's exit code; use `|| rc=$?`"
+    )
+    # Derived, not a magic count: every call site must capture, however many there are.
+    # Backslash continuations are joined first — the pre-flight call puts its `|| rc=$?`
+    # on the following physical line, and a line-at-a-time read would misreport it.
+    joined = re.sub(r"\\\n\s*", " ", text)
+    call_sites = [ln.strip() for ln in joined.splitlines() if re.match(r"\s*run_py\s", ln)]
+    assert call_sites, "run_py is no longer called; this guard has gone stale"
+    uncaptured = [ln for ln in call_sites if "|| rc=$?" not in ln]
+    assert not uncaptured, f"run_py call sites that drop the exit code: {uncaptured}"

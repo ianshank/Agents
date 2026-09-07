@@ -31,10 +31,28 @@ human-authored activation change (ADR 0005 checklist).
   against the repo root's mypy config), `--coverage-source`/`--cov-fail-under`
   (skills install pytest-cov in CI rather than declaring it), and
   `--coverage-config` (derived from pyproject presence; explicit override remains).
-  Existing package gates render byte-identically — their `--check` freshness gates
-  stay green. Ignored flags never appear in a gate's embedded provenance line.
+  Ignored flags never appear in a gate's embedded provenance line. The skill is
+  **1.3.0** (a new public flag; it had been left at 1.2.0).
 - `nightly-e2e.yml`'s invariant step now also runs the size-budget,
   guard-reachability, coverage-floor, marketplace, and architecture-drift checks.
+
+#### Fixed from automated review of the same pull request
+
+- **`--cov-config=` was rendered unquoted** while the `--cov=` beside it was
+  quoted. `_sh_escape` protects a *double-quoted* context, so outside quotes a
+  value containing a space — reachable through the `--coverage-config` override
+  this branch adds — word-splits into two arguments and the gate measures under a
+  different rc file than the one it names. That is the word-splitting failure
+  AGENTS.md forbids for any supplied value. Now quoted through `_quoted`, like
+  its sibling flag. **This changes generated output by one character pair per
+  gate**, so all six committed `scripts/quality-gate.sh` are regenerated in this
+  commit and the earlier "renders byte-identically" claim above no longer holds
+  for `--cov-config`. Behaviour is unchanged for every existing value.
+- **The POSIX driver's step helpers discarded the real exit code**
+  (`run_py ... || true` then `rc=$?` reads the status of `true`), so every failing
+  step recorded PASS. Same fix and same regression guard as the POSIX-driver
+  branch: `now_ms` also measured whole seconds, and the syntax-check test gated on
+  `shutil.which("bash")` rather than the `_bash_works()` probe AGENTS.md prescribes.
 
 ### Added — POSIX e2e driver and CI-restored matrix freshness
 

@@ -239,11 +239,26 @@ def test_cov_fail_under_ignored_without_coverage_source(tmp_path, caplog) -> Non
 
 
 def test_default_coverage_config_stays_pyproject(tmp_path) -> None:
-    """Backwards compatibility: no new flag -> byte-identical 1.1.x coverage command."""
+    """No new flag -> the 1.1.x default value, now rendered quoted (see below)."""
     _project(tmp_path)
     assert gen_gate.main(["--root", str(tmp_path)]) == 0
     body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
-    assert "--cov-config=pyproject.toml" in body
+    assert '--cov-config="pyproject.toml"' in body
+
+
+def test_coverage_config_is_quoted_so_a_space_cannot_split_the_argument(tmp_path) -> None:
+    """A bare --cov-config= word-splits; the sibling --cov= was quoted all along.
+
+    ``_sh_escape`` protects a double-quoted context only, so outside quotes a value
+    with a space became two arguments and pytest read a different rc file than the
+    gate named — the silent-mis-run this repo forbids for any supplied value.
+    """
+    _project(tmp_path)
+    argv = ["--root", str(tmp_path), "--coverage-config", "cfg dir/.coveragerc"]
+    assert gen_gate.main(argv) == 0
+    body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
+    assert '--cov-config="cfg dir/.coveragerc"' in body
+    assert "--cov-config=cfg dir" not in body
 
 
 # ------------------------------------------- 1.1.0: hand-extension marker seam
