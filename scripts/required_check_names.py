@@ -9,15 +9,25 @@ real workflows — this module is that derivation without restating the names.
 
 from __future__ import annotations
 
+import logging
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+logger = logging.getLogger(__name__)
+
 #: Repo-relative stub workflow. Relocating the file is one assignment, not a
 #: restated path at every call site.
 DEFAULT_STUB_WORKFLOW = ".github/workflows/required-check-stubs.yml"
+
+#: Unfiltered workflows whose rendered job names must be required whenever any
+#: check is required. Paths, never context-name literals — job ``name:`` is
+#: derived the same way as the stub pairing. A stub of these would be a false
+#: green (ADR 0040 secret-scan history).
+DEFAULT_EXTRA_REQUIRED_WORKFLOWS: tuple[str, ...] = (".github/workflows/secret-scan.yml",)
 
 _GATE_CONDITION = re.compile(r"needs\.gate\.outputs\.(?P<key>\w+)\s*==\s*'false'")
 _PYTHON_VERSION_EXPR = re.compile(r"\$\{\{\s*matrix\.python-version\s*\}\}")
@@ -107,3 +117,45 @@ def candidate_required_contexts(
     for group in stub_names_by_key(stubs).values():
         names.update(group)
     return tuple(sorted(names))
+
+
+def extra_required_contexts(
+    *,
+    repo: Path | None = None,
+    extra_workflows: Sequence[str] | None = None,
+) -> tuple[str, ...]:
+    """Rendered job names from unfiltered workflows that must not be stubbed."""
+    root = repo if repo is not None else Path(__file__).resolve().parent.parent
+    rels = tuple(extra_workflows) if extra_workflows is not None else DEFAULT_EXTRA_REQUIRED_WORKFLOWS
+    names: set[str] = set()
+    for rel in rels:
+        path = root / rel
+        if not path.is_file():
+            raise CheckNameError(f"extra required workflow {rel!r} is missing at {path}")
+        names.update(rendered_job_names(load_workflow(path)))
+    ordered = tuple(sorted(names))
+    logger.debug(
+        "extra required contexts from %s workflow path(s): %s",
+        len(rels),
+        ordered,
+    )
+    return ordered
+
+
+def enablement_required_contexts(
+    *,
+    repo: Path | None = None,
+    stub_workflow: str = DEFAULT_STUB_WORKFLOW,
+    extra_workflows: Sequence[str] | None = None,
+) -> tuple[str, ...]:
+    """Stub-derived contexts unioned with extra unfiltered workflow job names."""
+    stubs = candidate_required_contexts(repo=repo, stub_workflow=stub_workflow)
+    extras = extra_required_contexts(repo=repo, extra_workflows=extra_workflows)
+    combined = tuple(sorted({*stubs, *extras}))
+    logger.debug(
+        "enablement required contexts: %s stub + %s extra -> %s unique",
+        len(stubs),
+        len(extras),
+        len(combined),
+    )
+    return combined

@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Hardening — branch-protection enablement payload is derived, not copied
+
+`scripts/check_branch_protection.py` now emits and (with admin `gh`) applies the
+ADR 0037 classic rule. Required-check *names* still come from the stub/real
+pairing plus extra unfiltered workflow job names — never a restated list.
+`--emit-payload` prints the PUT body; `--apply` PUTs it and treats HTTP 403 as
+not-enabled (exit 1), so an unprivileged agent cannot claim success. Default
+posture is recorded on `ProtectionRuleConfig`: zero required approvals, Code-Owner
+review off, admins may bypass; `--enforce-admins` is the stricter alternative.
+The checker remains advisory in CI (default exit 0). Protection on `main` is
+still a human/admin settings change until `--apply` is accepted.
+
 ### Fixed — acting merge gate was armed-but-broken behind its flag
 
 The `gate` job in `calibrated-merge-gate.yml` decided on argparse defaults

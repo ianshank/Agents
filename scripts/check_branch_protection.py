@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Advisory checker for ADR 0037 branch protection on ``main``.
+"""Advisory checker and enablement helper for ADR 0037 branch protection on ``main``.
 
 Derives the candidate required-check set from
-``.github/workflows/required-check-stubs.yml`` (never a restated name list).
-Optionally probes GitHub via ``gh api``. Default exit 0: this cannot enable
-protection (admin settings are out-of-band) and must not fail CI. ``--strict``
-fails when protection is absent or a derived check is missing from the live
-required-status-check list.
+``.github/workflows/required-check-stubs.yml`` unioned with extra unfiltered
+workflows (never a restated name list). Optionally probes GitHub via ``gh api``.
+Default exit 0: this cannot enable protection without admin and must not fail CI.
+``--strict`` fails when protection is absent or a derived check is missing.
+``--emit-payload`` prints the classic-rule PUT body; ``--apply`` PUTs it and
+treats HTTP 403 as not-enabled (exit 1).
 
 Usage::
 
     python scripts/check_branch_protection.py
     python scripts/check_branch_protection.py --probe
+    python scripts/check_branch_protection.py --emit-payload
+    python scripts/check_branch_protection.py --apply --repository OWNER/REPO
     python scripts/check_branch_protection.py --strict --probe
 """
 
@@ -24,7 +27,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -33,10 +36,18 @@ if str(_HERE) not in sys.path:  # pragma: no cover - import bootstrap
     sys.path.insert(0, str(_HERE))
 
 from _cli import configure_logging  # noqa: E402
+from branch_protection_rule import (  # noqa: E402
+    ProtectionApplyConfig,
+    ProtectionRuleConfig,
+    apply_protection_rule,
+    build_protection_payload,
+    payload_json,
+)
 from required_check_names import (  # noqa: E402
+    DEFAULT_EXTRA_REQUIRED_WORKFLOWS,
     DEFAULT_STUB_WORKFLOW,
     CheckNameError,
-    candidate_required_contexts,
+    enablement_required_contexts,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,6 +60,7 @@ class BranchProtectionConfig:
     """Operator tunables. Empty env values are ignored at the CLI, not here."""
 
     stub_workflow: str = DEFAULT_STUB_WORKFLOW
+    extra_required_workflows: tuple[str, ...] = DEFAULT_EXTRA_REQUIRED_WORKFLOWS
     branch: str = "main"
     repository_env_var: str = "GITHUB_REPOSITORY"
     protection_api: str = "repos/{owner}/{repo}/branches/{branch}/protection"
@@ -162,7 +174,18 @@ def build_report(
     runner: GitRunner | None = None,
 ) -> ProtectionReport:
     conf = cfg or BranchProtectionConfig()
-    expected = candidate_required_contexts(repo=repo_root, stub_workflow=conf.stub_workflow)
+    expected = enablement_required_contexts(
+        repo=repo_root,
+        stub_workflow=conf.stub_workflow,
+        extra_workflows=conf.extra_required_workflows,
+    )
+    logger.debug(
+        "derived enablement set for %s (%s checks) from stub=%s extra=%s",
+        conf.branch,
+        len(expected),
+        conf.stub_workflow,
+        conf.extra_required_workflows,
+    )
     live: tuple[str, ...] | None = None
     protected: bool | None = None
     probe_error: str | None = None
@@ -213,14 +236,45 @@ def _emit(report: ProtectionReport) -> None:
     print(f"ok={report.ok}")
 
 
+def _rule_from_cli(*, enforce_admins: bool) -> ProtectionRuleConfig:
+    base = ProtectionRuleConfig()
+    return base if enforce_admins == base.enforce_admins else replace(base, enforce_admins=enforce_admins)
+
+
 def main(argv: list[str] | None = None) -> int:
     cfg = BranchProtectionConfig()
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--repo-root", default=".", help="repository root (default: cwd)")
     ap.add_argument("--stub-workflow", default=cfg.stub_workflow)
+    ap.add_argument(
+        "--extra-workflow",
+        action="append",
+        dest="extra_workflows",
+        metavar="PATH",
+        help=(
+            "repo-relative unfiltered workflow whose rendered job names join "
+            "the enablement set (repeatable; default: "
+            "BranchProtectionConfig.extra_required_workflows)"
+        ),
+    )
     ap.add_argument("--branch", default=cfg.branch)
     ap.add_argument("--repository", help="owner/repo; default GITHUB_REPOSITORY")
     ap.add_argument("--probe", action="store_true", help="query GitHub via gh api")
+    ap.add_argument(
+        "--emit-payload",
+        action="store_true",
+        help="print the derived classic-rule PUT body (no GitHub write)",
+    )
+    ap.add_argument(
+        "--apply",
+        action="store_true",
+        help="PUT the derived rule (needs admin; 403 means not enabled)",
+    )
+    ap.add_argument(
+        "--enforce-admins",
+        action="store_true",
+        help="include administrators (GitHub: Do not allow bypassing). Default is off.",
+    )
     ap.add_argument(
         "--strict",
         action="store_true",
@@ -229,22 +283,46 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args(argv)
     configure_logging(verbose=args.verbose)
+    extra = tuple(args.extra_workflows) if args.extra_workflows else cfg.extra_required_workflows
     conf = BranchProtectionConfig(
         stub_workflow=args.stub_workflow,
+        extra_required_workflows=extra,
         branch=args.branch,
     )
+    repo_root = Path(args.repo_root).resolve()
     try:
         report = build_report(
-            repo_root=Path(args.repo_root).resolve(),
+            repo_root=repo_root,
             cfg=conf,
             owner_repo=args.repository,
             probe=args.probe,
         )
-    except (OSError, CheckNameError) as exc:
+        payload = build_protection_payload(report.expected, _rule_from_cli(enforce_admins=args.enforce_admins))
+    except (OSError, CheckNameError, ValueError) as exc:
         logger.error("%s", exc)
         print(f"check-branch-protection error: {exc}", file=sys.stderr)
         return 2
-    _emit(report)
+    if args.emit_payload:
+        sys.stdout.write(payload_json(payload))
+    else:
+        _emit(report)
+    if args.apply:
+        parsed = parse_owner_repo(args.repository, conf)
+        if parsed is None:
+            logger.error("need owner/repo via --repository or $%s", conf.repository_env_var)
+            return 2
+        owner, name = parsed
+        apply_cfg = ProtectionApplyConfig(
+            branch=conf.branch,
+            gh_command=conf.gh_command,
+            timeout_s=conf.timeout_s,
+            protection_api=conf.protection_api,
+        )
+        ok, err = apply_protection_rule(owner, name, payload, cfg=apply_cfg)
+        if not ok:
+            print(f"apply_error={err}", file=sys.stderr)
+            return 1
+        print(f"applied=true branch={conf.branch} required_checks={len(report.expected)}", file=sys.stderr)
     if args.strict and not report.ok:
         return 1
     return 0
