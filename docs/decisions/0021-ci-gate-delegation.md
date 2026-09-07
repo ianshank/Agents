@@ -1,6 +1,6 @@
 # 0021 — CI Gate Delegation Strategy
 
-- Status: **Proposed.**
+- Status: **Accepted.** (2026-09-06: adoption complete — see Consequences.)
 - Date: 2026-07-20
 - Related: `.github/workflows/agent-core-ci.yml`, `.github/workflows/eval-harness-ci.yml`,
   `.github/workflows/flow-corpus-ci.yml`, `.github/workflows/behavioral-regression-ci.yml`,
@@ -38,6 +38,21 @@ We will delegate CI quality-gate verification to the generated `quality-gate.sh`
 - **Redundancy Reduction**: Standardizes the toolchain installation and execution, saving approximately 400 lines of duplicated GitHub workflow definitions.
 - **Improved Maintainability**: Changes to testing or linting behavior are made once in the local configuration or generator script and are instantly active in CI.
 - **Tooling dependency**: CI runners will require standard tools like GNU Make and bash, which are already standard across default GitHub Actions runners (e.g., `ubuntu-latest`).
+
+### Adoption note (2026-09-06)
+
+All six governed workflows now delegate: the four package CIs and `eval-harness-ci.yml`
+already used the composite action; `claude-foundation-ci.yml` now delegates to
+`make -C claude-foundation check`; and each `skills-ci.yml` per-skill job runs that skill's
+generated `scripts/quality-gate.sh` through the composite action. Skills are not
+pip-installable packages, so per the Alternatives section the action invokes the gate
+script directly rather than `make` — no skill carries a Makefile. Supporting generator
+work: `gen_gate.py` gained `--typechecker`/`--typecheck-config` (skills type-check against
+the repo root's mypy config), `--coverage-source`/`--cov-fail-under` (skills install
+pytest-cov in CI rather than declaring it), and `--coverage-config` (pyproject-less trees
+omit `--cov-config`; detection derives the default). Output for existing package gates is
+byte-identical (their `--check` freshness gates stay green). The `all-skills` job remains
+inline by design (it is a repo-level guard over the skill *set*, not a per-skill gate).
 
 ## Alternatives Considered
 

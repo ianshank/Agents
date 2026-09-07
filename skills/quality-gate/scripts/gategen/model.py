@@ -37,6 +37,14 @@ class GateFacts:
     coverage_source: tuple[str, ...] = (".",)
     cov_fail_under: int = 0
     lint_paths: tuple[str, ...] = (".",)
+    # mypy ``--config-file`` (e.g. skills type-check against the repo root's pyproject,
+    # shipping no config of their own). None renders no flag — the 1.0.x form.
+    typecheck_config: str | None = None
+    # Value of the coverage step's ``--cov-config=`` flag. The default reproduces the
+    # 1.0.x literal; an empty string OMITS the flag (projects without a pyproject —
+    # vendored skills — run coverage with its own default config resolution, and the
+    # COVERAGE_RCFILE guard still closes the env-var evasion).
+    coverage_config: str = "pyproject.toml"
 
     def __post_init__(self) -> None:
         # Backwards compatibility: 1.0.x typed these as single strings. Coerce str -> 1-tuple

@@ -29,7 +29,7 @@ import stat
 import sys
 from pathlib import Path
 
-from gategen import MARKER, detect, render_ci_snippet, render_gate, split_at_marker
+from gategen import MARKER, GateFacts, detect, render_ci_snippet, render_gate, split_at_marker
 
 logger = logging.getLogger("gategen")
 
@@ -109,7 +109,11 @@ def _write_preserving_tail(out: Path, content: str) -> bool:
 
 
 def _regen_args(
-    args: argparse.Namespace, lint_paths: tuple[str, ...], typecheck_paths: tuple[str, ...]
+    lint_paths: tuple[str, ...],
+    typecheck_paths: tuple[str, ...],
+    extras: dict[str, object],
+    out: str | None,
+    root: str,
 ) -> tuple[str, ...]:
     """Canonical, reproducible CLI form of this invocation (embedded as provenance).
 
@@ -119,13 +123,29 @@ def _regen_args(
     for committed artifacts: values are embedded verbatim, and absolute paths would make
     the artifact host-specific.
     """
-    parts: list[str] = ["--root", args.root]
+    parts: list[str] = ["--root", root]
     for path in lint_paths:
         parts += ["--lint-path", path]
     for path in typecheck_paths:
         parts += ["--typecheck-path", path]
-    if args.out:
-        parts += ["--out", args.out]
+    typechecker = extras.get("typechecker")
+    if isinstance(typechecker, str) and typechecker:
+        parts += ["--typechecker", typechecker]
+    typecheck_config = extras.get("typecheck_config")
+    if isinstance(typecheck_config, str) and typecheck_config:
+        parts += ["--typecheck-config", typecheck_config]
+    coverage_source = extras.get("coverage_source")
+    if isinstance(coverage_source, tuple):
+        for path in coverage_source:
+            parts += ["--coverage-source", path]
+    cov_fail_under = extras.get("cov_fail_under")
+    if isinstance(cov_fail_under, int):
+        parts += ["--cov-fail-under", str(cov_fail_under)]
+    coverage_config = extras.get("coverage_config")
+    if isinstance(coverage_config, str):
+        parts += ["--coverage-config", coverage_config]
+    if out:
+        parts += ["--out", out]
     return tuple(parts)
 
 
@@ -147,11 +167,98 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Explicit type-check path (repeatable; multiple paths render one invocation each).",
     )
+    parser.add_argument(
+        "--typechecker",
+        choices=("mypy", "pyright"),
+        default=None,
+        help="Force the type checker when detection finds none (e.g. a vendored skill with no pyproject of its own).",
+    )
+    parser.add_argument(
+        "--typecheck-config",
+        default=None,
+        metavar="PATH",
+        help="mypy --config-file value (skills type-check against the repo root's config).",
+    )
+    parser.add_argument(
+        "--coverage-source",
+        action="append",
+        default=None,
+        metavar="PATH",
+        help="Explicit coverage source (repeatable). Implies a coverage step even when no "
+        "pytest-cov dependency is detectable (skills install it in CI, not via pyproject).",
+    )
+    parser.add_argument(
+        "--cov-fail-under",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Coverage floor for the generated coverage step (requires --coverage-source).",
+    )
+    parser.add_argument(
+        "--coverage-config",
+        default=None,
+        metavar="PATH",
+        help="--cov-config value for the coverage step (default: pyproject.toml when the "
+        "project has one, otherwise the flag is omitted). Pass an empty string to force "
+        "omission on a pyproject-bearing project.",
+    )
     parser.add_argument("--stdout", action="store_true", help="Print the script instead of writing it.")
     parser.add_argument("--check", action="store_true", help="Advisory: exit 1 if the committed script is stale.")
     parser.add_argument("--print-ci", action="store_true", help="Print a CI step that runs the same script, then exit.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging (prints detected facts).")
     return parser
+
+
+def _apply_overrides(
+    args: argparse.Namespace, facts: GateFacts, root: Path
+) -> tuple[GateFacts, tuple[str, ...], tuple[str, ...], dict[str, object]]:
+    """Apply CLI overrides to detected facts.
+
+    Returns the updated facts, the EFFECTIVE lint/typecheck path overrides, and the
+    effective new-flag values for provenance: an ignored flag is warned about here and
+    never recorded as if honored.
+    """
+    applied_lint: tuple[str, ...] = ()
+    applied_typecheck: tuple[str, ...] = ()
+    extras: dict[str, object] = {}
+    if args.lint_path:
+        if not facts.has_ruff:
+            # Never fabricate: no detected linter means no lint step, flag or not — and an
+            # ignored flag must not be recorded in provenance as if honored.
+            logger.warning("ignoring --lint-path: no ruff configuration detected in %s", root.as_posix())
+        else:
+            applied_lint = tuple(args.lint_path)
+            facts = dataclasses.replace(facts, lint_paths=applied_lint)
+    if args.typecheck_path:
+        if facts.type_checker is None and not args.typechecker:
+            # Never fabricate: no detected type checker means no typecheck step, flag or not.
+            logger.warning("ignoring --typecheck-path: no type checker detected in %s", root.as_posix())
+        else:
+            applied_typecheck = tuple(args.typecheck_path)
+    if args.typechecker:
+        facts = dataclasses.replace(facts, type_checker=args.typechecker)
+        extras["typechecker"] = args.typechecker
+    if args.typecheck_config:
+        if facts.type_checker != "mypy":
+            logger.warning("ignoring --typecheck-config: only meaningful for mypy")
+        else:
+            facts = dataclasses.replace(facts, typecheck_config=args.typecheck_config)
+            extras["typecheck_config"] = args.typecheck_config
+    if applied_typecheck:
+        facts = dataclasses.replace(facts, typecheck_paths=applied_typecheck)
+    if args.coverage_source:
+        facts = dataclasses.replace(facts, has_pytest_cov=True, coverage_source=tuple(args.coverage_source))
+        extras["coverage_source"] = tuple(args.coverage_source)
+    if args.cov_fail_under is not None:
+        if not facts.has_pytest_cov:
+            logger.warning("ignoring --cov-fail-under: no coverage step without --coverage-source")
+        else:
+            facts = dataclasses.replace(facts, cov_fail_under=args.cov_fail_under)
+            extras["cov_fail_under"] = args.cov_fail_under
+    if args.coverage_config is not None:
+        facts = dataclasses.replace(facts, coverage_config=args.coverage_config)
+        extras["coverage_config"] = args.coverage_config
+    return facts, applied_lint, applied_typecheck, extras
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -163,29 +270,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     root = Path(args.root)
-    facts = detect(root)
-    applied_lint: tuple[str, ...] = ()
-    applied_typecheck: tuple[str, ...] = ()
-    if args.lint_path:
-        if not facts.has_ruff:
-            # Never fabricate: no detected linter means no lint step, flag or not — and an
-            # ignored flag must not be recorded in provenance as if honored.
-            logger.warning("ignoring --lint-path: no ruff configuration detected in %s", root.as_posix())
-        else:
-            applied_lint = tuple(args.lint_path)
-            facts = dataclasses.replace(facts, lint_paths=applied_lint)
-    if args.typecheck_path:
-        if facts.type_checker is None:
-            # Never fabricate: no detected type checker means no typecheck step, flag or not.
-            logger.warning("ignoring --typecheck-path: no type checker detected in %s", root.as_posix())
-        else:
-            applied_typecheck = tuple(args.typecheck_path)
-            facts = dataclasses.replace(facts, typecheck_paths=applied_typecheck)
+    facts, applied_lint, applied_typecheck, extras = _apply_overrides(args, detect(root), root)
     logger.debug("facts for %s: %s", root.as_posix(), facts)
     # The provenance program path is the generator AS INVOKED (cwd-relative, like --root),
     # so the embedded '# regenerate:' line replays from the same cwd.
     program = Path(sys.argv[0]).as_posix() if sys.argv and sys.argv[0] else "scripts/gen_gate.py"
-    content = render_gate(facts, regen_args=_regen_args(args, applied_lint, applied_typecheck), regen_program=program)
+    content = render_gate(
+        facts,
+        regen_args=_regen_args(applied_lint, applied_typecheck, extras, args.out, args.root),
+        regen_program=program,
+    )
 
     if args.stdout:
         sys.stdout.write(content)

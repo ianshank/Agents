@@ -1,6 +1,54 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 017 — 2026-09-06 / 2026-09-07
+
+### Changes
+
+Delivered Requirements-Generation Evaluation Matrix (F-068, ADR 0047). The RCA
+ranking prototype (`rca_ac_at_k` / `rca_component_match`) already on main is
+unchanged; full F-067 (onset / abstention / corpus) is still the OpenSpec change
+`add-rca-eval-matrix`, not this land.
+
+- **`src/eval_harness/targets/provenance.py`**: `EvidenceStore` protocol +
+  `MappingEvidenceStore` + `ProvenanceRecorderTarget` (wrapper publishing retrieval
+  evidence to `TargetOutput.metadata[REQUIREMENTS_EVIDENCE_KEY]`), with
+  `verify_provenance()` re-fetch verification pass detecting drift as a provenance failure.
+  Unpinnable sources omit `content_sha256` by design; revision-scoped references carry
+  content SHA.
+- **`src/eval_harness/scorers/requirements/`**:
+  - `ReqAcRecallScorer` (`req_ac_recall`): covered fraction of declared gold ACs.
+  - `ReqScopeHallucinationScorer` (`req_scope_hallucination`): unsupported requirements
+    flagged; contradictory sources recorded and reported.
+  - `ReqTraceabilityClosureScorer` (`req_traceability_closure`): structured links only;
+    prose references break the chain.
+  - `ReqSemanticDiversityScorer` (`req_semantic_diversity`): offline-lexical distinct-1
+    plus pairwise token Jaccard diversity; generation temperature recorded and mandatory
+    (scores without temperature marked uninterpretable, `passed=None`).
+- **`corpora/requirements/v1/`**: 25 synthetic epics with authored gold AC sets, declared
+  source mixes, and contradictory / stale / mutated negative controls.
+- **`scripts/gen_requirements_corpus.py`**: generator and `--check` validator for the
+  synthetic requirements corpus.
+- **`scripts/validations/F_068.py`**: 12-point functional validation checking unpinnable
+  representation, drift detection, gold recall, temperature obligation, traceability
+  closure, corpus regeneration, and advisory gate routing.
+- **Matrix obligation (ADR 0032)**: 20 scorer cells (M1/M2/M3/M5/M6) + 1 target row
+  (M1/M2/M3/M6) + M8 pipeline in `test_matrix_eval_tools.py`; matrix coverage artifact
+  `docs/matrix-coverage.md` and `FROZEN_ALIAS_MAP` synchronized.
+- **Architecture, config & repo hygiene**: updated `HARNESS_SPEC.md`, `README.md`,
+  `src/eval_harness/README.md`, `AGENTS.md`, `CHANGELOG.md`, `architecture.yaml`,
+  `architecture.mmd`, `docs/c4_architecture.md`, `.claude/hooks/stop-generated-artifacts.py`,
+  and `features.yaml`.
+
+### Validation evidence
+
+- `python scripts/validations/F_068.py`: 12/12 checks passed.
+- `python scripts/gen_requirements_corpus.py --check`: clean byte-for-byte regeneration.
+- `pytest tests/test_provenance_target.py tests/test_requirements_scorers.py tests/test_requirements_corpus.py tests/test_matrix_requirements_scorers.py`: 62/62 passed.
+- `python tests/test_matrix_coverage.py --check`: clean and fresh.
+- `python scripts/validations/F_053.py`: passed.
+
+---
 ## Session 016 — 2026-09-06
 
 ### Changes

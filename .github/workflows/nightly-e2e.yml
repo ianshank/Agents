@@ -42,12 +42,22 @@ jobs:
           pip install -e "./flow-protocol[dev]"
           pip install -e "./flow-corpus[dev]"
           pip install -e "./behavioral-regression[dev]"
-          pip install -e ".[dev,langfuse,openai,parquet,autoevals,e2e-matrix]"
+          pip install -e ".[dev,langfuse,openai,parquet,autoevals,e2e-matrix,archguard]"
 
+      # Scheduled coverage for the structural guards that otherwise only run per-PR:
+      # a drift introduced by a merge sequence (two individually-green PRs) surfaces
+      # here within a day instead of at the next release. jsonschema (registry schema)
+      # and grimp (architecture drift) are in the install set above.
       - name: Invariant & architectural integrity check
         run: |
           python scripts/check_charter_invariants.py
           python scripts/check_charter_drift.py
+          python scripts/check_size_budget.py
+          python scripts/check_guard_reachability.py
+          python scripts/check_coverage_floors.py
+          python scripts/skill_marketplace.py validate
+          python skills/architecture-drift-guard/scripts/drift_check.py --manifest architecture.yaml
+          python skills/architecture-drift-guard/scripts/mermaid_gen.py --manifest architecture.yaml --check -o architecture.mmd
 
       - name: Full monorepo pytest suite
         run: |

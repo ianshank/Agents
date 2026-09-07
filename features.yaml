@@ -1390,3 +1390,100 @@ features:
       Plan Phase 6 of docs/plans/eval-evidence-integrity/PLAN.md. Does not
       change SCHEMA_VERSION. Additive JudgeCalibrationGateConfig.report_path.
       Agent-in-the-loop OpenSpec remains owner-gated and is out of scope here.
+
+  - id: "F-067"
+    epic: "Eval Harness"
+    name: "RCA evaluation matrix (synthetic scope): ranked diagnosis, onset tolerance, abstention"
+    description: >-
+      Deterministic scoring of a ranked root-cause diagnosis against a finite
+      candidate set, including whether the agent correctly declines when the
+      evidence supports no cause. Ships the frozen synthetic corpus at
+      corpora/rca/v1/ (96 generated items across 4 answerability classes x 3
+      difficulty strata, with shape-identical negative controls and a keyed
+      sequestered split), the max-|Z| baseline as a registered deterministic
+      TARGET (it produces a diagnosis, so it is a target, not a scorer), and
+      three new scorers completing the five-scorer family: rca_ac_at_k,
+      rca_component_match (prototype PR #190), rca_onset_within_tolerance
+      (timezone-normalised; a wall-clock match in the wrong zone scores outside
+      tolerance), rca_abstention_correctness, rca_false_accusation_rate. The
+      corpus's difficulty is a GATED MEASUREMENT: the manifest records the
+      baseline's measured per-cell strict AC@1, and the generator's --check fails
+      when a regeneration leaves the calibrated bands. Real-incident telemetry is
+      out of scope (CHARTER §4 invariant 7); judge-backed reason scoring is
+      deferred behind calibration.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "an item with no candidate set, or timestamps with no declared timezone, is rejected at load -- never scored against a singleton set or compared in an implicit zone (scripts/validations/F_067.py, tests/test_rca_corpus.py::TestLoadRejection)"
+      - "a timezone-shifted onset (same wall clock, wrong zone) scores outside tolerance, with both instants recorded normalised to UTC (scripts/validations/F_067.py, tests/test_rca_abstention_scorers.py::TestOnsetWithinTolerance)"
+      - "correct abstention on an unanswerable item scores correct, a confident guess is penalised and counted as a false accusation, abstaining on an answerable item is not free, and rca_ac_at_k reports passed=None (not zero) there (scripts/validations/F_067.py, tests/test_rca_abstention_scorers.py)"
+      - "the baseline runs on the identical frozen item set the config evaluates, is deterministic across runs, and both diagnoses and declines on the real corpus (scripts/validations/F_067.py, tests/test_rca_baseline_target.py)"
+      - "the committed corpus regenerates byte-identically and the baseline's measured per-cell accuracy stays inside the calibrated bands, so a generator edit that trivialises the task fails --check (python scripts/gen_rca_corpus.py --check, tests/test_rca_corpus.py::TestCalibration)"
+      - "every shipped gate rule for this capability is advisory (report_only); the bounds in config/rca_eval.yaml are soak starting points and none appears in the spec delta (scripts/validations/F_067.py)"
+      - "19 new matrix cells (3 abstention scorers x M1/M2/M3/M5/M6, plus the target row M1/M2/M3/M6) and an M8 pipeline running the baseline target under all five scorers with ledger invocation asserted (tests/test_matrix_rca_scorers.py, tests/test_matrix_eval_tools.py::test_m8_rca_full_pipeline)"
+    validation_command: "python scripts/validations/F_067.py"
+    implemented_in: "d75028c62c1f1ddcc355792a3c3e9c7cd7cdca1b"
+    depends_on: ["F-062", "F-063"]
+    notes: >-
+      ADR 0046 records the shape-from-triplet / scoring-from-ranked-accuracy
+      split, the mandatory-timezone decision, the baseline-as-target decision,
+      and the counterfactual cut. implemented_in is stamped to this branch's
+      feature commit so F-064's ancestry check resolves it from HEAD; the
+      literal "PENDING" placeholder does not resolve and fails that gate on the
+      pull request rather than after merge (the same in-flight stamp F-066 and
+      F-068 used). The
+      onset scorer reads a claimed onset only from the diagnosis mapping's
+      `onset` key; the shipped baseline claims none, so its onset verdicts are
+      not-applicable by design. public_surface_baseline.json is unchanged: the
+      scorers subpackage declares no __all__, following state.py and
+      trajectory.py.
+
+  - id: "F-068"
+    epic: "Eval Harness"
+    name: "Requirements-generation evaluation (synthetic scope): provenance, grounding, diversity, traceability"
+    description: >-
+      Deterministic evaluation of generated requirements against declared gold
+      acceptance criteria and their recorded retrieval evidence. Ships the
+      provenance_recorder target wrapper (records one evidence record per
+      retrieved source on TargetOutput.metadata; revision-scoped references carry
+      a hash over the bytes they returned, unpinnable sources carry NO
+      content_sha256 key at all), the verify_provenance re-fetch pass (a mismatch
+      is a provenance failure, distinct from a scoring failure), the frozen
+      synthetic corpus at corpora/requirements/v1/ (25 epics with authored gold
+      AC sets plus contradictory-source, stale-source, and mutated-evidence
+      negative controls), and four scorers: req_ac_recall (covered / declared
+      gold, never inferred from the output), req_scope_hallucination (unsupported
+      by the RECORDED evidence; contradictions reported, not resolved),
+      req_traceability_closure (structured links only; prose is not a link), and
+      req_semantic_diversity (pure-Python distinct-1 + pairwise token Jaccard;
+      the generation temperature is recorded alongside every score and a score
+      without one is uninterpretable). No judge, no numpy, no network.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "an unpinnable source carries no content hash key at all, and a revision-scoped reference carries a hash over the bytes they returned (scripts/validations/F_068.py, tests/test_provenance_target.py)"
+      - "a mutated source is detected by the re-fetch verification pass and reported as a provenance failure, distinct from a scoring failure (scripts/validations/F_068.py, tests/test_provenance_target.py::test_verification_detects_drift_as_a_provenance_failure)"
+      - "recall is the covered fraction of the DECLARED gold set (8 declared, 6 covered -> 0.75), never inferred from the generated output (scripts/validations/F_068.py, tests/test_requirements_scorers.py::TestAcRecall)"
+      - "a diversity score without a generation temperature is reported uninterpretable, never compared to the floor (scripts/validations/F_068.py, tests/test_requirements_scorers.py::TestSemanticDiversity)"
+      - "an asserted (prose) link to an undeclared test breaks the traceability chain (scripts/validations/F_068.py, tests/test_requirements_scorers.py::TestTraceabilityClosure)"
+      - "the committed corpus regenerates byte-identically, carries the contradictory/stale/mutated negative controls, and holds out a sequestered split (python scripts/gen_requirements_corpus.py --check, tests/test_requirements_corpus.py)"
+      - "every shipped gate rule for this capability is advisory (report_only); a sub-floor diversity score escalates through the advisory channel rather than failing the run (scripts/validations/F_068.py)"
+      - "20 matrix cells across the scorer floor M1/M2/M3/M5/M6 plus the provenance_recorder target row (M1/M2/M3/M6), and an M8 pipeline running the wrapper under all four scorers with ledger invocation asserted (tests/test_matrix_requirements_scorers.py, tests/test_matrix_eval_tools.py::test_m8_requirements_pipeline)"
+    validation_command: "python scripts/validations/F_068.py"
+    implemented_in: "ccdac711afdfa90dbd14a4bdee1616ac68c9010e"
+    depends_on: ["F-062", "F-063"]
+    notes: >-
+      ADR 0047 records the revision-scoped-export decision, the
+      unpinnable-source category, the offline-lexical diversity measure with its
+      temperature obligation, and the refusal to encode an attribute partition
+      ahead of calibration. Live fetchers (Drive Revision.exportLinks, Context7)
+      are SDK-optional adapters behind the EvidenceStore protocol; the offline
+      path and synthetic corpus use the in-memory store. implemented_in is
+      stamped to this branch's landing commit so F-064's ancestry check
+      accepts it from HEAD (the same in-flight stamp F-066 used).
+      public_surface_baseline.json is unchanged: the scorers subpackage
+      declares no __all__.

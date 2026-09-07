@@ -20,6 +20,40 @@ invariant are unchanged (F-035 pins); the auto-merge step remains a placeholder 
 the real `gh pr merge` seam needs `contents: write` and belongs to the dedicated
 human-authored activation change (ADR 0005 checklist).
 
+### Changed — ADR 0021 adoption completed (CI gate delegation)
+
+- `claude-foundation-ci.yml` delegates to `make -C claude-foundation check`; each
+  per-skill job in `skills-ci.yml` runs that skill's generated
+  `scripts/quality-gate.sh` through the `run-quality-gate` composite action.
+  Skills are not pip-installable, so the action invokes the gate script directly
+  (ADR 0021's direct-script allowance); no skill carries a Makefile.
+- `gen_gate.py` learned `--typechecker`/`--typecheck-config` (skills type-check
+  against the repo root's mypy config), `--coverage-source`/`--cov-fail-under`
+  (skills install pytest-cov in CI rather than declaring it), and
+  `--coverage-config` (derived from pyproject presence; explicit override remains).
+  Ignored flags never appear in a gate's embedded provenance line. The skill is
+  **1.3.0** (a new public flag; it had been left at 1.2.0).
+- `nightly-e2e.yml`'s invariant step now also runs the size-budget,
+  guard-reachability, coverage-floor, marketplace, and architecture-drift checks.
+
+#### Fixed from automated review of the same pull request
+
+- **`--cov-config=` was rendered unquoted** while the `--cov=` beside it was
+  quoted. `_sh_escape` protects a *double-quoted* context, so outside quotes a
+  value containing a space — reachable through the `--coverage-config` override
+  this branch adds — word-splits into two arguments and the gate measures under a
+  different rc file than the one it names. That is the word-splitting failure
+  AGENTS.md forbids for any supplied value. Now quoted through `_quoted`, like
+  its sibling flag. **This changes generated output by one character pair per
+  gate**, so all six committed `scripts/quality-gate.sh` are regenerated in this
+  commit and the earlier "renders byte-identically" claim above no longer holds
+  for `--cov-config`. Behaviour is unchanged for every existing value.
+- **The POSIX driver's step helpers discarded the real exit code**
+  (`run_py ... || true` then `rc=$?` reads the status of `true`), so every failing
+  step recorded PASS. Same fix and same regression guard as the POSIX-driver
+  branch: `now_ms` also measured whole seconds, and the syntax-check test gated on
+  `shutil.which("bash")` rather than the `_bash_works()` probe AGENTS.md prescribes.
+
 ### Added — POSIX e2e driver and CI-restored matrix freshness
 
 - **`scripts/run_all_e2e.sh`** mirrors the PowerShell whole-repo driver: same five
@@ -85,6 +119,23 @@ speculative against a failure that does not reproduce — and `pyproject.toml`'s
 note on this exact limitation warns against guessing at it without live
 verification of which `langfuse` major pulls `opentelemetry` transitively.
 
+### Added — RCA evaluation matrix, synthetic scope (F-067, ADR 0046)
+
+- **Frozen synthetic corpus** at `corpora/rca/v1/` (96 generated items: 4
+  answerability classes × 3 difficulty strata, shape-identical negative controls,
+  keyed sequestered split). Difficulty is a gated measurement: the manifest records
+  the baseline's measured per-cell strict AC@1, and `gen_rca_corpus.py --check`
+  fails when a regeneration leaves the calibrated bands.
+- **`rca_maxz` baseline target** — a deterministic registered `TargetRunner`
+  ranking candidates by largest absolute z-score across the onset boundary, with
+  abstention below `z_floor`. A baseline is a target, not a scorer: it is graded
+  by the same five scorers on the identical item set.
+- **Three new scorers** completing the family: `rca_onset_within_tolerance`
+  (timezone-normalised; offset-free claims refused), `rca_abstention_correctness`,
+  `rca_false_accusation_rate`. Advisory-only gate rules in `config/rca_eval.yaml`.
+- Real-incident telemetry remains out of scope (CHARTER §4 invariant 7);
+  judge-backed reason scoring stays deferred behind calibration.
+
 ### Hardening — operational activation (merge gate, OpenSpec, branch protection)
 
 Engineering half of the VP strategic roadmap: make existing gates operable without
@@ -123,6 +174,127 @@ inventing human labels or flipping GitHub admin settings.
   Leadership record: `docs/plans/vp-strategic-deep-dive/DECISIONS.md` (staged
   per-domain activation; second maintainer recommended; CHARTER flywheel
   deferred — CHARTER is not amended).
+
+### Added — requirements-generation evaluation (F-068, ADR 0047)
+
+Deterministic, offline-safe evaluation of generated requirements against declared
+gold acceptance criteria and recorded retrieval evidence. No judge, no numpy, no
+network.
+
+- **`provenance_recorder` target wrapper** records one evidence record per retrieved
+  source on `TargetOutput.metadata`. Revision-scoped references carry
+  `content_sha256` over the bytes they returned; unpinnable sources omit the key
+  entirely. `verify_provenance` re-fetches and reports a mismatch as a provenance
+  failure, distinct from a scoring failure. Live fetchers sit behind the
+  `EvidenceStore` protocol; the offline path uses `MappingEvidenceStore`.
+- **Four scorers:** `req_ac_recall` (covered / declared gold, never inferred from
+  the output), `req_scope_hallucination` (unsupported by the *recorded* evidence;
+  contradictions reported, not resolved), `req_traceability_closure` (structured
+  links only; prose is not a link), `req_semantic_diversity` (pure-Python
+  distinct-1 + pairwise token Jaccard; a score without a generation temperature
+  is uninterpretable).
+- **Frozen synthetic corpus** at `corpora/requirements/v1/` (25 epics, authored
+  gold AC sets, contradictory / stale / mutated negative controls). Regenerated
+  by `scripts/gen_requirements_corpus.py`; `--check` gates drift. The generator
+  emits `eval/train.jsonl` (what the shipped config loads) and `eval/holdout.jsonl`
+  (sequestered; a separate file so iterating on scorers cannot touch it by default),
+  plus `eval/store.json` (captured bytes, so an ordinary run verifies clean) and
+  `eval/store.drifted.json` (post-capture edits; re-verifying the same records
+  against it is what proves `verify_provenance` detects drift). A scripted,
+  deliberately imperfect `generated` stand-in per record lets the shipped journey
+  score something without a model call. The stand-in describes itself, never a
+  real generator.
+- **Advisory-only gate rules** in `config/requirements_eval.yaml`. A sub-floor
+  diversity score escalates through the advisory channel rather than failing the
+  run (F-062).
+
+#### Fixed during peer review of the same change
+
+- **The shipped journey did not run.** `config/requirements_eval.yaml` named an
+  empty `store_contents: {}` while every corpus item declares two evidence
+  sources, so `eval-harness run --config config/requirements_eval.yaml` — the
+  command `config/README.md` and `AGENTS.md` document — raised `KeyError` on the
+  first item. The target grew a `store_path` param (read under `DATA_ROOT`
+  confinement, like every other config-named path) and the config points at the
+  generated store. `tests/test_requirements_corpus.py::TestShippedJourney` runs
+  the config end to end and refuses a vacuous result: no target errors, all four
+  scorers reporting over the train split, and more than one distinct recall value.
+- **Punctuation-only requirements scored as maximally diverse.** An empty token
+  set has an empty union with every other, which the Jaccard term read as zero
+  similarity. The scorer now filters on *tokenizable* content and reports "not
+  measured"; the two halves of the score also share one tokenizer, so
+  `"rejects it."` and `"rejects it"` are no longer two tokens to distinct-1 and
+  one to Jaccard.
+- **The scorers restated the evidence-key literal** (`"requirements_evidence"`)
+  instead of importing `REQUIREMENTS_EVIDENCE_KEY`, so the target-produces /
+  scorer-reads seam could have been renamed on one side and silently reported
+  every requirement as unsupported on the other. The sibling testgen package
+  already imported its constant.
+- **`AGENTS.md` documented an `EvidenceStore` API that does not exist**
+  (`fetch_record`/`verify_record`, `InMemoryEvidenceStore`). The protocol has one
+  call, `fetch`, and the class is `MappingEvidenceStore`.
+- **The corpus generator's seeded RNG was decorative** — constructed per item and
+  passed to a function that ignored it. Removing it left the committed corpus
+  byte-identical, which is the proof it was doing nothing.
+- **`_with_split` rewrote its argument in place** rather than returning copies.
+- New negative-path tests take all four new modules to 100% line and branch
+  coverage; a repo-wide 96% floor had let them sit at 92% behind the headroom.
+- `tests/test_claude_hooks.py` now derives the corpus-generator list from the
+  filesystem and asserts every one has a row in the Stop hook's `_CHECKERS` table
+  and a line in `make corpus-check` / `corpus-write` — the next corpus cannot be
+  added unwatched.
+
+#### Fixed from automated review of the same pull request
+
+Both findings are the same defect class — a truthiness test standing in for a
+presence test, so a *stated empty* value read as an *absent* one.
+
+- **`provenance_recorder` accepted `store_path` and `store_contents` together**
+  when the latter was `{}`, despite documenting "not both". That is not a
+  hypothetical spelling: the shipped config carried `store_contents: {}` until
+  this same branch moved it to `store_path`, so a half-finished edit would have
+  been accepted silently, with the path quietly winning. The check now tests
+  `is not None`; a stated-empty store on its own still constructs.
+- **`read_recorded_source_ids` could not warn about a falsy malformed payload.**
+  `metadata.get(key) or []` rewrote a present `None`/`0`/`{}` into an empty list
+  before the `isinstance` check, so a broken wrapper read as "recorded nothing"
+  and every requirement scored as unsupported with no diagnostic. Absent still
+  reads silently; present-and-wrong is now logged.
+- Parametrised journey ids are taken from the config-journey table itself, so a
+  failure names the config (`[requirements_eval.yaml]`) instead of carrying a
+  trailing separator from the unrenderable env mapping.
+
+#### Fixed from a second automated review of the same pull request
+
+Eight findings, all the same class: the corpus *claimed* controls and checks it
+did not actually exercise.
+
+- **The contradictory control contradicted nothing.** The comment assumed `src_a`
+  carried the authentication requirement; `src_b` did, and `src_b` was the side
+  being replaced, so the two sources discussed different topics. `read_contradictions()`
+  also read `inputs["contradictions"]`, a key the generator never emitted. Sources
+  now carry structured `supports`/`refutes` claim keys; a contradiction is *derived*
+  from two recorded sources disagreeing, so a contradictory item stays
+  indistinguishable from an ordinary one by any field the target sees (task 2.2).
+- **`req_scope_hallucination` checked citation, not support.** A latency budget
+  citing a recorded source that mentions no performance target passed. Support is
+  now checked against the cited source's claim keys when a requirement declares a
+  `claim`; a corpus with no claim keys keeps the old citation-only semantics.
+- **The mutated control could not demonstrate drift.** The store served the mutated
+  bytes, so the wrapper hashed what it was given. Capture and drift are now two
+  stores; F-068 re-verifies the wrapper's own records against both.
+- **The holdout was a metadata label on a file the config loaded in full.** It is
+  now `eval/train.jsonl` / `eval/holdout.jsonl`; the shipped config names train.
+- **`EvalItem.metadata` carried `control`**, which the target is handed. The class
+  stays in `items.json`, which the harness never loads.
+- **Any non-empty `covers` closed the traceability chain**, including
+  `covers: ["anything"]`. A link must now name a declared gold criterion.
+- **The config README table was split** by a paragraph inserted between rows.
+- **A provenance record attests independent fetch, not generator retrieval.**
+  Documented as a limitation of the synthetic-scope contract, not patched around.
+
+A `covers` link to an undeclared criterion, an assertion no cited source supports,
+and a one-sided contradiction are now pinned by F-068 as well as the unit tests.
 
 ### Added — labeling protocol and judge baseline
 

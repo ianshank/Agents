@@ -1,0 +1,44 @@
+{
+  "classes": {
+    "contradictory": 3,
+    "mutated": 3,
+    "ordinary": 16,
+    "stale": 3
+  },
+  "generator": "scripts/gen_requirements_corpus.py",
+  "generator_seed": 20260906,
+  "holdout_fraction": 0.24,
+  "item_count": 25,
+  "items": {
+    "req-00": "b523a0ffb66d5992914c4a70d0e897aa07388269e77b0d7a512cd006714e909f",
+    "req-01": "735ffe86b78febc64c1b0be455ae19f8d02643f953418ee29b69c44a13174c53",
+    "req-02": "97ef80d2e282019024c1dd28a75b2667d59666ab2a492ea4cdf2bb25c7dc695e",
+    "req-03": "0d38d67f8aad0bd575a081fb9c08c4a6a3d63d4beb2f83716e74c7b261e3366f",
+    "req-04": "0b73a6f62f6bada74d54c2cba1e4553ddbecb8253bb060039c3863af8d249d51",
+    "req-05": "117868d579e6a91fa314a52bdf49c0903dac2cebca0cb8c8afb261d4fd7bfdac",
+    "req-06": "954f331deb93111174339d0eed076ed709dbe125a21bb2f446d11ac477a85a29",
+    "req-07": "ae979b3f98c3cf54b285bd09ea3217d6aeb0ca93ab02aa9ab686af2f9ca9e58b",
+    "req-08": "ff6d848c29cff059694aaa525f0911c7d0baac98d62ee202cc3451493045bd86",
+    "req-09": "0fba75245003e71e05470ee53c3198793f73f08fc2c7220089f3a148eb956fde",
+    "req-10": "5dbdae3b2f00f10d876baab3fdf6531c726c44088555431892d0bdf4890bebe5",
+    "req-11": "04dee863786760b9d6b5a3f9f854f6cb03c1b8a0a3d56ec2d15c5b74c6c12914",
+    "req-12": "5d4e1f34c14ab3a547cf7d44a344272759ad49b0760ff575cca5b57fb4bfbb63",
+    "req-13": "4376d0ae4b257784658fff38f863d4cbe783669e9efa182850bb6b9366ac3e3f",
+    "req-14": "542d9880de87f6f25fb70129e97b80eb9ce3d7a5701081b6bcf4a23b4bdd6050",
+    "req-15": "69a1e18fa2253e878e3c4f7939f20ce98b88a55abedf7caaa272ab32fa43d995",
+    "req-16": "084340fb8ac9b7fc40a271a894705b63bf758e6ad8b6e2a26cb98a6204bf0ddd",
+    "req-17": "039e123ed4eada5428b618871c5b6317755b0228ec2479aa0b2a42866f2d372b",
+    "req-18": "2defafd629ff627c3b9a03f59aff8d2f0500cf090b9e4ba359895a2b27c47098",
+    "req-19": "117df505d3151ec720460e97939e86464bf7ec472f83a6ab35d593565ec08a8b",
+    "req-20": "e2636ea4055408820606bbb8a662094e2e53888b67c5376fb75f5925875cdc32",
+    "req-21": "f0640c9a6210443b56251a4178e622bf43140eee1b6f71c967af03782618f292",
+    "req-22": "39c67ab18544210ff510b9f7aa9baf2ffe9fac2c79837d25024c0a3cc4a003cc",
+    "req-23": "5c461db8ef97bdbe11724280eb1938955d27c64b659e5a2255910ee7b6ceac8e",
+    "req-24": "33943b7e844f2260108e9bacfc16d81368044a027ee34435056588c49f0c16d9"
+  },
+  "schema_version": "1.0",
+  "splits": {
+    "holdout": 5,
+    "train": 20
+  }
+}
