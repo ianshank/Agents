@@ -81,7 +81,11 @@ def test_every_shipped_config_is_either_journeyed_or_explicitly_excluded() -> No
 
 
 @pytest.mark.parametrize(
-    ("config_name", "extra_env"), OFFLINE_CONFIG_JOURNEYS, ids=lambda v: v if isinstance(v, str) else ""
+    ("config_name", "extra_env"),
+    OFFLINE_CONFIG_JOURNEYS,
+    # The filename alone; the env mapping adds nothing a failure report can use. Derived
+    # from the table so a new row cannot arrive without an id.
+    ids=[name for name, _env in OFFLINE_CONFIG_JOURNEYS],
 )
 def test_a_shipped_offline_config_runs_end_to_end(
     config_name: str, extra_env: dict[str, str], monkeypatch: pytest.MonkeyPatch
