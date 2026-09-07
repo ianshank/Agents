@@ -55,6 +55,25 @@ def test_load_report_injection_authorises_gating() -> None:
     require_calibration_for_judge_gating(config, scorers, load_report=_load)
 
 
+@pytest.mark.parametrize(
+    ("injected", "expected"),
+    [({"artifact_id": "run-123", "may_gate": True}, "dict"), ("run-123", "str")],
+    ids=["mapping", "string"],
+)
+def test_a_wrong_report_type_names_itself_instead_of_failing_deep_inside(injected: object, expected: str) -> None:
+    """`report=`/`load_report=` are typed `object`, so nothing checked what arrived.
+
+    A mapping that merely *looks* like a report reached `require_report_to_gate` and
+    died on an attribute lookup there — an AttributeError about `artifact_id` rather
+    than a statement that the injected value was the wrong type. The mapping case
+    matters most: it carries the right keys, so the error was maximally confusing.
+    """
+    config = _gated_judge_config(calibration_artifact_id="run-123")
+    scorers = [SCORERS.create("llm_judge", {"name": "quality"})]
+    with pytest.raises(TypeError, match=f"must be a JudgeCalibrationReport, got {expected}"):
+        require_calibration_for_judge_gating(config, scorers, report=injected)
+
+
 def test_report_path_authorises_gating(tmp_path: Path) -> None:
     from agent_core import dump_judge_calibration_report
 

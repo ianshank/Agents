@@ -24,7 +24,7 @@ def _describe_failing_check(report: JudgeCalibrationReport, name: str) -> str:
     return f"{name} ({reason})" if reason else name
 
 
-def require_report_to_gate(report: JudgeCalibrationReport, expected_artifact_id: str) -> None:
+def require_report_to_gate(report: object, expected_artifact_id: str) -> None:
     """Raise unless *report* authorises gating under *expected_artifact_id*.
 
     ``spec.md`` "Uncalibrated judges cannot gate releases": a judge stays advisory
@@ -36,7 +36,20 @@ def require_report_to_gate(report: JudgeCalibrationReport, expected_artifact_id:
     ``judge_calibration.calibration_artifact_id``
     (``eval_harness.config.models.JudgeCalibrationGateConfig``) without actually
     being that calibration run.
+
+    Takes ``object`` and narrows here rather than trusting the annotation. The
+    caller in ``eval_harness.gating`` resolves the report from ``report=`` /
+    ``load_report=``, both typed ``object`` so that module needs no ``agent_core``
+    import, so nothing had checked the injected value: a mapping carrying the right
+    keys got as far as the attribute lookup below and raised ``AttributeError``
+    about ``artifact_id``, rather than saying it was the wrong type. This is the
+    authorisation boundary, so the check belongs to it.
     """
+    if not isinstance(report, JudgeCalibrationReport):
+        raise TypeError(
+            f"judge calibration report for artifact_id {expected_artifact_id!r} must be a "
+            f"JudgeCalibrationReport, got {type(report).__name__}"
+        )
     if report.artifact_id != expected_artifact_id:
         raise ValueError(
             f"calibration report artifact_id {report.artifact_id!r} does not match the "
