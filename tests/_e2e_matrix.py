@@ -109,7 +109,9 @@ REGEN_HINT = f"regenerate and commit: {REGEN_COMMAND}"
 GENERATED_BANNER = (
     "GENERATED FILE - do not edit by hand.\n"
     f"Regenerate: {REGEN_COMMAND}\n"
-    "Freshness-gated by tests/test_e2e_matrix.py::test_matrix_artifact_is_fresh."
+    "Freshness-gated by tests/test_e2e_matrix.py::test_matrix_artifact_is_fresh.\n"
+    "Freshness compares content with the Duration (ms) column masked: wall-clock\n"
+    "duration is environment-dependent, so no rerun can reproduce committed values."
 )
 
 
@@ -1321,6 +1323,74 @@ def write_artifacts(sheets: Sequence[Sheet], out_dir: Path) -> list[Path]:
 #: Heading of the section excluded from the staleness comparison (see :func:`comparable`).
 PROVENANCE_SHEET_NAME = "Provenance"
 
+#: Columns excluded from the staleness comparison. Wall-clock duration is a property of
+#: the machine that ran the suite, not of the suite: no CI rerun can reproduce the
+#: committed values, so gating them would make the check red on every environment but the
+#: one that generated the artifact -- the same always-red defect the Provenance exemption
+#: exists to prevent. Durations stay visible in the committed artifact; they just are not
+#: gated. Add a column here only for data with the same environment-dependent character.
+VOLATILE_COLUMNS: tuple[str, ...] = ("Duration (ms)",)
+
+#: Splits a rendered markdown table row on UNESCAPED pipes only: cells may carry a
+#: literal ``\|`` (render_markdown escapes them), and a naive split would misalign the
+#: column indexes the volatile-column mask relies on.
+_MD_CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")
+
+
+def _mask_markdown_volatile_columns(document: str) -> str:
+    """Blank every VOLATILE_COLUMNS cell in every rendered markdown table.
+
+    Applied to both sides of the freshness comparison, so the transform only has to be
+    deterministic and column-accurate -- identical inputs stay identical, and two
+    documents differing only in a volatile column compare equal.
+    """
+    out: list[str] = []
+    volatile_idx: set[int] = set()
+    header_seen = False
+    for line in document.splitlines():
+        if line.startswith("## "):
+            volatile_idx = set()
+            header_seen = False
+            out.append(line)
+            continue
+        if not line.startswith("|"):
+            out.append(line)
+            continue
+        cells = _MD_CELL_SPLIT_RE.split(line)
+        # A rendered row is "| a | b |": splitting on pipes yields empty first/last.
+        inner = cells[1:-1] if len(cells) >= 2 else cells
+        if not header_seen:
+            header_seen = True
+            volatile_idx = {i for i, cell in enumerate(inner) if cell.strip() in VOLATILE_COLUMNS}
+            out.append(line)
+            continue
+        if volatile_idx and not all(set(cell.strip()) <= {"-", ":"} for cell in inner):
+            for i in volatile_idx:
+                if i < len(inner):
+                    inner[i] = ""
+            out.append("|" + "|".join(inner) + "|")
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def _mask_csv_volatile_columns(text: str) -> str:
+    """Blank every VOLATILE_COLUMNS cell in CSV text (header-named, so order-safe)."""
+    rows = list(csv.reader(io.StringIO(text)))
+    if not rows:
+        return text
+    volatile_idx = {i for i, cell in enumerate(rows[0]) if cell in VOLATILE_COLUMNS}
+    if not volatile_idx:
+        return text
+    for row in rows[1:]:
+        for i in volatile_idx:
+            if i < len(row):
+                row[i] = ""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows(rows)
+    return buffer.getvalue()
+
 
 def comparable(document: str) -> str:
     """The part of the artifact whose staleness is meaningful.
@@ -1332,8 +1402,11 @@ def comparable(document: str) -> str:
     artifact, which is worse than no gate: a check that is always red teaches people to
     ignore it. Provenance is metadata about the generation event, not content derived from
     the run, so staleness is judged on the derived content alone.
+
+    The derived content is compared with VOLATILE_COLUMNS masked: a Duration cell records
+    machine speed, not suite content, and no rerun can reproduce it byte-for-byte.
     """
-    return document.split(f"\n## {PROVENANCE_SHEET_NAME}\n", 1)[0]
+    return _mask_markdown_volatile_columns(document.split(f"\n## {PROVENANCE_SHEET_NAME}\n", 1)[0])
 
 
 def stale_csv_mirrors(sheets: Sequence[Sheet], out_dir: Path) -> list[str]:
@@ -1360,7 +1433,9 @@ def stale_csv_mirrors(sheets: Sequence[Sheet], out_dir: Path) -> list[str]:
         name = csv_filename(sheet)
         expected_names.add(name)
         path = csv_dir / name
-        if not path.is_file() or path.read_text(encoding="utf-8") != render_csv(sheet):
+        if not path.is_file() or _mask_csv_volatile_columns(
+            path.read_text(encoding="utf-8")
+        ) != _mask_csv_volatile_columns(render_csv(sheet)):
             stale.append(path.name)
     if csv_dir.is_dir():
         # The Provenance CSV is exempt above even when a caller passes that sheet, so it must

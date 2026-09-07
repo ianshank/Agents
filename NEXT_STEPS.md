@@ -679,19 +679,16 @@
   `pygments>=2.20.0`, `requests>=2.33.0` per Snyk scan results.
 - [ ] **Enable Snyk Code (SAST)** — Upgrade the Snyk org plan to enable static
   analysis of Python source code.
-- [ ] **POSIX e2e driver, and restore e2e-matrix freshness in CI** — the whole-repo
-  e2e orchestrator is `scripts/run_all_e2e.ps1` (PowerShell), which CI has never
-  invoked. Because it never runs, `artifacts/e2e-report/` is never produced, so
-  `python tests/test_e2e_matrix.py --check` raised `MatrixConfigError` -> exit 2 on
-  every scheduled `nightly-e2e` run from the workflow landing until 2026-08-23, when
-  the step was removed (all three matrix legs were red after every other step passed).
-  Freshness of `docs/e2e-matrix/` against a real run is therefore **verified locally
-  only** (`make e2e-matrix-check`) — the one CI gap this leaves. Note the artifact's
-  *content* is still cross-checked on every PR: `quality-gates.yml` runs
-  `pytest tests/test_e2e_matrix.py`, and `TestCoverageGrid` derives every package's
-  coverage floor from the repo and asserts the `pyproject` and generated
-  `quality-gate.sh` anchors agree. Restoring the CI freshness check requires a driver
-  that runs on `ubuntu-latest`; until then, do not re-add a step that cannot pass.
+- [x] **POSIX e2e driver, and restore e2e-matrix freshness in CI** — shipped:
+  `scripts/run_all_e2e.sh` mirrors the PowerShell driver (same tiers, step
+  inventory, and report layout; `tests/test_e2e_driver_parity.py` fails on drift),
+  and `nightly-e2e.yml` gained a single-version `e2e-freshness` job that runs it
+  and then `python tests/test_e2e_matrix.py --check`. Two latent blockers had to
+  be fixed for the check to be runnable in CI at all: the `Duration (ms)` column
+  sat inside the freshness comparison (no rerun can reproduce wall-clock values —
+  it is now masked, alongside the Provenance exemption), and the committed
+  artifact's canonical environment was a stale Windows/py3.11 render (regenerated
+  from the Linux driver).
 - [x] **BedrockJudge Tests** — Add mocked boto3 tests (similar to OpenAIJudge
   pattern) to close the last coverage gap.
 - [x] **Decide the root package's typing policy, then raise it to `mypy --strict`** —
