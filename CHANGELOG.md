@@ -111,6 +111,26 @@ network.
   and a line in `make corpus-check` / `corpus-write` — the next corpus cannot be
   added unwatched.
 
+#### Fixed from automated review of the same pull request
+
+Both findings are the same defect class — a truthiness test standing in for a
+presence test, so a *stated empty* value read as an *absent* one.
+
+- **`provenance_recorder` accepted `store_path` and `store_contents` together**
+  when the latter was `{}`, despite documenting "not both". That is not a
+  hypothetical spelling: the shipped config carried `store_contents: {}` until
+  this same branch moved it to `store_path`, so a half-finished edit would have
+  been accepted silently, with the path quietly winning. The check now tests
+  `is not None`; a stated-empty store on its own still constructs.
+- **`read_recorded_source_ids` could not warn about a falsy malformed payload.**
+  `metadata.get(key) or []` rewrote a present `None`/`0`/`{}` into an empty list
+  before the `isinstance` check, so a broken wrapper read as "recorded nothing"
+  and every requirement scored as unsupported with no diagnostic. Absent still
+  reads silently; present-and-wrong is now logged.
+- Parametrised journey ids are taken from the config-journey table itself, so a
+  failure names the config (`[requirements_eval.yaml]`) instead of carrying a
+  trailing separator from the unrenderable env mapping.
+
 ### Added — labeling protocol and judge baseline
 
 - `LabelingProtocolConfig` / `adjudicate` / `agreement_report` (kappa reused from

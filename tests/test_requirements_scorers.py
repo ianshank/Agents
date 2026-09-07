@@ -9,6 +9,7 @@ not a link.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 
 import pytest
@@ -307,9 +308,26 @@ class TestReaders:
         it = EvalItem(id="i", inputs={}, metadata={"gold_ac": [{"id": "ac-1"}, {"text": "no id"}, "bare"]})
         assert req_readers.read_gold(it) == ["ac-1"]
 
-    def test_a_non_list_evidence_payload_records_nothing(self) -> None:
-        out = TargetOutput(output={}, metadata={REQUIREMENTS_EVIDENCE_KEY: {"source_id": "src-a"}})
-        assert req_readers.read_recorded_source_ids(out) == set()
+    @pytest.mark.parametrize("payload", [{"source_id": "src-a"}, None, 0, {}, ""], ids=repr)
+    def test_a_non_list_evidence_payload_records_nothing_and_says_so(
+        self, payload: object, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A present-but-malformed payload is reported, including the falsy spellings.
+
+        A broken wrapper writing ``None`` is indistinguishable from one that recorded
+        nothing unless the read says which it saw, so silence here would let a provenance
+        outage read as a clean run.
+        """
+        out = TargetOutput(output={}, metadata={REQUIREMENTS_EVIDENCE_KEY: payload})
+        with caplog.at_level(logging.WARNING, logger=req_readers.__name__):
+            assert req_readers.read_recorded_source_ids(out) == set()
+        assert "payload is not a list" in caplog.text
+
+    def test_an_absent_evidence_payload_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Absent is not malformed: an unwrapped target must not log a warning."""
+        with caplog.at_level(logging.WARNING, logger=req_readers.__name__):
+            assert req_readers.read_recorded_source_ids(TargetOutput(output={}, metadata={})) == set()
+        assert caplog.text == ""
 
     def test_evidence_records_without_a_source_id_are_dropped(self) -> None:
         records = [{"source_id": "src-a"}, {"pinnable": True}, "bare"]

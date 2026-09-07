@@ -71,7 +71,11 @@ def read_gold(item: EvalItem) -> list[str] | None:
 def read_recorded_source_ids(output: TargetOutput) -> set[str]:
     """The source_ids the provenance wrapper actually recorded for this run."""
     metadata = output.metadata if isinstance(output.metadata, dict) else {}
-    records = metadata.get(REQUIREMENTS_EVIDENCE_KEY) or []
+    # Default `[]` rather than `... or []`: the latter rewrites a *present but malformed*
+    # falsy payload (None, 0, {}) into an empty list, so the warning below could never
+    # fire for it and a broken wrapper read as "recorded nothing". Absent stays silent;
+    # present-and-wrong is reported.
+    records = metadata.get(REQUIREMENTS_EVIDENCE_KEY, [])
     if not isinstance(records, list):
         logger.warning("requirements: %s payload is not a list", REQUIREMENTS_EVIDENCE_KEY)
         return set()

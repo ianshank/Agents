@@ -207,11 +207,23 @@ class TestStoreFile:
         with pytest.raises(ValueError, match="JSON object"):
             load_store_file(path)
 
-    def test_supplying_both_store_forms_is_refused_rather_than_silently_ranked(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize("contents", [{"doc-1": "other"}, {}], ids=["populated", "empty"])
+    def test_supplying_both_store_forms_is_refused_rather_than_silently_ranked(
+        self, tmp_path: Path, contents: dict[str, str]
+    ) -> None:
+        """An empty ``store_contents`` is a stated store, not an absent one.
+
+        The half-edited config — ``store_path`` added, ``store_contents: {}`` left behind —
+        is the realistic way to reach this, so refusing only the populated spelling would
+        miss the case the check exists for.
+        """
         with pytest.raises(ValueError, match="not both"):
-            ProvenanceRecorderTarget(
-                inner=_EchoInner(), store_path=self._store(tmp_path), store_contents={"doc-1": "other"}
-            )
+            ProvenanceRecorderTarget(inner=_EchoInner(), store_path=self._store(tmp_path), store_contents=contents)
+
+    def test_an_empty_store_contents_alone_still_builds_an_empty_store(self) -> None:
+        """Refusing the *pair* must not make a stated-empty store unconstructable."""
+        target = ProvenanceRecorderTarget(inner=_EchoInner(), store_contents={})
+        assert target.run(_item(None)).metadata[REQUIREMENTS_EVIDENCE_KEY] == []
 
     def test_an_explicit_store_object_still_wins_over_config_params(self, tmp_path: Path) -> None:
         """DI is the inner seam; naming a file must not override an injected store."""

@@ -179,7 +179,11 @@ class ProvenanceRecorderTarget(TargetRunner):
                 raise ValueError("provenance_recorder requires an inner target (inner= or inner_spec=)")
             inner = TARGETS.create(str(inner_spec["type"]), inner_spec.get("params") or {})
         if store is None:
-            if store_path is not None and store_contents:
+            # `is not None`, not truthiness: `store_contents: {}` is a *stated* empty
+            # store, and the shipped config carried exactly that spelling before it moved
+            # to `store_path`. Ranking a leftover `{}` below the path would accept the
+            # half-edited config silently, which is the misconfiguration this refuses.
+            if store_path is not None and store_contents is not None:
                 raise ValueError("provenance_recorder takes store_path or store_contents, not both")
             store = (
                 load_store_file(store_path)
