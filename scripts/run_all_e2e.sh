@@ -125,7 +125,19 @@ COUNT_SKIP=0
 
 safe_name() { local n="$1"; echo "${n//[^A-Za-z0-9_.-]/_}"; }
 
-now_ms() { date +%s000; }
+# Millisecond clock. EPOCHREALTIME (bash >= 5) is subprocess-free and genuinely
+# sub-second; `date +%s%3N` is GNU-only, and macOS ships neither, so the fallback
+# reports whole seconds rather than inventing precision it does not have. The
+# duration column is advisory — no gate reads it.
+now_ms() {
+    if [ -n "${EPOCHREALTIME:-}" ]; then
+        local secs="${EPOCHREALTIME%%[.,]*}" frac="${EPOCHREALTIME#*[.,]}"
+        frac="${frac}000"
+        echo "$((10#$secs * 1000 + 10#${frac:0:3}))"
+    else
+        date +%s000
+    fi
+}
 
 write_summary() {
     "$PY" - "$RESULTS_TSV" "$REPORT" "$TIERS" "$HYP_PROFILE" <<'PYEOF'
@@ -226,10 +238,12 @@ invoke_pytest_step() { # tier name junit timeout_sec workdir -- pyargs...
     local tier="$1" name="$2" junit="$3" tmo="$4" wd="$5"
     shift 5
     [ "${1:-}" = "--" ] && shift
-    local start rc n
+    local start n
+    local rc=0
     start="$(now_ms)"
-    run_py "$name" "$tmo" "$wd" -- "$@" || true
-    rc=$?
+    # `|| rc=$?`, not `|| true; rc=$?`: the latter reads the status of `true`, so rc is
+    # always 0 and every failing step reports PASS. run_py above uses this same idiom.
+    run_py "$name" "$tmo" "$wd" -- "$@" || rc=$?
     local ms=$(($(now_ms) - start))
     if [ "$rc" -eq "$TIMEOUT_EXIT" ]; then
         add_result "$tier" "$name" FAIL "TIMEOUT after ${tmo}s" "$ms"
@@ -250,10 +264,10 @@ invoke_cmd_step() { # tier name pass_codes skip_codes pass_detail timeout_sec wo
     local tier="$1" name="$2" pass_codes="$3" skip_codes="$4" detail="$5" tmo="$6" wd="$7"
     shift 7
     [ "${1:-}" = "--" ] && shift
-    local start rc
+    local start
+    local rc=0
     start="$(now_ms)"
-    run_py "$name" "$tmo" "$wd" -- "$@" || true
-    rc=$?
+    run_py "$name" "$tmo" "$wd" -- "$@" || rc=$?
     local ms=$(($(now_ms) - start))
     if [ "$rc" -eq "$TIMEOUT_EXIT" ]; then
         add_result "$tier" "$name" FAIL "TIMEOUT after ${tmo}s" "$ms"
