@@ -1424,13 +1424,16 @@ features:
       - "every shipped gate rule for this capability is advisory (report_only); the bounds in config/rca_eval.yaml are soak starting points and none appears in the spec delta (scripts/validations/F_067.py)"
       - "19 new matrix cells (3 abstention scorers x M1/M2/M3/M5/M6, plus the target row M1/M2/M3/M6) and an M8 pipeline running the baseline target under all five scorers with ledger invocation asserted (tests/test_matrix_rca_scorers.py, tests/test_matrix_eval_tools.py::test_m8_rca_full_pipeline)"
     validation_command: "python scripts/validations/F_067.py"
-    implemented_in: "PENDING"
+    implemented_in: "d75028c62c1f1ddcc355792a3c3e9c7cd7cdca1b"
     depends_on: ["F-062", "F-063"]
     notes: >-
       ADR 0046 records the shape-from-triplet / scoring-from-ranked-accuracy
       split, the mandatory-timezone decision, the baseline-as-target decision,
-      and the counterfactual cut. implemented_in is "PENDING" at land per the
-      ledger convention; a post-merge chore stamps the merge SHA (F-064). The
+      and the counterfactual cut. implemented_in is stamped to this branch's
+      feature commit so F-064's ancestry check resolves it from HEAD; the
+      literal "PENDING" placeholder does not resolve and fails that gate on the
+      pull request rather than after merge (the same in-flight stamp F-066 and
+      F-068 used). The
       onset scorer reads a claimed onset only from the diagnosis mapping's
       `onset` key; the shipped baseline claims none, so its onset verdicts are
       not-applicable by design. public_surface_baseline.json is unchanged: the
