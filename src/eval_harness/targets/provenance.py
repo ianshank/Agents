@@ -154,6 +154,18 @@ class ProvenanceRecorderTarget(TargetRunner):
     reference}``), fetches each from the evidence store, records one evidence record per
     source, runs the inner target, and attaches the records to the output's metadata.
 
+    **What a record attests, and what it does not.** The wrapper fetches the declared
+    sources itself and never hands the bytes to the inner target, so a record says "this
+    is what this reference resolved to at this moment", not "the generator read this".
+    That is deliberate, and it is the anti-circularity rule from spec 3.2: the scorers
+    check against the recorded evidence *rather than the generator's account of what it
+    used*, and an account the generator supplies is exactly what an independent fetch
+    replaces. The cost is real and worth naming — an opaque generator that retrieved
+    something else is not detected here, only one whose citations fail to line up with
+    what the declared sources actually claim. Closing that gap needs the generator to
+    report its retrieval and the two records to be reconciled, which is a different
+    contract from this one and is not in the synthetic scope.
+
     Two construction paths, one contract:
 
     * **DI** (tests, in-process composition): pass ``inner`` and ``store`` objects.

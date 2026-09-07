@@ -94,6 +94,39 @@ def _check_mutated_source_is_detected(errors: list[str]) -> None:
     _check(verify_provenance([record], stable) == [], "stable content verifies clean", errors)
 
 
+def _check_corpus_drift_is_detected_end_to_end(errors: list[str]) -> None:
+    """Task 2.3's actual claim: not that the corpus *holds* mutated bytes, but that the
+    verification pass *detects* them. Proven over the corpus's own artifacts, with the
+    records produced the way a run produces them, because a hand-built record and a
+    hand-built store can demonstrate the mechanism while the shipped corpus exercises
+    none of it — which is exactly what had happened."""
+    from eval_harness.core.types import REQUIREMENTS_EVIDENCE_KEY, EvalItem
+    from eval_harness.targets.provenance import MappingEvidenceStore, ProvenanceRecorderTarget, verify_provenance
+    from gen_requirements_corpus import build_eval_records, build_items, build_store
+
+    items = build_items()
+    capture = build_store(items)
+    drifted = MappingEvidenceStore({k: v.encode("utf-8") for k, v in build_store(items, key="drifted_bytes").items()})
+    target = ProvenanceRecorderTarget(
+        inner_spec={"type": "echo", "params": {"output_key": "generated"}}, store_contents=capture
+    )
+    clean, drifting = [], []
+    for record, item in zip(build_eval_records(items), items, strict=True):
+        output = target.run(EvalItem(id=record["id"], inputs=record["inputs"], expected=record["expected"]))
+        records = output.metadata[REQUIREMENTS_EVIDENCE_KEY]
+        if verify_provenance(records, MappingEvidenceStore({k: v.encode("utf-8") for k, v in capture.items()})):
+            clean.append(item["epic_id"])
+        if verify_provenance(records, drifted):
+            drifting.append(item["control"])
+    _check(not clean, f"every item verifies clean against the bytes it captured (drifted: {clean[:2]})", errors)
+    expected = [i["control"] for i in items if i["control"] == "mutated"]
+    _check(
+        sorted(drifting) == sorted(expected) and bool(expected),
+        f"re-verifying against the drift store fails for exactly the mutated controls (observed {sorted(set(drifting))})",
+        errors,
+    )
+
+
 def _score(name: str, output: Any, item: Any) -> Any:
     from eval_harness.core.types import EvalItem, RunContext, TargetOutput
     from eval_harness.plugins import SCORERS, bootstrap
@@ -139,6 +172,62 @@ def _check_scorer_semantics(errors: list[str]) -> None:
         errors,
     )
 
+    undeclared_ac = TargetOutput(
+        output={"requirements": [{"id": "r1", "covers": ["ac-invented"], "test_links": ["test_real"]}]},
+        metadata={REQUIREMENTS_EVIDENCE_KEY: [{"source_id": "doc-1", "pinnable": True}]},
+    )
+    invented = _score("req_traceability_closure", undeclared_ac, with_tests)
+    _check(
+        getattr(invented, "passed", True) is False,
+        "a covers link to a criterion outside the declared gold set does not close the chain",
+        errors,
+    )
+
+    # The spec's unsupported-constraint scenario, against a source that IS recorded: only
+    # reading what the source claims can catch it, which a citation check cannot.
+    latency = TargetOutput(
+        output={"requirements": [{"id": "r1", "claim": "latency_budget", "evidence_links": ["doc-1"]}]},
+        metadata={REQUIREMENTS_EVIDENCE_KEY: [{"source_id": "doc-1", "pinnable": True}]},
+    )
+    claiming = EvalItem(
+        id="v",
+        inputs={"evidence_sources": [{"source_id": "doc-1", "supports": ["persistence"], "refutes": []}]},
+        metadata={"gold_ac": gold},
+    )
+    unsupported = _score("req_scope_hallucination", latency, claiming)
+    _check(
+        getattr(unsupported, "value", None) == 1.0,
+        "an assertion no cited source supports is flagged even though the citation resolves",
+        errors,
+    )
+
+    disputed = EvalItem(
+        id="v",
+        inputs={
+            "evidence_sources": [
+                {"source_id": "doc-1", "supports": ["auth_required"], "refutes": []},
+                {"source_id": "doc-2", "supports": [], "refutes": ["auth_required"]},
+            ]
+        },
+        metadata={"gold_ac": gold},
+    )
+    picked = TargetOutput(
+        output={"requirements": [{"id": "r1", "claim": "auth_required", "evidence_links": ["doc-1"]}]},
+        metadata={
+            REQUIREMENTS_EVIDENCE_KEY: [
+                {"source_id": "doc-1", "pinnable": True},
+                {"source_id": "doc-2", "pinnable": True},
+            ]
+        },
+    )
+    contradiction = _score("req_scope_hallucination", picked, disputed)
+    _check(
+        getattr(contradiction, "passed", True) is False
+        and contradiction.metadata["contradiction_citations"] == ["r1"],
+        "a requirement asserting one side of a contradiction is reported, not scored as cleanly supported",
+        errors,
+    )
+
 
 def _check_corpus(errors: list[str]) -> None:
     import json
@@ -163,6 +252,23 @@ def _check_corpus(errors: list[str]) -> None:
         errors,
     )
 
+    with open(_CONFIG, encoding="utf-8") as handle:
+        dataset_path = str(((yaml.safe_load(handle).get("dataset") or {}).get("params") or {}).get("path", ""))
+    _check(
+        dataset_path.endswith("train.jsonl") and os.path.exists(os.path.join(_CORPUS, "eval", "holdout.jsonl")),
+        f"the shipped config reads the train split, leaving the holdout sequestered (reads {dataset_path!r})",
+        errors,
+    )
+
+    from gen_requirements_corpus import build_eval_records, build_items
+
+    leaked = [r["id"] for r in build_eval_records(build_items()) if "control" in r.get("metadata", {})]
+    _check(
+        not leaked,
+        f"no harness-loaded record carries its control class, which the target would see (leaked: {leaked[:2]})",
+        errors,
+    )
+
 
 def _check_every_shipped_rule_is_advisory(errors: list[str]) -> None:
     with open(_CONFIG, encoding="utf-8") as handle:
@@ -183,6 +289,7 @@ def main() -> int:
     errors: list[str] = []
     _check_unpinnable_records_carry_no_hash(errors)
     _check_mutated_source_is_detected(errors)
+    _check_corpus_drift_is_detected_end_to_end(errors)
     _check_scorer_semantics(errors)
     _check_corpus(errors)
     _check_every_shipped_rule_is_advisory(errors)

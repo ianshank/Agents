@@ -336,7 +336,8 @@ def build_eval_records(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     **So does ``control``.** Task 2.2 requires that no field the target sees distinguishes
     a negative control from an ordinary item, and ``EvalItem.metadata`` is handed to the
     target along with everything else. The class stays in ``items.json``, which the harness
-    never loads; an analysis joins it back on ``corpus_item``.
+    never loads; an analysis joins it back on ``corpus_item``. The split stays out for the
+    same reason it need not be here: it is the file the record lands in, not a label.
 
     ``generated`` is the scripted stand-in (see :func:`build_standin`), which the shipped
     config surfaces with ``echo``'s ``output_key``. A real evaluation replaces the inner
@@ -353,7 +354,7 @@ def build_eval_records(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "generated": build_standin(item, ordinal),
             },
             "expected": [ac["id"] for ac in item["gold_ac"]],
-            "metadata": {"corpus_item": item["epic_id"], "split": item["split"]},
+            "metadata": {"corpus_item": item["epic_id"]},
         }
         for ordinal, item in enumerate(items)
     ]
@@ -399,8 +400,8 @@ def split_records(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]
     item's scripted stand-in does not change with the split it lands in.
     """
     partitioned: dict[str, list[dict[str, Any]]] = {"train": [], "holdout": []}
-    for record in build_eval_records(items):
-        partitioned[str(record["metadata"]["split"])].append(record)
+    for record, item in zip(build_eval_records(items), items, strict=True):
+        partitioned[str(item["split"])].append(record)
     return partitioned
 
 
