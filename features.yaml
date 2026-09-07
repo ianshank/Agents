@@ -1474,7 +1474,7 @@ features:
       - "every shipped gate rule for this capability is advisory (report_only); a sub-floor diversity score escalates through the advisory channel rather than failing the run (scripts/validations/F_068.py)"
       - "20 matrix cells across the scorer floor M1/M2/M3/M5/M6 plus the provenance_recorder target row (M1/M2/M3/M6), and an M8 pipeline running the wrapper under all four scorers with ledger invocation asserted (tests/test_matrix_requirements_scorers.py, tests/test_matrix_eval_tools.py::test_m8_requirements_pipeline)"
     validation_command: "python scripts/validations/F_068.py"
-    implemented_in: "ccdac711afdfa90dbd14a4bdee1616ac68c9010e"
+    implemented_in: "49c7db829066d1628455b87efd63be73229daa6d"
     depends_on: ["F-062", "F-063"]
     notes: >-
       ADR 0047 records the revision-scoped-export decision, the
