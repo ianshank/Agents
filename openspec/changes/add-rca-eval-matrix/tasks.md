@@ -2,7 +2,7 @@
 
 `[P]` = protected path (`eval-change-approved` label + CODEOWNERS review).
 Coverage floor: root `eval_harness` **96%** (`coverage-floors.yaml`).
-**Blocked until** `add-gate-decision-provenance` and `prove-m8-execution` land.
+**Unblocked** — `add-gate-decision-provenance` (F-062) and `prove-m8-execution` (F-063) are archived.
 **Real-incident corpus is out of scope** — see `proposal.md` "What is deliberately not here".
 
 ## 1. Prototype against the existing suite
@@ -17,24 +17,24 @@ Coverage floor: root `eval_harness` **96%** (`coverage-floors.yaml`).
 
 ## 2. Corpus
 
-- [ ] 2.1 Generate `corpora/rca/v1/`: per item a declared timezone, a finite candidate set, a
+- [x] 2.1 Generate `corpora/rca/v1/`: per item a declared timezone, a finite candidate set, a
       confirmed cause (or none), an onset instant, and synthetic telemetry.
-- [ ] 2.2 Include negative controls — items with no correct candidate and items with several — and
+- [x] 2.2 Include negative controls — items with no correct candidate and items with several — and
       confirm no field visible to the target distinguishes them.
-- [ ] 2.3 Reject at load: an item with no candidate set, or with timestamps and no declared
+- [x] 2.3 Reject at load: an item with no candidate set, or with timestamps and no declared
       timezone. Both are spec requirements, both tested.
-- [ ] 2.4 Freeze with a manifest carrying `schema_version`, generator seed, per-item hashes, and the
+- [x] 2.4 Freeze with a manifest carrying `schema_version`, generator seed, per-item hashes, and the
       answerable/unanswerable split counts.
-- [ ] 2.5 Hold out a sequestered split not used while iterating scorers; key it with the
+- [x] 2.5 Hold out a sequestered split not used while iterating scorers; key it with the
       `flow_corpus.holdout` idioms rather than inventing a scheme.
 
 ## 3. Baseline target
 
-- [ ] 3.1 **[P]** Implement the `max-|Z|` baseline as a deterministic `TargetRunner`: rank
+- [x] 3.1 **[P]** Implement the `max-|Z|` baseline as a deterministic `TargetRunner`: rank
       candidates by largest absolute z-score over the item's telemetry. It produces a diagnosis, so
       it is a target — not a scorer.
-- [ ] 3.2 **[P]** Add a target-kind matrix row (floor M1, M2, M3, M6).
-- [ ] 3.3 Assert determinism: two runs over one item produce identical rankings; no clock, no RNG,
+- [x] 3.2 **[P]** Add a target-kind matrix row (floor M1, M2, M3, M6).
+- [x] 3.3 Assert determinism: two runs over one item produce identical rankings; no clock, no RNG,
       no network.
 
 ## 4. Scorers
@@ -45,44 +45,44 @@ Coverage floor: root `eval_harness` **96%** (`coverage-floors.yaml`).
       ~1.5–2× strict in this task family; an unlabelled number is not comparable to anything. — **prototype landed.**
 - [x] 4.3 **[P]** `rca_component_match` — top-1 against the confirmed cause; an answer outside the
       declared candidate set is recorded as such, distinguishably from a wrong in-set choice. — **prototype landed.**
-- [ ] 4.4 **[P]** `rca_onset_within_tolerance` — normalise both instants to one timezone before
+- [x] 4.4 **[P]** `rca_onset_within_tolerance` — normalise both instants to one timezone before
       comparing. Test the timezone-shifted case explicitly: a wall-clock match in the wrong zone
       must score as outside tolerance. Tolerance is a config field, not a literal.
-- [ ] 4.5 **[P]** `rca_abstention_correctness` — correct only when the agent declines on an
+- [x] 4.5 **[P]** `rca_abstention_correctness` — correct only when the agent declines on an
       unanswerable item; declining on an answerable item is incorrect.
-- [ ] 4.6 **[P]** `rca_false_accusation_rate` — counts a named cause on an unanswerable item.
+- [x] 4.6 **[P]** `rca_false_accusation_rate` — counts a named cause on an unanswerable item.
 - [x] 4.7 **[P]** On an unanswerable item, `rca_ac_at_k` reports "not applicable" (`passed=None`),
       not zero — the `state.py` precedent. — **prototype landed.**
-- [~] 4.8 **[P]** Split across `scorers/rca/{__init__,ranking,abstention}.py`; each file under
+- [x] 4.8 **[P]** Split across `scorers/rca/{__init__,ranking,abstention}.py`; each file under
       `MAX_FILE_LINES = 500`. — **`__init__` + `ranking` landed; `abstention.py` deferred with tasks 4.5–4.6.**
 
 ## 5. Matrix, surface and registry
 
-- [ ] 5.1 **[P]** Matrix rows for all five scorers across M1, M2, M3, M5, M6 — **25 cells** — plus
+- [x] 5.1 **[P]** Matrix rows for all five scorers across M1, M2, M3, M5, M6 — **25 cells** — plus
       the target row from 3.2. **Cells are not methods:** a class's dim set applies to every name in
       its `MATRIX_COMPONENTS` (`_matrix_coverage.py:645`), so one parametrized method covers a
       column; follow `TestTrajectoryScorersShared` (`tests/test_matrix_eval_tools.py:789`). Matrix
       classes must not inherit (`:609-618`).
-- [ ] 5.2 **[P]** Regenerate `docs/matrix-coverage.md`; freshness is gated.
-- [ ] 5.3 **[P]** Regenerate `tests/public_surface_baseline.json` (F-039 exact-equality) and
+- [x] 5.2 **[P]** Regenerate `docs/matrix-coverage.md`; freshness is gated.
+- [x] 5.3 **[P]** Regenerate `tests/public_surface_baseline.json` (F-039 exact-equality) and
       `tests/plugin_registry_baseline.json` (M7).
-- [ ] 5.4 Update the scorer and target registry tables in **both** `README.md` and
+- [x] 5.4 Update the scorer and target registry tables in **both** `README.md` and
       `src/eval_harness/README.md`.
 
 ## 6. Gating
 
-- [ ] 6.1 **[P]** Ship advisory rules only, in `config/`. Bounds are soak starting points, not spec
+- [x] 6.1 **[P]** Ship advisory rules only, in `config/`. Bounds are soak starting points, not spec
       values; the spec delta contains no numeric threshold.
-- [ ] 6.2 **[P]** Assert the baseline target is evaluated on the identical item set whenever an
+- [x] 6.2 **[P]** Assert the baseline target is evaluated on the identical item set whenever an
       agent is, and that both results are reported together.
 
 ## 7. Validation and index
 
-- [ ] 7.1 **[P]** Add `scripts/validations/F_0NN.py` pinning: an item with no declared timezone is
+- [x] 7.1 **[P]** Add `scripts/validations/F_0NN.py` pinning: an item with no declared timezone is
       rejected; a timezone-shifted onset scores outside tolerance; correct abstention on an
       unanswerable item scores correct; the baseline runs on the same corpus.
-- [ ] 7.2 Claim the F-ID in `features.yaml` with `verification` bullets mirroring the spec
+- [x] 7.2 Claim the F-ID in `features.yaml` with `verification` bullets mirroring the spec
       scenarios; set `implemented_in`.
 - [ ] 7.3 Add this change to "Current changes" in `openspec/README.md` as a **link target**.
-- [ ] 7.4 Run `./scripts/quality-gate.sh all` and `make check-all`; confirm the 96% floor.
+- [x] 7.4 Run `./scripts/quality-gate.sh all` and `make check-all`; confirm the 96% floor.
 - [ ] 7.5 Record the `spec-guardian` and `peer-reviewer` passes in `review.md`.

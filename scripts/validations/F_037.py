@@ -6,7 +6,8 @@ Asserts the 2026-07-03 branch-sweep remediation stays enforced:
        (its own .github/ copy is inert inside the monorepo). The workflow and
        the staging directory exist or vanish together: after extraction the
        deletion PR removes both, and this check inverts to "neither remains".
-    2. skills-ci type-checks and format-gates all four skills with pinned tools.
+    2. skills-ci type-checks and format-gates every per-skill job's generated gate
+       against the root mypy config, with pinned tools (delegated form, ADR 0021).
     3. The instrumented modules keep their loggers (silent-degrade regression
        guard for the paths the sweep made observable).
     4. The shared strict JSONL reader stays the single read path for
@@ -17,8 +18,9 @@ of it -- see ``_common.ci_enforces``. They pass whether the step is inline in th
 or delegated to that suite's generated ``scripts/quality-gate.sh`` (ADR 0021). Pinning the
 inline spelling made this gate fail the moment the eval-harness delegation landed (PR #64)
 even though tests/ were still fully type-checked; because the protected-path guard does not
-fire on ``.github/``-only PRs, that failure went undetected on ``main``. Check 2 is
-deliberately still inline-matched (no skill has a generated gate yet).
+fire on ``.github/``-only PRs, that failure went undetected on ``main``. Check 2 uses
+the same delegated form since the skills half of ADR 0021 landed (each skill's generated
+gate is asserted to carry the root-config mypy invocation and the ruff format check).
 
 Deterministic and offline: reads config/workflow/source files only, runs
 nothing.
@@ -32,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 
 # Ensure scripts/ and this directory are importable when run directly.
@@ -151,21 +154,30 @@ def main() -> int:
         ):
             _check(ci_enforces(wf, foundation_gate, inline=inline, in_gate=in_gate), label, errors)
 
-    # 2. Skills typing + formatting gates, pinned tools.
-    # Deliberately still matched inline: unlike the five packages, no skill has a generated
-    # scripts/quality-gate.sh, so there is no delegated form to assert against yet. When the
-    # skills half of ADR 0021 lands (it needs a gategen coverage-contract flag first, since
-    # skills ship no pyproject.toml and would otherwise generate a gate with no floor),
-    # these three checks must move to ci_enforces() the same way checks 1/4 did.
+    # 2. Skills typing + formatting gates, pinned tools. Delegated form (ADR 0021): each
+    # per-skill job runs that skill's generated ``scripts/quality-gate.sh`` through the
+    # composite action, so the guarantee is asserted on the gate contents -- the same
+    # ci_enforces() posture as checks 1/4. The skill set is DERIVED from the workflow's
+    # own working-directory entries, never restated here.
     skills_ci = _read(os.path.join(".github", "workflows", "skills-ci.yml"))
+    skill_dirs = sorted(set(re.findall(r"working-directory:\s*(skills/[\w-]+)", skills_ci)))
+    _check(bool(skill_dirs), "skills-ci declares per-skill working directories", errors)
+    for skill_dir in skill_dirs:
+        gate_rel = os.path.join(skill_dir, "scripts", "quality-gate.sh")
+        gate = _read(gate_rel) if os.path.exists(os.path.join(_ROOT, gate_rel)) else ""
+        _check(
+            'mypy --config-file "../../pyproject.toml"' in gate,
+            f"{skill_dir}'s generated gate type-checks against the root mypy config",
+            errors,
+        )
+        _check(
+            "ruff format --check" in gate,
+            f"{skill_dir}'s generated gate format-gates",
+            errors,
+        )
     _check(
-        skills_ci.count("mypy --config-file ../../pyproject.toml") >= 4,
-        "skills-ci type-checks all four skills against the root mypy config",
-        errors,
-    )
-    _check(
-        skills_ci.count("ruff format --check") >= 4,
-        "skills-ci format-gates all four skills",
+        skills_ci.count("uses: ./.github/actions/run-quality-gate") >= len(skill_dirs),
+        "skills-ci delegates every per-skill job to the generated gate (composite action)",
         errors,
     )
     _check(

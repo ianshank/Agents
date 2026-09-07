@@ -148,14 +148,19 @@ def _lint_commands(facts: GateFacts) -> list[str]:
 
 def _typecheck_commands(facts: GateFacts) -> list[str]:
     tool = '"$PYTHON" -m mypy' if facts.type_checker == "mypy" else "pyright"
+    config = ""
+    if facts.typecheck_config:
+        if facts.type_checker != "mypy":
+            raise ValueError("typecheck_config is only meaningful for mypy")
+        config = f" --config-file {_quoted((facts.typecheck_config,))}"
     if _typecheck_env_form(facts):
         # Single path keeps the 1.0.x env-overridable form (a documented debug affordance).
-        return [f'{tool} "$TYPECHECK_PATHS"']
+        return [f'{tool}{config} "$TYPECHECK_PATHS"']
     notice = _ignored_override_notice("TYPECHECK_PATHS")
     if facts.type_checker == "mypy":
         # One invocation per path is DELIBERATE for mypy: separate runs avoid
         # module-name collisions between roots (and the quoted env var can't hold a list).
-        return [notice, *(f"{tool} {_quoted((path,))}" for path in facts.typecheck_paths)]
+        return [notice, *(f"{tool}{config} {_quoted((path,))}" for path in facts.typecheck_paths)]
     # pyright has no such constraint and accepts many paths; one invocation avoids
     # paying its startup cost once per path.
     return [notice, f"{tool} {_quoted(facts.typecheck_paths)}"]
@@ -186,14 +191,23 @@ def _coverage_command(facts: GateFacts) -> list[str]:
     for exactly one source that is byte-identical to this general, repeat-the-flag form
     (joining one element is a no-op), so the dedicated form was dead weight, not a behavior
     difference. Collapsing to one path removes that now-pointless branch.
+
+    ``--cov-config`` comes from ``facts.coverage_config`` (default ``pyproject.toml``,
+    reproducing the 1.0.x literal). An empty value omits the flag for projects with no
+    pyproject (vendored skills); the COVERAGE_RCFILE guard above still unsets the env var,
+    so the evasion stays closed without the explicit flag.
     """
     cov = " ".join(f"--cov={_quoted((src,))}" for src in facts.coverage_source)
+    # Quoted like the sibling --cov= flag, not bare: _sh_escape alone protects a
+    # double-quoted context, so outside quotes a value carrying a space (reachable via
+    # --coverage-config) word-splits into two arguments and the gate silently mis-runs.
+    config = f" --cov-config={_quoted((facts.coverage_config,))}" if facts.coverage_config else ""
     return [
         _ignored_override_notice("COVERAGE_SOURCE"),
         _ignored_override_notice("COV_FAIL_UNDER"),
         *_pytest_addopts_guard(),
         *_coverage_rcfile_guard(),
-        f'"$PYTHON" -m pytest {cov} --cov-config=pyproject.toml --cov-branch --cov-report=term-missing --cov-fail-under={facts.cov_fail_under}',
+        f'"$PYTHON" -m pytest {cov}{config} --cov-branch --cov-report=term-missing --cov-fail-under={facts.cov_fail_under}',
     ]
 
 

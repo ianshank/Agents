@@ -136,4 +136,9 @@ def detect(root: Path | str) -> GateFacts:
         has_pytest_cov=_mentions(data, "pytest-cov"),
         coverage_source=cov_sources,
         cov_fail_under=cov_fail_under,
+        # --cov-config=pyproject.toml only exists where a pyproject does. A pyproject-less
+        # tree (vendored skills) omits the flag and lets coverage use its own default
+        # config resolution (e.g. a local .coveragerc); the COVERAGE_RCFILE guard still
+        # closes the env-var evasion either way.
+        coverage_config="pyproject.toml" if (root / "pyproject.toml").is_file() else "",
     )

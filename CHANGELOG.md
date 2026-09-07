@@ -6,6 +6,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — acting merge gate was armed-but-broken behind its flag
+
+The `gate` job in `calibrated-merge-gate.yml` decided on argparse defaults
+(`mech_pass=False`, `touches_protected=False`, `--domain` from a repo variable),
+so flipping `ENABLE_CALIBRATED_AUTOMERGE` would have REJECTed every PR regardless
+of store contents. The job is now wired to parity with shadow: read-only store
+pull, changed-files detection, regression-gate `mech_pass`, context composition
+via `scripts/merge_gate_context.py` (domain classification + protected-path
+feed), `--context` decision, and the decision audit log uploaded as an artifact.
+The enablement flag, the stricter `0 | 10) exit 0` exit map, and the no-push
+invariant are unchanged (F-035 pins); the auto-merge step remains a placeholder —
+the real `gh pr merge` seam needs `contents: write` and belongs to the dedicated
+human-authored activation change (ADR 0005 checklist).
+
+### Changed — ADR 0021 adoption completed (CI gate delegation)
+
+- `claude-foundation-ci.yml` delegates to `make -C claude-foundation check`; each
+  per-skill job in `skills-ci.yml` runs that skill's generated
+  `scripts/quality-gate.sh` through the `run-quality-gate` composite action.
+  Skills are not pip-installable, so the action invokes the gate script directly
+  (ADR 0021's direct-script allowance); no skill carries a Makefile.
+- `gen_gate.py` learned `--typechecker`/`--typecheck-config` (skills type-check
+  against the repo root's mypy config), `--coverage-source`/`--cov-fail-under`
+  (skills install pytest-cov in CI rather than declaring it), and
+  `--coverage-config` (derived from pyproject presence; explicit override remains).
+  Ignored flags never appear in a gate's embedded provenance line. The skill is
+  **1.3.0** (a new public flag; it had been left at 1.2.0).
+- `nightly-e2e.yml`'s invariant step now also runs the size-budget,
+  guard-reachability, coverage-floor, marketplace, and architecture-drift checks.
+
+#### Fixed from automated review of the same pull request
+
+- **`--cov-config=` was rendered unquoted** while the `--cov=` beside it was
+  quoted. `_sh_escape` protects a *double-quoted* context, so outside quotes a
+  value containing a space — reachable through the `--coverage-config` override
+  this branch adds — word-splits into two arguments and the gate measures under a
+  different rc file than the one it names. That is the word-splitting failure
+  AGENTS.md forbids for any supplied value. Now quoted through `_quoted`, like
+  its sibling flag. **This changes generated output by one character pair per
+  gate**, so all six committed `scripts/quality-gate.sh` are regenerated in this
+  commit and the earlier "renders byte-identically" claim above no longer holds
+  for `--cov-config`. Behaviour is unchanged for every existing value.
+- **The POSIX driver's step helpers discarded the real exit code**
+  (`run_py ... || true` then `rc=$?` reads the status of `true`), so every failing
+  step recorded PASS. Same fix and same regression guard as the POSIX-driver
+  branch: `now_ms` also measured whole seconds, and the syntax-check test gated on
+  `shutil.which("bash")` rather than the `_bash_works()` probe AGENTS.md prescribes.
+
+### Added — POSIX e2e driver and CI-restored matrix freshness
+
+- **`scripts/run_all_e2e.sh`** mirrors the PowerShell whole-repo driver: same five
+  tiers, same step inventory, same `artifacts/e2e-report/` layout, with the
+  anti-vacuous guards intact (pre-flight imports, JUnit `tests > 0`, missing-script
+  is FAIL not SKIP, 78/EX_CONFIG skip code). It falls back to the ambient
+  `python3` when no `.venv` exists so CI can run it. Step inventory drift between
+  the drivers fails `tests/test_e2e_driver_parity.py`.
+- **e2e-matrix freshness is back in CI** as a single-version `e2e-freshness` job
+  in `nightly-e2e.yml` (per-suite counts legitimately differ across Python
+  versions, so it is not a matrix leg). Two latent blockers are fixed to make
+  that possible: the `Duration (ms)` column is masked in the freshness comparison
+  (`VOLATILE_COLUMNS` in `tests/_e2e_matrix.py` — wall-clock duration can never
+  reproduce across machines, the same always-red defect class the Provenance
+  exemption covers), and the committed artifact is regenerated from the canonical
+  Linux environment (the previous render was Windows/py3.11 with a smaller suite).
+
+### Added — RCA evaluation matrix, synthetic scope (F-067, ADR 0046)
+
+- **Frozen synthetic corpus** at `corpora/rca/v1/` (96 generated items: 4
+  answerability classes × 3 difficulty strata, shape-identical negative controls,
+  keyed sequestered split). Difficulty is a gated measurement: the manifest records
+  the baseline's measured per-cell strict AC@1, and `gen_rca_corpus.py --check`
+  fails when a regeneration leaves the calibrated bands.
+- **`rca_maxz` baseline target** — a deterministic registered `TargetRunner`
+  ranking candidates by largest absolute z-score across the onset boundary, with
+  abstention below `z_floor`. A baseline is a target, not a scorer: it is graded
+  by the same five scorers on the identical item set.
+- **Three new scorers** completing the family: `rca_onset_within_tolerance`
+  (timezone-normalised; offset-free claims refused), `rca_abstention_correctness`,
+  `rca_false_accusation_rate`. Advisory-only gate rules in `config/rca_eval.yaml`.
+- Real-incident telemetry remains out of scope (CHARTER §4 invariant 7);
+  judge-backed reason scoring stays deferred behind calibration.
+
 ### Hardening — operational activation (merge gate, OpenSpec, branch protection)
 
 Engineering half of the VP strategic roadmap: make existing gates operable without
