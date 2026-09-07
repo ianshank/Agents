@@ -57,10 +57,12 @@ matrix-update: ## Regenerate docs/matrix-coverage.md from the live registry cens
 
 corpus-check: ## Verify committed corpora regenerate byte-identically
 	$(PYTHON) scripts/gen_testgen_corpus.py --check
+	$(PYTHON) scripts/gen_rca_corpus.py --check
 	$(PYTHON) scripts/gen_requirements_corpus.py --check
 
 corpus-write: ## Regenerate committed corpora from their generators
 	$(PYTHON) scripts/gen_testgen_corpus.py --write
+	$(PYTHON) scripts/gen_rca_corpus.py --write
 	$(PYTHON) scripts/gen_requirements_corpus.py --write
 
 .PHONY: e2e-matrix-check e2e-matrix-update invariants e2e-matrix

@@ -42,12 +42,22 @@ jobs:
           pip install -e "./flow-protocol[dev]"
           pip install -e "./flow-corpus[dev]"
           pip install -e "./behavioral-regression[dev]"
-          pip install -e ".[dev,langfuse,openai,parquet,autoevals,e2e-matrix]"
+          pip install -e ".[dev,langfuse,openai,parquet,autoevals,e2e-matrix,archguard]"
 
+      # Scheduled coverage for the structural guards that otherwise only run per-PR:
+      # a drift introduced by a merge sequence (two individually-green PRs) surfaces
+      # here within a day instead of at the next release. jsonschema (registry schema)
+      # and grimp (architecture drift) are in the install set above.
       - name: Invariant & architectural integrity check
         run: |
           python scripts/check_charter_invariants.py
           python scripts/check_charter_drift.py
+          python scripts/check_size_budget.py
+          python scripts/check_guard_reachability.py
+          python scripts/check_coverage_floors.py
+          python scripts/skill_marketplace.py validate
+          python skills/architecture-drift-guard/scripts/drift_check.py --manifest architecture.yaml
+          python skills/architecture-drift-guard/scripts/mermaid_gen.py --manifest architecture.yaml --check -o architecture.mmd
 
       - name: Full monorepo pytest suite
         run: |
@@ -57,22 +67,48 @@ jobs:
           pytest flow-corpus/tests/ -v --tb=short
           pytest flow-protocol/tests/ -v --tb=short
 
-      # The e2e-matrix freshness check is deliberately NOT run here.
-      #
-      # `tests/test_e2e_matrix.py --check` regenerates the committed artifact from a run
-      # report and diffs it. That report (artifacts/e2e-report/, gitignored) is produced
-      # only by scripts/run_all_e2e.ps1, which CI has never invoked -- so the step raised
-      # MatrixConfigError -> exit 2 on every scheduled run since this workflow landed,
-      # failing all three matrix legs after every other step had passed.
-      #
-      # A permanently-red scheduled job trains readers to ignore CI, so it is removed
-      # rather than left red or wrapped in an `if:` that could never be true (a step that
-      # looks like a gate but never executes is the same failure in a quieter form).
-      #
-      # What still covers this artifact on every PR: quality-gates.yml runs
-      # `pytest tests/test_e2e_matrix.py`, whose TestCoverageGrid reads the repo directly
-      # (no run report) and cross-checks every package's coverage floor against both its
-      # pyproject and its generated quality-gate.sh anchor. What is NOT covered is
-      # freshness of the rendered tables against a real run -- that stays a local-only
-      # check (`make e2e-matrix-check`) until a POSIX e2e driver exists. Tracked in
-      # NEXT_STEPS.md.
+  # Freshness of the committed e2e-matrix artifact against a REAL run. This is a
+  # separate single-version job, not a matrix leg: per-suite test counts and
+  # coverage percentages legitimately differ across Python versions, and the
+  # committed artifact is generated from one canonical environment (this one).
+  # The Duration (ms) column is masked in the comparison (tests/_e2e_matrix.py
+  # VOLATILE_COLUMNS) — wall-clock duration can never reproduce across machines.
+  e2e-freshness:
+    name: e2e-matrix freshness (offline driver)
+    runs-on: ubuntu-latest
+    env:
+      HYPOTHESIS_PROFILE: ci
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"  # the canonical generation environment
+          cache: "pip"
+
+      - name: Upgrade build tools
+        run: python -m pip install --upgrade pip "setuptools>=68" wheel
+
+      - name: Install monorepo dependencies
+        run: |
+          pip install -e "./agent-core[dev]"
+          pip install -e "./flow-protocol[dev]"
+          pip install -e "./flow-corpus[dev]"
+          pip install -e "./behavioral-regression[dev]"
+          pip install -e ".[dev,langfuse,openai,parquet,autoevals,e2e-matrix]"
+
+      - name: Run the POSIX e2e driver (offline tiers)
+        run: bash scripts/run_all_e2e.sh --tiers offline --hypothesis-profile ci
+
+      - name: e2e-matrix freshness check
+        run: python tests/test_e2e_matrix.py --check
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        if: always()
+        with:
+          name: e2e-report
+          path: artifacts/e2e-report/
+          if-no-files-found: ignore

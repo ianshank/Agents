@@ -1,10 +1,10 @@
 Metric,Value
 Declared steps,40
-Observed steps,30
-Not reached,10
-Status PASS,30
+Observed steps,31
+Not reached,9
+Status PASS,31
 Tier A,PASS 7
-Tier B,PASS 1
+Tier B,PASS 2
 Tier C,PASS 21
 Tier D,not exercised in this run
 Tier E,not exercised in this run

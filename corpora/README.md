@@ -7,6 +7,7 @@ carrying its schema version, generator seed, and a content hash per item.
 | Corpus | Generator | Loaded by |
 |---|---|---|
 | [`testgen/v1/`](testgen/v1/) | [`scripts/gen_testgen_corpus.py`](../scripts/gen_testgen_corpus.py) | [`config/testgen_eval.yaml`](../config/testgen_eval.yaml) via the `jsonl` dataset |
+| [`rca/v1/`](rca/v1/) | [`scripts/gen_rca_corpus.py`](../scripts/gen_rca_corpus.py) | [`config/rca_eval.yaml`](../config/rca_eval.yaml) via the `jsonl` dataset |
 | [`requirements/v1/`](requirements/v1/) | [`scripts/gen_requirements_corpus.py`](../scripts/gen_requirements_corpus.py) | [`config/requirements_eval.yaml`](../config/requirements_eval.yaml) via the `jsonl` dataset |
 
 ## What belongs here

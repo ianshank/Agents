@@ -32,10 +32,16 @@
     "llm-judge",
     "llm_judge",
     "policy_violation",
+    "rca-abstention-correctness",
     "rca-ac-at-k",
     "rca-component-match",
+    "rca-false-accusation-rate",
+    "rca-onset-within-tolerance",
+    "rca_abstention_correctness",
     "rca_ac_at_k",
     "rca_component_match",
+    "rca_false_accusation_rate",
+    "rca_onset_within_tolerance",
     "regex",
     "regex_match",
     "req-ac-recall",
@@ -91,6 +97,8 @@
     "model",
     "provenance-recorder",
     "provenance_recorder",
-    "python"
+    "python",
+    "rca-maxz",
+    "rca_maxz"
   ]
 }

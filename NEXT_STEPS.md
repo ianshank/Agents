@@ -9,6 +9,9 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **RCA evaluation matrix (F-067, ADR 0046)** — ranked diagnosis against a finite
+  candidate set, including correct abstention: frozen synthetic corpus at
+  `corpora/rca/v1/`, `rca_maxz` baseline target, five scorers, advisory-only gates.
 - [x] **Requirements-generation evaluation matrix (F-068, ADR 0047)** — deterministic
   synthetic evaluation of generated requirements against declared gold acceptance
   criteria and recorded retrieval evidence: `provenance_recorder` target wrapper,
@@ -40,11 +43,10 @@
     `.claude/hooks/session-start.sh` (the exact failure mode that produced
     misleading `regression_gate.py` output mid-session — a local `main` 9 commits
     behind `origin/main` — `git fetch origin main:main` fixed it, but nothing
-    detects it proactively); extending `nightly-e2e.yml`'s existing invariant-check
-    step to also run `check_size_budget.py`, `check_guard_reachability.py`, the
-    architecture-drift checks, and `skill_marketplace.py validate` (today only the
-    two charter checks run on a schedule; lint/mypy/coverage don't run nightly at
-    all).
+    detects it proactively). (The third deferred item — extending `nightly-e2e.yml`'s
+    invariant-check step with the size-budget, guard-reachability,
+    architecture-drift, and marketplace guards — has since shipped; lint/mypy/coverage
+    still do not run nightly.)
 - [x] **God-file decomposition: `engine.py` + `agent_core_adapter` (ADR 0036)** — split
   along existing seams, following the `store_sync/` package-split precedent (ADR 0019):
   `engine.py` (500 → 425 lines) delegates its two execution strategies to a new
@@ -416,6 +418,17 @@
   review: the root gate's `ruff check .` makes this job lint the whole repo (currently green); the
   py3.12 `htmlcov/` artifact was dropped (not produced by the shared gate). Both files are under
   protected `.github/**`, so the PR carries the `eval-change-approved` label gate.
+- [x] **CI gate delegation completed (ADR 0021 → Accepted)** — `claude-foundation-ci.yml`
+  delegates to `make -C claude-foundation check`, and every per-skill job in
+  `skills-ci.yml` runs that skill's newly generated `scripts/quality-gate.sh` via the
+  composite action (skills are not pip-installable, so the action invokes the gate
+  directly — no Makefiles; ADR 0021's direct-script allowance). `gen_gate.py` gained
+  `--typechecker`/`--typecheck-config` (skills type-check against the root mypy config),
+  `--coverage-source`/`--cov-fail-under` (skills install pytest-cov in CI rather than
+  declaring it), and `--coverage-config` (derived: `pyproject.toml` where one exists,
+  omitted otherwise); existing package gates render byte-identically. `nightly-e2e.yml`'s
+  invariant step now also runs the size-budget, guard-reachability, coverage-floor,
+  marketplace, and architecture-drift checks (previously charter-only on schedule).
 - [x] **E2E Windows cross-platform hardening (21/21 offline green)** — fixed
   three classes of failure on the Windows e2e path: (1) a pre-existing PS 5.1
   string-concatenation bug in the `--junitxml` argument that silently zeroed
@@ -686,19 +699,16 @@
   `pygments>=2.20.0`, `requests>=2.33.0` per Snyk scan results.
 - [ ] **Enable Snyk Code (SAST)** — Upgrade the Snyk org plan to enable static
   analysis of Python source code.
-- [ ] **POSIX e2e driver, and restore e2e-matrix freshness in CI** — the whole-repo
-  e2e orchestrator is `scripts/run_all_e2e.ps1` (PowerShell), which CI has never
-  invoked. Because it never runs, `artifacts/e2e-report/` is never produced, so
-  `python tests/test_e2e_matrix.py --check` raised `MatrixConfigError` -> exit 2 on
-  every scheduled `nightly-e2e` run from the workflow landing until 2026-08-23, when
-  the step was removed (all three matrix legs were red after every other step passed).
-  Freshness of `docs/e2e-matrix/` against a real run is therefore **verified locally
-  only** (`make e2e-matrix-check`) — the one CI gap this leaves. Note the artifact's
-  *content* is still cross-checked on every PR: `quality-gates.yml` runs
-  `pytest tests/test_e2e_matrix.py`, and `TestCoverageGrid` derives every package's
-  coverage floor from the repo and asserts the `pyproject` and generated
-  `quality-gate.sh` anchors agree. Restoring the CI freshness check requires a driver
-  that runs on `ubuntu-latest`; until then, do not re-add a step that cannot pass.
+- [x] **POSIX e2e driver, and restore e2e-matrix freshness in CI** — shipped:
+  `scripts/run_all_e2e.sh` mirrors the PowerShell driver (same tiers, step
+  inventory, and report layout; `tests/test_e2e_driver_parity.py` fails on drift),
+  and `nightly-e2e.yml` gained a single-version `e2e-freshness` job that runs it
+  and then `python tests/test_e2e_matrix.py --check`. Two latent blockers had to
+  be fixed for the check to be runnable in CI at all: the `Duration (ms)` column
+  sat inside the freshness comparison (no rerun can reproduce wall-clock values —
+  it is now masked, alongside the Provenance exemption), and the committed
+  artifact's canonical environment was a stale Windows/py3.11 render (regenerated
+  from the Linux driver).
 - [x] **BedrockJudge Tests** — Add mocked boto3 tests (similar to OpenAIJudge
   pattern) to close the last coverage gap.
 - [ ] **Decide the root package's typing policy, then raise it to `mypy --strict`** —

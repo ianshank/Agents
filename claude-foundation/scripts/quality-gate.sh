@@ -40,7 +40,7 @@ do_coverage() {
   unset PYTEST_ADDOPTS
   if [ -n "${COVERAGE_RCFILE:-}" ]; then echo "quality-gate: COVERAGE_RCFILE is ignored; the coverage config is fixed at generation time" >&2; fi
   unset COVERAGE_RCFILE
-  "$PYTHON" -m pytest --cov="foundation_tools" --cov="hooks" --cov-config=pyproject.toml --cov-branch --cov-report=term-missing --cov-fail-under=85
+  "$PYTHON" -m pytest --cov="foundation_tools" --cov="hooks" --cov-config="pyproject.toml" --cov-branch --cov-report=term-missing --cov-fail-under=85
 }
 
 do_all() {
