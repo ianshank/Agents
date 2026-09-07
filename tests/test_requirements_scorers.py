@@ -232,7 +232,7 @@ class TestTraceabilityClosure:
         """Otherwise ``covers: ["anything"]`` scores this metric without doing the work —
         and the two grounding scorers would disagree about what a valid link is, since
         ``req_ac_recall`` has always counted only criteria in the gold set."""
-        reqs = [
+        reqs: list[dict[str, Any]] = [
             {"id": "r1", "covers": ["ac-not-declared"], "test_links": ["test_persists"]},
             {"id": "r2", "covers": [None], "test_links": ["test_persists"]},
             {"id": "r3", "covers": ["ac-not-declared", "ac-1"], "test_links": ["test_persists"]},
