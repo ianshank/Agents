@@ -42,16 +42,19 @@ def test_parse_owner_repo_from_env_and_arg() -> None:
     )
     assert chk.parse_owner_repo("acme/widgets", cfg, {}) == ("acme", "widgets")
     assert chk.parse_owner_repo("nope", cfg, {}) is None
+    assert chk.parse_owner_repo("acme/widgets/nested", cfg, {}) is None
+    assert chk.parse_owner_repo("/widgets", cfg, {}) is None
 
 
 def test_contexts_from_protection_payload_unions_both_shapes() -> None:
     payload = {
         "required_status_checks": {
             "contexts": ["a"],
-            "checks": [{"context": "b", "app_id": 1}, {"context": "a"}],
+            "checks": [{"context": "b", "app_id": 1}, {"context": "a"}, "skip", {}],
         }
     }
     assert chk.contexts_from_protection_payload(payload) == ("a", "b")
+    assert chk.contexts_from_protection_payload({"required_status_checks": ["not-a-mapping"]}) == ()
 
 
 def test_probe_404_is_unprotected_not_an_error() -> None:
@@ -351,3 +354,70 @@ def test_probe_oserror_is_an_error() -> None:
     protected, live, err = chk.probe_protection("acme", "widgets", runner=runner)
     assert protected is None and live is None
     assert err is not None and "gh missing" in err
+
+
+def test_probe_success_reads_unioned_contexts() -> None:
+    import json
+
+    body = json.dumps(
+        {
+            "required_status_checks": {
+                "contexts": ["a"],
+                "checks": [{"context": "b"}],
+            }
+        }
+    )
+
+    def runner(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 0, stdout=body, stderr="")
+
+    protected, live, err = chk.probe_protection("acme", "widgets", runner=runner)
+    assert protected is True and live == ("a", "b") and err is None
+
+
+def test_probe_non_404_failure_is_an_error() -> None:
+    def runner(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 1, stdout="", stderr="")
+
+    protected, live, err = chk.probe_protection("acme", "widgets", runner=runner)
+    assert protected is None and live is None
+    assert err is not None and "exited" in err
+
+
+def test_missing_extra_workflow_through_main_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
+    root = Path(__file__).resolve().parent.parent
+    rc = chk.main(["--repo-root", str(root), "--extra-workflow", "nope.yml"])
+    assert rc == 2
+    assert "check-branch-protection error:" in capsys.readouterr().err
+
+
+def test_emit_lists_live_missing_and_extra(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    root = Path(__file__).resolve().parent.parent
+    names = enablement_required_contexts(repo=root)
+    monkeypatch.setattr(
+        chk,
+        "probe_protection",
+        lambda *a, **k: (True, (names[0], "not-in-enablement-set"), None),
+    )
+    rc = chk.main(["--repo-root", str(root), "--probe", "--repository", "acme/widgets"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "live_required_checks=" in out
+    assert "missing:" in out
+    assert "extra: not-in-enablement-set" in out
+    assert "ok=False" in out
+
+
+def test_unprotected_null_live_lists_every_expected_as_missing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Defensive probe shape: unprotected with no context list still fills missing=."""
+    root = Path(__file__).resolve().parent.parent
+    monkeypatch.setattr(chk, "probe_protection", lambda *a, **k: (False, None, None))
+    rc = chk.main(["--repo-root", str(root), "--probe", "--repository", "acme/widgets"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "protected=False" in out
+    assert "live_required_checks=" not in out
+    assert "missing:" in out
+    assert "ok=False" in out
