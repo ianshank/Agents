@@ -1425,7 +1425,7 @@ features:
       - "every shipped gate rule for this capability is advisory (report_only); a sub-floor diversity score escalates through the advisory channel rather than failing the run (scripts/validations/F_068.py)"
       - "20 matrix cells across the scorer floor M1/M2/M3/M5/M6 plus the provenance_recorder target row (M1/M2/M3/M6), and an M8 pipeline running the wrapper under all four scorers with ledger invocation asserted (tests/test_matrix_requirements_scorers.py, tests/test_matrix_eval_tools.py::test_m8_requirements_pipeline)"
     validation_command: "python scripts/validations/F_068.py"
-    implemented_in: "PENDING"
+    implemented_in: "ccdac711afdfa90dbd14a4bdee1616ac68c9010e"
     depends_on: ["F-062", "F-063"]
     notes: >-
       ADR 0047 records the revision-scoped-export decision, the
@@ -1434,6 +1434,7 @@ features:
       ahead of calibration. Live fetchers (Drive Revision.exportLinks, Context7)
       are SDK-optional adapters behind the EvidenceStore protocol; the offline
       path and synthetic corpus use the in-memory store. implemented_in is
-      "PENDING" at land per the ledger convention; a post-merge chore stamps the
-      SHA (F-064). public_surface_baseline.json is unchanged: the scorers
-      subpackage declares no __all__.
+      stamped to this branch's landing commit so F-064's ancestry check
+      accepts it from HEAD (the same in-flight stamp F-066 used).
+      public_surface_baseline.json is unchanged: the scorers subpackage
+      declares no __all__.
