@@ -49,7 +49,8 @@ from eval_harness.plugins import DATASETS, JUDGES, SCORERS, SINKS, TARGETS, boot
 from tests import _trajectory_helpers as traj
 from tests._m8_probe import ExecutionLedger, probe
 from tests._matrix_coverage import PipelineConfig, format_vacuous, pipeline_vacuous
-from tests.test_matrix_rca_scorers import RCA_RANKING_SCORERS
+from tests.test_matrix_rca_scorers import RCA_ABSTENTION_SCORERS, RCA_RANKING_SCORERS
+from tests.test_matrix_requirements_scorers import REQUIREMENTS_SCORERS
 from tests.test_matrix_testgen_scorers import TESTGEN_SCORERS
 
 bootstrap()
@@ -1996,6 +1997,134 @@ PIPELINES: dict[str, PipelineConfig] = {
         ],
         "sinks": [{"type": "console"}],
     },
+    # The requirements stack: the provenance-recorder wrapper (echo inner) over a
+    # declared evidence source, graded by all four scorers. The echo inner returns the
+    # item's `generated` payload — the shape a real generator would produce.
+    "requirements_full": {
+        "schema_version": "1.0",
+        "run": {"name": "requirements-full-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "req-1",
+                        "inputs": {
+                            "epic": "harden the billing workflow",
+                            "declared_tests": ["test_billing_persists"],
+                            "evidence_sources": [
+                                {
+                                    "source_type": "drive_doc",
+                                    "source_id": "doc-1",
+                                    "reference": {
+                                        "kind": "revision_export_link",
+                                        "revision_id": "r1",
+                                        "mime": "text/plain",
+                                    },
+                                }
+                            ],
+                            "generated": {
+                                "requirements": [
+                                    {
+                                        "id": "r1",
+                                        "text": "the system persists billing submissions",
+                                        "covers": ["ac-1", "ac-2"],
+                                        "evidence_links": ["doc-1"],
+                                        "test_links": ["test_billing_persists"],
+                                    },
+                                    {
+                                        "id": "r2",
+                                        "text": "quota overuse throttles with 429",
+                                        "covers": ["ac-2"],
+                                        "evidence_links": ["doc-1"],
+                                        "test_links": ["test_billing_persists"],
+                                    },
+                                ],
+                                "generation_temperature": 0.7,
+                            },
+                        },
+                        "expected": ["ac-1", "ac-2"],
+                        "metadata": {
+                            "gold_ac": [{"id": "ac-1", "text": "persists"}, {"id": "ac-2", "text": "rejects"}]
+                        },
+                    }
+                ]
+            },
+        },
+        "target": {
+            "type": "provenance_recorder",
+            "params": {
+                "inner_spec": {"type": "echo", "params": {"output_key": "generated"}},
+                "store_contents": {"doc-1": "billing persists submissions"},
+            },
+        },
+        "scorers": [
+            {"type": "req_ac_recall"},
+            {"type": "req_scope_hallucination"},
+            {"type": "req_traceability_closure"},
+            {"type": "req_semantic_diversity"},
+        ],
+        "sinks": [{"type": "console"}],
+    },
+    # The full RCA stack: the max-|Z| baseline target over synthetic telemetry, graded by
+    # all five scorers (the abstention family needs an unanswerable item to exercise the
+    # decline path, so the dataset carries one of each).
+    "rca_full": {
+        "schema_version": "1.0",
+        "run": {"name": "rca-full-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "rca-answerable",
+                        "inputs": {
+                            "candidates": ["svc-a", "svc-b"],
+                            "onset": "2026-03-04T11:42:00+08:00",
+                            "timezone": "UTC+08:00",
+                            "telemetry": {
+                                "metrics": {
+                                    "svc-a": {
+                                        "latency_ms": {"pre": [100.0, 101.0, 99.0], "post": [400.0, 401.0, 399.0]}
+                                    },
+                                    "svc-b": {
+                                        "latency_ms": {"pre": [100.0, 101.0, 99.0], "post": [100.0, 101.0, 99.0]}
+                                    },
+                                },
+                                "events": [],
+                            },
+                        },
+                        "expected": ["svc-a"],
+                    },
+                    {
+                        "id": "rca-unanswerable",
+                        "inputs": {
+                            "candidates": ["svc-a", "svc-b"],
+                            "onset": "2026-03-04T11:42:00+08:00",
+                            "timezone": "UTC+08:00",
+                            "telemetry": {
+                                "metrics": {
+                                    "svc-a": {"latency_ms": {"pre": [100.0, 100.0], "post": [100.0, 100.0]}},
+                                    "svc-b": {"latency_ms": {"pre": [100.0, 100.0], "post": [100.0, 100.0]}},
+                                },
+                                "events": [],
+                            },
+                        },
+                        "expected": [],
+                    },
+                ]
+            },
+        },
+        "target": {"type": "rca_maxz"},
+        "scorers": [
+            {"type": "rca_ac_at_k"},
+            {"type": "rca_component_match"},
+            {"type": "rca_onset_within_tolerance"},
+            {"type": "rca_abstention_correctness"},
+            {"type": "rca_false_accusation_rate"},
+        ],
+        "sinks": [{"type": "console"}],
+    },
     "weighted": {
         "schema_version": "1.0",
         "run": {"name": "composite-test", "seed": 1},
@@ -2565,6 +2694,44 @@ class TestM8Composability:
         for component in RCA_RANKING_SCORERS:
             assert ledger.invoked("scorer", component), component
         assert ledger.invoked("target", "echo")
+
+    def test_m8_requirements_pipeline(self) -> None:
+        """The provenance-recorder wrapper graded by all four requirements scorers.
+
+        The ledger must show the wrapper target AND every scorer invoked — a pipeline
+        that declares the components but never runs them is the vacuous-credit failure
+        M8 exists to catch. The verdicts are asserted too: full recall, no unsupported
+        requirement, a closed chain, and a temperature-carrying diversity score.
+        """
+        _, result, _, ledger = self._run("requirements_full")
+        assert result.aggregate["req_ac_recall"].mean == 1.0
+        assert result.aggregate["req_scope_hallucination"].mean == 0.0
+        assert result.aggregate["req_traceability_closure"].mean == 1.0
+        assert result.aggregate["req_semantic_diversity"].mean > 0.0
+        for component in REQUIREMENTS_SCORERS:
+            assert ledger.invoked("scorer", component), component
+        assert ledger.invoked("target", "provenance_recorder")
+
+    def test_m8_rca_full_pipeline(self) -> None:
+        """The max-|Z| baseline target graded by all five RCA scorers.
+
+        The ledger must show the target AND every scorer invoked — a pipeline that
+        declares the components but never runs them is the vacuous-credit failure M8
+        exists to catch. The verdicts are asserted too: the answerable item's spike is
+        diagnosed (AC@1 = 1.0), and the unanswerable item is declined cleanly.
+        """
+        _, result, _, ledger = self._run("rca_full")
+        # pass_rate excludes the unanswerable item's not-applicable verdict; the mean
+        # includes its 0.0, so 0.5 over one answerable hit + one N/A is the honest mixed
+        # corpus number (documented ScoreResult semantics, not a scorer defect).
+        assert result.aggregate["rca_ac_at_k"].pass_rate == 1.0
+        assert result.aggregate["rca_ac_at_k"].mean == 0.5
+        assert result.aggregate["rca_component_match"].pass_rate == 1.0
+        assert result.aggregate["rca_abstention_correctness"].mean == 1.0
+        assert result.aggregate["rca_false_accusation_rate"].mean == 0.0
+        for component in (*RCA_RANKING_SCORERS, *RCA_ABSTENTION_SCORERS):
+            assert ledger.invoked("scorer", component), component
+        assert ledger.invoked("target", "rca_maxz")
 
     def test_m8_pipeline_with_composite_scorer(self) -> None:
         """Composite scorer composes children inside the engine pipeline."""

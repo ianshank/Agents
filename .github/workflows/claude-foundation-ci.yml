@@ -36,9 +36,6 @@ jobs:
     name: claude-foundation py${{ matrix.python-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: claude-foundation
     strategy:
       fail-fast: false
       matrix:
@@ -47,16 +44,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      # Delegate to the generated package gate so CI runs the exact same steps as
+      # local `make -C claude-foundation check` (ADR 0021). The gate's lint scope is
+      # `.` (a superset of the old inline `tools tests hooks`) and its do_extra runs
+      # foundation_tools validate + scan.
+      - uses: ./.github/actions/run-quality-gate
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install --upgrade pip "setuptools>=68"
-      - run: pip install -e ".[dev]"
-      - run: ruff check tools tests hooks
-      - run: ruff format --check tools tests hooks
-      - run: mypy tools
-      - run: mypy hooks
-      - run: mypy tests
-      - run: python -m foundation_tools.validate --root .
-      - run: python -m foundation_tools.scan --root .
-      - run: python -m pytest --cov --cov-report=term-missing
+          working-directory: claude-foundation
+          install: pip install -e ".[dev]"
+          check: make check

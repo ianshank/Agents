@@ -63,3 +63,5 @@ changes course is a *new* ADR that supersedes the old one, not an edit.
 | [0043](0043-testgen-evaluation-seam.md) | Test-generation evaluation: the target executes in a subprocess sandbox, the scorers read |
 | [0044](0044-root-typing-policy.md) | Root-package typing policy: strict under the CI install profile, per-module flag bundle |
 | [0045](0045-testgen-sandbox-boundary.md) | Testgen sandbox boundary: scrubbed child env + POSIX rlimits now, OS isolation deferred |
+| [0046](0046-rca-eval-matrix.md) | RCA evaluation matrix: triplet shape, ranked scoring, baseline-as-target |
+| [0047](0047-requirements-eval-matrix.md) | Requirements-generation evaluation: revision-scoped provenance, unpinnable sources, offline-lexical diversity |

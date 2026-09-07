@@ -3,7 +3,7 @@ name: quality-gate
 description: Generate a deterministic quality-gate shell script (scripts/quality-gate.sh) that runs lint, type-check, tests and a coverage threshold for a Python project, using bash strict mode. Use this whenever the user wants a single command that runs all checks, a CI-and-local quality gate, a pre-merge or pre-commit check script, to enforce a coverage threshold, or to stop lint/test commands drifting between the Makefile and CI. Detects ruff, mypy/pyright, pytest and coverage config and bakes them into one ShellCheck-clean script that CI and `make check` both call.
 validator_version: '2.0'
 compatibility: python>=3.10 (tomli on 3.10)
-version: 1.2.0
+version: 1.3.0
 ---
 
 # quality-gate — gate-script writer
