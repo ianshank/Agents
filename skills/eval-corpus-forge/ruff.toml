@@ -1,0 +1,6 @@
+# Inherit the repo-root ruff configuration so the skill lints by the same rules.
+# The vendored scripts/validate_skill.py is intentionally a byte-for-byte copy of
+# the repo-root canonical script (pinned by the skill-script drift guard), so it
+# is excluded from linting here — its style is owned by the canonical copy.
+extend = "../../pyproject.toml"
+extend-exclude = ["scripts/validate_skill.py"]

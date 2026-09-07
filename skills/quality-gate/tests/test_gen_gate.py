@@ -148,6 +148,119 @@ def test_lint_flag_ignored_without_ruff(tmp_path, caplog) -> None:
     assert "--lint-path" not in body
 
 
+# ------------------------------------------- skill support: forced checker + config
+def _skill_tree(root: Path) -> None:
+    """A vendored-skill-shaped tree: ruff.toml + tests/, no pyproject."""
+    (root / "tests").mkdir(parents=True)
+    (root / "ruff.toml").write_text('extend = "../../pyproject.toml"\n', encoding="utf-8")
+    (root / "tests" / "test_ok.py").write_text("def test_ok() -> None:\n    assert True\n", encoding="utf-8")
+
+
+def test_forced_mypy_with_config_file_renders_and_records_provenance(tmp_path) -> None:
+    """Skills ship no config of their own: the flag pair must produce the CI form."""
+    _skill_tree(tmp_path)
+    argv = [
+        "--root",
+        str(tmp_path),
+        "--typechecker",
+        "mypy",
+        "--typecheck-config",
+        "../../pyproject.toml",
+        "--typecheck-path",
+        "scripts/run.py",
+    ]
+    assert gen_gate.main(argv) == 0
+    body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
+    # Single path keeps the env-overridable form; the config flag still applies.
+    assert '"$PYTHON" -m mypy --config-file "../../pyproject.toml" "$TYPECHECK_PATHS"' in body
+    assert 'TYPECHECK_PATHS="${TYPECHECK_PATHS:-scripts/run.py}"' in body
+    assert "--typechecker mypy" in body and "--typecheck-config ../../pyproject.toml" in body
+
+
+def test_typecheck_config_applies_per_path_in_multi_path_form(tmp_path) -> None:
+    _skill_tree(tmp_path)
+    argv = [
+        "--root",
+        str(tmp_path),
+        "--typechecker",
+        "mypy",
+        "--typecheck-config",
+        "../../pyproject.toml",
+        "--typecheck-path",
+        "scripts/forge",
+        "--typecheck-path",
+        "scripts/run.py",
+    ]
+    assert gen_gate.main(argv) == 0
+    body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
+    assert '"$PYTHON" -m mypy --config-file "../../pyproject.toml" "scripts/forge"' in body
+    assert '"$PYTHON" -m mypy --config-file "../../pyproject.toml" "scripts/run.py"' in body
+
+
+def test_typecheck_config_ignored_for_pyright(tmp_path, caplog) -> None:
+    _skill_tree(tmp_path)
+    with caplog.at_level(logging.WARNING, logger="gategen"):
+        gen_gate.main(["--root", str(tmp_path), "--typechecker", "pyright", "--typecheck-config", "pyrightconfig.json"])
+    assert any("ignoring --typecheck-config" in r.message for r in caplog.records)
+    body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
+    assert "--config-file" not in body
+    assert "--typecheck-config" not in body  # ignored flags never appear in provenance
+
+
+def test_coverage_source_forces_a_coverage_step_without_pyproject(tmp_path) -> None:
+    """Skills install pytest-cov in CI rather than declaring it; the flag supplies the fact."""
+    _skill_tree(tmp_path)
+    argv = [
+        "--root",
+        str(tmp_path),
+        "--coverage-source",
+        "run",
+        "--cov-fail-under",
+        "95",
+        "--coverage-config",
+        "",
+    ]
+    assert gen_gate.main(argv) == 0
+    body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
+    assert '"$PYTHON" -m pytest --cov="run" --cov-branch' in body
+    assert "--cov-fail-under=95" in body
+    assert "--cov-config" not in body  # empty value omits the flag (no pyproject here)
+    assert "--coverage-source run --cov-fail-under 95 --coverage-config " in body
+
+
+def test_cov_fail_under_ignored_without_coverage_source(tmp_path, caplog) -> None:
+    _skill_tree(tmp_path)
+    with caplog.at_level(logging.WARNING, logger="gategen"):
+        gen_gate.main(["--root", str(tmp_path), "--cov-fail-under", "95"])
+    assert any("ignoring --cov-fail-under" in r.message for r in caplog.records)
+    body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
+    assert "do_coverage" not in body
+    assert "--cov-fail-under" not in body
+
+
+def test_default_coverage_config_stays_pyproject(tmp_path) -> None:
+    """No new flag -> the 1.1.x default value, now rendered quoted (see below)."""
+    _project(tmp_path)
+    assert gen_gate.main(["--root", str(tmp_path)]) == 0
+    body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
+    assert '--cov-config="pyproject.toml"' in body
+
+
+def test_coverage_config_is_quoted_so_a_space_cannot_split_the_argument(tmp_path) -> None:
+    """A bare --cov-config= word-splits; the sibling --cov= was quoted all along.
+
+    ``_sh_escape`` protects a double-quoted context only, so outside quotes a value
+    with a space became two arguments and pytest read a different rc file than the
+    gate named — the silent-mis-run this repo forbids for any supplied value.
+    """
+    _project(tmp_path)
+    argv = ["--root", str(tmp_path), "--coverage-config", "cfg dir/.coveragerc"]
+    assert gen_gate.main(argv) == 0
+    body = (tmp_path / "scripts" / "quality-gate.sh").read_text(encoding="utf-8")
+    assert '--cov-config="cfg dir/.coveragerc"' in body
+    assert "--cov-config=cfg dir" not in body
+
+
 # ------------------------------------------- 1.1.0: hand-extension marker seam
 def _extend_below_marker(out, extra: str) -> None:
     """Insert hand content where the seam comment directs: after the marker, BEFORE the

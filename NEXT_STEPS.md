@@ -33,11 +33,10 @@
     `.claude/hooks/session-start.sh` (the exact failure mode that produced
     misleading `regression_gate.py` output mid-session — a local `main` 9 commits
     behind `origin/main` — `git fetch origin main:main` fixed it, but nothing
-    detects it proactively); extending `nightly-e2e.yml`'s existing invariant-check
-    step to also run `check_size_budget.py`, `check_guard_reachability.py`, the
-    architecture-drift checks, and `skill_marketplace.py validate` (today only the
-    two charter checks run on a schedule; lint/mypy/coverage don't run nightly at
-    all).
+    detects it proactively). (The third deferred item — extending `nightly-e2e.yml`'s
+    invariant-check step with the size-budget, guard-reachability,
+    architecture-drift, and marketplace guards — has since shipped; lint/mypy/coverage
+    still do not run nightly.)
 - [x] **God-file decomposition: `engine.py` + `agent_core_adapter` (ADR 0036)** — split
   along existing seams, following the `store_sync/` package-split precedent (ADR 0019):
   `engine.py` (500 → 425 lines) delegates its two execution strategies to a new
@@ -409,6 +408,17 @@
   review: the root gate's `ruff check .` makes this job lint the whole repo (currently green); the
   py3.12 `htmlcov/` artifact was dropped (not produced by the shared gate). Both files are under
   protected `.github/**`, so the PR carries the `eval-change-approved` label gate.
+- [x] **CI gate delegation completed (ADR 0021 → Accepted)** — `claude-foundation-ci.yml`
+  delegates to `make -C claude-foundation check`, and every per-skill job in
+  `skills-ci.yml` runs that skill's newly generated `scripts/quality-gate.sh` via the
+  composite action (skills are not pip-installable, so the action invokes the gate
+  directly — no Makefiles; ADR 0021's direct-script allowance). `gen_gate.py` gained
+  `--typechecker`/`--typecheck-config` (skills type-check against the root mypy config),
+  `--coverage-source`/`--cov-fail-under` (skills install pytest-cov in CI rather than
+  declaring it), and `--coverage-config` (derived: `pyproject.toml` where one exists,
+  omitted otherwise); existing package gates render byte-identically. `nightly-e2e.yml`'s
+  invariant step now also runs the size-budget, guard-reachability, coverage-floor,
+  marketplace, and architecture-drift checks (previously charter-only on schedule).
 - [x] **E2E Windows cross-platform hardening (21/21 offline green)** — fixed
   three classes of failure on the Windows e2e path: (1) a pre-existing PS 5.1
   string-concatenation bug in the `--junitxml` argument that silently zeroed
