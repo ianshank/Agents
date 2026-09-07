@@ -37,6 +37,27 @@ human-authored activation change (ADR 0005 checklist).
   exemption covers), and the committed artifact is regenerated from the canonical
   Linux environment (the previous render was Windows/py3.11 with a smaller suite).
 
+#### Fixed from automated review of the same pull request
+
+- **Every failing step reported PASS.** `invoke_pytest_step` and `invoke_cmd_step`
+  ran `run_py ... || true` and then read `rc=$?`, which is the status of `true`,
+  so `rc` was always `0`. `invoke_cmd_step` then matched its `0`-is-a-pass branch
+  unconditionally (no failure or skip code could ever be seen) and
+  `invoke_pytest_step` reported PASS for any run that produced a JUnit file at
+  all, including one whose tests failed. `run_py` itself already used the correct
+  `|| rc=$?` form 20 lines above. `test_step_helpers_capture_the_real_exit_code`
+  now derives every `run_py` call site (joining backslash continuations) and
+  fails if any drops the code.
+- **`now_ms` reported whole seconds.** `date +%s000` appends three zeros rather
+  than measuring milliseconds, so every sub-second step showed `0` and the rest
+  showed multiples of `1000`. Now uses `EPOCHREALTIME` (bash ≥ 5, subprocess-free)
+  and falls back to whole seconds where it is unavailable — `date +%s%3N` is
+  GNU-only and macOS ships neither.
+- **`test_bash_driver_is_syntax_clean` gated on `shutil.which("bash")`**, which on
+  Windows resolves the WSL shim: it answers `bash -c` but cannot open a native
+  path, turning a skip into a false failure. Replaced with the `_bash_works()`
+  temp-script probe that AGENTS.md prescribes and the skill suites already use.
+
 ### Hardening — operational activation (merge gate, OpenSpec, branch protection)
 
 Engineering half of the VP strategic roadmap: make existing gates operable without
