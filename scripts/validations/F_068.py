@@ -100,9 +100,10 @@ def _check_corpus_drift_is_detected_end_to_end(errors: list[str]) -> None:
     records produced the way a run produces them, because a hand-built record and a
     hand-built store can demonstrate the mechanism while the shipped corpus exercises
     none of it — which is exactly what had happened."""
+    from gen_requirements_corpus import build_eval_records, build_items, build_store
+
     from eval_harness.core.types import REQUIREMENTS_EVIDENCE_KEY, EvalItem
     from eval_harness.targets.provenance import MappingEvidenceStore, ProvenanceRecorderTarget, verify_provenance
-    from gen_requirements_corpus import build_eval_records, build_items, build_store
 
     items = build_items()
     capture = build_store(items)
@@ -222,8 +223,7 @@ def _check_scorer_semantics(errors: list[str]) -> None:
     )
     contradiction = _score("req_scope_hallucination", picked, disputed)
     _check(
-        getattr(contradiction, "passed", True) is False
-        and contradiction.metadata["contradiction_citations"] == ["r1"],
+        getattr(contradiction, "passed", True) is False and contradiction.metadata["contradiction_citations"] == ["r1"],
         "a requirement asserting one side of a contradiction is reported, not scored as cleanly supported",
         errors,
     )

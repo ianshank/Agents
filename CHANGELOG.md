@@ -148,10 +148,13 @@ network.
 - **Frozen synthetic corpus** at `corpora/requirements/v1/` (25 epics, authored
   gold AC sets, contradictory / stale / mutated negative controls). Regenerated
   by `scripts/gen_requirements_corpus.py`; `--check` gates drift. The generator
-  also emits `eval/store.json` (the offline evidence store, serving the bytes each
-  source *resolves to* — mutated bytes for a mutated control) and a scripted,
-  deliberately imperfect `generated` stand-in per record, so the shipped journey
-  scores something without a model call. The stand-in describes itself, never a
+  emits `eval/train.jsonl` (what the shipped config loads) and `eval/holdout.jsonl`
+  (sequestered; a separate file so iterating on scorers cannot touch it by default),
+  plus `eval/store.json` (captured bytes, so an ordinary run verifies clean) and
+  `eval/store.drifted.json` (post-capture edits; re-verifying the same records
+  against it is what proves `verify_provenance` detects drift). A scripted,
+  deliberately imperfect `generated` stand-in per record lets the shipped journey
+  score something without a model call. The stand-in describes itself, never a
   real generator.
 - **Advisory-only gate rules** in `config/requirements_eval.yaml`. A sub-floor
   diversity score escalates through the advisory channel rather than failing the
@@ -167,7 +170,7 @@ network.
   confinement, like every other config-named path) and the config points at the
   generated store. `tests/test_requirements_corpus.py::TestShippedJourney` runs
   the config end to end and refuses a vacuous result: no target errors, all four
-  scorers reporting over all 25 items, and more than one distinct recall value.
+  scorers reporting over the train split, and more than one distinct recall value.
 - **Punctuation-only requirements scored as maximally diverse.** An empty token
   set has an empty union with every other, which the Jaccard term read as zero
   similarity. The scorer now filters on *tokenizable* content and reports "not
@@ -212,6 +215,38 @@ presence test, so a *stated empty* value read as an *absent* one.
 - Parametrised journey ids are taken from the config-journey table itself, so a
   failure names the config (`[requirements_eval.yaml]`) instead of carrying a
   trailing separator from the unrenderable env mapping.
+
+#### Fixed from a second automated review of the same pull request
+
+Eight findings, all the same class: the corpus *claimed* controls and checks it
+did not actually exercise.
+
+- **The contradictory control contradicted nothing.** The comment assumed `src_a`
+  carried the authentication requirement; `src_b` did, and `src_b` was the side
+  being replaced, so the two sources discussed different topics. `read_contradictions()`
+  also read `inputs["contradictions"]`, a key the generator never emitted. Sources
+  now carry structured `supports`/`refutes` claim keys; a contradiction is *derived*
+  from two recorded sources disagreeing, so a contradictory item stays
+  indistinguishable from an ordinary one by any field the target sees (task 2.2).
+- **`req_scope_hallucination` checked citation, not support.** A latency budget
+  citing a recorded source that mentions no performance target passed. Support is
+  now checked against the cited source's claim keys when a requirement declares a
+  `claim`; a corpus with no claim keys keeps the old citation-only semantics.
+- **The mutated control could not demonstrate drift.** The store served the mutated
+  bytes, so the wrapper hashed what it was given. Capture and drift are now two
+  stores; F-068 re-verifies the wrapper's own records against both.
+- **The holdout was a metadata label on a file the config loaded in full.** It is
+  now `eval/train.jsonl` / `eval/holdout.jsonl`; the shipped config names train.
+- **`EvalItem.metadata` carried `control`**, which the target is handed. The class
+  stays in `items.json`, which the harness never loads.
+- **Any non-empty `covers` closed the traceability chain**, including
+  `covers: ["anything"]`. A link must now name a declared gold criterion.
+- **The config README table was split** by a paragraph inserted between rows.
+- **A provenance record attests independent fetch, not generator retrieval.**
+  Documented as a limitation of the synthetic-scope contract, not patched around.
+
+A `covers` link to an undeclared criterion, an assertion no cited source supports,
+and a one-sided contradiction are now pinned by F-068 as well as the unit tests.
 
 ### Added — labeling protocol and judge baseline
 

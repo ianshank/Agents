@@ -18,9 +18,8 @@ import gen_requirements_corpus as gen
 import pytest
 
 from eval_harness.config import load_config
-from eval_harness.core.types import REQUIREMENTS_EVIDENCE_KEY, EvalItem
+from eval_harness.core.types import REQUIREMENTS_EVIDENCE_KEY, EvalItem, RunContext
 from eval_harness.engine import EvalEngine
-from eval_harness.core.types import RunContext
 from eval_harness.langfuse_client import NullLangfuseClient
 from eval_harness.plugins import SCORERS
 from eval_harness.targets.provenance import (
@@ -84,9 +83,7 @@ class TestNegativeControls:
         for key in ("domain",):
             assert {i[key] for i in items if i["control"] != "ordinary"} <= {i[key] for i in ordinary}
 
-    def test_the_control_class_never_reaches_the_record_the_target_is_handed(
-        self, items: list[dict]
-    ) -> None:
+    def test_the_control_class_never_reaches_the_record_the_target_is_handed(self, items: list[dict]) -> None:
         """The check above reads the corpus item; this reads what the *harness* loads.
 
         ``EvalItem.metadata`` is handed to the target with everything else, so a
@@ -122,9 +119,7 @@ class TestNegativeControls:
                 for sid, recorded in item["recorded_hashes"].items()
             ), item["epic_id"]
 
-    def test_only_the_mutated_controls_drift_when_the_run_s_own_records_are_reverified(
-        self, items: list[dict]
-    ) -> None:
+    def test_only_the_mutated_controls_drift_when_the_run_s_own_records_are_reverified(self, items: list[dict]) -> None:
         """The end-to-end claim task 2.3 actually makes: not that the corpus *contains*
         mutated bytes, but that the verification pass *detects* them.
 
