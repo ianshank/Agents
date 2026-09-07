@@ -186,6 +186,24 @@ ignore_missing_imports = true
 # introduces the transitive opentelemetry dependency requires live testing; do not guess
 # a version pin without verifying which major it started in.
 
+# ADR 0044: the root package is the only one held to the strict bundle (the siblings are
+# strict via their own configs). The flags are enumerated individually because a
+# per-module `strict = true` key applies GLOBALLY under the pinned mypy (verified), which
+# would flip scripts/ and tests/ by accident. ignores are authored for the canonical
+# eval-harness-ci install profile; the SDK-absent direction is covered by
+# ignore_missing_imports above.
+[[tool.mypy.overrides]]
+module = "eval_harness.*"
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true
+extra_checks = true
+strict_concatenate = true
+
 [tool.coverage.run]
 branch = true
 source = ["eval_harness"]

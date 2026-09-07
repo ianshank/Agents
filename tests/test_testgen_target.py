@@ -8,6 +8,8 @@ or two mutants. ``tests/test_testgen_corpus.py`` covers the corpus itself.
 
 from __future__ import annotations
 
+import importlib.util
+import logging
 import socket
 from pathlib import Path
 from typing import Any
@@ -16,7 +18,7 @@ import pytest
 
 from eval_harness.core._imports import CALLABLE_ALLOWLIST_ENV, DisallowedImportError
 from eval_harness.plugins import TARGETS, bootstrap
-from eval_harness.targets import testgen
+from eval_harness.targets import _sandbox, testgen
 from eval_harness.targets._suite_runner import FOCAL_FILENAME
 
 bootstrap()
@@ -62,6 +64,116 @@ KILLING_SUITE = "from focal import add\n\ndef test_boundary():\n    assert add(2
 
 #: A suite that only drives an input where the mutant agrees: neither covered nor killed.
 BLIND_SUITE = "from focal import add\n\ndef test_origin():\n    assert add(0, 0) == 0\n"
+
+
+class TestSandboxBoundary:
+    """The ADR 0045 boundary: default-deny environment + POSIX resource limits."""
+
+    def test_generated_code_cannot_read_the_harness_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A credential in the harness process must be invisible to the suite.
+
+        The child used to inherit the whole environment, so any credential-bearing job
+        (a live judge run, say) exposed its keys to model-authored code. The canary is
+        asserted absent from inside the suite — a pass proves the scrub, not just the
+        absence of a crash.
+        """
+        monkeypatch.setenv("EVAL_HARNESS_TESTCANARY", "secret")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-canary")
+        scrubbed = (
+            "import os\n"
+            "from focal import add\n\n"
+            "def test_env_is_scrubbed():\n"
+            "    assert 'EVAL_HARNESS_TESTCANARY' not in os.environ\n"
+            "    assert 'OPENAI_API_KEY' not in os.environ\n"
+            "    assert 'PATH' in os.environ\n"  # the allowlist still carries plumbing
+            "    assert add(2, 1) == -1\n"
+        )
+        payload = evidence_of(testgen.run_generated_suite(item(scrubbed)))
+        assert payload["collected"] == 1
+        assert payload["mutants"]["killed"] == 1, "the suite must have run green on the reference"
+
+    def test_sandbox_child_env_is_default_deny(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unit-level: only allowlisted plumbing plus the limit vars cross the boundary."""
+        monkeypatch.setenv("EVAL_HARNESS_TESTCANARY", "secret")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+        env = _sandbox.sandbox_child_env(_sandbox.SandboxLimits(), 30.0)
+        assert "EVAL_HARNESS_TESTCANARY" not in env
+        assert "LANGFUSE_SECRET_KEY" not in env
+        assert env["PYTHONUTF8"] == "1"
+        limits = _sandbox.SandboxLimits()
+        assert env[_sandbox.RLIMIT_ENV_AS] == str(limits.memory_bytes)
+        assert env[_sandbox.RLIMIT_ENV_NPROC] == str(limits.max_processes)
+        # CPU ceiling derives from the execution timeout unless explicitly set.
+        assert env[_sandbox.RLIMIT_ENV_CPU] == str(35)
+        explicit = _sandbox.sandbox_child_env(_sandbox.SandboxLimits(cpu_seconds=9), 30.0)
+        assert explicit[_sandbox.RLIMIT_ENV_CPU] == "9"
+
+    def test_a_platform_without_resource_limits_says_so_where_it_can_be_read(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The child's stderr notice went to DEVNULL, so the degradation was invisible.
+
+        Parent and child share a host, so the parent can answer this itself — and only
+        the parent's logger is actually attached to anything a reader sees.
+        """
+        monkeypatch.setattr(_sandbox.importlib.util, "find_spec", lambda name: None)
+        _sandbox.warn_if_limits_unavailable.cache_clear()
+        with caplog.at_level(logging.WARNING, logger=_sandbox.__name__):
+            assert _sandbox.warn_if_limits_unavailable() is False
+        assert "resource module is unavailable" in caplog.text
+
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger=_sandbox.__name__):
+            _sandbox.warn_if_limits_unavailable()
+        assert caplog.text == "", "one line per process, not one per item"
+        _sandbox.warn_if_limits_unavailable.cache_clear()
+
+    def test_a_platform_with_resource_limits_stays_quiet(self, caplog: pytest.LogCaptureFixture) -> None:
+        """POSIX is the normal case: no warning, and the answer is True."""
+        _sandbox.warn_if_limits_unavailable.cache_clear()
+        with caplog.at_level(logging.WARNING, logger=_sandbox.__name__):
+            available = _sandbox.warn_if_limits_unavailable()
+        _sandbox.warn_if_limits_unavailable.cache_clear()
+        assert available is (importlib.util.find_spec("resource") is not None)
+        if available:
+            assert caplog.text == ""
+
+    def test_a_fork_bomb_is_refused_by_the_process_limit(self, tmp_path: Path) -> None:
+        """RLIMIT_NPROC=0 turns a fork attempt into a failing test, not a host incident."""
+        resource = pytest.importorskip("resource", reason="POSIX-only limit")
+        del resource  # imported for the skip; the child enforces the limit itself
+        forking = "import os\nfrom focal import add\n\ndef test_fork():\n    os.fork()\n"
+        payload, failure = testgen._run_against(
+            tmp_path,
+            "reference",
+            FOCAL,
+            FOCAL_NAME,
+            forking,
+            30.0,
+            _sandbox.SandboxLimits(),
+        )
+        assert failure is None, f"runner itself must survive: {failure}"
+        assert payload is not None
+        assert payload["failed"] == ["test_fork"]
+        assert "BlockingIOError" in payload["failures"]["test_fork"]  # fork denied (OSError subclass)
+
+    def test_a_memory_hog_hits_the_address_space_cap(self, tmp_path: Path) -> None:
+        """A suite allocating past the cap fails with MemoryError; the harness survives."""
+        pytest.importorskip("resource", reason="POSIX-only limit")
+        hog = "from focal import add\n\ndef test_hog():\n    x = ' ' * (512 * 1024**2)\n"
+        payload, failure = testgen._run_against(
+            tmp_path,
+            "reference",
+            FOCAL,
+            FOCAL_NAME,
+            hog,
+            30.0,
+            _sandbox.SandboxLimits(memory_bytes=128 * 1024**2),
+        )
+        assert failure is None, f"runner itself must survive: {failure}"
+        assert payload is not None
+        assert payload["failed"] == ["test_hog"]
+        assert "MemoryError" in payload["failures"]["test_hog"]
 
 
 class TestSuiteExecution:
@@ -229,7 +341,9 @@ class TestBoundsAndFailureModes:
     def test_a_label_that_escapes_is_refused_at_the_write(self, tmp_path: Path) -> None:
         """Defence in depth: `_run_against` is the last line before bytes hit the disk."""
         with pytest.raises(ValueError, match="escapes the execution root"):
-            testgen._run_against(tmp_path, "../escaped", FOCAL, FOCAL_NAME, KILLING_SUITE, 5.0)
+            testgen._run_against(
+                tmp_path, "../escaped", FOCAL, FOCAL_NAME, KILLING_SUITE, 5.0, _sandbox.SandboxLimits()
+            )
 
     def test_each_run_gets_its_own_working_directory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """The reference and each mutant must not see each other's `focal.py`.
@@ -245,10 +359,12 @@ class TestBoundsAndFailureModes:
         the subdirectories inside it are laid out — it passed with `workdir = root`, the
         exact regression it was named for, and spent four subprocesses to do it.
         """
-        monkeypatch.setattr(testgen, "_execute", lambda workdir, timeout: ({}, None))
+        monkeypatch.setattr(testgen, "_execute", lambda workdir, timeout, limits: ({}, None))
         labels = ("reference", "mutant-M1", "mutant-M2")
         for label in labels:
-            testgen._run_against(tmp_path, label, f"# {label}\n" + FOCAL, FOCAL_NAME, KILLING_SUITE, 1.0)
+            testgen._run_against(
+                tmp_path, label, f"# {label}\n" + FOCAL, FOCAL_NAME, KILLING_SUITE, 1.0, _sandbox.SandboxLimits()
+            )
         written = [
             path.read_text(encoding="utf-8") for path in sorted(tmp_path.rglob(testgen._suite_runner.FOCAL_FILENAME))
         ]
@@ -270,8 +386,8 @@ class TestBoundsAndFailureModes:
         in-process — the change this seam exists to forbid — turns the assertion red.
 
         What it does NOT claim: the sandbox itself is not network-isolated. A generated
-        suite can still open sockets in its own interpreter. That gap is recorded in
-        `docs/plans/eval-delivery-sequencing/PLAN.md` rather than papered over here.
+        suite can still open sockets in its own interpreter. That residual risk is the
+        recorded subject of ADR 0045 (deferred OS-level isolation), not papered over here.
         """
         connects: list[Any] = []
         real = socket.socket.connect
@@ -442,6 +558,22 @@ class TestRunnerProtocol:
         result = testgen.run_generated_suite(item(KILLING_SUITE))
         assert result.error is not None and "runner exited 3" in result.error
         assert evidence_of(result)["collection_error"] == "reference run did not complete"
+
+    def test_a_malformed_rlimit_value_writes_a_runner_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The one failure mode the limits docstring promises fails closed.
+
+        `_apply_sandbox_limits` ran *before* the try that writes runner_error.txt, so
+        `int("not-an-int")` escaped uncaught: the parent saw a bare non-zero exit and
+        reported "no detail" for a misconfiguration it could have named.
+        """
+        from eval_harness.targets import _sandbox, _suite_runner
+
+        monkeypatch.setenv(_sandbox.RLIMIT_ENV_CPU, "not-an-int")
+        assert _suite_runner.main([str(tmp_path)]) == 1
+        detail = (tmp_path / _suite_runner.RUNNER_ERROR_FILENAME).read_text(encoding="utf-8")
+        assert "ValueError" in detail and "not-an-int" in detail
 
     def test_an_unparseable_result_file_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The verdict file exists but is not JSON — distinct from the runner never running."""

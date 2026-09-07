@@ -21,8 +21,12 @@ class ConfigError(ValueError):
 MIGRATIONS: dict[str, tuple[str, Callable[[dict[str, Any]], dict[str, Any]]]] = {}
 
 
-def migration(from_version: str, to_version: str):
-    def deco(fn: Callable[[dict[str, Any]], dict[str, Any]]):
+def migration(
+    from_version: str, to_version: str
+) -> Callable[[Callable[[dict[str, Any]], dict[str, Any]]], Callable[[dict[str, Any]], dict[str, Any]]]:
+    def deco(
+        fn: Callable[[dict[str, Any]], dict[str, Any]],
+    ) -> Callable[[dict[str, Any]], dict[str, Any]]:
         MIGRATIONS[from_version] = (to_version, fn)
         return fn
 
@@ -40,7 +44,7 @@ def _v0_9_to_1_0(raw: dict[str, Any]) -> dict[str, Any]:
     return raw
 
 
-def migrate_to_current(raw: dict) -> dict:
+def migrate_to_current(raw: dict[str, Any]) -> dict[str, Any]:
     """Bring a (possibly old) config dict up to the current schema version.
 
     This migration-chain-walker pattern is intentionally duplicated across:

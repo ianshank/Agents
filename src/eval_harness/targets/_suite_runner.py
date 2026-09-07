@@ -48,6 +48,7 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import json
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -68,6 +69,41 @@ TEST_PREFIX = "test_"
 #: read back by the harness and lands in a results file; a test asserting on a large
 #: structure can otherwise produce a megabyte of `assert` repr.
 FAILURE_DETAIL_CHARS = 300
+
+#: Env vars the parent uses to hand resource limits to this interpreter (see
+#: ``targets/_sandbox.py``). Applied to self before any model-authored code is loaded.
+_RLIMIT_VARS: tuple[tuple[str, str], ...] = (
+    ("EVAL_HARNESS_TESTGEN_RLIMIT_CPU", "RLIMIT_CPU"),
+    ("EVAL_HARNESS_TESTGEN_RLIMIT_AS", "RLIMIT_AS"),
+    ("EVAL_HARNESS_TESTGEN_RLIMIT_NPROC", "RLIMIT_NPROC"),
+    ("EVAL_HARNESS_TESTGEN_RLIMIT_FSIZE", "RLIMIT_FSIZE"),
+    ("EVAL_HARNESS_TESTGEN_RLIMIT_NOFILE", "RLIMIT_NOFILE"),
+)
+
+
+def _apply_sandbox_limits() -> None:
+    """Apply the parent's resource limits to this interpreter (POSIX only).
+
+    No-ops where the ``resource`` module is absent (Windows) or a variable is missing;
+    the parent's wall-clock timeout is always the backstop. Runs BEFORE the suite is
+    loaded so the limits bind the code they exist to contain. A malformed value fails
+    closed into the runner-error path rather than running unlimited.
+    """
+    try:
+        import resource
+    except ImportError:
+        print(
+            "suite-runner: resource module unavailable; sandbox limits degraded to the wall-clock timeout",
+            file=sys.stderr,
+        )
+        return
+    for env_name, limit_name in _RLIMIT_VARS:
+        raw = os.environ.get(env_name)
+        if raw is None:
+            continue
+        limit = getattr(resource, limit_name)
+        value = int(raw)
+        resource.setrlimit(limit, (value, value))
 
 
 def _load(path: Path, name: str) -> Any:
@@ -145,6 +181,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     workdir = Path(args[0])
     try:
+        # Inside the try, not before it: a malformed RLIMIT value makes int() raise, and
+        # outside the try that escaped uncaught, so no runner_error.txt was written and
+        # the parent reported "no detail" for the one failure mode the docstring
+        # promises fails closed. Still ahead of _report, so the limits bind the suite.
+        _apply_sandbox_limits()
         payload = _report(workdir)
     except Exception:  # the runner itself broke; the caller must not read this as a verdict
         # An unwritable workdir is itself the failure; the exit code carries it, and the

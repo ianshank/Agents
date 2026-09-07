@@ -268,7 +268,7 @@ class ModelTarget(TargetRunner):
             logger.debug("Calling OpenAI-compatible API: model=%s, base_url=%s", self.model, self.base_url)
             return self.client.chat.completions.create(
                 model=self.model,
-                messages=messages,  # type: ignore[arg-type]
+                messages=messages,
                 temperature=self.temperature,
                 top_p=self.top_p,
                 max_tokens=self.max_tokens,

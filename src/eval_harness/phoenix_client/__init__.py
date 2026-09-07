@@ -84,7 +84,7 @@ def _otel_tracer() -> Any | None:
         from phoenix.otel import register  # noqa: F401 - import is a presence gate, not a call
     except ImportError:
         return None
-    return trace.get_tracer(__name__)  # type: ignore[attr-defined]
+    return trace.get_tracer(__name__)
 
 
 def phoenix_observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
@@ -155,10 +155,10 @@ class NullPhoenixScoreClient(PhoenixScoreClient):
     """In-memory no-op client. Used offline and as a test double (records calls)."""
 
     def __init__(self) -> None:
-        self.scores: list[dict] = []
+        self.scores: list[dict[str, Any]] = []
         self.flushed = False
 
-    def log_score(self, *, run_id, item_id, name, value, comment=None) -> None:
+    def log_score(self, *, run_id: str, item_id: str, name: str, value: float, comment: str | None = None) -> None:
         self.scores.append({"run_id": run_id, "item_id": item_id, "name": name, "value": value, "comment": comment})
 
     def flush(self) -> None:
@@ -176,7 +176,7 @@ class SDKPhoenixScoreClient(PhoenixScoreClient):
     def __init__(self, tracer: Any) -> None:
         self._tracer = tracer
 
-    def log_score(self, *, run_id, item_id, name, value, comment=None) -> None:
+    def log_score(self, *, run_id: str, item_id: str, name: str, value: float, comment: str | None = None) -> None:
         try:
             with self._tracer.start_as_current_span(f"eval.score.{name}") as span:
                 span.set_attribute(_ATTR_RUN_ID, run_id)

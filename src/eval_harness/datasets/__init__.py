@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _to_item(record: dict, fallback_id: int) -> EvalItem:
+def _to_item(record: dict[str, Any], fallback_id: int) -> EvalItem:
     """Convert a raw dict record into an :class:`EvalItem`.
 
     A missing *or* ``None`` ``id`` falls back to the positional index, so id-less records
@@ -75,7 +75,7 @@ def _validate_dataset_path(path: str | Path, *, allow_absolute: bool = False) ->
 class InlineDataset(DatasetSource):
     """Dataset defined directly in the YAML config as inline items."""
 
-    def __init__(self, items: list[dict] | None = None):
+    def __init__(self, items: list[dict[str, Any]] | None = None):
         self.items = items or []
 
     def load(self) -> Iterable[EvalItem]:

@@ -58,7 +58,7 @@ class NullBrainTrustClient(BrainTrustClient):
     """In-memory no-op client. Used offline and as a test double (records calls)."""
 
     def __init__(self) -> None:
-        self.items: list[dict] = []
+        self.items: list[dict[str, Any]] = []
         self.flushed = False
 
     def log_item(
@@ -186,7 +186,7 @@ def fetch_dataset_items(
     project_name: str,
     dataset_name: str,
     version: str | int | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return a BrainTrust dataset's items as harness records.
 
     Reads ``BRAINTRUST_API_KEY`` / ``BRAINTRUST_API_URL`` from the environment (via the SDK).

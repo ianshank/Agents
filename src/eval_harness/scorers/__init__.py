@@ -125,7 +125,7 @@ class CompositeScorer(Scorer):
     def __init__(
         self,
         name: str | None = None,
-        components: list[dict] | None = None,
+        components: list[dict[str, Any]] | None = None,
         strategy: str = "weighted_mean",
         pass_threshold: float | None = None,
     ):

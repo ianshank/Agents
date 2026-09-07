@@ -71,6 +71,51 @@ human-authored activation change (ADR 0005 checklist).
   exemption covers), and the committed artifact is regenerated from the canonical
   Linux environment (the previous render was Windows/py3.11 with a smaller suite).
 
+### Security — testgen sandbox: default-deny environment + POSIX resource limits (ADR 0045)
+
+The suite-execution sandbox previously confined the working directory and wall-clock
+but inherited the harness process's whole environment, so generated (or corpus) test
+code running in a credential-bearing job could read `OPENAI_API_KEY` / `LANGFUSE_*` /
+`AWS_*`. The child interpreter now inherits only an allowlisted plumbing set
+(`targets/_sandbox.py`, deliberately not config-driven) and self-applies POSIX
+resource limits (CPU derived from the execution timeout, address space, no
+fork/threads, file-size and fd caps) carried through that environment —
+`preexec_fn` was rejected as unsafe under the engine's threaded execution. Windows
+degrades to the timeout-only posture with a logged note. OS-level network isolation
+is deferred behind a recorded trigger (first non-synthetic corpus or credential-gated
+live generation). Unblocks `add-agent-in-the-loop-testgen` on the security dimension.
+
+#### Fixed from automated review of the same pull request
+
+- **The limits did not actually fail closed.** `_apply_sandbox_limits()` ran
+  *before* the `try` that writes `runner_error.txt`, so a malformed RLIMIT value
+  — the one case its docstring promises fails closed — made `int()` raise
+  uncaught. The parent saw a bare non-zero exit and reported "no detail" for a
+  misconfiguration it could have named. The call moved inside the `try`, still
+  ahead of suite loading so the limits bind the code they exist to contain.
+- **The Windows degradation notice reached nobody.** The runner printed it to its
+  own stderr and the parent runs the runner with `stderr=DEVNULL`, so the
+  timeout-only posture was silent on exactly the platform where it applies. The
+  *parent* now logs it once per process (`warn_if_limits_unavailable`, `lru_cache`d
+  so it is one line per run rather than one per item); parent and child share a
+  host, so the parent can determine this itself. ADR 0045 is corrected to say
+  where the notice comes from.
+- Fixed a test-name typo (`harnesss`).
+
+### Changed — root `eval_harness` package is strict-typed (ADR 0044)
+
+- `eval_harness.*` now carries the strict mypy flag bundle via an enumerated
+  `[[tool.mypy.overrides]]` section (a per-module `strict = true` key leaks
+  globally under the pinned mypy). All 37 strict errors were resolved: 28
+  mechanical annotations (`dict[str, Any]` / `Match[str]` / parameter and return
+  types), 5 unused-ignore removals, 2 seam typings (`observe` gained `overload`s
+  so decorated engine methods stay typed; the `migration` decorator factory is
+  typed), and the `langfuse.openai` ignore recoded then removed as the canonical
+  CI install profile no longer raises there. `warn_redundant_casts` and
+  `implicit_reexport = false` are deliberately absent from the bundle — mypy
+  rejects the former per-module, and F-039's explicit `__all__` guard already
+  covers the latter. `scripts/` and `tests/` strictness remains follow-up work.
+
 ### Added — RCA evaluation matrix, synthetic scope (F-067, ADR 0046)
 
 - **Frozen synthetic corpus** at `corpora/rca/v1/` (96 generated items: 4
