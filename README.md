@@ -424,14 +424,18 @@ src/eval_harness/
                      readers of the evidence targets/testgen.py publishes after running the
                      suite in a subprocess sandbox against a reference implementation and
                      each seeded mutant (F-065, ADR 0043 — corpus at corpora/testgen/v1/)
-    rca/             rca_ac_at_k, rca_component_match score a ranked diagnosis against a
-                     finite candidate set (sdlc solution_space/correct shape; synthetic RCA
-                     prototype — F-ID claimed at full land)
+    rca/             rca_ac_at_k, rca_component_match, rca_onset_within_tolerance,
+                     rca_abstention_correctness, rca_false_accusation_rate score a
+                     ranked diagnosis against a finite candidate set, including correct
+                     abstention on unanswerable items (F-067, ADR 0046 — synthetic
+                     corpus at corpora/rca/v1/)
   datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
   targets/           echo, callable (dynamic import — gated by
                      EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST; see "Config files are
                      executable input" below), model (alias llm; calls an
-                     OpenAI-compatible / LM Studio / Nemotron endpoint)
+                     OpenAI-compatible / LM Studio / Nemotron endpoint),
+                     rca_maxz (deterministic max-|Z| baseline diagnosis over an
+                     item's telemetry; F-067)
   sinks/             console, json_file, html_file, langfuse, phoenix, braintrust
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
                      phoenix_evals, panel (aggregates N member judges — median/mean/

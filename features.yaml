@@ -1390,3 +1390,52 @@ features:
       Plan Phase 6 of docs/plans/eval-evidence-integrity/PLAN.md. Does not
       change SCHEMA_VERSION. Additive JudgeCalibrationGateConfig.report_path.
       Agent-in-the-loop OpenSpec remains owner-gated and is out of scope here.
+
+  - id: "F-067"
+    epic: "Eval Harness"
+    name: "RCA evaluation matrix (synthetic scope): ranked diagnosis, onset tolerance, abstention"
+    description: >-
+      Deterministic scoring of a ranked root-cause diagnosis against a finite
+      candidate set, including whether the agent correctly declines when the
+      evidence supports no cause. Ships the frozen synthetic corpus at
+      corpora/rca/v1/ (96 generated items across 4 answerability classes x 3
+      difficulty strata, with shape-identical negative controls and a keyed
+      sequestered split), the max-|Z| baseline as a registered deterministic
+      TARGET (it produces a diagnosis, so it is a target, not a scorer), and
+      three new scorers completing the five-scorer family: rca_ac_at_k,
+      rca_component_match (prototype PR #190), rca_onset_within_tolerance
+      (timezone-normalised; a wall-clock match in the wrong zone scores outside
+      tolerance), rca_abstention_correctness, rca_false_accusation_rate. The
+      corpus's difficulty is a GATED MEASUREMENT: the manifest records the
+      baseline's measured per-cell strict AC@1, and the generator's --check fails
+      when a regeneration leaves the calibrated bands. Real-incident telemetry is
+      out of scope (CHARTER §4 invariant 7); judge-backed reason scoring is
+      deferred behind calibration.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "an item with no candidate set, or timestamps with no declared timezone, is rejected at load -- never scored against a singleton set or compared in an implicit zone (scripts/validations/F_067.py, tests/test_rca_corpus.py::TestLoadRejection)"
+      - "a timezone-shifted onset (same wall clock, wrong zone) scores outside tolerance, with both instants recorded normalised to UTC (scripts/validations/F_067.py, tests/test_rca_abstention_scorers.py::TestOnsetWithinTolerance)"
+      - "correct abstention on an unanswerable item scores correct, a confident guess is penalised and counted as a false accusation, abstaining on an answerable item is not free, and rca_ac_at_k reports passed=None (not zero) there (scripts/validations/F_067.py, tests/test_rca_abstention_scorers.py)"
+      - "the baseline runs on the identical frozen item set the config evaluates, is deterministic across runs, and both diagnoses and declines on the real corpus (scripts/validations/F_067.py, tests/test_rca_baseline_target.py)"
+      - "the committed corpus regenerates byte-identically and the baseline's measured per-cell accuracy stays inside the calibrated bands, so a generator edit that trivialises the task fails --check (python scripts/gen_rca_corpus.py --check, tests/test_rca_corpus.py::TestCalibration)"
+      - "every shipped gate rule for this capability is advisory (report_only); the bounds in config/rca_eval.yaml are soak starting points and none appears in the spec delta (scripts/validations/F_067.py)"
+      - "19 new matrix cells (3 abstention scorers x M1/M2/M3/M5/M6, plus the target row M1/M2/M3/M6) and an M8 pipeline running the baseline target under all five scorers with ledger invocation asserted (tests/test_matrix_rca_scorers.py, tests/test_matrix_eval_tools.py::test_m8_rca_full_pipeline)"
+    validation_command: "python scripts/validations/F_067.py"
+    implemented_in: "d75028c62c1f1ddcc355792a3c3e9c7cd7cdca1b"
+    depends_on: ["F-062", "F-063"]
+    notes: >-
+      ADR 0046 records the shape-from-triplet / scoring-from-ranked-accuracy
+      split, the mandatory-timezone decision, the baseline-as-target decision,
+      and the counterfactual cut. implemented_in is stamped to this branch's
+      feature commit so F-064's ancestry check resolves it from HEAD; the
+      literal "PENDING" placeholder does not resolve and fails that gate on the
+      pull request rather than after merge (the same in-flight stamp F-066 and
+      F-068 used). The
+      onset scorer reads a claimed onset only from the diagnosis mapping's
+      `onset` key; the shipped baseline claims none, so its onset verdicts are
+      not-applicable by design. public_surface_baseline.json is unchanged: the
+      scorers subpackage declares no __all__, following state.py and
+      trajectory.py.
