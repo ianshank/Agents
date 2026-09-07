@@ -21,7 +21,10 @@ run:
 dataset:
   type: jsonl
   params:
+    # Keep the sequestered holdout out of day-to-day scoring so the shipped journey
+    # exercises the training slice that the scorer is being developed against.
     path: "corpora/requirements/v1/eval/items.jsonl"
+    split: "train"
 
 target:
   type: provenance_recorder

@@ -87,16 +87,29 @@ class InlineDataset(DatasetSource):
 class JsonlDataset(DatasetSource):
     """Dataset loaded from a JSON Lines file."""
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, split: str | None = None, split_field: str = "split"):
         self.path = _validate_dataset_path(path)
+        self.split = split
+        self.split_field = split_field
 
     def load(self) -> Iterable[EvalItem]:
-        """Parse each non-empty line as JSON and yield :class:`EvalItem`."""
+        """Parse each non-empty line as JSON and yield :class:`EvalItem`.
+
+        When ``split`` is set, only rows whose ``metadata[split_field]`` matches are kept.
+        This keeps the sequestered holdout out of scorer iteration without requiring a
+        second dataset file for day-to-day development.
+        """
         items = []
         for i, line in enumerate(self.path.read_text(encoding="utf-8").splitlines()):
             line = line.strip()
-            if line:
-                items.append(_to_item(json.loads(line), i))
+            if not line:
+                continue
+            item = _to_item(json.loads(line), i)
+            if self.split is not None:
+                metadata = item.metadata if isinstance(item.metadata, dict) else {}
+                if metadata.get(self.split_field) != self.split:
+                    continue
+            items.append(item)
         return items
 
 

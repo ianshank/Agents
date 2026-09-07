@@ -112,7 +112,8 @@ class TestShippedJourney:
             "req_traceability_closure",
             "req_semantic_diversity",
         }
-        assert all(agg.count == gen.ITEM_COUNT for agg in run.aggregate.values())
+        train_count = sum(1 for item in gen._with_split(gen.build_items()) if item["split"] == "train")
+        assert all(agg.count == train_count for agg in run.aggregate.values())
 
     def test_no_scorer_reports_not_applicable_for_the_whole_corpus(self, run: Any) -> None:
         """ANTI-VACUOUS: a `pass_rate` of None across the board is the shape this had."""
