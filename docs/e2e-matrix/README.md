@@ -17,7 +17,8 @@ evidence log the runner wrote.
 ## Regenerating
 
 ```bash
-pwsh -NoProfile -File scripts/run_all_e2e.ps1 -Tiers all -HypothesisProfile ci
+bash scripts/run_all_e2e.sh --tiers all --hypothesis-profile ci   # POSIX (canonical)
+# or: pwsh -NoProfile -File scripts/run_all_e2e.ps1 -Tiers all -HypothesisProfile ci
 python tests/test_e2e_matrix.py --update      # rewrite this directory
 python tests/test_e2e_matrix.py --check       # exit 1 if it is stale
 ```
@@ -28,7 +29,9 @@ markdown and CSVs are still written and the command still exits 0.
 `--check` compares the derived content and deliberately ignores the **Provenance** section.
 That section records the commit SHA at generation time, and committing the artifact creates a
 new commit — so judging staleness on it would leave the check permanently red on the very
-commit that carries the artifact. A change to any other sheet still reports stale.
+commit that carries the artifact. The **Duration (ms)** column is likewise excluded:
+wall-clock duration is a property of the machine that ran the suite, so no rerun can
+reproduce it byte-for-byte. A change to any other content still reports stale.
 
 ## What the columns mean
 

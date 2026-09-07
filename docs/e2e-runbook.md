@@ -53,6 +53,23 @@ pwsh scripts/run_all_e2e.ps1 -Tiers offline -FailFast           # stop at first 
 `windows powershell` users: substitute `powershell` for `pwsh`, or run
 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run_all_e2e.ps1 -Tiers offline`.
 
+### POSIX driver
+
+`scripts/run_all_e2e.sh` is the POSIX mirror (same tiers, same step inventory, same
+report layout) for Linux/macOS hosts and CI — the nightly e2e-matrix freshness job runs
+it. It falls back to the ambient `python3` when no `.venv` exists (CI installs into the
+runner interpreter), and needs coreutils `timeout` (on macOS: `brew install coreutils`,
+which provides `gtimeout`).
+
+```bash
+bash scripts/run_all_e2e.sh --tiers offline                     # Tiers A–C, no network, no creds
+bash scripts/run_all_e2e.sh --tiers all --hypothesis-profile ci # + Tier D live
+bash scripts/run_all_e2e.sh --tiers offline --fail-fast         # stop at first failure
+```
+
+The two drivers declare the same steps; `tests/test_e2e_driver_parity.py` fails if they
+drift apart.
+
 ### Flags
 
 | Flag | Values | Default | Meaning |
