@@ -2,7 +2,7 @@
 
 Check-context *names* are never literals here: callers pass the derived
 enablement set. Operator tunables (admin bypass, review count, force-push)
-live on ``ProtectionRuleConfig`` so call sites do not restated numeric defaults.
+live on ``ProtectionRuleConfig`` so call sites do not restate numeric defaults.
 """
 
 from __future__ import annotations
