@@ -13,14 +13,16 @@ from ...core.interfaces import Scorer
 from ...core.types import EvalItem, RunContext, ScoreResult, TargetOutput
 from ...plugins import SCORERS
 from . import (
+    NO_CLAIMS,
     NO_GOLD,
     NO_REQUIREMENTS,
+    contradicted_claims,
     not_applicable,
-    read_contradictions,
     read_declared_tests,
     read_gold,
     read_recorded_source_ids,
     read_requirements,
+    read_source_claims,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,10 +70,22 @@ class ReqAcRecallScorer(Scorer):
 class ReqScopeHallucinationScorer(Scorer):
     """Rate of generated requirements unsupported by any recorded evidence item.
 
-    A requirement is supported when its ``evidence_links`` reference at least one source
-    the provenance wrapper actually recorded. Citing exactly one side of a declared
-    contradiction is reported (``contradiction_citations``), not scored as cleanly
-    supported and not silently resolved.
+    Support is checked at two depths, because a citation is not an entailment:
+
+    1. The requirement's ``evidence_links`` must name at least one source the provenance
+       wrapper actually recorded. A citation of something never retrieved supports nothing.
+    2. When the requirement declares a ``claim`` key, one of those recorded-and-cited
+       sources must *assert* that key (``supports``). This is what catches the spec's
+       unsupported-constraint scenario: a latency budget asserted against a source whose
+       claims say nothing about latency is counted, even though the citation resolves.
+
+    A requirement whose claim some *other* recorded source denies (``refutes``) is a
+    silent pick between contradictory sources. It is reported in
+    ``contradiction_citations`` and denied a clean pass, but it is not counted toward the
+    hallucination rate — the claim is in the evidence; the evidence disagrees with itself.
+
+    A corpus that declares no claim keys falls back to depth 1 alone, so citation-only
+    datasets keep scoring as before.
     """
 
     default_name = "req_scope_hallucination"
@@ -83,30 +97,43 @@ class ReqScopeHallucinationScorer(Scorer):
         if not reqs:
             return not_applicable(self.name, "the generated set is empty")
         recorded = read_recorded_source_ids(output)
-        contradictions = read_contradictions(item)
+        claims = read_source_claims(item)
+        contradicted = contradicted_claims(claims, recorded)
         unsupported: list[str] = []
         contradiction_citations: list[str] = []
         for index, req in enumerate(reqs):
-            links = _links(req, "evidence_links")
             rid = str(req.get("id", f"req-{index}"))
-            if not links or not any(link in recorded for link in links):
+            cited = [link for link in _links(req, "evidence_links") if link in recorded]
+            if not cited:
                 logger.debug("Requirement %s has no valid evidence links in recorded sources", rid)
                 unsupported.append(rid)
                 continue
-            for left, right in contradictions:
-                cited = set(links)
-                if (left in cited) != (right in cited):
-                    logger.debug("Requirement %s cites one side of contradiction (%s vs %s)", rid, left, right)
-                    contradiction_citations.append(rid)
+            claim = req.get("claim")
+            if claim is None:
+                continue
+            claim = str(claim)
+            if not any(claim in claims.get(sid, NO_CLAIMS).supports for sid in cited):
+                logger.debug("Requirement %s asserts %r, which no cited source supports", rid, claim)
+                unsupported.append(rid)
+                continue
+            if claim in contradicted:
+                logger.debug("Requirement %s asserts %r, which another recorded source refutes", rid, claim)
+                contradiction_citations.append(rid)
         rate = len(unsupported) / len(reqs)
+        contradictory = sorted(set(contradiction_citations))
         return ScoreResult(
             self.name,
             value=rate,
-            passed=not unsupported,
-            comment=f"{len(unsupported)}/{len(reqs)} requirements unsupported by recorded evidence",
+            # A contradiction is not a hallucination, so it stays out of `rate` — but the
+            # spec forbids reporting such a requirement as *cleanly* supported, so it
+            # still denies the pass.
+            passed=not unsupported and not contradictory,
+            comment=f"{len(unsupported)}/{len(reqs)} requirements unsupported by recorded evidence"
+            + (f"; {len(contradictory)} cite a contradicted claim" if contradictory else ""),
             metadata={
                 "unsupported": unsupported,
-                "contradiction_citations": sorted(set(contradiction_citations)),
+                "contradiction_citations": contradictory,
+                "contradicted_claims": sorted(contradicted),
                 "recorded_sources": sorted(recorded),
                 "requirement_count": len(reqs),
             },
@@ -119,8 +146,11 @@ class ReqTraceabilityClosureScorer(Scorer):
     corpus declares tests — a test link referencing a declared test.
 
     A fluent narrative asserting a link does not satisfy it: only the structured
-    ``covers`` / ``test_links`` fields count, and a test link naming a test the corpus
-    does not declare breaks the chain.
+    ``covers`` / ``test_links`` fields count. A link naming something the corpus does not
+    declare breaks the chain on *both* sides — an unknown test, and (where the corpus
+    declares a gold set) an acceptance criterion that is not in it. Accepting any
+    non-empty ``covers`` would let ``covers: ["anything"]`` close the chain, which is the
+    cheapest possible way to score this metric without doing the work.
     """
 
     default_name = "req_traceability_closure"
@@ -132,11 +162,13 @@ class ReqTraceabilityClosureScorer(Scorer):
         if not reqs:
             return not_applicable(self.name, "the generated set is empty")
         declared_tests = read_declared_tests(item)
+        gold = read_gold(item)
         incomplete: list[str] = []
         for index, req in enumerate(reqs):
             rid = str(req.get("id", f"req-{index}"))
-            if not _links(req, "covers"):
-                logger.debug("Requirement %s has incomplete traceability: missing 'covers' links", rid)
+            covers = _links(req, "covers")
+            if not covers or (gold is not None and not any(ac in gold for ac in covers)):
+                logger.debug("Requirement %s has incomplete traceability: no declared 'covers' link (%s)", rid, covers)
                 incomplete.append(rid)
                 continue
             if declared_tests is not None:

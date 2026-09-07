@@ -6,10 +6,14 @@
       "test_billing_rejects_invalid"
     ],
     "domain": "billing",
+    "drifted_bytes": {
+      "src-req-00-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-00-b": "The billing service allows anonymous actions without authentication."
+    },
     "epic_id": "req-00",
     "evidence_bytes": {
-      "src-req-00-a": "The billing service persists submissions and reports quota use.",
-      "src-req-00-b": "The billing service allows anonymous actions."
+      "src-req-00-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-00-b": "The billing service allows anonymous actions without authentication."
     },
     "evidence_sources": [
       {
@@ -18,8 +22,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-00-a"
         },
+        "refutes": [],
         "source_id": "src-req-00-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -27,8 +36,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-00-b"
         },
+        "refutes": [
+          "auth_required"
+        ],
         "source_id": "src-req-00-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": []
       }
     ],
     "gold_ac": [
@@ -46,15 +59,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-00-a": "0096270650abbd0f815c84803307f409d04962e67aa5ed7209adb76a77b8939e",
-      "src-req-00-b": "e44d44a0c50d2f5cd1085a1f8cc3226afeeaf43b54af769b97242c49e57702a4"
+      "src-req-00-a": "9776c3c0e5ce55eb52470ad0887f008d90c13e01005f97ba4e5adf5d41958f26",
+      "src-req-00-b": "046e0489ff73864510c276275a7555cb9034e5cb1759767c9b62d0cf66cafc1e"
     },
     "split": "train",
     "statement": "As a billing owner I need the billing workflow hardened.",
-    "store_bytes": {
-      "src-req-00-a": "The billing service persists submissions and reports quota use.",
-      "src-req-00-b": "The billing service allows anonymous actions."
-    },
     "title": "Billing epic 0"
   },
   {
@@ -64,10 +73,14 @@
       "test_auth_rejects_invalid"
     ],
     "domain": "auth",
+    "drifted_bytes": {
+      "src-req-01-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-01-b": "DEPRECATED (rev 1): the auth service enforces no quota."
+    },
     "epic_id": "req-01",
     "evidence_bytes": {
-      "src-req-01-a": "The auth service persists submissions and reports quota use.",
-      "src-req-01-b": "DEPRECATED (rev 1): the auth service has no quota."
+      "src-req-01-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-01-b": "DEPRECATED (rev 1): the auth service enforces no quota."
     },
     "evidence_sources": [
       {
@@ -76,8 +89,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-01-a"
         },
+        "refutes": [],
         "source_id": "src-req-01-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -85,8 +103,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-01-b"
         },
+        "refutes": [
+          "quota"
+        ],
         "source_id": "src-req-01-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": []
       }
     ],
     "gold_ac": [
@@ -108,15 +130,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-01-a": "7e441f82fd6f05d7aa93d5f25f68d86003e13bc233595c44a1d1e643c56620b4",
-      "src-req-01-b": "92783eca0da28f43fcc8b0d281a0b7aacdf4475cdc233198da2dc532774c6b56"
+      "src-req-01-a": "7de3181508e38b37f42975852b48d923b1e6c49f70b864f51e40f1264607cff9",
+      "src-req-01-b": "5995b2a43e720cc702cef3492da54da4b418ed2070e4e8ef954eb0844ff83732"
     },
     "split": "holdout",
     "statement": "As a auth owner I need the auth workflow hardened.",
-    "store_bytes": {
-      "src-req-01-a": "The auth service persists submissions and reports quota use.",
-      "src-req-01-b": "DEPRECATED (rev 1): the auth service has no quota."
-    },
     "title": "Auth epic 1"
   },
   {
@@ -126,10 +144,14 @@
       "test_search_rejects_invalid"
     ],
     "domain": "search",
+    "drifted_bytes": {
+      "src-req-02-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-02-b": "The search service enforces a per-tenant quota. (edited after capture)"
+    },
     "epic_id": "req-02",
     "evidence_bytes": {
-      "src-req-02-a": "The search service persists submissions and reports quota use.",
-      "src-req-02-b": "The search service requires authentication for all actions."
+      "src-req-02-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-02-b": "The search service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -138,8 +160,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-02-a"
         },
+        "refutes": [],
         "source_id": "src-req-02-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -147,8 +174,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-02-b"
         },
+        "refutes": [],
         "source_id": "src-req-02-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -174,15 +205,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-02-a": "a2363d286d526b0ea3ec8b0eb60ba5feea01f6259464c28f8e3b07c88a2fbe69",
-      "src-req-02-b": "f02a8f4b331fee390ea0567d2f0f7d5bb96d09865e3c8969c97ab726b15069ab"
+      "src-req-02-a": "e8261ce0834728952c6505b9537f8976ce0765d330c461cb652c13566edbb635",
+      "src-req-02-b": "4d699f289e9f42538f878d5c77cb4f01793ec467f4b7da741843dc04078fb687"
     },
     "split": "train",
     "statement": "As a search owner I need the search workflow hardened.",
-    "store_bytes": {
-      "src-req-02-a": "The search service persists submissions and reports quota use.",
-      "src-req-02-b": "The search service requires authentication for all actions. (edited after capture)"
-    },
     "title": "Search epic 2"
   },
   {
@@ -192,10 +219,14 @@
       "test_notify_rejects_invalid"
     ],
     "domain": "notify",
+    "drifted_bytes": {
+      "src-req-03-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-03-b": "The notify service allows anonymous actions without authentication."
+    },
     "epic_id": "req-03",
     "evidence_bytes": {
-      "src-req-03-a": "The notify service persists submissions and reports quota use.",
-      "src-req-03-b": "The notify service allows anonymous actions."
+      "src-req-03-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-03-b": "The notify service allows anonymous actions without authentication."
     },
     "evidence_sources": [
       {
@@ -204,8 +235,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-03-a"
         },
+        "refutes": [],
         "source_id": "src-req-03-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -213,8 +249,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-03-b"
         },
+        "refutes": [
+          "auth_required"
+        ],
         "source_id": "src-req-03-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": []
       }
     ],
     "gold_ac": [
@@ -232,15 +272,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-03-a": "c11c69ee55f8648eebf8aeccdd69497d90be89af793aed6e757eefa7dee00dfd",
-      "src-req-03-b": "448217ca5e409b7a4a33980b661d05796ff1ba29f73d9b3330ef8e264f6d030b"
+      "src-req-03-a": "95c09a5c93aa09b2e8eea3afadee70fcdf8033c502bb96afa321b27b44693d47",
+      "src-req-03-b": "a90f2ae062dfc69d866ef67780547abf7728c0bb2b8a2a6850455e55ebe6a9d7"
     },
     "split": "train",
     "statement": "As a notify owner I need the notify workflow hardened.",
-    "store_bytes": {
-      "src-req-03-a": "The notify service persists submissions and reports quota use.",
-      "src-req-03-b": "The notify service allows anonymous actions."
-    },
     "title": "Notify epic 3"
   },
   {
@@ -250,10 +286,14 @@
       "test_reporting_rejects_invalid"
     ],
     "domain": "reporting",
+    "drifted_bytes": {
+      "src-req-04-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-04-b": "DEPRECATED (rev 1): the reporting service enforces no quota."
+    },
     "epic_id": "req-04",
     "evidence_bytes": {
-      "src-req-04-a": "The reporting service persists submissions and reports quota use.",
-      "src-req-04-b": "DEPRECATED (rev 1): the reporting service has no quota."
+      "src-req-04-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-04-b": "DEPRECATED (rev 1): the reporting service enforces no quota."
     },
     "evidence_sources": [
       {
@@ -262,8 +302,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-04-a"
         },
+        "refutes": [],
         "source_id": "src-req-04-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -271,8 +316,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-04-b"
         },
+        "refutes": [
+          "quota"
+        ],
         "source_id": "src-req-04-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": []
       }
     ],
     "gold_ac": [
@@ -294,15 +343,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-04-a": "bc89079ca44e3c01b1968e2adce0f80f9177e1f9429c8c8bb6cf89fe9032b8b0",
-      "src-req-04-b": "2d974847e22064c31ba0d6ce52879850563a0cea8a9c750239c505a827c00ea9"
+      "src-req-04-a": "f65020f02abc1d993570406fbcdee1c6d4202799f998839ddd73960bfde966b7",
+      "src-req-04-b": "060712549fce16e9a474f71117f18ef0806fcaf397f3fb1337aee7713ba774d4"
     },
     "split": "train",
     "statement": "As a reporting owner I need the reporting workflow hardened.",
-    "store_bytes": {
-      "src-req-04-a": "The reporting service persists submissions and reports quota use.",
-      "src-req-04-b": "DEPRECATED (rev 1): the reporting service has no quota."
-    },
     "title": "Reporting epic 4"
   },
   {
@@ -312,10 +357,14 @@
       "test_billing_rejects_invalid"
     ],
     "domain": "billing",
+    "drifted_bytes": {
+      "src-req-05-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-05-b": "The billing service enforces a per-tenant quota. (edited after capture)"
+    },
     "epic_id": "req-05",
     "evidence_bytes": {
-      "src-req-05-a": "The billing service persists submissions and reports quota use.",
-      "src-req-05-b": "The billing service requires authentication for all actions."
+      "src-req-05-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-05-b": "The billing service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -324,8 +373,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-05-a"
         },
+        "refutes": [],
         "source_id": "src-req-05-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -333,8 +387,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-05-b"
         },
+        "refutes": [],
         "source_id": "src-req-05-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -360,15 +418,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-05-a": "0096270650abbd0f815c84803307f409d04962e67aa5ed7209adb76a77b8939e",
-      "src-req-05-b": "17197a66a5eb555dc2f7886b93e1a3e9eab072910f7f4c511f250c2b1117d6fe"
+      "src-req-05-a": "9776c3c0e5ce55eb52470ad0887f008d90c13e01005f97ba4e5adf5d41958f26",
+      "src-req-05-b": "b25fe29ba2717fe4b3d4fa2b8697c0320510845120dfda764b041d5748750e70"
     },
     "split": "train",
     "statement": "As a billing owner I need the billing workflow hardened.",
-    "store_bytes": {
-      "src-req-05-a": "The billing service persists submissions and reports quota use.",
-      "src-req-05-b": "The billing service requires authentication for all actions. (edited after capture)"
-    },
     "title": "Billing epic 5"
   },
   {
@@ -378,10 +432,14 @@
       "test_auth_rejects_invalid"
     ],
     "domain": "auth",
+    "drifted_bytes": {
+      "src-req-06-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-06-b": "The auth service allows anonymous actions without authentication."
+    },
     "epic_id": "req-06",
     "evidence_bytes": {
-      "src-req-06-a": "The auth service persists submissions and reports quota use.",
-      "src-req-06-b": "The auth service allows anonymous actions."
+      "src-req-06-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-06-b": "The auth service allows anonymous actions without authentication."
     },
     "evidence_sources": [
       {
@@ -390,8 +448,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-06-a"
         },
+        "refutes": [],
         "source_id": "src-req-06-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -399,8 +462,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-06-b"
         },
+        "refutes": [
+          "auth_required"
+        ],
         "source_id": "src-req-06-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": []
       }
     ],
     "gold_ac": [
@@ -418,15 +485,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-06-a": "7e441f82fd6f05d7aa93d5f25f68d86003e13bc233595c44a1d1e643c56620b4",
-      "src-req-06-b": "95bfe65ec27fdef9ea27c13ffd69612ca5996d814b31bc5617b1b2bd4bd95305"
+      "src-req-06-a": "7de3181508e38b37f42975852b48d923b1e6c49f70b864f51e40f1264607cff9",
+      "src-req-06-b": "21d3cd4a8313ee0d087f7c4816b6363ba18d7a65a147107d30de507f71a4a2f2"
     },
     "split": "holdout",
     "statement": "As a auth owner I need the auth workflow hardened.",
-    "store_bytes": {
-      "src-req-06-a": "The auth service persists submissions and reports quota use.",
-      "src-req-06-b": "The auth service allows anonymous actions."
-    },
     "title": "Auth epic 6"
   },
   {
@@ -436,10 +499,14 @@
       "test_search_rejects_invalid"
     ],
     "domain": "search",
+    "drifted_bytes": {
+      "src-req-07-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-07-b": "DEPRECATED (rev 1): the search service enforces no quota."
+    },
     "epic_id": "req-07",
     "evidence_bytes": {
-      "src-req-07-a": "The search service persists submissions and reports quota use.",
-      "src-req-07-b": "DEPRECATED (rev 1): the search service has no quota."
+      "src-req-07-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-07-b": "DEPRECATED (rev 1): the search service enforces no quota."
     },
     "evidence_sources": [
       {
@@ -448,8 +515,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-07-a"
         },
+        "refutes": [],
         "source_id": "src-req-07-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -457,8 +529,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-07-b"
         },
+        "refutes": [
+          "quota"
+        ],
         "source_id": "src-req-07-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": []
       }
     ],
     "gold_ac": [
@@ -480,15 +556,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-07-a": "a2363d286d526b0ea3ec8b0eb60ba5feea01f6259464c28f8e3b07c88a2fbe69",
-      "src-req-07-b": "588fbf1055cad55d498ba802b8f5549514c73d621022ba6adb7f952011989fb7"
+      "src-req-07-a": "e8261ce0834728952c6505b9537f8976ce0765d330c461cb652c13566edbb635",
+      "src-req-07-b": "80a11c905ca155638479d7390029a4804c76ce8208e49aa043b8dfc0e32a7070"
     },
     "split": "train",
     "statement": "As a search owner I need the search workflow hardened.",
-    "store_bytes": {
-      "src-req-07-a": "The search service persists submissions and reports quota use.",
-      "src-req-07-b": "DEPRECATED (rev 1): the search service has no quota."
-    },
     "title": "Search epic 7"
   },
   {
@@ -498,10 +570,14 @@
       "test_notify_rejects_invalid"
     ],
     "domain": "notify",
+    "drifted_bytes": {
+      "src-req-08-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-08-b": "The notify service enforces a per-tenant quota. (edited after capture)"
+    },
     "epic_id": "req-08",
     "evidence_bytes": {
-      "src-req-08-a": "The notify service persists submissions and reports quota use.",
-      "src-req-08-b": "The notify service requires authentication for all actions."
+      "src-req-08-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-08-b": "The notify service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -510,8 +586,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-08-a"
         },
+        "refutes": [],
         "source_id": "src-req-08-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -519,8 +600,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-08-b"
         },
+        "refutes": [],
         "source_id": "src-req-08-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -546,15 +631,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-08-a": "c11c69ee55f8648eebf8aeccdd69497d90be89af793aed6e757eefa7dee00dfd",
-      "src-req-08-b": "4cf8179c63a5c605be7a8e5b87a41966e5adba57d6c467fa6c38cdbdbde9c6fc"
+      "src-req-08-a": "95c09a5c93aa09b2e8eea3afadee70fcdf8033c502bb96afa321b27b44693d47",
+      "src-req-08-b": "0cad26cc876e2b3ee28447213fb0f3a3bc6050342e90b7d3a5be5f2a1802de6e"
     },
     "split": "train",
     "statement": "As a notify owner I need the notify workflow hardened.",
-    "store_bytes": {
-      "src-req-08-a": "The notify service persists submissions and reports quota use.",
-      "src-req-08-b": "The notify service requires authentication for all actions. (edited after capture)"
-    },
     "title": "Notify epic 8"
   },
   {
@@ -564,10 +645,14 @@
       "test_reporting_rejects_invalid"
     ],
     "domain": "reporting",
+    "drifted_bytes": {
+      "src-req-09-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-09-b": "The reporting service enforces a per-tenant quota."
+    },
     "epic_id": "req-09",
     "evidence_bytes": {
-      "src-req-09-a": "The reporting service persists submissions and reports quota use.",
-      "src-req-09-b": "The reporting service requires authentication for all actions."
+      "src-req-09-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-09-b": "The reporting service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -576,8 +661,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-09-a"
         },
+        "refutes": [],
         "source_id": "src-req-09-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -585,8 +675,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-09-b"
         },
+        "refutes": [],
         "source_id": "src-req-09-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -604,15 +698,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-09-a": "bc89079ca44e3c01b1968e2adce0f80f9177e1f9429c8c8bb6cf89fe9032b8b0",
-      "src-req-09-b": "13d86938a09398f6d8697792a91eb292ef85712e64b6c2899dff20b322d038e3"
+      "src-req-09-a": "f65020f02abc1d993570406fbcdee1c6d4202799f998839ddd73960bfde966b7",
+      "src-req-09-b": "9cae72941dffe1563175e1200fbe14e0fffae3c0de0e1572d559e9304f58e203"
     },
     "split": "train",
     "statement": "As a reporting owner I need the reporting workflow hardened.",
-    "store_bytes": {
-      "src-req-09-a": "The reporting service persists submissions and reports quota use.",
-      "src-req-09-b": "The reporting service requires authentication for all actions."
-    },
     "title": "Reporting epic 9"
   },
   {
@@ -622,10 +712,14 @@
       "test_billing_rejects_invalid"
     ],
     "domain": "billing",
+    "drifted_bytes": {
+      "src-req-10-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-10-b": "The billing service enforces a per-tenant quota."
+    },
     "epic_id": "req-10",
     "evidence_bytes": {
-      "src-req-10-a": "The billing service persists submissions and reports quota use.",
-      "src-req-10-b": "The billing service requires authentication for all actions."
+      "src-req-10-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-10-b": "The billing service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -634,8 +728,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-10-a"
         },
+        "refutes": [],
         "source_id": "src-req-10-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -643,8 +742,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-10-b"
         },
+        "refutes": [],
         "source_id": "src-req-10-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -666,15 +769,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-10-a": "0096270650abbd0f815c84803307f409d04962e67aa5ed7209adb76a77b8939e",
-      "src-req-10-b": "17197a66a5eb555dc2f7886b93e1a3e9eab072910f7f4c511f250c2b1117d6fe"
+      "src-req-10-a": "9776c3c0e5ce55eb52470ad0887f008d90c13e01005f97ba4e5adf5d41958f26",
+      "src-req-10-b": "b25fe29ba2717fe4b3d4fa2b8697c0320510845120dfda764b041d5748750e70"
     },
     "split": "holdout",
     "statement": "As a billing owner I need the billing workflow hardened.",
-    "store_bytes": {
-      "src-req-10-a": "The billing service persists submissions and reports quota use.",
-      "src-req-10-b": "The billing service requires authentication for all actions."
-    },
     "title": "Billing epic 10"
   },
   {
@@ -684,10 +783,14 @@
       "test_auth_rejects_invalid"
     ],
     "domain": "auth",
+    "drifted_bytes": {
+      "src-req-11-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-11-b": "The auth service enforces a per-tenant quota."
+    },
     "epic_id": "req-11",
     "evidence_bytes": {
-      "src-req-11-a": "The auth service persists submissions and reports quota use.",
-      "src-req-11-b": "The auth service requires authentication for all actions."
+      "src-req-11-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-11-b": "The auth service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -696,8 +799,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-11-a"
         },
+        "refutes": [],
         "source_id": "src-req-11-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -705,8 +813,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-11-b"
         },
+        "refutes": [],
         "source_id": "src-req-11-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -732,15 +844,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-11-a": "7e441f82fd6f05d7aa93d5f25f68d86003e13bc233595c44a1d1e643c56620b4",
-      "src-req-11-b": "eaa5679e4399dcc4243aa265a66e9233dd315c9b00d3eb272fc7c6917f4d9be6"
+      "src-req-11-a": "7de3181508e38b37f42975852b48d923b1e6c49f70b864f51e40f1264607cff9",
+      "src-req-11-b": "2dc83f812dff3c34bfe52253aa7ea645fe407273a122d431dc81debd87811f32"
     },
     "split": "train",
     "statement": "As a auth owner I need the auth workflow hardened.",
-    "store_bytes": {
-      "src-req-11-a": "The auth service persists submissions and reports quota use.",
-      "src-req-11-b": "The auth service requires authentication for all actions."
-    },
     "title": "Auth epic 11"
   },
   {
@@ -750,10 +858,14 @@
       "test_search_rejects_invalid"
     ],
     "domain": "search",
+    "drifted_bytes": {
+      "src-req-12-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-12-b": "The search service enforces a per-tenant quota."
+    },
     "epic_id": "req-12",
     "evidence_bytes": {
-      "src-req-12-a": "The search service persists submissions and reports quota use.",
-      "src-req-12-b": "The search service requires authentication for all actions."
+      "src-req-12-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-12-b": "The search service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -762,8 +874,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-12-a"
         },
+        "refutes": [],
         "source_id": "src-req-12-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -771,8 +888,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-12-b"
         },
+        "refutes": [],
         "source_id": "src-req-12-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -790,15 +911,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-12-a": "a2363d286d526b0ea3ec8b0eb60ba5feea01f6259464c28f8e3b07c88a2fbe69",
-      "src-req-12-b": "f02a8f4b331fee390ea0567d2f0f7d5bb96d09865e3c8969c97ab726b15069ab"
+      "src-req-12-a": "e8261ce0834728952c6505b9537f8976ce0765d330c461cb652c13566edbb635",
+      "src-req-12-b": "4d699f289e9f42538f878d5c77cb4f01793ec467f4b7da741843dc04078fb687"
     },
     "split": "holdout",
     "statement": "As a search owner I need the search workflow hardened.",
-    "store_bytes": {
-      "src-req-12-a": "The search service persists submissions and reports quota use.",
-      "src-req-12-b": "The search service requires authentication for all actions."
-    },
     "title": "Search epic 12"
   },
   {
@@ -808,10 +925,14 @@
       "test_notify_rejects_invalid"
     ],
     "domain": "notify",
+    "drifted_bytes": {
+      "src-req-13-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-13-b": "The notify service enforces a per-tenant quota."
+    },
     "epic_id": "req-13",
     "evidence_bytes": {
-      "src-req-13-a": "The notify service persists submissions and reports quota use.",
-      "src-req-13-b": "The notify service requires authentication for all actions."
+      "src-req-13-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-13-b": "The notify service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -820,8 +941,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-13-a"
         },
+        "refutes": [],
         "source_id": "src-req-13-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -829,8 +955,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-13-b"
         },
+        "refutes": [],
         "source_id": "src-req-13-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -852,15 +982,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-13-a": "c11c69ee55f8648eebf8aeccdd69497d90be89af793aed6e757eefa7dee00dfd",
-      "src-req-13-b": "4cf8179c63a5c605be7a8e5b87a41966e5adba57d6c467fa6c38cdbdbde9c6fc"
+      "src-req-13-a": "95c09a5c93aa09b2e8eea3afadee70fcdf8033c502bb96afa321b27b44693d47",
+      "src-req-13-b": "0cad26cc876e2b3ee28447213fb0f3a3bc6050342e90b7d3a5be5f2a1802de6e"
     },
     "split": "train",
     "statement": "As a notify owner I need the notify workflow hardened.",
-    "store_bytes": {
-      "src-req-13-a": "The notify service persists submissions and reports quota use.",
-      "src-req-13-b": "The notify service requires authentication for all actions."
-    },
     "title": "Notify epic 13"
   },
   {
@@ -870,10 +996,14 @@
       "test_reporting_rejects_invalid"
     ],
     "domain": "reporting",
+    "drifted_bytes": {
+      "src-req-14-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-14-b": "The reporting service enforces a per-tenant quota."
+    },
     "epic_id": "req-14",
     "evidence_bytes": {
-      "src-req-14-a": "The reporting service persists submissions and reports quota use.",
-      "src-req-14-b": "The reporting service requires authentication for all actions."
+      "src-req-14-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-14-b": "The reporting service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -882,8 +1012,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-14-a"
         },
+        "refutes": [],
         "source_id": "src-req-14-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -891,8 +1026,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-14-b"
         },
+        "refutes": [],
         "source_id": "src-req-14-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -918,15 +1057,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-14-a": "bc89079ca44e3c01b1968e2adce0f80f9177e1f9429c8c8bb6cf89fe9032b8b0",
-      "src-req-14-b": "13d86938a09398f6d8697792a91eb292ef85712e64b6c2899dff20b322d038e3"
+      "src-req-14-a": "f65020f02abc1d993570406fbcdee1c6d4202799f998839ddd73960bfde966b7",
+      "src-req-14-b": "9cae72941dffe1563175e1200fbe14e0fffae3c0de0e1572d559e9304f58e203"
     },
     "split": "train",
     "statement": "As a reporting owner I need the reporting workflow hardened.",
-    "store_bytes": {
-      "src-req-14-a": "The reporting service persists submissions and reports quota use.",
-      "src-req-14-b": "The reporting service requires authentication for all actions."
-    },
     "title": "Reporting epic 14"
   },
   {
@@ -936,10 +1071,14 @@
       "test_billing_rejects_invalid"
     ],
     "domain": "billing",
+    "drifted_bytes": {
+      "src-req-15-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-15-b": "The billing service enforces a per-tenant quota."
+    },
     "epic_id": "req-15",
     "evidence_bytes": {
-      "src-req-15-a": "The billing service persists submissions and reports quota use.",
-      "src-req-15-b": "The billing service requires authentication for all actions."
+      "src-req-15-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-15-b": "The billing service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -948,8 +1087,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-15-a"
         },
+        "refutes": [],
         "source_id": "src-req-15-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -957,8 +1101,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-15-b"
         },
+        "refutes": [],
         "source_id": "src-req-15-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -976,15 +1124,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-15-a": "0096270650abbd0f815c84803307f409d04962e67aa5ed7209adb76a77b8939e",
-      "src-req-15-b": "17197a66a5eb555dc2f7886b93e1a3e9eab072910f7f4c511f250c2b1117d6fe"
+      "src-req-15-a": "9776c3c0e5ce55eb52470ad0887f008d90c13e01005f97ba4e5adf5d41958f26",
+      "src-req-15-b": "b25fe29ba2717fe4b3d4fa2b8697c0320510845120dfda764b041d5748750e70"
     },
     "split": "train",
     "statement": "As a billing owner I need the billing workflow hardened.",
-    "store_bytes": {
-      "src-req-15-a": "The billing service persists submissions and reports quota use.",
-      "src-req-15-b": "The billing service requires authentication for all actions."
-    },
     "title": "Billing epic 15"
   },
   {
@@ -994,10 +1138,14 @@
       "test_auth_rejects_invalid"
     ],
     "domain": "auth",
+    "drifted_bytes": {
+      "src-req-16-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-16-b": "The auth service enforces a per-tenant quota."
+    },
     "epic_id": "req-16",
     "evidence_bytes": {
-      "src-req-16-a": "The auth service persists submissions and reports quota use.",
-      "src-req-16-b": "The auth service requires authentication for all actions."
+      "src-req-16-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-16-b": "The auth service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -1006,8 +1154,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-16-a"
         },
+        "refutes": [],
         "source_id": "src-req-16-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -1015,8 +1168,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-16-b"
         },
+        "refutes": [],
         "source_id": "src-req-16-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -1038,15 +1195,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-16-a": "7e441f82fd6f05d7aa93d5f25f68d86003e13bc233595c44a1d1e643c56620b4",
-      "src-req-16-b": "eaa5679e4399dcc4243aa265a66e9233dd315c9b00d3eb272fc7c6917f4d9be6"
+      "src-req-16-a": "7de3181508e38b37f42975852b48d923b1e6c49f70b864f51e40f1264607cff9",
+      "src-req-16-b": "2dc83f812dff3c34bfe52253aa7ea645fe407273a122d431dc81debd87811f32"
     },
     "split": "train",
     "statement": "As a auth owner I need the auth workflow hardened.",
-    "store_bytes": {
-      "src-req-16-a": "The auth service persists submissions and reports quota use.",
-      "src-req-16-b": "The auth service requires authentication for all actions."
-    },
     "title": "Auth epic 16"
   },
   {
@@ -1056,10 +1209,14 @@
       "test_search_rejects_invalid"
     ],
     "domain": "search",
+    "drifted_bytes": {
+      "src-req-17-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-17-b": "The search service enforces a per-tenant quota."
+    },
     "epic_id": "req-17",
     "evidence_bytes": {
-      "src-req-17-a": "The search service persists submissions and reports quota use.",
-      "src-req-17-b": "The search service requires authentication for all actions."
+      "src-req-17-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-17-b": "The search service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -1068,8 +1225,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-17-a"
         },
+        "refutes": [],
         "source_id": "src-req-17-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -1077,8 +1239,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-17-b"
         },
+        "refutes": [],
         "source_id": "src-req-17-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -1104,15 +1270,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-17-a": "a2363d286d526b0ea3ec8b0eb60ba5feea01f6259464c28f8e3b07c88a2fbe69",
-      "src-req-17-b": "f02a8f4b331fee390ea0567d2f0f7d5bb96d09865e3c8969c97ab726b15069ab"
+      "src-req-17-a": "e8261ce0834728952c6505b9537f8976ce0765d330c461cb652c13566edbb635",
+      "src-req-17-b": "4d699f289e9f42538f878d5c77cb4f01793ec467f4b7da741843dc04078fb687"
     },
     "split": "train",
     "statement": "As a search owner I need the search workflow hardened.",
-    "store_bytes": {
-      "src-req-17-a": "The search service persists submissions and reports quota use.",
-      "src-req-17-b": "The search service requires authentication for all actions."
-    },
     "title": "Search epic 17"
   },
   {
@@ -1122,10 +1284,14 @@
       "test_notify_rejects_invalid"
     ],
     "domain": "notify",
+    "drifted_bytes": {
+      "src-req-18-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-18-b": "The notify service enforces a per-tenant quota."
+    },
     "epic_id": "req-18",
     "evidence_bytes": {
-      "src-req-18-a": "The notify service persists submissions and reports quota use.",
-      "src-req-18-b": "The notify service requires authentication for all actions."
+      "src-req-18-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-18-b": "The notify service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -1134,8 +1300,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-18-a"
         },
+        "refutes": [],
         "source_id": "src-req-18-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -1143,8 +1314,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-18-b"
         },
+        "refutes": [],
         "source_id": "src-req-18-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -1162,15 +1337,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-18-a": "c11c69ee55f8648eebf8aeccdd69497d90be89af793aed6e757eefa7dee00dfd",
-      "src-req-18-b": "4cf8179c63a5c605be7a8e5b87a41966e5adba57d6c467fa6c38cdbdbde9c6fc"
+      "src-req-18-a": "95c09a5c93aa09b2e8eea3afadee70fcdf8033c502bb96afa321b27b44693d47",
+      "src-req-18-b": "0cad26cc876e2b3ee28447213fb0f3a3bc6050342e90b7d3a5be5f2a1802de6e"
     },
     "split": "train",
     "statement": "As a notify owner I need the notify workflow hardened.",
-    "store_bytes": {
-      "src-req-18-a": "The notify service persists submissions and reports quota use.",
-      "src-req-18-b": "The notify service requires authentication for all actions."
-    },
     "title": "Notify epic 18"
   },
   {
@@ -1180,10 +1351,14 @@
       "test_reporting_rejects_invalid"
     ],
     "domain": "reporting",
+    "drifted_bytes": {
+      "src-req-19-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-19-b": "The reporting service enforces a per-tenant quota."
+    },
     "epic_id": "req-19",
     "evidence_bytes": {
-      "src-req-19-a": "The reporting service persists submissions and reports quota use.",
-      "src-req-19-b": "The reporting service requires authentication for all actions."
+      "src-req-19-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-19-b": "The reporting service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -1192,8 +1367,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-19-a"
         },
+        "refutes": [],
         "source_id": "src-req-19-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -1201,8 +1381,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-19-b"
         },
+        "refutes": [],
         "source_id": "src-req-19-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -1224,15 +1408,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-19-a": "bc89079ca44e3c01b1968e2adce0f80f9177e1f9429c8c8bb6cf89fe9032b8b0",
-      "src-req-19-b": "13d86938a09398f6d8697792a91eb292ef85712e64b6c2899dff20b322d038e3"
+      "src-req-19-a": "f65020f02abc1d993570406fbcdee1c6d4202799f998839ddd73960bfde966b7",
+      "src-req-19-b": "9cae72941dffe1563175e1200fbe14e0fffae3c0de0e1572d559e9304f58e203"
     },
     "split": "train",
     "statement": "As a reporting owner I need the reporting workflow hardened.",
-    "store_bytes": {
-      "src-req-19-a": "The reporting service persists submissions and reports quota use.",
-      "src-req-19-b": "The reporting service requires authentication for all actions."
-    },
     "title": "Reporting epic 19"
   },
   {
@@ -1242,10 +1422,14 @@
       "test_billing_rejects_invalid"
     ],
     "domain": "billing",
+    "drifted_bytes": {
+      "src-req-20-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-20-b": "The billing service enforces a per-tenant quota."
+    },
     "epic_id": "req-20",
     "evidence_bytes": {
-      "src-req-20-a": "The billing service persists submissions and reports quota use.",
-      "src-req-20-b": "The billing service requires authentication for all actions."
+      "src-req-20-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-20-b": "The billing service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -1254,8 +1438,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-20-a"
         },
+        "refutes": [],
         "source_id": "src-req-20-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -1263,8 +1452,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-20-b"
         },
+        "refutes": [],
         "source_id": "src-req-20-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -1290,15 +1483,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-20-a": "0096270650abbd0f815c84803307f409d04962e67aa5ed7209adb76a77b8939e",
-      "src-req-20-b": "17197a66a5eb555dc2f7886b93e1a3e9eab072910f7f4c511f250c2b1117d6fe"
+      "src-req-20-a": "9776c3c0e5ce55eb52470ad0887f008d90c13e01005f97ba4e5adf5d41958f26",
+      "src-req-20-b": "b25fe29ba2717fe4b3d4fa2b8697c0320510845120dfda764b041d5748750e70"
     },
     "split": "train",
     "statement": "As a billing owner I need the billing workflow hardened.",
-    "store_bytes": {
-      "src-req-20-a": "The billing service persists submissions and reports quota use.",
-      "src-req-20-b": "The billing service requires authentication for all actions."
-    },
     "title": "Billing epic 20"
   },
   {
@@ -1308,10 +1497,14 @@
       "test_auth_rejects_invalid"
     ],
     "domain": "auth",
+    "drifted_bytes": {
+      "src-req-21-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-21-b": "The auth service enforces a per-tenant quota."
+    },
     "epic_id": "req-21",
     "evidence_bytes": {
-      "src-req-21-a": "The auth service persists submissions and reports quota use.",
-      "src-req-21-b": "The auth service requires authentication for all actions."
+      "src-req-21-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-21-b": "The auth service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -1320,8 +1513,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-21-a"
         },
+        "refutes": [],
         "source_id": "src-req-21-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -1329,8 +1527,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-21-b"
         },
+        "refutes": [],
         "source_id": "src-req-21-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -1348,15 +1550,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-21-a": "7e441f82fd6f05d7aa93d5f25f68d86003e13bc233595c44a1d1e643c56620b4",
-      "src-req-21-b": "eaa5679e4399dcc4243aa265a66e9233dd315c9b00d3eb272fc7c6917f4d9be6"
+      "src-req-21-a": "7de3181508e38b37f42975852b48d923b1e6c49f70b864f51e40f1264607cff9",
+      "src-req-21-b": "2dc83f812dff3c34bfe52253aa7ea645fe407273a122d431dc81debd87811f32"
     },
     "split": "train",
     "statement": "As a auth owner I need the auth workflow hardened.",
-    "store_bytes": {
-      "src-req-21-a": "The auth service persists submissions and reports quota use.",
-      "src-req-21-b": "The auth service requires authentication for all actions."
-    },
     "title": "Auth epic 21"
   },
   {
@@ -1366,10 +1564,14 @@
       "test_search_rejects_invalid"
     ],
     "domain": "search",
+    "drifted_bytes": {
+      "src-req-22-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-22-b": "The search service enforces a per-tenant quota."
+    },
     "epic_id": "req-22",
     "evidence_bytes": {
-      "src-req-22-a": "The search service persists submissions and reports quota use.",
-      "src-req-22-b": "The search service requires authentication for all actions."
+      "src-req-22-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-22-b": "The search service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -1378,8 +1580,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-22-a"
         },
+        "refutes": [],
         "source_id": "src-req-22-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -1387,8 +1594,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-22-b"
         },
+        "refutes": [],
         "source_id": "src-req-22-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -1410,15 +1621,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-22-a": "a2363d286d526b0ea3ec8b0eb60ba5feea01f6259464c28f8e3b07c88a2fbe69",
-      "src-req-22-b": "f02a8f4b331fee390ea0567d2f0f7d5bb96d09865e3c8969c97ab726b15069ab"
+      "src-req-22-a": "e8261ce0834728952c6505b9537f8976ce0765d330c461cb652c13566edbb635",
+      "src-req-22-b": "4d699f289e9f42538f878d5c77cb4f01793ec467f4b7da741843dc04078fb687"
     },
     "split": "holdout",
     "statement": "As a search owner I need the search workflow hardened.",
-    "store_bytes": {
-      "src-req-22-a": "The search service persists submissions and reports quota use.",
-      "src-req-22-b": "The search service requires authentication for all actions."
-    },
     "title": "Search epic 22"
   },
   {
@@ -1428,10 +1635,14 @@
       "test_notify_rejects_invalid"
     ],
     "domain": "notify",
+    "drifted_bytes": {
+      "src-req-23-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-23-b": "The notify service enforces a per-tenant quota."
+    },
     "epic_id": "req-23",
     "evidence_bytes": {
-      "src-req-23-a": "The notify service persists submissions and reports quota use.",
-      "src-req-23-b": "The notify service requires authentication for all actions."
+      "src-req-23-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-23-b": "The notify service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -1440,8 +1651,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-23-a"
         },
+        "refutes": [],
         "source_id": "src-req-23-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -1449,8 +1665,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-23-b"
         },
+        "refutes": [],
         "source_id": "src-req-23-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -1476,15 +1696,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-23-a": "c11c69ee55f8648eebf8aeccdd69497d90be89af793aed6e757eefa7dee00dfd",
-      "src-req-23-b": "4cf8179c63a5c605be7a8e5b87a41966e5adba57d6c467fa6c38cdbdbde9c6fc"
+      "src-req-23-a": "95c09a5c93aa09b2e8eea3afadee70fcdf8033c502bb96afa321b27b44693d47",
+      "src-req-23-b": "0cad26cc876e2b3ee28447213fb0f3a3bc6050342e90b7d3a5be5f2a1802de6e"
     },
     "split": "train",
     "statement": "As a notify owner I need the notify workflow hardened.",
-    "store_bytes": {
-      "src-req-23-a": "The notify service persists submissions and reports quota use.",
-      "src-req-23-b": "The notify service requires authentication for all actions."
-    },
     "title": "Notify epic 23"
   },
   {
@@ -1494,10 +1710,14 @@
       "test_reporting_rejects_invalid"
     ],
     "domain": "reporting",
+    "drifted_bytes": {
+      "src-req-24-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-24-b": "The reporting service enforces a per-tenant quota."
+    },
     "epic_id": "req-24",
     "evidence_bytes": {
-      "src-req-24-a": "The reporting service persists submissions and reports quota use.",
-      "src-req-24-b": "The reporting service requires authentication for all actions."
+      "src-req-24-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-24-b": "The reporting service enforces a per-tenant quota."
     },
     "evidence_sources": [
       {
@@ -1506,8 +1726,13 @@
           "mime": "text/plain",
           "revision_id": "rev-req-24-a"
         },
+        "refutes": [],
         "source_id": "src-req-24-a",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
       },
       {
         "reference": {
@@ -1515,8 +1740,12 @@
           "mime": "text/plain",
           "revision_id": "rev-req-24-b"
         },
+        "refutes": [],
         "source_id": "src-req-24-b",
-        "source_type": "drive_doc"
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
       }
     ],
     "gold_ac": [
@@ -1534,15 +1763,11 @@
       }
     ],
     "recorded_hashes": {
-      "src-req-24-a": "bc89079ca44e3c01b1968e2adce0f80f9177e1f9429c8c8bb6cf89fe9032b8b0",
-      "src-req-24-b": "13d86938a09398f6d8697792a91eb292ef85712e64b6c2899dff20b322d038e3"
+      "src-req-24-a": "f65020f02abc1d993570406fbcdee1c6d4202799f998839ddd73960bfde966b7",
+      "src-req-24-b": "9cae72941dffe1563175e1200fbe14e0fffae3c0de0e1572d559e9304f58e203"
     },
     "split": "train",
     "statement": "As a reporting owner I need the reporting workflow hardened.",
-    "store_bytes": {
-      "src-req-24-a": "The reporting service persists submissions and reports quota use.",
-      "src-req-24-b": "The reporting service requires authentication for all actions."
-    },
     "title": "Reporting epic 24"
   }
 ]

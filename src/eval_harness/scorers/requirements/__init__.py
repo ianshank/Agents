@@ -16,6 +16,7 @@ item").
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from ...core.types import REQUIREMENTS_EVIDENCE_KEY, EvalItem, ScoreResult, TargetOutput
@@ -92,19 +93,59 @@ def read_declared_tests(item: EvalItem) -> list[str] | None:
     return None
 
 
-def read_contradictions(item: EvalItem) -> list[tuple[str, str]]:
-    """Source pairs the task declares as contradictory (a reviewer flag on the inputs)."""
+@dataclass(frozen=True)
+class SourceClaims:
+    """The claim keys one evidence source asserts and denies."""
+
+    supports: frozenset[str] = frozenset()
+    refutes: frozenset[str] = frozenset()
+
+
+#: The claims of a source the item does not declare: it asserts and denies nothing.
+NO_CLAIMS = SourceClaims()
+
+
+def _claim_keys(source: dict[str, Any], field: str) -> frozenset[str]:
+    raw = source.get(field)
+    return frozenset(str(v) for v in raw) if isinstance(raw, list) else frozenset()
+
+
+def read_source_claims(item: EvalItem) -> dict[str, SourceClaims]:
+    """What each declared evidence source asserts (``supports``) and denies (``refutes``).
+
+    Claim keys are part of a source's *content*, alongside its bytes — not a reviewer
+    flag on the item. That distinction is load-bearing twice over. It lets
+    ``req_scope_hallucination`` ask whether a cited source actually supports the assertion
+    rather than merely whether the citation names something recorded; and it lets a
+    contradiction be *derived* from two sources disagreeing, so a contradictory-source
+    negative control carries no field marking it as a control (corpus task 2.2). A
+    declared ``contradictions`` pair would have marked one.
+    """
     inputs = item.inputs
     if not isinstance(inputs, dict):
-        return []
-    raw = inputs.get("contradictions")
-    if not isinstance(raw, list):
-        return []
-    pairs: list[tuple[str, str]] = []
-    for pair in raw:
-        if isinstance(pair, (list, tuple)) and len(pair) == 2:
-            pairs.append((str(pair[0]), str(pair[1])))
-    return pairs
+        return {}
+    sources = inputs.get("evidence_sources")
+    if not isinstance(sources, list):
+        return {}
+    claims: dict[str, SourceClaims] = {}
+    for source in sources:
+        if not isinstance(source, dict) or not source.get("source_id"):
+            continue
+        claims[str(source["source_id"])] = SourceClaims(
+            supports=_claim_keys(source, "supports"), refutes=_claim_keys(source, "refutes")
+        )
+    return claims
+
+
+def contradicted_claims(claims: dict[str, SourceClaims], recorded: set[str]) -> set[str]:
+    """Claim keys that one recorded source asserts and another recorded source denies.
+
+    Restricted to *recorded* sources on purpose: a disagreement between sources the
+    provenance wrapper never retrieved is not evidence the run actually holds.
+    """
+    supported = {key for sid in recorded for key in claims.get(sid, NO_CLAIMS).supports}
+    refuted = {key for sid in recorded for key in claims.get(sid, NO_CLAIMS).refutes}
+    return supported & refuted
 
 
 def read_generation_temperature(output: TargetOutput) -> float | None:

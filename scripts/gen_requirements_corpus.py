@@ -66,6 +66,20 @@ CONTROL_CLASSES = ("contradictory", "stale", "mutated")
 #: The class of an item that is not a negative control.
 ORDINARY_CLASS = "ordinary"
 
+#: Claim keys. A source declares which it asserts (``supports``) and which it denies
+#: (``refutes``); a generated requirement declares the one it asserts. Structured rather
+#: than inferred from prose so the grounding check is deterministic and offline — and so a
+#: contradiction is *derived* from two sources disagreeing rather than declared by a flag
+#: that would mark the item as a negative control (task 2.2).
+CLAIM_PERSISTENCE = "persistence"
+CLAIM_AUTH_REQUIRED = "auth_required"
+CLAIM_QUOTA = "quota"
+
+#: Asserted by the stand-in, supported by no source in any item. The spec's
+#: unsupported-constraint scenario: evidence mentions no performance target, the generated
+#: set asserts a latency budget.
+CLAIM_LATENCY_BUDGET = "latency_budget"
+
 _DOMAINS = ("billing", "auth", "search", "notify", "reporting")
 _AC_TEMPLATES = (
     "when {actor} submits valid input, the system persists it",
@@ -113,19 +127,30 @@ def build_items() -> list[dict[str, Any]]:
         # contain. Source bytes live in the corpus so the offline store can serve them.
         src_a = f"src-{epic_id}-a"
         src_b = f"src-{epic_id}-b"
-        base_a = f"The {domain} service persists submissions and reports quota use."
-        base_b = f"The {domain} service requires authentication for all actions."
+        # src_a is the governance source (persistence + authentication); src_b is the
+        # quota source. Splitting the claims across the two sources is what lets a control
+        # put them in genuine conflict: a contradictory src_b denies a claim src_a asserts.
+        base_a = f"The {domain} service persists submissions and requires authentication for all actions."
+        supports_a = [CLAIM_PERSISTENCE, CLAIM_AUTH_REQUIRED]
+        base_b = f"The {domain} service enforces a per-tenant quota."
+        supports_b, refutes_b = [CLAIM_QUOTA], []
 
         control = ORDINARY_CLASS
         if ordinal < control_count:
             control = CONTROL_CLASSES[ordinal % len(CONTROL_CLASSES)]
         if control == "contradictory":
-            base_b = f"The {domain} service allows anonymous actions."  # contradicts src_a's auth requirement
+            # Denies src_a's authentication requirement outright. Each class gets a
+            # distinct observable signature: contradictory shows up as a requirement
+            # citing a claim another recorded source refutes; stale as a claim no
+            # surviving source supports; mutated as post-capture provenance drift.
+            base_b = f"The {domain} service allows anonymous actions without authentication."
+            supports_b, refutes_b = [], [CLAIM_AUTH_REQUIRED]
         elif control == "stale":
-            base_b = f"DEPRECATED (rev 1): the {domain} service has no quota."
+            base_b = f"DEPRECATED (rev 1): the {domain} service enforces no quota."
+            supports_b, refutes_b = [], [CLAIM_QUOTA]
         # The "mutated" control leaves the evidence bytes alone here on purpose: what it
-        # mutates is what the *store* later serves, below, so the recorded hash covers the
-        # original bytes and the re-fetch diverges from it.
+        # mutates is what the *drifted* store later serves, so a re-fetch through that
+        # store diverges from the hash recorded against these bytes.
 
         evidence = {
             src_a: base_a,
@@ -136,18 +161,23 @@ def build_items() -> list[dict[str, Any]]:
                 "source_type": "drive_doc",
                 "source_id": src_a,
                 "reference": {"kind": "revision_export_link", "revision_id": f"rev-{epic_id}-a", "mime": "text/plain"},
+                "supports": supports_a,
+                "refutes": [],
             },
             {
                 "source_type": "drive_doc",
                 "source_id": src_b,
                 "reference": {"kind": "revision_export_link", "revision_id": f"rev-{epic_id}-b", "mime": "text/plain"},
+                "supports": supports_b,
+                "refutes": refutes_b,
             },
         ]
-        # The mutated control's store bytes differ from what its recorded hash covers.
-        store_bytes = dict(evidence)
+        # What a post-capture edit would serve on a re-fetch. Identical to the captured
+        # bytes except for the mutated control, whose src_b drifted.
+        drifted_bytes = dict(evidence)
         recorded_hashes = {sid: hashlib.sha256(data.encode()).hexdigest() for sid, data in evidence.items()}
         if control == "mutated":
-            store_bytes[src_b] = base_b + " (edited after capture)"
+            drifted_bytes[src_b] = base_b + " (edited after capture)"
 
         items.append(
             {
@@ -158,7 +188,7 @@ def build_items() -> list[dict[str, Any]]:
                 "gold_ac": gold,
                 "evidence_sources": sources,
                 "evidence_bytes": evidence,
-                "store_bytes": store_bytes,
+                "drifted_bytes": drifted_bytes,
                 "recorded_hashes": recorded_hashes,
                 "declared_tests": [f"test_{domain}_persists", f"test_{domain}_rejects_invalid"],
                 "control": control,
@@ -201,6 +231,12 @@ STANDIN_DROP_EVERY = 3
 #: hallucination rate is exercised rather than constantly zero.
 STANDIN_UNSUPPORTED_EVERY = 5
 
+#: Every Nth epic's stand-in asserts a latency budget against a source that *is* recorded
+#: but supports no such claim. Distinct from the modulus above on purpose: one exercises
+#: the citation check, the other the support check, and a corpus that only ever failed
+#: the first would leave the second unproven.
+STANDIN_UNGROUNDED_EVERY = 4
+
 #: The uncited source id the unsupported requirement points at. Deliberately absent from
 #: every item's ``evidence_sources``, so no run can record it.
 STANDIN_UNRECORDED_SOURCE = "src-not-retrieved"
@@ -218,27 +254,74 @@ def build_standin(item: dict[str, Any], ordinal: int) -> dict[str, Any]:
     0.0) cannot distinguish a working scorer from a broken one.
     """
     gold = item["gold_ac"]
+    domain = item["domain"]
     covered = gold[:-1] if ordinal % STANDIN_DROP_EVERY == 0 and len(gold) > 1 else gold
-    primary_source = item["evidence_sources"][0]["source_id"]
-    requirements = [
-        {
-            "id": f"{item['epic_id']}-r{index}",
-            "text": f"The {item['domain']} service SHALL ensure {ac['text']}.",
-            "covers": [ac["id"]],
-            "evidence_links": [primary_source],
-            "test_links": item["declared_tests"][:1],
+    governance_source, quota_source = (s["source_id"] for s in item["evidence_sources"])
+    first_ac = gold[0]["id"]
+    declared_test = item["declared_tests"][:1]
+
+    def requirement(text: str, claim: str, covers: list[str], links: list[str], tests: list[str]) -> dict[str, Any]:
+        return {
+            "id": f"{item['epic_id']}-r{len(requirements)}",
+            "text": text,
+            "claim": claim,
+            "covers": covers,
+            "evidence_links": links,
+            "test_links": tests,
         }
-        for index, ac in enumerate(covered)
-    ]
+
+    requirements: list[dict[str, Any]] = []
+    for ac in covered:
+        requirements.append(
+            requirement(
+                f"The {domain} service SHALL ensure {ac['text']}.",
+                CLAIM_PERSISTENCE,
+                [ac["id"]],
+                [governance_source],
+                declared_test,
+            )
+        )
+    # Emitted for *every* item, so the field shape cannot mark a control. What differs is
+    # the outcome: the authentication claim is cleanly supported on an ordinary item and
+    # contradicted on a contradictory one, and the quota claim loses its support on a
+    # stale one. The control class is a property of the evidence, never of the record.
+    requirements.append(
+        requirement(
+            f"The {domain} service SHALL require authentication for every action.",
+            CLAIM_AUTH_REQUIRED,
+            [first_ac],
+            [governance_source],
+            declared_test,
+        )
+    )
+    requirements.append(
+        requirement(
+            f"The {domain} service SHALL enforce the per-tenant quota.",
+            CLAIM_QUOTA,
+            [first_ac],
+            [quota_source],
+            declared_test,
+        )
+    )
     if ordinal % STANDIN_UNSUPPORTED_EVERY == 0:
         requirements.append(
-            {
-                "id": f"{item['epic_id']}-r{len(requirements)}",
-                "text": f"The {item['domain']} service SHALL respond within a fixed latency budget.",
-                "covers": [],
-                "evidence_links": [STANDIN_UNRECORDED_SOURCE],
-                "test_links": [],
-            }
+            requirement(
+                f"The {domain} service SHALL respond within a fixed latency budget.",
+                CLAIM_LATENCY_BUDGET,
+                [],
+                [STANDIN_UNRECORDED_SOURCE],
+                [],
+            )
+        )
+    if ordinal % STANDIN_UNGROUNDED_EVERY == 0:
+        requirements.append(
+            requirement(
+                f"The {domain} service SHALL complete every request within a fixed latency budget.",
+                CLAIM_LATENCY_BUDGET,
+                [first_ac],
+                [governance_source],
+                declared_test,
+            )
         )
     return {"requirements": requirements, "generation_temperature": STANDIN_TEMPERATURE}
 
@@ -246,9 +329,14 @@ def build_standin(item: dict[str, Any], ordinal: int) -> dict[str, Any]:
 def build_eval_records(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Harness-loadable records: the epic, its gold set, and its declared evidence.
 
-    ``evidence_bytes``/``store_bytes``/``recorded_hashes`` stay OUT of the inputs — they
+    ``evidence_bytes``/``drifted_bytes``/``recorded_hashes`` stay OUT of the record — they
     are corpus-internal ground truth the target must not see (the wrapper fetches through
     the store, and the verification pass compares against the recorded hashes).
+
+    **So does ``control``.** Task 2.2 requires that no field the target sees distinguishes
+    a negative control from an ordinary item, and ``EvalItem.metadata`` is handed to the
+    target along with everything else. The class stays in ``items.json``, which the harness
+    never loads; an analysis joins it back on ``corpus_item``.
 
     ``generated`` is the scripted stand-in (see :func:`build_standin`), which the shipped
     config surfaces with ``echo``'s ``output_key``. A real evaluation replaces the inner
@@ -265,27 +353,25 @@ def build_eval_records(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "generated": build_standin(item, ordinal),
             },
             "expected": [ac["id"] for ac in item["gold_ac"]],
-            "metadata": {
-                "corpus_item": item["epic_id"],
-                "control": item["control"],
-                "split": item["split"],
-                "gold_ac": item["gold_ac"],
-            },
+            "metadata": {"corpus_item": item["epic_id"], "split": item["split"]},
         }
         for ordinal, item in enumerate(items)
     ]
 
 
-def build_store(items: list[dict[str, Any]]) -> dict[str, str]:
-    """The offline evidence store the harness run reads: ``source_id -> served bytes``.
+def build_store(items: list[dict[str, Any]], *, key: str = "evidence_bytes") -> dict[str, str]:
+    """An offline evidence store: ``source_id -> served bytes``, drawn from *key*.
 
-    Serves ``store_bytes``, not ``evidence_bytes``: for a *mutated* control those differ,
-    and serving the original would make the corpus unable to demonstrate the very drift
-    its verification pass exists to catch.
+    Two stores ship, and the pair is what makes the mutated control mean anything. The
+    capture store (``evidence_bytes``) serves the bytes the recorded hashes cover, so an
+    ordinary run verifies clean. The drift store (``drifted_bytes``) serves what a
+    re-fetch would return after a post-capture edit, so re-verifying the *same* records
+    against it fails for exactly the mutated controls. One store alone can only record a
+    hash; it cannot demonstrate that verification detects drift (task 2.3).
     """
     store: dict[str, str] = {}
     for item in items:
-        for source_id, content in item["store_bytes"].items():
+        for source_id, content in item[key].items():
             store[str(source_id)] = str(content)
     return store
 
@@ -299,21 +385,32 @@ def _with_split(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def _jsonl(records: list[dict[str, Any]]) -> str:
+    return "".join(json.dumps(r, sort_keys=True) + "\n" for r in records)
+
+
+def split_records(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Eval records partitioned into the train and holdout splits.
+
+    Two files rather than one file plus a metadata label: a label is only a sequestered
+    split if something enforces it, and nothing in a dataset config filters on metadata.
+    The shipped config names the train artifact, so iterating on scorers cannot see the
+    holdout by default (task 2.5). Records are built over the *whole* corpus first, so an
+    item's scripted stand-in does not change with the split it lands in.
+    """
+    partitioned: dict[str, list[dict[str, Any]]] = {"train": [], "holdout": []}
+    for record in build_eval_records(items):
+        partitioned[str(record["metadata"]["split"])].append(record)
+    return partitioned
+
+
 def write_corpus(directory: Path) -> tuple[Path, Path]:
-    items = _with_split(build_items())
     directory.mkdir(parents=True, exist_ok=True)
-    items_path = directory / "items.json"
-    manifest_path = directory / "manifest.json"
-    items_path.write_text(_dumps(items), encoding="utf-8")
-    manifest_path.write_text(_dumps(build_manifest(items)), encoding="utf-8")
-    eval_dir = directory / "eval"
-    eval_dir.mkdir(exist_ok=True)
-    records = build_eval_records(items)
-    (eval_dir / "items.jsonl").write_text(
-        "".join(json.dumps(r, sort_keys=True) + "\n" for r in records), encoding="utf-8"
-    )
-    (eval_dir / "store.json").write_text(_dumps(build_store(items)), encoding="utf-8")
-    logger.info("wrote %d items to %s (+eval dataset and evidence store)", len(items), items_path)
+    (directory / "eval").mkdir(exist_ok=True)
+    for relative, text in generated_artifacts().items():
+        (directory / relative).write_text(text, encoding="utf-8")
+    items_path, manifest_path = directory / "items.json", directory / "manifest.json"
+    logger.info("wrote %d artifacts under %s", len(generated_artifacts()), directory)
     return items_path, manifest_path
 
 
@@ -324,11 +421,14 @@ def generated_artifacts() -> dict[str, str]:
     added to the corpus cannot be written without also being freshness-gated.
     """
     items = _with_split(build_items())
+    splits = split_records(items)
     return {
         "items.json": _dumps(items),
         "manifest.json": _dumps(build_manifest(items)),
-        "eval/items.jsonl": "".join(json.dumps(r, sort_keys=True) + "\n" for r in build_eval_records(items)),
+        "eval/train.jsonl": _jsonl(splits["train"]),
+        "eval/holdout.jsonl": _jsonl(splits["holdout"]),
         "eval/store.json": _dumps(build_store(items)),
+        "eval/store.drifted.json": _dumps(build_store(items, key="drifted_bytes")),
     }
 
 

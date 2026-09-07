@@ -32,12 +32,17 @@ GOLD = [
 ]
 
 
-def item(*, gold: Any = ..., declared_tests: Any = ..., contradictions: Any = None) -> EvalItem:
+def source(source_id: str, *, supports: tuple[str, ...] = (), refutes: tuple[str, ...] = ()) -> dict[str, Any]:
+    """One declared evidence source and the claim keys it asserts / denies."""
+    return {"source_id": source_id, "supports": list(supports), "refutes": list(refutes)}
+
+
+def item(*, gold: Any = ..., declared_tests: Any = ..., sources: Any = None) -> EvalItem:
     inputs: dict[str, Any] = {"epic": "epic text"}
     if declared_tests is not ...:
         inputs["declared_tests"] = declared_tests
-    if contradictions is not None:
-        inputs["contradictions"] = contradictions
+    if sources is not None:
+        inputs["evidence_sources"] = sources
     metadata: dict[str, Any] = {}
     if gold is not ...:
         metadata["gold_ac"] = gold
@@ -92,36 +97,82 @@ class TestAcRecall:
 
 
 class TestScopeHallucination:
-    def test_an_unsupported_constraint_is_flagged(self) -> None:
-        """Spec: evidence mentions no performance target; the set asserts a latency budget."""
+    def test_an_uncited_source_supports_nothing(self) -> None:
+        """Depth 1: a citation naming something the wrapper never recorded is not evidence."""
         reqs = [{"id": "r1", "text": "latency under 100ms", "evidence_links": ["src-unrecorded"]}]
         result = score("req_scope_hallucination", output(reqs, recorded=["src-a"]), item(gold=GOLD))
         assert result.value == 1.0 and result.passed is False
         assert result.metadata["unsupported"] == ["r1"]
 
+    def test_an_unsupported_constraint_is_flagged(self) -> None:
+        """Spec: evidence mentions no performance target; the set asserts a latency budget.
+
+        Depth 2, and the reason a citation check alone is not enough: the cited source is
+        real and recorded, so only reading what it actually claims catches this.
+        """
+        reqs = [
+            {
+                "id": "r1",
+                "text": "latency under 100ms",
+                "claim": "latency_budget",
+                "evidence_links": ["src-a"],
+            }
+        ]
+        it = item(gold=GOLD, sources=[source("src-a", supports=("persistence",))])
+        result = score("req_scope_hallucination", output(reqs, recorded=["src-a"]), it)
+        assert result.value == 1.0 and result.passed is False
+        assert result.metadata["unsupported"] == ["r1"]
+
     def test_a_supported_requirement_is_not_flagged(self) -> None:
-        reqs = [{"id": "r1", "text": "persists submissions", "evidence_links": ["src-a"]}]
+        reqs = [{"id": "r1", "text": "persists", "claim": "persistence", "evidence_links": ["src-a"]}]
+        it = item(gold=GOLD, sources=[source("src-a", supports=("persistence",))])
+        result = score("req_scope_hallucination", output(reqs, recorded=["src-a"]), it)
+        assert result.value == 0.0 and result.passed is True
+
+    def test_a_corpus_declaring_no_claims_still_scores_on_citations_alone(self) -> None:
+        """Back-compatible: a dataset predating claim keys keeps its depth-1 semantics."""
+        reqs = [{"id": "r1", "text": "persists", "evidence_links": ["src-a"]}]
         result = score("req_scope_hallucination", output(reqs, recorded=["src-a"]), item(gold=GOLD))
         assert result.value == 0.0 and result.passed is True
 
     def test_contradictory_sources_are_reported_not_resolved(self) -> None:
-        reqs = [{"id": "r1", "text": "allows anonymous", "evidence_links": ["src-a"]}]
-        it = item(gold=GOLD, contradictions=[["src-a", "src-b"]])
+        """Spec: a requirement asserting one side of a contradiction is not cleanly supported."""
+        reqs = [{"id": "r1", "text": "auth required", "claim": "auth_required", "evidence_links": ["src-a"]}]
+        it = item(
+            gold=GOLD,
+            sources=[source("src-a", supports=("auth_required",)), source("src-b", refutes=("auth_required",))],
+        )
         result = score("req_scope_hallucination", output(reqs, recorded=["src-a", "src-b"]), it)
-        assert result.passed is True  # supported, but NOT cleanly
         assert result.metadata["contradiction_citations"] == ["r1"]
+        assert result.metadata["contradicted_claims"] == ["auth_required"]
+        # Supported — the claim is in the evidence — so it stays out of the rate. But the
+        # evidence disagrees with itself, so it is not a clean pass either.
+        assert result.value == 0.0
+        assert result.passed is False
 
-    def test_citing_both_sides_is_not_a_one_sided_citation(self) -> None:
-        """Acknowledging the conflict is the behaviour the flag is meant to distinguish."""
-        reqs = [{"id": "r1", "text": "both", "evidence_links": ["src-a", "src-b"]}]
-        it = item(gold=GOLD, contradictions=[["src-a", "src-b"]])
+    def test_a_claim_no_source_disputes_is_not_swept_up_by_a_neighbouring_contradiction(self) -> None:
+        """Only the contradicted claim is reported, not every requirement on the item."""
+        reqs = [
+            {"id": "r1", "text": "persists", "claim": "persistence", "evidence_links": ["src-a"]},
+            {"id": "r2", "text": "auth required", "claim": "auth_required", "evidence_links": ["src-a"]},
+        ]
+        it = item(
+            gold=GOLD,
+            sources=[
+                source("src-a", supports=("persistence", "auth_required")),
+                source("src-b", refutes=("auth_required",)),
+            ],
+        )
         result = score("req_scope_hallucination", output(reqs, recorded=["src-a", "src-b"]), it)
-        assert result.metadata["contradiction_citations"] == []
+        assert result.metadata["contradiction_citations"] == ["r2"]
 
-    def test_a_contradiction_the_set_never_cites_is_not_reported(self) -> None:
-        reqs = [{"id": "r1", "text": "unrelated", "evidence_links": ["src-c"]}]
-        it = item(gold=GOLD, contradictions=[["src-a", "src-b"]])
-        result = score("req_scope_hallucination", output(reqs, recorded=["src-a", "src-b", "src-c"]), it)
+    def test_a_disagreement_among_unrecorded_sources_is_not_evidence_the_run_holds(self) -> None:
+        reqs = [{"id": "r1", "text": "auth required", "claim": "auth_required", "evidence_links": ["src-a"]}]
+        it = item(
+            gold=GOLD,
+            sources=[source("src-a", supports=("auth_required",)), source("src-b", refutes=("auth_required",))],
+        )
+        result = score("req_scope_hallucination", output(reqs, recorded=["src-a"]), it)
         assert result.metadata["contradiction_citations"] == []
         assert result.passed is True
 
@@ -176,6 +227,26 @@ class TestTraceabilityClosure:
         result = score("req_traceability_closure", output(reqs), item(gold=GOLD, declared_tests=["test_persists"]))
         assert result.metadata["incomplete"] == ["r1", "r2", "r3"]
         assert result.value == 0.25
+
+    def test_a_covers_link_to_an_undeclared_criterion_does_not_close_the_chain(self) -> None:
+        """Otherwise ``covers: ["anything"]`` scores this metric without doing the work —
+        and the two grounding scorers would disagree about what a valid link is, since
+        ``req_ac_recall`` has always counted only criteria in the gold set."""
+        reqs = [
+            {"id": "r1", "covers": ["ac-not-declared"], "test_links": ["test_persists"]},
+            {"id": "r2", "covers": [None], "test_links": ["test_persists"]},
+            {"id": "r3", "covers": ["ac-not-declared", "ac-1"], "test_links": ["test_persists"]},
+        ]
+        it = item(gold=GOLD, declared_tests=["test_persists"])
+        result = score("req_traceability_closure", output(reqs), it)
+        assert result.metadata["incomplete"] == ["r1", "r2"]
+        assert score("req_ac_recall", output(reqs), it).metadata["covered"] == ["ac-1"]
+
+    def test_a_corpus_declaring_no_gold_set_still_accepts_any_covers_link(self) -> None:
+        """With nothing to validate against, presence is all the chain can require."""
+        reqs = [{"id": "r1", "covers": ["ac-whatever"], "test_links": []}]
+        result = score("req_traceability_closure", output(reqs), item(gold=None, declared_tests=...))
+        assert result.value == 1.0 and result.passed is True
 
     def test_a_requirement_without_an_id_is_reported_by_position(self) -> None:
         result = score("req_traceability_closure", output([{"text": "no id"}]), item(gold=GOLD, declared_tests=None))
@@ -290,7 +361,7 @@ class TestReaders:
         bad.metadata = cast("dict[str, Any]", "not-a-mapping")
         assert req_readers.read_gold(bad) is None
         assert req_readers.read_declared_tests(bad) is None
-        assert req_readers.read_contradictions(bad) == []
+        assert req_readers.read_source_claims(bad) == {}
 
     def test_a_non_list_gold_declaration_reads_as_undeclared(self) -> None:
         assert req_readers.read_gold(EvalItem(id="i", inputs={}, metadata={"gold_ac": "ac-1"})) is None
@@ -338,13 +409,38 @@ class TestReaders:
         assert req_readers.read_declared_tests(EvalItem(id="i", inputs={})) is None
         assert req_readers.read_declared_tests(EvalItem(id="i", inputs={"declared_tests": "t"})) is None
 
-    def test_a_malformed_contradiction_pair_is_ignored_not_guessed(self) -> None:
-        it = EvalItem(id="i", inputs={"contradictions": [["a", "b"], ["c"], "d", ["e", "f", "g"]]})
-        assert req_readers.read_contradictions(it) == [("a", "b")]
+    def test_malformed_source_entries_are_skipped_not_guessed(self) -> None:
+        it = EvalItem(
+            id="i",
+            inputs={
+                "evidence_sources": [
+                    {"source_id": "a", "supports": ["x"], "refutes": "not-a-list"},
+                    {"supports": ["y"]},  # no source_id
+                    "a bare string",
+                ]
+            },
+        )
+        claims = req_readers.read_source_claims(it)
+        assert set(claims) == {"a"}
+        assert claims["a"] == req_readers.SourceClaims(supports=frozenset({"x"}), refutes=frozenset())
 
-    def test_contradictions_absent_or_malformed_read_as_none_declared(self) -> None:
-        assert req_readers.read_contradictions(EvalItem(id="i", inputs={})) == []
-        assert req_readers.read_contradictions(EvalItem(id="i", inputs={"contradictions": "a,b"})) == []
+    def test_sources_absent_or_malformed_read_as_no_claims(self) -> None:
+        assert req_readers.read_source_claims(EvalItem(id="i", inputs={})) == {}
+        assert req_readers.read_source_claims(EvalItem(id="i", inputs={"evidence_sources": "src-a"})) == {}
+
+    def test_a_claim_is_contradicted_only_when_both_sides_were_recorded(self) -> None:
+        claims = {
+            "a": req_readers.SourceClaims(supports=frozenset({"auth"})),
+            "b": req_readers.SourceClaims(refutes=frozenset({"auth"})),
+        }
+        assert req_readers.contradicted_claims(claims, {"a", "b"}) == {"auth"}
+        assert req_readers.contradicted_claims(claims, {"a"}) == set()
+        assert req_readers.contradicted_claims(claims, set()) == set()
+
+    def test_a_source_that_both_asserts_and_denies_a_claim_contradicts_itself(self) -> None:
+        """Degenerate but real: the check is over the recorded set, not over source pairs."""
+        claims = {"a": req_readers.SourceClaims(supports=frozenset({"x"}), refutes=frozenset({"x"}))}
+        assert req_readers.contradicted_claims(claims, {"a"}) == {"x"}
 
     def test_temperature_falls_back_to_metadata(self) -> None:
         out = TargetOutput(output={"requirements": []}, metadata={"generation_temperature": 0.4})
