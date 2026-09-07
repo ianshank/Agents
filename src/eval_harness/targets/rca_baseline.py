@@ -37,24 +37,50 @@ def _std(values: list[float]) -> float:
     return math.sqrt(sum((v - mu) ** 2 for v in values) / len(values))
 
 
-def _max_abs_z(metrics: dict[str, Any]) -> float:
+def _finite_values(values: Any) -> list[float]:
+    if isinstance(values, (str, bytes, dict)):
+        return []
+    try:
+        iterator = iter(values)
+    except TypeError:
+        return []
+    result: list[float] = []
+    try:
+        for value in iterator:
+            try:
+                number = float(value)
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if math.isfinite(number):
+                result.append(number)
+    except (TypeError, ValueError, RuntimeError):
+        return result
+    return result
+
+
+def _max_abs_z(metrics: Any) -> float:
     """Largest |z| over a candidate's metrics: post-window mean vs pre-window spread.
 
     A metric with a constant pre-window (zero spread) is skipped rather than producing
     an infinite z — an infinite z would win every ranking regardless of the post window.
     """
+    if not isinstance(metrics, dict):
+        return 0.0
     best = 0.0
     for series in metrics.values():
         if not isinstance(series, dict):
             continue
-        pre = [float(v) for v in series.get("pre") or []]
-        post = [float(v) for v in series.get("post") or []]
+        pre = _finite_values(series.get("pre"))
+        post = _finite_values(series.get("post"))
         if not pre or not post:
             continue
-        spread = _std(pre)
-        if spread <= 0.0:
+        try:
+            spread = _std(pre)
+            z = abs(_mean(post) - _mean(pre)) / spread if spread > 0.0 else 0.0
+        except (OverflowError, ValueError, ZeroDivisionError):
             continue
-        z = abs(_mean(post) - _mean(pre)) / spread
+        if not math.isfinite(z):
+            continue
         best = max(best, z)
     return best
 
