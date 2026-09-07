@@ -26,10 +26,19 @@ dataset:
 target:
   type: provenance_recorder
   params:
-    inner_spec: { type: echo }
-    # Offline store: the wrapper fetches each item's declared evidence_sources from
-    # this mapping. The frozen corpus's own bytes back it in the shipped journey.
-    store_contents: {}
+    # `echo` surfaces the corpus's scripted stand-in generator output (`inputs.generated`)
+    # so all four scorers run offline with no model call. The stand-in is DERIVED from the
+    # gold set: its scores describe the stand-in and are not a measurement of any
+    # generator. Point `inner_spec` at the system under test for a real evaluation; the
+    # `generated` field then simply goes unread.
+    inner_spec: { type: echo, params: { output_key: generated } }
+    # Offline store: the wrapper fetches each item's declared evidence_sources from this
+    # file, which the generator emits alongside the dataset. It serves the bytes the
+    # sources RESOLVE TO — for a mutated control those differ from the bytes the recorded
+    # hash covers, which is what lets `verify_provenance` demonstrate drift here at all.
+    # Read under DATA_ROOT confinement, like every other config-named dataset path.
+    # `store_contents:` takes the same mapping inline for a small ad-hoc store.
+    store_path: "corpora/requirements/v1/eval/store.json"
 
 scorers:
   - type: req_ac_recall

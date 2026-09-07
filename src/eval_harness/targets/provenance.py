@@ -23,11 +23,15 @@ distinct from a scoring failure.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Protocol, runtime_checkable
+from pathlib import Path
+from typing import Any, Protocol, TypeAlias, runtime_checkable
 
+from ..core._paths import DATA_ROOT_ENV, resolve_confined_path
 from ..core.interfaces import TargetRunner
 from ..core.types import REQUIREMENTS_EVIDENCE_KEY, EvalItem, TargetOutput
 from ..plugins import TARGETS
@@ -37,11 +41,21 @@ logger = logging.getLogger(__name__)
 #: Reference kinds that pin content to a version (a re-fetch returns the same bytes).
 PINNABLE_KINDS: frozenset[str] = frozenset({"revision_export_link", "content_addressed"})
 
+#: The DI seam for "now". Named rather than left as ``Any`` so a caller injecting a fixed
+#: clock is type-checked at the call site; mirrors ``agent_core.protocols.Clock`` in shape
+#: without importing it (that package is not a dependency of the harness).
+RetrievalClock: TypeAlias = Callable[[], object]
+
 
 @runtime_checkable
 class EvidenceStore(Protocol):
     """Where evidence bytes come from. The synthetic corpus's store is in-memory; live
-    adapters (Drive, Context7) implement the same two-call surface."""
+    adapters (Drive, Context7) implement the same single-call surface.
+
+    Verification is deliberately *not* a store method: ``verify_provenance`` re-fetches
+    through ``fetch`` and compares hashes itself, so a store cannot self-certify content
+    it has already drifted away from.
+    """
 
     def fetch(self, source_id: str, reference: dict[str, Any]) -> bytes:
         """Return the bytes *reference* resolves to for *source_id*."""
@@ -60,6 +74,23 @@ class MappingEvidenceStore:
         except KeyError as exc:
             logger.debug("Evidence source %r not found in store", source_id)
             raise KeyError(f"evidence source {source_id!r} is not in the store") from exc
+
+
+def load_store_file(path: str | Path) -> MappingEvidenceStore:
+    """Build a store from a JSON ``{source_id: content}`` mapping on disk.
+
+    A config naming a file is a config-driven filesystem read, so it goes through the
+    same ``DATA_ROOT`` confinement every dataset read uses (ADR 0039's sibling rule) —
+    an evidence store is dataset-shaped input and must not be the one read that escapes.
+    """
+    resolved = resolve_confined_path(
+        path, root_env_var=DATA_ROOT_ENV, description="evidence store path", must_exist=True
+    )
+    payload: Any = json.loads(resolved.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"evidence store {resolved} must be a JSON object of source_id -> content")
+    logger.debug("Loaded %d evidence sources from %s", len(payload), resolved)
+    return MappingEvidenceStore(contents={str(k): str(v).encode("utf-8") for k, v in payload.items()})
 
 
 def build_evidence_record(
@@ -127,9 +158,11 @@ class ProvenanceRecorderTarget(TargetRunner):
 
     * **DI** (tests, in-process composition): pass ``inner`` and ``store`` objects.
     * **Config** (registry-driven): pass ``inner_spec`` (a ``{type, params}`` mapping
-      resolved through the TARGETS registry) and ``store_contents`` (a source_id →
-      content mapping, e.g. the synthetic corpus's evidence bytes). No config string
-      names an importable callable, so the wrapper adds no allowlist surface (ADR 0039).
+      resolved through the TARGETS registry) plus either ``store_contents`` (an inline
+      source_id → content mapping) or ``store_path`` (a JSON file of the same shape,
+      read under ``DATA_ROOT`` confinement — how the shipped corpus supplies its 50
+      evidence sources without restating them in YAML). No config string names an
+      importable callable, so the wrapper adds no allowlist surface (ADR 0039).
     """
 
     def __init__(
@@ -138,15 +171,22 @@ class ProvenanceRecorderTarget(TargetRunner):
         store: EvidenceStore | None = None,
         inner_spec: dict[str, Any] | None = None,
         store_contents: dict[str, str] | None = None,
-        clock: Any = None,
+        store_path: str | Path | None = None,
+        clock: RetrievalClock | None = None,
     ) -> None:
         if inner is None:
             if not isinstance(inner_spec, dict) or "type" not in inner_spec:
                 raise ValueError("provenance_recorder requires an inner target (inner= or inner_spec=)")
             inner = TARGETS.create(str(inner_spec["type"]), inner_spec.get("params") or {})
         if store is None:
-            store = MappingEvidenceStore(
-                contents={str(k): v.encode("utf-8") for k, v in (store_contents or {}).items()}
+            if store_path is not None and store_contents:
+                raise ValueError("provenance_recorder takes store_path or store_contents, not both")
+            store = (
+                load_store_file(store_path)
+                if store_path is not None
+                else MappingEvidenceStore(
+                    contents={str(k): v.encode("utf-8") for k, v in (store_contents or {}).items()}
+                )
             )
         self.inner = inner
         self.store = store

@@ -29,7 +29,6 @@ import argparse
 import hashlib
 import json
 import logging
-import random
 import sys
 from pathlib import Path
 from typing import Any
@@ -59,6 +58,14 @@ ITEM_COUNT = 25
 #: Ordinary items fill the rest.
 CONTROL_FRACTION = 0.36
 
+#: The negative-control classes, in the order items cycle through them. Named here rather
+#: than restated inline so the generator, the manifest census and the tests agree by
+#: construction about what classes exist.
+CONTROL_CLASSES = ("contradictory", "stale", "mutated")
+
+#: The class of an item that is not a negative control.
+ORDINARY_CLASS = "ordinary"
+
 _DOMAINS = ("billing", "auth", "search", "notify", "reporting")
 _AC_TEMPLATES = (
     "when {actor} submits valid input, the system persists it",
@@ -80,7 +87,12 @@ def _item_hash(item: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(item, sort_keys=True).encode()).hexdigest()
 
 
-def _gold_acs(rng: random.Random, domain: str, count: int) -> list[dict[str, str]]:
+def _gold_acs(domain: str, count: int) -> list[dict[str, str]]:
+    """The declared gold acceptance criteria for one epic.
+
+    Templated rather than sampled: the corpus is a fixture, and a seeded RNG here would
+    only look like variation while producing one fixed sequence anyway.
+    """
     actor = f"{domain} user"
     return [
         {"id": f"ac-{domain}-{i}", "text": _AC_TEMPLATES[i % len(_AC_TEMPLATES)].format(actor=actor)}
@@ -93,10 +105,9 @@ def build_items() -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     control_count = round(ITEM_COUNT * CONTROL_FRACTION)
     for ordinal in range(ITEM_COUNT):
-        rng = random.Random(f"{GENERATOR_SEED}:req-{ordinal:02d}")
         domain = _DOMAINS[ordinal % len(_DOMAINS)]
         epic_id = f"req-{ordinal:02d}"
-        gold = _gold_acs(rng, domain, 3 + ordinal % 3)
+        gold = _gold_acs(domain, 3 + ordinal % 3)
 
         # Every item declares two evidence sources; the control class decides what they
         # contain. Source bytes live in the corpus so the offline store can serve them.
@@ -105,16 +116,16 @@ def build_items() -> list[dict[str, Any]]:
         base_a = f"The {domain} service persists submissions and reports quota use."
         base_b = f"The {domain} service requires authentication for all actions."
 
-        control = "ordinary"
+        control = ORDINARY_CLASS
         if ordinal < control_count:
-            control = ("contradictory", "stale", "mutated")[ordinal % 3]
+            control = CONTROL_CLASSES[ordinal % len(CONTROL_CLASSES)]
         if control == "contradictory":
             base_b = f"The {domain} service allows anonymous actions."  # contradicts src_a's auth requirement
         elif control == "stale":
             base_b = f"DEPRECATED (rev 1): the {domain} service has no quota."
-        elif control == "mutated":
-            # The recorded hash is over the ORIGINAL bytes; the store serves mutated ones.
-            pass
+        # The "mutated" control leaves the evidence bytes alone here on purpose: what it
+        # mutates is what the *store* later serves, below, so the recorded hash covers the
+        # original bytes and the re-fetch diverges from it.
 
         evidence = {
             src_a: base_a,
@@ -178,12 +189,70 @@ def _dumps(payload: Any) -> str:
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"
 
 
+#: Generation temperature the scripted stand-in reports. A diversity score without one is
+#: uninterpretable by contract, so the stand-in has to declare the value it "ran at".
+STANDIN_TEMPERATURE = 0.7
+
+#: Every Nth epic's stand-in drops its last gold criterion, so recall varies across the
+#: corpus instead of being a flat 1.0 that would prove nothing about the scorer.
+STANDIN_DROP_EVERY = 3
+
+#: Every Nth epic's stand-in cites a source the wrapper never recorded, so the
+#: hallucination rate is exercised rather than constantly zero.
+STANDIN_UNSUPPORTED_EVERY = 5
+
+#: The uncited source id the unsupported requirement points at. Deliberately absent from
+#: every item's ``evidence_sources``, so no run can record it.
+STANDIN_UNRECORDED_SOURCE = "src-not-retrieved"
+
+
+def build_standin(item: dict[str, Any], ordinal: int) -> dict[str, Any]:
+    """A scripted generator output for one epic — the artifact the scorers grade.
+
+    **This is a stand-in, not a measurement.** It is derived from the gold set on purpose:
+    its job is to make the shipped journey exercise all four scorers offline with no model
+    call. Scores it produces describe the stand-in, never a real generator. A real run
+    points ``inner_spec`` at the system under test and these fields go unused.
+
+    Scripted to be imperfect and to vary, because a demo that scores a flat 1.0 (or a flat
+    0.0) cannot distinguish a working scorer from a broken one.
+    """
+    gold = item["gold_ac"]
+    covered = gold[:-1] if ordinal % STANDIN_DROP_EVERY == 0 and len(gold) > 1 else gold
+    primary_source = item["evidence_sources"][0]["source_id"]
+    requirements = [
+        {
+            "id": f"{item['epic_id']}-r{index}",
+            "text": f"The {item['domain']} service SHALL ensure {ac['text']}.",
+            "covers": [ac["id"]],
+            "evidence_links": [primary_source],
+            "test_links": item["declared_tests"][:1],
+        }
+        for index, ac in enumerate(covered)
+    ]
+    if ordinal % STANDIN_UNSUPPORTED_EVERY == 0:
+        requirements.append(
+            {
+                "id": f"{item['epic_id']}-r{len(requirements)}",
+                "text": f"The {item['domain']} service SHALL respond within a fixed latency budget.",
+                "covers": [],
+                "evidence_links": [STANDIN_UNRECORDED_SOURCE],
+                "test_links": [],
+            }
+        )
+    return {"requirements": requirements, "generation_temperature": STANDIN_TEMPERATURE}
+
+
 def build_eval_records(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Harness-loadable records: the epic, its gold set, and its declared evidence.
 
     ``evidence_bytes``/``store_bytes``/``recorded_hashes`` stay OUT of the inputs — they
     are corpus-internal ground truth the target must not see (the wrapper fetches through
     the store, and the verification pass compares against the recorded hashes).
+
+    ``generated`` is the scripted stand-in (see :func:`build_standin`), which the shipped
+    config surfaces with ``echo``'s ``output_key``. A real evaluation replaces the inner
+    target and ignores this field.
     """
     return [
         {
@@ -193,6 +262,7 @@ def build_eval_records(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "title": item["title"],
                 "evidence_sources": item["evidence_sources"],
                 "declared_tests": item["declared_tests"],
+                "generated": build_standin(item, ordinal),
             },
             "expected": [ac["id"] for ac in item["gold_ac"]],
             "metadata": {
@@ -202,16 +272,31 @@ def build_eval_records(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "gold_ac": item["gold_ac"],
             },
         }
-        for item in items
+        for ordinal, item in enumerate(items)
     ]
 
 
-def _with_split(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = []
+def build_store(items: list[dict[str, Any]]) -> dict[str, str]:
+    """The offline evidence store the harness run reads: ``source_id -> served bytes``.
+
+    Serves ``store_bytes``, not ``evidence_bytes``: for a *mutated* control those differ,
+    and serving the original would make the corpus unable to demonstrate the very drift
+    its verification pass exists to catch.
+    """
+    store: dict[str, str] = {}
     for item in items:
-        item["split"] = "holdout" if _bucket(GENERATOR_SEED, item["epic_id"]) < HOLDOUT_FRACTION else "train"
-        out.append(item)
-    return out
+        for source_id, content in item["store_bytes"].items():
+            store[str(source_id)] = str(content)
+    return store
+
+
+def _with_split(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Copies carrying a keyed ``split``. Copies, not in-place edits, so a caller that
+    reuses its own list does not find it silently rewritten."""
+    return [
+        {**item, "split": ("holdout" if _bucket(GENERATOR_SEED, item["epic_id"]) < HOLDOUT_FRACTION else "train")}
+        for item in items
+    ]
 
 
 def write_corpus(directory: Path) -> tuple[Path, Path]:
@@ -227,26 +312,34 @@ def write_corpus(directory: Path) -> tuple[Path, Path]:
     (eval_dir / "items.jsonl").write_text(
         "".join(json.dumps(r, sort_keys=True) + "\n" for r in records), encoding="utf-8"
     )
-    logger.info("wrote %d items to %s (+eval dataset)", len(items), items_path)
+    (eval_dir / "store.json").write_text(_dumps(build_store(items)), encoding="utf-8")
+    logger.info("wrote %d items to %s (+eval dataset and evidence store)", len(items), items_path)
     return items_path, manifest_path
+
+
+def generated_artifacts() -> dict[str, str]:
+    """Every file ``--write`` emits, mapped to its expected text.
+
+    One derivation shared by the writer's expectations and the checker, so an artifact
+    added to the corpus cannot be written without also being freshness-gated.
+    """
+    items = _with_split(build_items())
+    return {
+        "items.json": _dumps(items),
+        "manifest.json": _dumps(build_manifest(items)),
+        "eval/items.jsonl": "".join(json.dumps(r, sort_keys=True) + "\n" for r in build_eval_records(items)),
+        "eval/store.json": _dumps(build_store(items)),
+    }
 
 
 def check_corpus(directory: Path) -> list[str]:
     problems: list[str] = []
-    items = _with_split(build_items())
-    for name, fresh in (("items.json", items), ("manifest.json", build_manifest(items))):
-        path = directory / name
+    for relative, expected in generated_artifacts().items():
+        path = directory / relative
         if not path.exists():
             problems.append(f"{path} is missing")
-            continue
-        if path.read_text(encoding="utf-8") != _dumps(fresh):
+        elif path.read_text(encoding="utf-8") != expected:
             problems.append(f"{path} differs from a fresh generation — regenerate with --write")
-    path = directory / "eval" / "items.jsonl"
-    expected = "".join(json.dumps(r, sort_keys=True) + "\n" for r in build_eval_records(items))
-    if not path.exists():
-        problems.append(f"{path} is missing")
-    elif path.read_text(encoding="utf-8") != expected:
-        problems.append(f"{path} differs from a fresh generation — regenerate with --write")
     return problems
 
 

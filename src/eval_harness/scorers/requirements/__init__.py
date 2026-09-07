@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ...core.types import EvalItem, ScoreResult, TargetOutput
+from ...core.types import REQUIREMENTS_EVIDENCE_KEY, EvalItem, ScoreResult, TargetOutput
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,10 @@ def read_gold(item: EvalItem) -> list[str] | None:
 def read_recorded_source_ids(output: TargetOutput) -> set[str]:
     """The source_ids the provenance wrapper actually recorded for this run."""
     metadata = output.metadata if isinstance(output.metadata, dict) else {}
-    records = metadata.get("requirements_evidence") or []
+    records = metadata.get(REQUIREMENTS_EVIDENCE_KEY) or []
+    if not isinstance(records, list):
+        logger.warning("requirements: %s payload is not a list", REQUIREMENTS_EVIDENCE_KEY)
+        return set()
     return {str(r.get("source_id")) for r in records if isinstance(r, dict) and r.get("source_id")}
 
 

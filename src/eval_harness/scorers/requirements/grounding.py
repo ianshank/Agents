@@ -7,6 +7,7 @@ generator's own account), per the spec's anti-circularity and evidence-record ru
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from ...core.interfaces import Scorer
 from ...core.types import EvalItem, RunContext, ScoreResult, TargetOutput
@@ -25,7 +26,7 @@ from . import (
 logger = logging.getLogger(__name__)
 
 
-def _links(req: dict, key: str) -> list[str]:
+def _links(req: dict[str, Any], key: str) -> list[str]:
     raw = req.get(key)
     if not isinstance(raw, list):
         return []

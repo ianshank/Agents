@@ -65,10 +65,51 @@ network.
   is uninterpretable).
 - **Frozen synthetic corpus** at `corpora/requirements/v1/` (25 epics, authored
   gold AC sets, contradictory / stale / mutated negative controls). Regenerated
-  by `scripts/gen_requirements_corpus.py`; `--check` gates drift.
+  by `scripts/gen_requirements_corpus.py`; `--check` gates drift. The generator
+  also emits `eval/store.json` (the offline evidence store, serving the bytes each
+  source *resolves to* — mutated bytes for a mutated control) and a scripted,
+  deliberately imperfect `generated` stand-in per record, so the shipped journey
+  scores something without a model call. The stand-in describes itself, never a
+  real generator.
 - **Advisory-only gate rules** in `config/requirements_eval.yaml`. A sub-floor
   diversity score escalates through the advisory channel rather than failing the
   run (F-062).
+
+#### Fixed during peer review of the same change
+
+- **The shipped journey did not run.** `config/requirements_eval.yaml` named an
+  empty `store_contents: {}` while every corpus item declares two evidence
+  sources, so `eval-harness run --config config/requirements_eval.yaml` — the
+  command `config/README.md` and `AGENTS.md` document — raised `KeyError` on the
+  first item. The target grew a `store_path` param (read under `DATA_ROOT`
+  confinement, like every other config-named path) and the config points at the
+  generated store. `tests/test_requirements_corpus.py::TestShippedJourney` runs
+  the config end to end and refuses a vacuous result: no target errors, all four
+  scorers reporting over all 25 items, and more than one distinct recall value.
+- **Punctuation-only requirements scored as maximally diverse.** An empty token
+  set has an empty union with every other, which the Jaccard term read as zero
+  similarity. The scorer now filters on *tokenizable* content and reports "not
+  measured"; the two halves of the score also share one tokenizer, so
+  `"rejects it."` and `"rejects it"` are no longer two tokens to distinct-1 and
+  one to Jaccard.
+- **The scorers restated the evidence-key literal** (`"requirements_evidence"`)
+  instead of importing `REQUIREMENTS_EVIDENCE_KEY`, so the target-produces /
+  scorer-reads seam could have been renamed on one side and silently reported
+  every requirement as unsupported on the other. The sibling testgen package
+  already imported its constant.
+- **`AGENTS.md` documented an `EvidenceStore` API that does not exist**
+  (`fetch_record`/`verify_record`, `InMemoryEvidenceStore`). The protocol has one
+  call, `fetch`, and the class is `MappingEvidenceStore`.
+- **The corpus generator's seeded RNG was decorative** — constructed per item and
+  passed to a function that ignored it. Removing it left the committed corpus
+  byte-identical, which is the proof it was doing nothing.
+- **`_with_split` rewrote its argument in place** rather than returning copies.
+- New negative-path tests take all four new modules to 100% line and branch
+  coverage; a repo-wide 96% floor had let them sit at 92% behind the headroom.
+- `tests/test_claude_hooks.py` now derives the corpus-generator list from the
+  filesystem and asserts every one has a row in the Stop hook's `_CHECKERS` table
+  and a line in `make corpus-check` / `corpus-write` — the next corpus cannot be
+  added unwatched.
 
 ### Added — labeling protocol and judge baseline
 

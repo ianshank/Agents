@@ -8,14 +8,22 @@ verification pass reports drift as a provenance failure distinct from scoring.
 
 from __future__ import annotations
 
+import hashlib
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any, cast
+
 import pytest
 
 from eval_harness.core.types import REQUIREMENTS_EVIDENCE_KEY, EvalItem, TargetOutput
 from eval_harness.plugins import TARGETS, bootstrap
 from eval_harness.targets.provenance import (
+    EvidenceStore,
     MappingEvidenceStore,
     ProvenanceRecorderTarget,
     build_evidence_record,
+    load_store_file,
     verify_provenance,
 )
 
@@ -117,10 +125,147 @@ def test_a_missing_source_fails_the_run_loudly() -> None:
 
 
 def test_inner_spec_and_store_contents_config_construction() -> None:
+    """The config path must actually retrieve, not merely construct."""
     target = ProvenanceRecorderTarget(
         inner_spec={"type": "echo"},
         store_contents={"doc-1": "content"},
     )
-    assert target is not None
+    out = target.run(_item([{"source_type": "drive_doc", "source_id": "doc-1", "reference": REF}]))
+    records = out.metadata[REQUIREMENTS_EVIDENCE_KEY]
+    assert records[0]["content_sha256"] == hashlib.sha256(b"content").hexdigest()
+
+
+def test_construction_without_any_inner_is_refused() -> None:
     with pytest.raises(ValueError, match="inner target"):
         ProvenanceRecorderTarget(inner=None, inner_spec=None)
+
+
+def test_an_inner_spec_without_a_type_is_refused() -> None:
+    with pytest.raises(ValueError, match="inner target"):
+        ProvenanceRecorderTarget(inner_spec={"params": {}})
+
+
+def test_a_non_mapping_source_entry_is_skipped_not_fetched() -> None:
+    """A malformed dataset row must not take the run down, and must not be recorded."""
+    store = MappingEvidenceStore(contents={"doc-1": b"bytes"})
+    sources = ["not-a-mapping", {"source_type": "drive_doc", "source_id": "doc-1", "reference": REF}]
+    out = _target(store).run(_item(sources))
+    records = out.metadata[REQUIREMENTS_EVIDENCE_KEY]
+    assert [r["source_id"] for r in records] == ["doc-1"]
+
+
+def test_a_non_mapping_reference_records_an_unpinnable_source() -> None:
+    store = MappingEvidenceStore(contents={"doc-1": b"bytes"})
+    out = _target(store).run(_item([{"source_type": "drive_doc", "source_id": "doc-1", "reference": "rev-9"}]))
+    record = out.metadata[REQUIREMENTS_EVIDENCE_KEY][0]
+    assert record["pinnable"] is False
+    assert "content_sha256" not in record
+
+
+def test_items_whose_inputs_are_not_a_mapping_record_nothing() -> None:
+    item = EvalItem(id="req-1", inputs=cast("dict[str, Any]", ["evidence_sources"]))
+    assert _target(MappingEvidenceStore()).run(item).metadata[REQUIREMENTS_EVIDENCE_KEY] == []
+
+
+class TestStoreFile:
+    """``store_path`` is a config-driven filesystem read, so it obeys DATA_ROOT."""
+
+    def _store(self, tmp_path: Path) -> Path:
+        path = tmp_path / "store.json"
+        path.write_text(json.dumps({"doc-1": "content"}), encoding="utf-8")
+        return path
+
+    def test_a_store_file_backs_retrieval(self, tmp_path: Path) -> None:
+        target = ProvenanceRecorderTarget(inner=_EchoInner(), store_path=self._store(tmp_path))
+        record = target.run(_item([{"source_type": "d", "source_id": "doc-1", "reference": REF}])).metadata[
+            REQUIREMENTS_EVIDENCE_KEY
+        ][0]
+        assert record["content_sha256"] == hashlib.sha256(b"content").hexdigest()
+
+    def test_a_store_outside_data_root_is_refused(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An evidence store must not be the one config-named read that escapes confinement."""
+        outside = self._store(tmp_path)
+        confined = tmp_path / "allowed"
+        confined.mkdir()
+        monkeypatch.setenv("DATA_ROOT", str(confined))
+        with pytest.raises(ValueError, match="outside DATA_ROOT"):
+            load_store_file(outside)
+
+    def test_a_traversal_segment_is_refused_before_resolution(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="traversal"):
+            load_store_file(tmp_path / ".." / "store.json")
+
+    def test_a_missing_store_names_the_path_rather_than_raising_oserror(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="does not exist"):
+            load_store_file(tmp_path / "absent.json")
+
+    def test_a_store_that_is_not_a_json_object_is_refused(self, tmp_path: Path) -> None:
+        path = tmp_path / "store.json"
+        path.write_text(json.dumps(["doc-1"]), encoding="utf-8")
+        with pytest.raises(ValueError, match="JSON object"):
+            load_store_file(path)
+
+    def test_supplying_both_store_forms_is_refused_rather_than_silently_ranked(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="not both"):
+            ProvenanceRecorderTarget(
+                inner=_EchoInner(), store_path=self._store(tmp_path), store_contents={"doc-1": "other"}
+            )
+
+    def test_an_explicit_store_object_still_wins_over_config_params(self, tmp_path: Path) -> None:
+        """DI is the inner seam; naming a file must not override an injected store."""
+        target = ProvenanceRecorderTarget(
+            inner=_EchoInner(),
+            store=MappingEvidenceStore(contents={"doc-1": b"injected"}),
+            store_path=self._store(tmp_path),
+        )
+        record = target.run(_item([{"source_type": "d", "source_id": "doc-1", "reference": REF}])).metadata[
+            REQUIREMENTS_EVIDENCE_KEY
+        ][0]
+        assert record["content_sha256"] == hashlib.sha256(b"injected").hexdigest()
+
+
+def test_the_in_memory_store_satisfies_the_protocol_structurally() -> None:
+    """The seam is structural: a live adapter needs the shape, not the base class."""
+    assert isinstance(MappingEvidenceStore(), EvidenceStore)
+    assert not isinstance(object(), EvidenceStore)
+
+
+class TestDeterminismDeclaration:
+    """``is_deterministic`` must not claim more than the wrapper can know."""
+
+    def test_a_live_clock_makes_the_wrapper_undeclared(self) -> None:
+        """The retrieval timestamp is wall-clock, so the wrapper cannot promise determinism."""
+        assert _target(MappingEvidenceStore()).is_deterministic() is None
+
+    def test_a_fixed_clock_defers_to_the_inner_target(self) -> None:
+        target = ProvenanceRecorderTarget(inner=_EchoInner(), store=MappingEvidenceStore(), clock=lambda: "t0")
+        assert target.is_deterministic() is True
+
+    def test_an_inner_that_declares_nothing_leaves_the_wrapper_undeclared(self) -> None:
+        class _Silent:
+            def run(self, item: EvalItem) -> TargetOutput:
+                return TargetOutput(output={})
+
+        target = ProvenanceRecorderTarget(
+            inner=cast("Any", _Silent()), store=MappingEvidenceStore(), clock=lambda: "t0"
+        )
+        assert target.is_deterministic() is None
+
+    def test_a_fixed_clock_stamps_every_record_identically(self) -> None:
+        store = MappingEvidenceStore(contents={"doc-1": b"a", "doc-2": b"b"})
+        target = ProvenanceRecorderTarget(inner=_EchoInner(), store=store, clock=lambda: "2026-01-01T00:00:00+00:00")
+        sources = [
+            {"source_type": "drive_doc", "source_id": "doc-1", "reference": REF},
+            {"source_type": "drive_doc", "source_id": "doc-2", "reference": REF},
+        ]
+        records = target.run(_item(sources)).metadata[REQUIREMENTS_EVIDENCE_KEY]
+        assert {r["retrieved_at"] for r in records} == {"2026-01-01T00:00:00+00:00"}
+
+    def test_a_live_clock_stamps_an_iso_utc_timestamp(self) -> None:
+        store = MappingEvidenceStore(contents={"doc-1": b"a"})
+        record = (
+            _target(store)
+            .run(_item([{"source_type": "d", "source_id": "doc-1", "reference": REF}]))
+            .metadata[REQUIREMENTS_EVIDENCE_KEY][0]
+        )
+        assert datetime.fromisoformat(record["retrieved_at"]).tzinfo is not None

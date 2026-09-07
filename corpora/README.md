@@ -76,6 +76,20 @@ contradictory / stale / mutated negative control (F-068, ADR 0047).
 | `manifest.json` | schema version, generator seed, split counts, per-item hashes |
 | `items.json` | the corpus itself — gold ACs, evidence bytes, declared tests, control class |
 | `eval/items.jsonl` | harness-loadable records pairing each epic with its generated-set stand-in |
+| `eval/store.json` | the offline evidence store — `source_id` → the bytes that source *resolves to* |
+
+`eval/store.json` is what `config/requirements_eval.yaml` names as the target's
+`store_path`, so `eval-harness run --config config/requirements_eval.yaml` retrieves real
+evidence with no network. It serves `store_bytes`, not `evidence_bytes`: for a **mutated**
+control those two differ, and serving the original would leave the corpus unable to
+demonstrate the drift its verification pass exists to catch.
+
+The `generated` field on each eval record is a **scripted stand-in**, not a model output.
+It is derived from the gold set so the shipped journey exercises all four scorers offline;
+scores it produces describe the stand-in and measure no real generator. It is deliberately
+imperfect and varied — a demo that scores a flat 1.0 cannot tell a working scorer from a
+broken one. A real evaluation points `inner_spec` at the system under test, and the field
+goes unread.
 
 Three properties are measured rather than asserted:
 

@@ -22,31 +22,42 @@ from . import NO_REQUIREMENTS, NO_TEMPERATURE, not_applicable, read_generation_t
 logger = logging.getLogger(__name__)
 
 
-def _tokens(text: str) -> set[str]:
-    """Whitespace/punctuation token set, lowercased. Lexical by design (no embeddings)."""
-    return {
-        "".join(ch for ch in word if ch.isalnum()) for text_part in [text] for word in text_part.lower().split()
-    } - {""}
+def tokenize(text: str) -> list[str]:
+    """Lowercased alphanumeric tokens, in order. Lexical by design (no embeddings).
+
+    One tokenizer serves both components deliberately. When distinct-1 counted raw
+    whitespace splits and Jaccard counted punctuation-stripped ones, ``"rejects it."``
+    and ``"rejects it"`` were two tokens to one half of the score and one to the other,
+    so the two halves were not measuring the same set.
+    """
+    return [stripped for word in text.lower().split() if (stripped := "".join(ch for ch in word if ch.isalnum()))]
 
 
 def _distinct_1(texts: list[str]) -> float:
-    """Unique-token ratio over the whole set (distinct-1)."""
-    all_tokens = [token for text in texts for token in " ".join(text.lower().split()).split()]
+    """Unique-token ratio over the whole set (distinct-1). Empty input scores 0.0."""
+    all_tokens = [token for text in texts for token in tokenize(text)]
     if not all_tokens:
         return 0.0
     return len(set(all_tokens)) / len(all_tokens)
 
 
 def _jaccard_diversity(texts: list[str]) -> float:
-    """1 - mean pairwise token-set Jaccard over the set's members."""
-    sets = [_tokens(text) for text in texts]
+    """1 - mean pairwise token-set Jaccard over the set's members.
+
+    Fewer than two members yields 0.0: there is no pair to compare, so there is no
+    evidence of diversity to report (the scorer refuses such a set before reaching here).
+    """
+    sets = [set(tokenize(text)) for text in texts]
     pairs = [(sets[i], sets[j]) for i in range(len(sets)) for j in range(i + 1, len(sets))]
     if not pairs:
         return 0.0
     similarities = []
     for left, right in pairs:
         union = left | right
-        similarities.append(len(left & right) / len(union) if union else 0.0)
+        # Two members that tokenize to nothing are identical, not maximally different.
+        # Scoring an empty union as 0.0 similarity would make a set of punctuation the
+        # most diverse backlog the scorer can see.
+        similarities.append(len(left & right) / len(union) if union else 1.0)
     return 1.0 - sum(similarities) / len(similarities)
 
 
@@ -74,10 +85,12 @@ class ReqSemanticDiversityScorer(Scorer):
         reqs = read_requirements(output)
         if reqs is None:
             return not_applicable(self.name, NO_REQUIREMENTS)
-        texts = [str(req.get("text", "")) for req in reqs]
-        texts = [text for text in texts if text.strip()]
+        # Filter on *tokenizable* content rather than on ``strip()``: a punctuation-only
+        # requirement is non-empty but contributes no token, and the honest report for a
+        # set with nothing lexical in it is "not measured", not a diversity number.
+        texts = [text for req in reqs if (text := str(req.get("text", ""))) and tokenize(text)]
         if len(texts) < 2:
-            return not_applicable(self.name, "diversity needs at least two non-empty requirements")
+            return not_applicable(self.name, "diversity needs at least two requirements with scorable text")
         temperature = read_generation_temperature(output)
         if temperature is None:
             logger.debug("Requirement generation temperature missing in output metadata; scoring not applicable")
