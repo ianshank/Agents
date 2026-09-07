@@ -20,6 +20,23 @@ invariant are unchanged (F-035 pins); the auto-merge step remains a placeholder 
 the real `gh pr merge` seam needs `contents: write` and belongs to the dedicated
 human-authored activation change (ADR 0005 checklist).
 
+### Added — POSIX e2e driver and CI-restored matrix freshness
+
+- **`scripts/run_all_e2e.sh`** mirrors the PowerShell whole-repo driver: same five
+  tiers, same step inventory, same `artifacts/e2e-report/` layout, with the
+  anti-vacuous guards intact (pre-flight imports, JUnit `tests > 0`, missing-script
+  is FAIL not SKIP, 78/EX_CONFIG skip code). It falls back to the ambient
+  `python3` when no `.venv` exists so CI can run it. Step inventory drift between
+  the drivers fails `tests/test_e2e_driver_parity.py`.
+- **e2e-matrix freshness is back in CI** as a single-version `e2e-freshness` job
+  in `nightly-e2e.yml` (per-suite counts legitimately differ across Python
+  versions, so it is not a matrix leg). Two latent blockers are fixed to make
+  that possible: the `Duration (ms)` column is masked in the freshness comparison
+  (`VOLATILE_COLUMNS` in `tests/_e2e_matrix.py` — wall-clock duration can never
+  reproduce across machines, the same always-red defect class the Provenance
+  exemption covers), and the committed artifact is regenerated from the canonical
+  Linux environment (the previous render was Windows/py3.11 with a smaller suite).
+
 ### Hardening — operational activation (merge gate, OpenSpec, branch protection)
 
 Engineering half of the VP strategic roadmap: make existing gates operable without
