@@ -135,10 +135,13 @@ FROZEN_ALIAS_MAP: dict[str, dict[str, str]] = {
         "trajectory-step-efficiency": "trajectory_step_efficiency",
         "rca-ac-at-k": "rca_ac_at_k",
         "rca-component-match": "rca_component_match",
+        "rca-onset-within-tolerance": "rca_onset_within_tolerance",
+        "rca-abstention-correctness": "rca_abstention_correctness",
+        "rca-false-accusation-rate": "rca_false_accusation_rate",
     },
     "sink": {"html": "html_file", "json": "json_file"},
     "state_adapter": {},
-    "target": {"llm": "model", "python": "callable"},
+    "target": {"llm": "model", "python": "callable", "rca-maxz": "rca_maxz"},
 }
 
 

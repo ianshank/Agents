@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — RCA evaluation matrix, synthetic scope (F-067, ADR 0046)
+
+- **Frozen synthetic corpus** at `corpora/rca/v1/` (96 generated items: 4
+  answerability classes × 3 difficulty strata, shape-identical negative controls,
+  keyed sequestered split). Difficulty is a gated measurement: the manifest records
+  the baseline's measured per-cell strict AC@1, and `gen_rca_corpus.py --check`
+  fails when a regeneration leaves the calibrated bands.
+- **`rca_maxz` baseline target** — a deterministic registered `TargetRunner`
+  ranking candidates by largest absolute z-score across the onset boundary, with
+  abstention below `z_floor`. A baseline is a target, not a scorer: it is graded
+  by the same five scorers on the identical item set.
+- **Three new scorers** completing the family: `rca_onset_within_tolerance`
+  (timezone-normalised; offset-free claims refused), `rca_abstention_correctness`,
+  `rca_false_accusation_rate`. Advisory-only gate rules in `config/rca_eval.yaml`.
+- Real-incident telemetry remains out of scope (CHARTER §4 invariant 7);
+  judge-backed reason scoring stays deferred behind calibration.
+
 ### Hardening — operational activation (merge gate, OpenSpec, branch protection)
 
 Engineering half of the VP strategic roadmap: make existing gates operable without

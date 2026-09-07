@@ -83,4 +83,4 @@ class CallableTarget(TargetRunner):
 # Importing the module runs the ``@TARGETS.register("model")`` decorator. Kept at
 # the bottom so the simple targets above register first; the E402/F401 suppressions
 # below exist because this is an intentional register-on-import side effect, not unused.
-from . import model  # noqa: E402, F401
+from . import model, rca_baseline  # noqa: E402, F401

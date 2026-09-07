@@ -129,4 +129,4 @@ def is_unanswerable(correct: list[str]) -> bool:
 
 
 # Side-effect registration of ranking scorers (mirrors test_generation / state).
-from . import ranking  # noqa: E402, F401
+from . import abstention, ranking  # noqa: E402, F401

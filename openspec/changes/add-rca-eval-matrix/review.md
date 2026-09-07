@@ -143,3 +143,15 @@ baseline (task 3.x) and the telemetry corpus (task 2.x) are what turn this into 
 credibility-preserving comparison. Abstention scorers are not in this slice.
 
 Covered by `tests/test_rca_ranking_scorers.py::test_oracle_on_sdlc_fixture_is_perfect_and_records_distribution`.
+
+## Landing note (2026-09-06, F-067)
+
+The full synthetic scope landed: corpus (`corpora/rca/v1/`, 96 items, keyed holdout),
+the `rca_maxz` baseline target, and the abstention family (`rca_onset_within_tolerance`,
+`rca_abstention_correctness`, `rca_false_accusation_rate`). ADR 0046 records the design
+decisions. The corpus's difficulty is a gated measurement: the manifest's
+`baseline_strict_ac1` is calibrated against the baseline's default floor, and
+`gen_rca_corpus.py --check` fails when a regeneration leaves the bands. The first
+calibration pass caught a real generator defect (a cause spiking all three metrics won
+every ranking by construction; faults now move one or two). `implemented_in` is
+"PENDING" at land per the ledger convention; the post-merge chore stamps the SHA.
