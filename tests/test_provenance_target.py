@@ -33,8 +33,10 @@ REF = {"kind": "revision_export_link", "revision_id": "rev-9", "mime": "text/pla
 UNPINNABLE_REF = {"kind": "context7_blob", "library": "/org/project", "query": "auth"}
 
 
-def _item(sources: list[dict] | None) -> EvalItem:
-    inputs: dict = {"question": "q"}
+def _item(sources: list[Any] | None) -> EvalItem:
+    # `list[Any]`, not `list[dict]`: a dataset row is untrusted input, and some tests
+    # here deliberately supply a malformed entry to prove the wrapper skips it.
+    inputs: dict[str, Any] = {"question": "q"}
     if sources is not None:
         inputs["evidence_sources"] = sources
     return EvalItem(id="req-1", inputs=inputs)
