@@ -44,9 +44,11 @@ def _make_feature(**overrides: Any) -> dict[str, Any]:
 
 def _run_select_next(tmp: Path) -> subprocess.CompletedProcess[str]:
     """Run select_next.py against a features.yaml in tmp."""
+    import sys
+
     select_script = Path(__file__).resolve().parent.parent / "scripts" / "select_next.py"
-    cmd = f"python {select_script} --features {tmp / 'features.yaml'}"
-    return subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=str(tmp))
+    cmd = [sys.executable, str(select_script), "--features", str(tmp / "features.yaml")]
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=str(tmp))
 
 
 # ---------------------------------------------------------------------------

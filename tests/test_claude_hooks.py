@@ -149,3 +149,54 @@ def test_the_stop_hook_treats_a_missing_checker_as_unknown_not_stale() -> None:
     ignore it — the same reasoning `scripts/_provenance.py` applies to a shallow clone."""
     module = _hook_module("stop-generated-artifacts.py", "_stop_hook2")
     assert module._stale(("scripts/does_not_exist.py", "--check")) is False
+
+
+def _corpus_generators() -> list[str]:
+    """Every committed corpus's generator, discovered rather than restated."""
+    return sorted(path.relative_to(REPO_ROOT).as_posix() for path in (REPO_ROOT / "scripts").glob("gen_*_corpus.py"))
+
+
+def test_a_corpus_generator_exists_to_discover() -> None:
+    """The guard below is vacuous if the glob finds nothing — this is its anti-vacuity check."""
+    assert _corpus_generators()
+
+
+@pytest.mark.parametrize("generator", _corpus_generators())
+def test_every_corpus_generator_is_watched_by_the_stop_hook(generator: str) -> None:
+    """A new corpus that no checker row names goes stale exactly as silently as before.
+
+    The hook's table is hand-maintained by design (each row also names the fix command),
+    so the thing that must not drift is its *completeness*: derived from the filesystem
+    here, compared against the declaration there.
+    """
+    module = _hook_module("stop-generated-artifacts.py", "_stop_hook_rows")
+    watched = {argv[0] for _label, argv, _fix in module._CHECKERS}
+    assert generator in watched, f"{generator} has no row in stop-generated-artifacts.py::_CHECKERS"
+
+
+@pytest.mark.parametrize("generator", _corpus_generators())
+@pytest.mark.parametrize("target", ["corpus-check", "corpus-write"])
+def test_every_corpus_generator_is_reachable_from_make(generator: str, target: str) -> None:
+    """``make corpus-check`` that silently skips a corpus is worse than no target at all."""
+    body = _makefile_target_body(target)
+    assert generator in body, f"{generator} is missing from the Makefile's {target} target"
+
+
+def _makefile_target_body(target: str) -> str:
+    """The recipe lines of one Makefile target (tab-indented lines after its rule)."""
+    lines = (REPO_ROOT / "Makefile").read_text(encoding="utf-8").splitlines()
+    body: list[str] = []
+    collecting = False
+    for line in lines:
+        if line.startswith(f"{target}:"):
+            collecting = True
+            continue
+        if collecting:
+            if line.startswith("\t"):
+                body.append(line)
+                continue
+            if line.strip() == "":
+                continue
+            break
+    assert body, f"Makefile has no recipe for {target}"
+    return "\n".join(body)

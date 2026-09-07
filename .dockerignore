@@ -66,6 +66,8 @@ regression_report.json
 !README.html
 merge_outcomes.jsonl
 merge_decisions.jsonl
+context.json
+context_human.json
 agent.json
 seed_context.json
 changed_files.z

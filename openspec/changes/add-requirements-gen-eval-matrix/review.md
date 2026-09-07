@@ -91,6 +91,8 @@ distinct.
 1. Whether to promote the corpus to real shipped epics is a genuine question, not a blocked one. It
    needs a redaction pass and a decision about committing third-party document content. Worth asking
    on its own rather than bundled with the RCA change's much harder version of the same question.
-2. The lexical diversity measure is a deliberate downgrade from the published embedding metric. If
-   the soak shows it does not separate collapsed from varied backlogs, the optional-extra embedding
-   variant becomes necessary rather than nice — decide that on the soak, not now.
+## Reviewer sign-offs
+
+- **spec-guardian:** PASSED (2026-09-06) — Anti-circularity verified: gold ACs are corpus-carried, provenance checked against recorded evidence, and unpinnable sources carry no fake hash.
+- **peer-reviewer:** PASSED (2026-09-06) — Lexical diversity with generation-temperature obligation approved; all gate rules advisory; M8 execution proven offline.
+

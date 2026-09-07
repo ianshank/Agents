@@ -38,7 +38,7 @@ check: ## Run the full quality gate
 # Hand-added convenience targets (not emitted by the generator). None of them creates a
 # file with its own name, so they are declared phony here -- in their own statement, so
 # the generated .PHONY line above stays byte-stable for the generator's --check.
-.PHONY: determinism matrix-check matrix-update
+.PHONY: determinism matrix-check matrix-update corpus-check corpus-write
 
 determinism: ## Prove tool-call canonicalisation is stable across interpreter processes
 	@# Delegates to the test that owns this assertion rather than restating the probe here,
@@ -54,6 +54,16 @@ matrix-check: ## Verify docs/matrix-coverage.md matches a live regeneration (F-0
 matrix-update: ## Regenerate docs/matrix-coverage.md from the live registry census (F-053)
 	@# Refuses to write while the matrix itself has holes -- fix the rows first.
 	$(PYTHON) tests/test_matrix_coverage.py --update
+
+corpus-check: ## Verify committed corpora regenerate byte-identically
+	$(PYTHON) scripts/gen_testgen_corpus.py --check
+	$(PYTHON) scripts/gen_rca_corpus.py --check
+	$(PYTHON) scripts/gen_requirements_corpus.py --check
+
+corpus-write: ## Regenerate committed corpora from their generators
+	$(PYTHON) scripts/gen_testgen_corpus.py --write
+	$(PYTHON) scripts/gen_rca_corpus.py --write
+	$(PYTHON) scripts/gen_requirements_corpus.py --write
 
 .PHONY: e2e-matrix-check e2e-matrix-update invariants e2e-matrix
 

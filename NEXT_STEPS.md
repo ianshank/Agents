@@ -9,6 +9,16 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **RCA evaluation matrix (F-067, ADR 0046)** — ranked diagnosis against a finite
+  candidate set, including correct abstention: frozen synthetic corpus at
+  `corpora/rca/v1/`, `rca_maxz` baseline target, five scorers, advisory-only gates.
+- [x] **Requirements-generation evaluation matrix (F-068, ADR 0047)** — deterministic
+  synthetic evaluation of generated requirements against declared gold acceptance
+  criteria and recorded retrieval evidence: `provenance_recorder` target wrapper,
+  `verify_provenance` drift verification pass, unpinnable source representation,
+  offline-lexical semantic diversity with temperature qualification, gold AC recall,
+  scope hallucination with contradiction reporting, structured traceability closure,
+  and frozen synthetic corpus at `corpora/requirements/v1/`.
 - [x] **`make pre-pr` + the `pre-pr-gate` skill** — an automation-opportunity scan of
   the god-file-decomposition session below found its own ~15-command validation
   checklist existed nowhere as one command (`AGENTS.md`/`CONTRIBUTING.md` each

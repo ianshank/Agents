@@ -242,9 +242,11 @@ Agents/                          # repo root
 │       ├── core/                 # Orchestration, registry, interfaces
 │       ├── judges/               # Judge implementations
 │       ├── scorers/              # Scoring functions
-│       │   └── trajectory.py     # Agent trajectory scorers (F-051)
+│       │   ├── trajectory.py     # Agent trajectory scorers (F-051)
+│       │   ├── rca/              # RCA ranking scorers (prototype)
+│       │   └── requirements/     # Requirements grounding & diversity scorers (F-068)
 │       ├── datasets/             # Dataset loaders (inline, jsonl, csv, parquet, langfuse, braintrust)
-│       ├── targets/              # System-under-test adapters (echo, callable, model-backed)
+│       ├── targets/              # System-under-test adapters (echo, callable, model-backed, provenance)
 │       ├── langfuse_client/      # Langfuse integration (SDK-optional seam)
 │       ├── phoenix_client/       # Arize Phoenix integration (SDK-optional seam)
 │       ├── braintrust_client/    # BrainTrust integration (SDK-optional seam)

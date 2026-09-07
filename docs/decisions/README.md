@@ -62,3 +62,4 @@ changes course is a *new* ADR that supersedes the old one, not an edit.
 | [0042](0042-gate-decision-provenance.md) | Gate-decision provenance: evaluate before emit, and per-rule advisory rules |
 | [0043](0043-testgen-evaluation-seam.md) | Test-generation evaluation: the target executes in a subprocess sandbox, the scorers read |
 | [0046](0046-rca-eval-matrix.md) | RCA evaluation matrix: triplet shape, ranked scoring, baseline-as-target |
+| [0047](0047-requirements-eval-matrix.md) | Requirements-generation evaluation: revision-scoped provenance, unpinnable sources, offline-lexical diversity |

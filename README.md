@@ -429,11 +429,17 @@ src/eval_harness/
                      ranked diagnosis against a finite candidate set, including correct
                      abstention on unanswerable items (F-067, ADR 0046 — synthetic
                      corpus at corpora/rca/v1/)
+    requirements/    req_ac_recall, req_scope_hallucination, req_semantic_diversity,
+                     req_traceability_closure grade generated requirements against declared
+                     gold acceptance criteria and recorded evidence sources (F-068, ADR 0047;
+                     corpus at corpora/requirements/v1/)
   datasets/          inline, jsonl, langfuse, braintrust, csv, parquet
   targets/           echo, callable (dynamic import — gated by
                      EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST; see "Config files are
                      executable input" below), model (alias llm; calls an
                      OpenAI-compatible / LM Studio / Nemotron endpoint),
+                     provenance_recorder (wraps an inner target and records
+                     retrieval-evidence records; F-068),
                      rca_maxz (deterministic max-|Z| baseline diagnosis over an
                      item's telemetry; F-067)
   sinks/             console, json_file, html_file, langfuse, phoenix, braintrust

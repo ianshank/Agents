@@ -1,0 +1,1773 @@
+[
+  {
+    "control": "contradictory",
+    "declared_tests": [
+      "test_billing_persists",
+      "test_billing_rejects_invalid"
+    ],
+    "domain": "billing",
+    "drifted_bytes": {
+      "src-req-00-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-00-b": "The billing service allows anonymous actions without authentication."
+    },
+    "epic_id": "req-00",
+    "evidence_bytes": {
+      "src-req-00-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-00-b": "The billing service allows anonymous actions without authentication."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-00-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-00-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-00-b"
+        },
+        "refutes": [
+          "auth_required"
+        ],
+        "source_id": "src-req-00-b",
+        "source_type": "drive_doc",
+        "supports": []
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-billing-0",
+        "text": "when billing user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-billing-1",
+        "text": "when billing user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-billing-2",
+        "text": "when billing user is unauthenticated, the system refuses the action"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-00-a": "9776c3c0e5ce55eb52470ad0887f008d90c13e01005f97ba4e5adf5d41958f26",
+      "src-req-00-b": "046e0489ff73864510c276275a7555cb9034e5cb1759767c9b62d0cf66cafc1e"
+    },
+    "split": "train",
+    "statement": "As a billing owner I need the billing workflow hardened.",
+    "title": "Billing epic 0"
+  },
+  {
+    "control": "stale",
+    "declared_tests": [
+      "test_auth_persists",
+      "test_auth_rejects_invalid"
+    ],
+    "domain": "auth",
+    "drifted_bytes": {
+      "src-req-01-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-01-b": "DEPRECATED (rev 1): the auth service enforces no quota."
+    },
+    "epic_id": "req-01",
+    "evidence_bytes": {
+      "src-req-01-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-01-b": "DEPRECATED (rev 1): the auth service enforces no quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-01-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-01-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-01-b"
+        },
+        "refutes": [
+          "quota"
+        ],
+        "source_id": "src-req-01-b",
+        "source_type": "drive_doc",
+        "supports": []
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-auth-0",
+        "text": "when auth user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-auth-1",
+        "text": "when auth user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-auth-2",
+        "text": "when auth user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-auth-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-01-a": "7de3181508e38b37f42975852b48d923b1e6c49f70b864f51e40f1264607cff9",
+      "src-req-01-b": "5995b2a43e720cc702cef3492da54da4b418ed2070e4e8ef954eb0844ff83732"
+    },
+    "split": "holdout",
+    "statement": "As a auth owner I need the auth workflow hardened.",
+    "title": "Auth epic 1"
+  },
+  {
+    "control": "mutated",
+    "declared_tests": [
+      "test_search_persists",
+      "test_search_rejects_invalid"
+    ],
+    "domain": "search",
+    "drifted_bytes": {
+      "src-req-02-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-02-b": "The search service enforces a per-tenant quota. (edited after capture)"
+    },
+    "epic_id": "req-02",
+    "evidence_bytes": {
+      "src-req-02-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-02-b": "The search service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-02-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-02-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-02-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-02-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-search-0",
+        "text": "when search user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-search-1",
+        "text": "when search user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-search-2",
+        "text": "when search user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-search-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      },
+      {
+        "id": "ac-search-4",
+        "text": "when two submissions race, the system serialises them deterministically"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-02-a": "e8261ce0834728952c6505b9537f8976ce0765d330c461cb652c13566edbb635",
+      "src-req-02-b": "4d699f289e9f42538f878d5c77cb4f01793ec467f4b7da741843dc04078fb687"
+    },
+    "split": "train",
+    "statement": "As a search owner I need the search workflow hardened.",
+    "title": "Search epic 2"
+  },
+  {
+    "control": "contradictory",
+    "declared_tests": [
+      "test_notify_persists",
+      "test_notify_rejects_invalid"
+    ],
+    "domain": "notify",
+    "drifted_bytes": {
+      "src-req-03-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-03-b": "The notify service allows anonymous actions without authentication."
+    },
+    "epic_id": "req-03",
+    "evidence_bytes": {
+      "src-req-03-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-03-b": "The notify service allows anonymous actions without authentication."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-03-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-03-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-03-b"
+        },
+        "refutes": [
+          "auth_required"
+        ],
+        "source_id": "src-req-03-b",
+        "source_type": "drive_doc",
+        "supports": []
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-notify-0",
+        "text": "when notify user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-notify-1",
+        "text": "when notify user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-notify-2",
+        "text": "when notify user is unauthenticated, the system refuses the action"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-03-a": "95c09a5c93aa09b2e8eea3afadee70fcdf8033c502bb96afa321b27b44693d47",
+      "src-req-03-b": "a90f2ae062dfc69d866ef67780547abf7728c0bb2b8a2a6850455e55ebe6a9d7"
+    },
+    "split": "train",
+    "statement": "As a notify owner I need the notify workflow hardened.",
+    "title": "Notify epic 3"
+  },
+  {
+    "control": "stale",
+    "declared_tests": [
+      "test_reporting_persists",
+      "test_reporting_rejects_invalid"
+    ],
+    "domain": "reporting",
+    "drifted_bytes": {
+      "src-req-04-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-04-b": "DEPRECATED (rev 1): the reporting service enforces no quota."
+    },
+    "epic_id": "req-04",
+    "evidence_bytes": {
+      "src-req-04-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-04-b": "DEPRECATED (rev 1): the reporting service enforces no quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-04-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-04-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-04-b"
+        },
+        "refutes": [
+          "quota"
+        ],
+        "source_id": "src-req-04-b",
+        "source_type": "drive_doc",
+        "supports": []
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-reporting-0",
+        "text": "when reporting user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-reporting-1",
+        "text": "when reporting user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-reporting-2",
+        "text": "when reporting user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-reporting-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-04-a": "f65020f02abc1d993570406fbcdee1c6d4202799f998839ddd73960bfde966b7",
+      "src-req-04-b": "060712549fce16e9a474f71117f18ef0806fcaf397f3fb1337aee7713ba774d4"
+    },
+    "split": "train",
+    "statement": "As a reporting owner I need the reporting workflow hardened.",
+    "title": "Reporting epic 4"
+  },
+  {
+    "control": "mutated",
+    "declared_tests": [
+      "test_billing_persists",
+      "test_billing_rejects_invalid"
+    ],
+    "domain": "billing",
+    "drifted_bytes": {
+      "src-req-05-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-05-b": "The billing service enforces a per-tenant quota. (edited after capture)"
+    },
+    "epic_id": "req-05",
+    "evidence_bytes": {
+      "src-req-05-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-05-b": "The billing service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-05-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-05-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-05-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-05-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-billing-0",
+        "text": "when billing user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-billing-1",
+        "text": "when billing user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-billing-2",
+        "text": "when billing user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-billing-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      },
+      {
+        "id": "ac-billing-4",
+        "text": "when two submissions race, the system serialises them deterministically"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-05-a": "9776c3c0e5ce55eb52470ad0887f008d90c13e01005f97ba4e5adf5d41958f26",
+      "src-req-05-b": "b25fe29ba2717fe4b3d4fa2b8697c0320510845120dfda764b041d5748750e70"
+    },
+    "split": "train",
+    "statement": "As a billing owner I need the billing workflow hardened.",
+    "title": "Billing epic 5"
+  },
+  {
+    "control": "contradictory",
+    "declared_tests": [
+      "test_auth_persists",
+      "test_auth_rejects_invalid"
+    ],
+    "domain": "auth",
+    "drifted_bytes": {
+      "src-req-06-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-06-b": "The auth service allows anonymous actions without authentication."
+    },
+    "epic_id": "req-06",
+    "evidence_bytes": {
+      "src-req-06-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-06-b": "The auth service allows anonymous actions without authentication."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-06-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-06-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-06-b"
+        },
+        "refutes": [
+          "auth_required"
+        ],
+        "source_id": "src-req-06-b",
+        "source_type": "drive_doc",
+        "supports": []
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-auth-0",
+        "text": "when auth user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-auth-1",
+        "text": "when auth user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-auth-2",
+        "text": "when auth user is unauthenticated, the system refuses the action"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-06-a": "7de3181508e38b37f42975852b48d923b1e6c49f70b864f51e40f1264607cff9",
+      "src-req-06-b": "21d3cd4a8313ee0d087f7c4816b6363ba18d7a65a147107d30de507f71a4a2f2"
+    },
+    "split": "holdout",
+    "statement": "As a auth owner I need the auth workflow hardened.",
+    "title": "Auth epic 6"
+  },
+  {
+    "control": "stale",
+    "declared_tests": [
+      "test_search_persists",
+      "test_search_rejects_invalid"
+    ],
+    "domain": "search",
+    "drifted_bytes": {
+      "src-req-07-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-07-b": "DEPRECATED (rev 1): the search service enforces no quota."
+    },
+    "epic_id": "req-07",
+    "evidence_bytes": {
+      "src-req-07-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-07-b": "DEPRECATED (rev 1): the search service enforces no quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-07-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-07-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-07-b"
+        },
+        "refutes": [
+          "quota"
+        ],
+        "source_id": "src-req-07-b",
+        "source_type": "drive_doc",
+        "supports": []
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-search-0",
+        "text": "when search user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-search-1",
+        "text": "when search user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-search-2",
+        "text": "when search user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-search-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-07-a": "e8261ce0834728952c6505b9537f8976ce0765d330c461cb652c13566edbb635",
+      "src-req-07-b": "80a11c905ca155638479d7390029a4804c76ce8208e49aa043b8dfc0e32a7070"
+    },
+    "split": "train",
+    "statement": "As a search owner I need the search workflow hardened.",
+    "title": "Search epic 7"
+  },
+  {
+    "control": "mutated",
+    "declared_tests": [
+      "test_notify_persists",
+      "test_notify_rejects_invalid"
+    ],
+    "domain": "notify",
+    "drifted_bytes": {
+      "src-req-08-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-08-b": "The notify service enforces a per-tenant quota. (edited after capture)"
+    },
+    "epic_id": "req-08",
+    "evidence_bytes": {
+      "src-req-08-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-08-b": "The notify service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-08-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-08-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-08-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-08-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-notify-0",
+        "text": "when notify user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-notify-1",
+        "text": "when notify user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-notify-2",
+        "text": "when notify user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-notify-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      },
+      {
+        "id": "ac-notify-4",
+        "text": "when two submissions race, the system serialises them deterministically"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-08-a": "95c09a5c93aa09b2e8eea3afadee70fcdf8033c502bb96afa321b27b44693d47",
+      "src-req-08-b": "0cad26cc876e2b3ee28447213fb0f3a3bc6050342e90b7d3a5be5f2a1802de6e"
+    },
+    "split": "train",
+    "statement": "As a notify owner I need the notify workflow hardened.",
+    "title": "Notify epic 8"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_reporting_persists",
+      "test_reporting_rejects_invalid"
+    ],
+    "domain": "reporting",
+    "drifted_bytes": {
+      "src-req-09-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-09-b": "The reporting service enforces a per-tenant quota."
+    },
+    "epic_id": "req-09",
+    "evidence_bytes": {
+      "src-req-09-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-09-b": "The reporting service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-09-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-09-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-09-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-09-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-reporting-0",
+        "text": "when reporting user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-reporting-1",
+        "text": "when reporting user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-reporting-2",
+        "text": "when reporting user is unauthenticated, the system refuses the action"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-09-a": "f65020f02abc1d993570406fbcdee1c6d4202799f998839ddd73960bfde966b7",
+      "src-req-09-b": "9cae72941dffe1563175e1200fbe14e0fffae3c0de0e1572d559e9304f58e203"
+    },
+    "split": "train",
+    "statement": "As a reporting owner I need the reporting workflow hardened.",
+    "title": "Reporting epic 9"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_billing_persists",
+      "test_billing_rejects_invalid"
+    ],
+    "domain": "billing",
+    "drifted_bytes": {
+      "src-req-10-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-10-b": "The billing service enforces a per-tenant quota."
+    },
+    "epic_id": "req-10",
+    "evidence_bytes": {
+      "src-req-10-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-10-b": "The billing service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-10-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-10-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-10-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-10-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-billing-0",
+        "text": "when billing user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-billing-1",
+        "text": "when billing user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-billing-2",
+        "text": "when billing user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-billing-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-10-a": "9776c3c0e5ce55eb52470ad0887f008d90c13e01005f97ba4e5adf5d41958f26",
+      "src-req-10-b": "b25fe29ba2717fe4b3d4fa2b8697c0320510845120dfda764b041d5748750e70"
+    },
+    "split": "holdout",
+    "statement": "As a billing owner I need the billing workflow hardened.",
+    "title": "Billing epic 10"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_auth_persists",
+      "test_auth_rejects_invalid"
+    ],
+    "domain": "auth",
+    "drifted_bytes": {
+      "src-req-11-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-11-b": "The auth service enforces a per-tenant quota."
+    },
+    "epic_id": "req-11",
+    "evidence_bytes": {
+      "src-req-11-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-11-b": "The auth service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-11-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-11-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-11-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-11-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-auth-0",
+        "text": "when auth user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-auth-1",
+        "text": "when auth user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-auth-2",
+        "text": "when auth user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-auth-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      },
+      {
+        "id": "ac-auth-4",
+        "text": "when two submissions race, the system serialises them deterministically"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-11-a": "7de3181508e38b37f42975852b48d923b1e6c49f70b864f51e40f1264607cff9",
+      "src-req-11-b": "2dc83f812dff3c34bfe52253aa7ea645fe407273a122d431dc81debd87811f32"
+    },
+    "split": "train",
+    "statement": "As a auth owner I need the auth workflow hardened.",
+    "title": "Auth epic 11"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_search_persists",
+      "test_search_rejects_invalid"
+    ],
+    "domain": "search",
+    "drifted_bytes": {
+      "src-req-12-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-12-b": "The search service enforces a per-tenant quota."
+    },
+    "epic_id": "req-12",
+    "evidence_bytes": {
+      "src-req-12-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-12-b": "The search service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-12-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-12-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-12-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-12-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-search-0",
+        "text": "when search user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-search-1",
+        "text": "when search user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-search-2",
+        "text": "when search user is unauthenticated, the system refuses the action"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-12-a": "e8261ce0834728952c6505b9537f8976ce0765d330c461cb652c13566edbb635",
+      "src-req-12-b": "4d699f289e9f42538f878d5c77cb4f01793ec467f4b7da741843dc04078fb687"
+    },
+    "split": "holdout",
+    "statement": "As a search owner I need the search workflow hardened.",
+    "title": "Search epic 12"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_notify_persists",
+      "test_notify_rejects_invalid"
+    ],
+    "domain": "notify",
+    "drifted_bytes": {
+      "src-req-13-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-13-b": "The notify service enforces a per-tenant quota."
+    },
+    "epic_id": "req-13",
+    "evidence_bytes": {
+      "src-req-13-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-13-b": "The notify service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-13-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-13-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-13-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-13-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-notify-0",
+        "text": "when notify user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-notify-1",
+        "text": "when notify user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-notify-2",
+        "text": "when notify user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-notify-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-13-a": "95c09a5c93aa09b2e8eea3afadee70fcdf8033c502bb96afa321b27b44693d47",
+      "src-req-13-b": "0cad26cc876e2b3ee28447213fb0f3a3bc6050342e90b7d3a5be5f2a1802de6e"
+    },
+    "split": "train",
+    "statement": "As a notify owner I need the notify workflow hardened.",
+    "title": "Notify epic 13"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_reporting_persists",
+      "test_reporting_rejects_invalid"
+    ],
+    "domain": "reporting",
+    "drifted_bytes": {
+      "src-req-14-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-14-b": "The reporting service enforces a per-tenant quota."
+    },
+    "epic_id": "req-14",
+    "evidence_bytes": {
+      "src-req-14-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-14-b": "The reporting service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-14-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-14-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-14-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-14-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-reporting-0",
+        "text": "when reporting user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-reporting-1",
+        "text": "when reporting user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-reporting-2",
+        "text": "when reporting user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-reporting-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      },
+      {
+        "id": "ac-reporting-4",
+        "text": "when two submissions race, the system serialises them deterministically"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-14-a": "f65020f02abc1d993570406fbcdee1c6d4202799f998839ddd73960bfde966b7",
+      "src-req-14-b": "9cae72941dffe1563175e1200fbe14e0fffae3c0de0e1572d559e9304f58e203"
+    },
+    "split": "train",
+    "statement": "As a reporting owner I need the reporting workflow hardened.",
+    "title": "Reporting epic 14"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_billing_persists",
+      "test_billing_rejects_invalid"
+    ],
+    "domain": "billing",
+    "drifted_bytes": {
+      "src-req-15-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-15-b": "The billing service enforces a per-tenant quota."
+    },
+    "epic_id": "req-15",
+    "evidence_bytes": {
+      "src-req-15-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-15-b": "The billing service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-15-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-15-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-15-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-15-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-billing-0",
+        "text": "when billing user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-billing-1",
+        "text": "when billing user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-billing-2",
+        "text": "when billing user is unauthenticated, the system refuses the action"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-15-a": "9776c3c0e5ce55eb52470ad0887f008d90c13e01005f97ba4e5adf5d41958f26",
+      "src-req-15-b": "b25fe29ba2717fe4b3d4fa2b8697c0320510845120dfda764b041d5748750e70"
+    },
+    "split": "train",
+    "statement": "As a billing owner I need the billing workflow hardened.",
+    "title": "Billing epic 15"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_auth_persists",
+      "test_auth_rejects_invalid"
+    ],
+    "domain": "auth",
+    "drifted_bytes": {
+      "src-req-16-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-16-b": "The auth service enforces a per-tenant quota."
+    },
+    "epic_id": "req-16",
+    "evidence_bytes": {
+      "src-req-16-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-16-b": "The auth service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-16-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-16-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-16-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-16-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-auth-0",
+        "text": "when auth user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-auth-1",
+        "text": "when auth user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-auth-2",
+        "text": "when auth user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-auth-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-16-a": "7de3181508e38b37f42975852b48d923b1e6c49f70b864f51e40f1264607cff9",
+      "src-req-16-b": "2dc83f812dff3c34bfe52253aa7ea645fe407273a122d431dc81debd87811f32"
+    },
+    "split": "train",
+    "statement": "As a auth owner I need the auth workflow hardened.",
+    "title": "Auth epic 16"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_search_persists",
+      "test_search_rejects_invalid"
+    ],
+    "domain": "search",
+    "drifted_bytes": {
+      "src-req-17-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-17-b": "The search service enforces a per-tenant quota."
+    },
+    "epic_id": "req-17",
+    "evidence_bytes": {
+      "src-req-17-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-17-b": "The search service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-17-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-17-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-17-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-17-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-search-0",
+        "text": "when search user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-search-1",
+        "text": "when search user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-search-2",
+        "text": "when search user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-search-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      },
+      {
+        "id": "ac-search-4",
+        "text": "when two submissions race, the system serialises them deterministically"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-17-a": "e8261ce0834728952c6505b9537f8976ce0765d330c461cb652c13566edbb635",
+      "src-req-17-b": "4d699f289e9f42538f878d5c77cb4f01793ec467f4b7da741843dc04078fb687"
+    },
+    "split": "train",
+    "statement": "As a search owner I need the search workflow hardened.",
+    "title": "Search epic 17"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_notify_persists",
+      "test_notify_rejects_invalid"
+    ],
+    "domain": "notify",
+    "drifted_bytes": {
+      "src-req-18-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-18-b": "The notify service enforces a per-tenant quota."
+    },
+    "epic_id": "req-18",
+    "evidence_bytes": {
+      "src-req-18-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-18-b": "The notify service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-18-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-18-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-18-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-18-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-notify-0",
+        "text": "when notify user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-notify-1",
+        "text": "when notify user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-notify-2",
+        "text": "when notify user is unauthenticated, the system refuses the action"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-18-a": "95c09a5c93aa09b2e8eea3afadee70fcdf8033c502bb96afa321b27b44693d47",
+      "src-req-18-b": "0cad26cc876e2b3ee28447213fb0f3a3bc6050342e90b7d3a5be5f2a1802de6e"
+    },
+    "split": "train",
+    "statement": "As a notify owner I need the notify workflow hardened.",
+    "title": "Notify epic 18"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_reporting_persists",
+      "test_reporting_rejects_invalid"
+    ],
+    "domain": "reporting",
+    "drifted_bytes": {
+      "src-req-19-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-19-b": "The reporting service enforces a per-tenant quota."
+    },
+    "epic_id": "req-19",
+    "evidence_bytes": {
+      "src-req-19-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-19-b": "The reporting service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-19-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-19-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-19-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-19-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-reporting-0",
+        "text": "when reporting user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-reporting-1",
+        "text": "when reporting user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-reporting-2",
+        "text": "when reporting user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-reporting-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-19-a": "f65020f02abc1d993570406fbcdee1c6d4202799f998839ddd73960bfde966b7",
+      "src-req-19-b": "9cae72941dffe1563175e1200fbe14e0fffae3c0de0e1572d559e9304f58e203"
+    },
+    "split": "train",
+    "statement": "As a reporting owner I need the reporting workflow hardened.",
+    "title": "Reporting epic 19"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_billing_persists",
+      "test_billing_rejects_invalid"
+    ],
+    "domain": "billing",
+    "drifted_bytes": {
+      "src-req-20-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-20-b": "The billing service enforces a per-tenant quota."
+    },
+    "epic_id": "req-20",
+    "evidence_bytes": {
+      "src-req-20-a": "The billing service persists submissions and requires authentication for all actions.",
+      "src-req-20-b": "The billing service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-20-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-20-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-20-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-20-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-billing-0",
+        "text": "when billing user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-billing-1",
+        "text": "when billing user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-billing-2",
+        "text": "when billing user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-billing-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      },
+      {
+        "id": "ac-billing-4",
+        "text": "when two submissions race, the system serialises them deterministically"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-20-a": "9776c3c0e5ce55eb52470ad0887f008d90c13e01005f97ba4e5adf5d41958f26",
+      "src-req-20-b": "b25fe29ba2717fe4b3d4fa2b8697c0320510845120dfda764b041d5748750e70"
+    },
+    "split": "train",
+    "statement": "As a billing owner I need the billing workflow hardened.",
+    "title": "Billing epic 20"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_auth_persists",
+      "test_auth_rejects_invalid"
+    ],
+    "domain": "auth",
+    "drifted_bytes": {
+      "src-req-21-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-21-b": "The auth service enforces a per-tenant quota."
+    },
+    "epic_id": "req-21",
+    "evidence_bytes": {
+      "src-req-21-a": "The auth service persists submissions and requires authentication for all actions.",
+      "src-req-21-b": "The auth service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-21-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-21-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-21-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-21-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-auth-0",
+        "text": "when auth user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-auth-1",
+        "text": "when auth user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-auth-2",
+        "text": "when auth user is unauthenticated, the system refuses the action"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-21-a": "7de3181508e38b37f42975852b48d923b1e6c49f70b864f51e40f1264607cff9",
+      "src-req-21-b": "2dc83f812dff3c34bfe52253aa7ea645fe407273a122d431dc81debd87811f32"
+    },
+    "split": "train",
+    "statement": "As a auth owner I need the auth workflow hardened.",
+    "title": "Auth epic 21"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_search_persists",
+      "test_search_rejects_invalid"
+    ],
+    "domain": "search",
+    "drifted_bytes": {
+      "src-req-22-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-22-b": "The search service enforces a per-tenant quota."
+    },
+    "epic_id": "req-22",
+    "evidence_bytes": {
+      "src-req-22-a": "The search service persists submissions and requires authentication for all actions.",
+      "src-req-22-b": "The search service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-22-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-22-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-22-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-22-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-search-0",
+        "text": "when search user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-search-1",
+        "text": "when search user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-search-2",
+        "text": "when search user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-search-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-22-a": "e8261ce0834728952c6505b9537f8976ce0765d330c461cb652c13566edbb635",
+      "src-req-22-b": "4d699f289e9f42538f878d5c77cb4f01793ec467f4b7da741843dc04078fb687"
+    },
+    "split": "holdout",
+    "statement": "As a search owner I need the search workflow hardened.",
+    "title": "Search epic 22"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_notify_persists",
+      "test_notify_rejects_invalid"
+    ],
+    "domain": "notify",
+    "drifted_bytes": {
+      "src-req-23-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-23-b": "The notify service enforces a per-tenant quota."
+    },
+    "epic_id": "req-23",
+    "evidence_bytes": {
+      "src-req-23-a": "The notify service persists submissions and requires authentication for all actions.",
+      "src-req-23-b": "The notify service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-23-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-23-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-23-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-23-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-notify-0",
+        "text": "when notify user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-notify-1",
+        "text": "when notify user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-notify-2",
+        "text": "when notify user is unauthenticated, the system refuses the action"
+      },
+      {
+        "id": "ac-notify-3",
+        "text": "when the backend is unavailable, the system retries with backoff"
+      },
+      {
+        "id": "ac-notify-4",
+        "text": "when two submissions race, the system serialises them deterministically"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-23-a": "95c09a5c93aa09b2e8eea3afadee70fcdf8033c502bb96afa321b27b44693d47",
+      "src-req-23-b": "0cad26cc876e2b3ee28447213fb0f3a3bc6050342e90b7d3a5be5f2a1802de6e"
+    },
+    "split": "train",
+    "statement": "As a notify owner I need the notify workflow hardened.",
+    "title": "Notify epic 23"
+  },
+  {
+    "control": "ordinary",
+    "declared_tests": [
+      "test_reporting_persists",
+      "test_reporting_rejects_invalid"
+    ],
+    "domain": "reporting",
+    "drifted_bytes": {
+      "src-req-24-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-24-b": "The reporting service enforces a per-tenant quota."
+    },
+    "epic_id": "req-24",
+    "evidence_bytes": {
+      "src-req-24-a": "The reporting service persists submissions and requires authentication for all actions.",
+      "src-req-24-b": "The reporting service enforces a per-tenant quota."
+    },
+    "evidence_sources": [
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-24-a"
+        },
+        "refutes": [],
+        "source_id": "src-req-24-a",
+        "source_type": "drive_doc",
+        "supports": [
+          "persistence",
+          "auth_required"
+        ]
+      },
+      {
+        "reference": {
+          "kind": "revision_export_link",
+          "mime": "text/plain",
+          "revision_id": "rev-req-24-b"
+        },
+        "refutes": [],
+        "source_id": "src-req-24-b",
+        "source_type": "drive_doc",
+        "supports": [
+          "quota"
+        ]
+      }
+    ],
+    "gold_ac": [
+      {
+        "id": "ac-reporting-0",
+        "text": "when reporting user submits valid input, the system persists it"
+      },
+      {
+        "id": "ac-reporting-1",
+        "text": "when reporting user submits invalid input, the system rejects it with a named error"
+      },
+      {
+        "id": "ac-reporting-2",
+        "text": "when reporting user is unauthenticated, the system refuses the action"
+      }
+    ],
+    "recorded_hashes": {
+      "src-req-24-a": "f65020f02abc1d993570406fbcdee1c6d4202799f998839ddd73960bfde966b7",
+      "src-req-24-b": "9cae72941dffe1563175e1200fbe14e0fffae3c0de0e1572d559e9304f58e203"
+    },
+    "split": "train",
+    "statement": "As a reporting owner I need the reporting workflow hardened.",
+    "title": "Reporting epic 24"
+  }
+]

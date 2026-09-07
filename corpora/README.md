@@ -7,12 +7,14 @@ carrying its schema version, generator seed, and a content hash per item.
 | Corpus | Generator | Loaded by |
 |---|---|---|
 | [`testgen/v1/`](testgen/v1/) | [`scripts/gen_testgen_corpus.py`](../scripts/gen_testgen_corpus.py) | [`config/testgen_eval.yaml`](../config/testgen_eval.yaml) via the `jsonl` dataset |
+| [`rca/v1/`](rca/v1/) | [`scripts/gen_rca_corpus.py`](../scripts/gen_rca_corpus.py) | [`config/rca_eval.yaml`](../config/rca_eval.yaml) via the `jsonl` dataset |
+| [`requirements/v1/`](requirements/v1/) | [`scripts/gen_requirements_corpus.py`](../scripts/gen_requirements_corpus.py) | [`config/requirements_eval.yaml`](../config/requirements_eval.yaml) via the `jsonl` dataset |
 
 ## What belongs here
 
 Data that the **harness** loads: generated, reproducible, and verifiable against its own
-manifest. `python scripts/gen_testgen_corpus.py --check` regenerates a corpus and fails if
-the committed bytes differ, so a hand-edited item is caught rather than trusted.
+manifest. `make corpus-check` (or each generator's `--check`) regenerates a corpus and
+fails if the committed bytes differ, so a hand-edited item is caught rather than trusted.
 
 Nothing host-specific, and nothing scraped from an internal system. A corpus of real
 internal source would run at CHARTER §4 invariant 7 — *"Nothing host-specific is
@@ -63,3 +65,42 @@ trusting:
   already reviewed. Reused as an idiom rather than imported, because of the airgap above.
 
 Regenerate with `python scripts/gen_testgen_corpus.py --write`; verify with `--check`.
+
+## `requirements/v1/`
+
+Twenty-five synthetic epics across authored domains, each with a declared gold
+acceptance-criteria set, recorded evidence sources, and (where applicable) a
+contradictory / stale / mutated negative control (F-068, ADR 0047).
+
+| File | Contents |
+|---|---|
+| `manifest.json` | schema version, generator seed, split counts, per-item hashes |
+| `items.json` | the corpus itself — gold ACs, evidence bytes, declared tests, control class |
+| `eval/items.jsonl` | harness-loadable records pairing each epic with its generated-set stand-in |
+| `eval/store.json` | the offline evidence store — `source_id` → the bytes that source *resolves to* |
+
+`eval/store.json` is what `config/requirements_eval.yaml` names as the target's
+`store_path`, so `eval-harness run --config config/requirements_eval.yaml` retrieves real
+evidence with no network. It serves `store_bytes`, not `evidence_bytes`: for a **mutated**
+control those two differ, and serving the original would leave the corpus unable to
+demonstrate the drift its verification pass exists to catch.
+
+The `generated` field on each eval record is a **scripted stand-in**, not a model output.
+It is derived from the gold set so the shipped journey exercises all four scorers offline;
+scores it produces describe the stand-in and measure no real generator. It is deliberately
+imperfect and varied — a demo that scores a flat 1.0 cannot tell a working scorer from a
+broken one. A real evaluation points `inner_spec` at the system under test, and the field
+goes unread.
+
+Three properties are measured rather than asserted:
+
+- **Gold ACs are corpus-carried.** Recall is the covered fraction of the declared set,
+  never inferred from the generated output.
+- **Evidence is revision-scoped when pinnable.** A mutated control's store bytes
+  diverge from the recorded hash so `verify_provenance` reports a provenance
+  failure, distinct from a scoring failure. Unpinnable sources omit `content_sha256`.
+- **The holdout split is keyed, not shuffled.** Same `sha256(seed:item_id)` idiom as
+  `testgen/v1/`, reused rather than imported (F-011 airgap).
+
+Regenerate with `python scripts/gen_requirements_corpus.py --write`; verify with `--check`.
+Or run both corpora through `make corpus-check` / `make corpus-write`.
