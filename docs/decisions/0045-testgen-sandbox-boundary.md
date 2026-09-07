@@ -56,9 +56,12 @@ Now (this change):
   Limits travel through the environment rather than `preexec_fn` because
   `preexec_fn` runs between fork and exec, which is unsafe under the engine's
   threaded item execution (`max_workers > 1`); env-carried limits keep the fork path
-  lock-free. On platforms without the `resource` module (Windows) the runner logs the
-  degradation and the wall-clock timeout remains the only bound — the repo's accepted
-  platform-asymmetry posture.
+  lock-free. On platforms without the `resource` module (Windows) the wall-clock
+  timeout remains the only bound — the repo's accepted platform-asymmetry posture —
+  and the *parent* logs that degradation once per process
+  (`_sandbox.warn_if_limits_unavailable`). The runner also writes a note to its own
+  stderr, but the parent runs it with `stderr=DEVNULL`, so the child's copy reaches
+  nobody; parent and child share a host, so the parent can determine this itself.
 - Limits are fields on `SandboxLimits` with documented defaults (ADR 0009); there is
   no per-item override in v1 (YAGNI — the corpus is synthetic and uniform).
 

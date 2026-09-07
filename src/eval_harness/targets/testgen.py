@@ -44,7 +44,7 @@ from typing import Any
 
 from ..core.types import TESTGEN_EVIDENCE_KEY, TargetOutput
 from . import _suite_runner
-from ._sandbox import SandboxLimits, sandbox_child_env
+from ._sandbox import SandboxLimits, sandbox_child_env, warn_if_limits_unavailable
 
 logger = logging.getLogger(__name__)
 
@@ -307,6 +307,7 @@ def run_generated_suite(inputs: dict[str, Any]) -> TargetOutput:
     with tempfile.TemporaryDirectory(prefix="eval-harness-testgen-") as tmp:
         root = Path(tmp)
         limits = SandboxLimits()
+        warn_if_limits_unavailable()
         baseline, failure = _run_against(root, _REFERENCE_LABEL, reference, focal_name, suite, timeout, limits)
         if baseline is None:
             evidence = _empty_evidence(mutants, timed_out=failure == TIMEOUT_FAILURE)

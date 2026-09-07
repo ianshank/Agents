@@ -8,6 +8,8 @@ or two mutants. ``tests/test_testgen_corpus.py`` covers the corpus itself.
 
 from __future__ import annotations
 
+import importlib.util
+import logging
 import socket
 from pathlib import Path
 from typing import Any
@@ -67,7 +69,7 @@ BLIND_SUITE = "from focal import add\n\ndef test_origin():\n    assert add(0, 0)
 class TestSandboxBoundary:
     """The ADR 0045 boundary: default-deny environment + POSIX resource limits."""
 
-    def test_generated_code_cannot_read_the_harnesss_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_generated_code_cannot_read_the_harness_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A credential in the harness process must be invisible to the suite.
 
         The child used to inherit the whole environment, so any credential-bearing job
@@ -105,6 +107,36 @@ class TestSandboxBoundary:
         assert env[_sandbox.RLIMIT_ENV_CPU] == str(35)
         explicit = _sandbox.sandbox_child_env(_sandbox.SandboxLimits(cpu_seconds=9), 30.0)
         assert explicit[_sandbox.RLIMIT_ENV_CPU] == "9"
+
+    def test_a_platform_without_resource_limits_says_so_where_it_can_be_read(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The child's stderr notice went to DEVNULL, so the degradation was invisible.
+
+        Parent and child share a host, so the parent can answer this itself — and only
+        the parent's logger is actually attached to anything a reader sees.
+        """
+        monkeypatch.setattr(_sandbox.importlib.util, "find_spec", lambda name: None)
+        _sandbox.warn_if_limits_unavailable.cache_clear()
+        with caplog.at_level(logging.WARNING, logger=_sandbox.__name__):
+            assert _sandbox.warn_if_limits_unavailable() is False
+        assert "resource module is unavailable" in caplog.text
+
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger=_sandbox.__name__):
+            _sandbox.warn_if_limits_unavailable()
+        assert caplog.text == "", "one line per process, not one per item"
+        _sandbox.warn_if_limits_unavailable.cache_clear()
+
+    def test_a_platform_with_resource_limits_stays_quiet(self, caplog: pytest.LogCaptureFixture) -> None:
+        """POSIX is the normal case: no warning, and the answer is True."""
+        _sandbox.warn_if_limits_unavailable.cache_clear()
+        with caplog.at_level(logging.WARNING, logger=_sandbox.__name__):
+            available = _sandbox.warn_if_limits_unavailable()
+        _sandbox.warn_if_limits_unavailable.cache_clear()
+        assert available is (importlib.util.find_spec("resource") is not None)
+        if available:
+            assert caplog.text == ""
 
     def test_a_fork_bomb_is_refused_by_the_process_limit(self, tmp_path: Path) -> None:
         """RLIMIT_NPROC=0 turns a fork attempt into a failing test, not a host incident."""
@@ -526,6 +558,22 @@ class TestRunnerProtocol:
         result = testgen.run_generated_suite(item(KILLING_SUITE))
         assert result.error is not None and "runner exited 3" in result.error
         assert evidence_of(result)["collection_error"] == "reference run did not complete"
+
+    def test_a_malformed_rlimit_value_writes_a_runner_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The one failure mode the limits docstring promises fails closed.
+
+        `_apply_sandbox_limits` ran *before* the try that writes runner_error.txt, so
+        `int("not-an-int")` escaped uncaught: the parent saw a bare non-zero exit and
+        reported "no detail" for a misconfiguration it could have named.
+        """
+        from eval_harness.targets import _sandbox, _suite_runner
+
+        monkeypatch.setenv(_sandbox.RLIMIT_ENV_CPU, "not-an-int")
+        assert _suite_runner.main([str(tmp_path)]) == 1
+        detail = (tmp_path / _suite_runner.RUNNER_ERROR_FILENAME).read_text(encoding="utf-8")
+        assert "ValueError" in detail and "not-an-int" in detail
 
     def test_an_unparseable_result_file_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The verdict file exists but is not JSON — distinct from the runner never running."""

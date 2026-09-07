@@ -34,6 +34,23 @@ degrades to the timeout-only posture with a logged note. OS-level network isolat
 is deferred behind a recorded trigger (first non-synthetic corpus or credential-gated
 live generation). Unblocks `add-agent-in-the-loop-testgen` on the security dimension.
 
+#### Fixed from automated review of the same pull request
+
+- **The limits did not actually fail closed.** `_apply_sandbox_limits()` ran
+  *before* the `try` that writes `runner_error.txt`, so a malformed RLIMIT value
+  — the one case its docstring promises fails closed — made `int()` raise
+  uncaught. The parent saw a bare non-zero exit and reported "no detail" for a
+  misconfiguration it could have named. The call moved inside the `try`, still
+  ahead of suite loading so the limits bind the code they exist to contain.
+- **The Windows degradation notice reached nobody.** The runner printed it to its
+  own stderr and the parent runs the runner with `stderr=DEVNULL`, so the
+  timeout-only posture was silent on exactly the platform where it applies. The
+  *parent* now logs it once per process (`warn_if_limits_unavailable`, `lru_cache`d
+  so it is one line per run rather than one per item); parent and child share a
+  host, so the parent can determine this itself. ADR 0045 is corrected to say
+  where the notice comes from.
+- Fixed a test-name typo (`harnesss`).
+
 ### Changed — root `eval_harness` package is strict-typed (ADR 0044)
 
 - `eval_harness.*` now carries the strict mypy flag bundle via an enumerated

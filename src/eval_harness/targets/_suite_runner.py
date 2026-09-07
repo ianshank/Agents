@@ -180,8 +180,12 @@ def main(argv: list[str] | None = None) -> int:
         print("usage: _suite_runner.py <workdir>", file=sys.stderr)
         return 2
     workdir = Path(args[0])
-    _apply_sandbox_limits()
     try:
+        # Inside the try, not before it: a malformed RLIMIT value makes int() raise, and
+        # outside the try that escaped uncaught, so no runner_error.txt was written and
+        # the parent reported "no detail" for the one failure mode the docstring
+        # promises fails closed. Still ahead of _report, so the limits bind the suite.
+        _apply_sandbox_limits()
         payload = _report(workdir)
     except Exception:  # the runner itself broke; the caller must not read this as a verdict
         # An unwritable workdir is itself the failure; the exit code carries it, and the

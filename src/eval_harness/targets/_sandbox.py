@@ -18,9 +18,14 @@ Two invariants live here:
 
 from __future__ import annotations
 
+import functools
+import importlib.util
+import logging
 import math
 import os
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 #: Environment variables the sandboxed interpreter is allowed to inherit. PATH/HOME/
 #: TMPDIR keep the interpreter and stdlib tempfile working; SYSTEMROOT is required for
@@ -70,6 +75,26 @@ class SandboxLimits:
         if self.cpu_seconds is not None:
             return self.cpu_seconds
         return math.ceil(timeout) + self.cpu_margin_seconds
+
+
+@functools.lru_cache(maxsize=1)
+def warn_if_limits_unavailable() -> bool:
+    """Log once when this platform has no ``resource``, and report whether it does.
+
+    The child logs its own degradation to stderr, but the parent runs it with
+    ``stderr=DEVNULL``, so on Windows that notice reached nobody and the sandbox
+    silently narrowed to the wall-clock timeout alone. Parent and child are the same
+    host, so the parent can answer this itself. ``lru_cache`` keeps it to one line
+    per process rather than one per item.
+    """
+    available = importlib.util.find_spec("resource") is not None
+    if not available:
+        logger.warning(
+            "testgen sandbox: the resource module is unavailable on this platform; "
+            "CPU, memory, process and file-size limits are not applied and the "
+            "wall-clock timeout is the only bound"
+        )
+    return available
 
 
 def sandbox_child_env(limits: SandboxLimits, timeout: float) -> dict[str, str]:
