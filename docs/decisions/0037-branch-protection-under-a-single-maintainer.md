@@ -85,19 +85,25 @@ since 2026-06-30.
   enforced when it is not.
 - **Negative.** A maintainer with admin bypass enabled can still merge past a red required
   check. This ADR does not resolve that; it only asks that the choice be stated, not hidden.
-- **Neutral.** No code changes ship with this ADR. The settings change it authorises happens
-  in GitHub's repository settings, out-of-band, by a human with admin access — an agent
-  session does not have the authority or the visibility to perform or verify it, and should
-  not attempt to.
+- **Neutral.** The settings change this ADR authorises happens in GitHub's
+  repository settings, out-of-band, by a human with admin access. `--apply`
+  is a derived PUT of the same rule: a 403 is not-enabled, never success.
+  An agent session without admin must not claim the setting is on.
 
 ## Compliance
 
 `scripts/check_branch_protection.py` derives the candidate required-check set from
-`.github/workflows/required-check-stubs.yml` (the ADR 0040 stub/real pairing) and,
+`.github/workflows/required-check-stubs.yml` (the ADR 0040 stub/real pairing) unioned
+with extra unfiltered workflows (their job names, never restated literals), and,
 with `--probe`, compares it to `gh api repos/{owner}/{repo}/branches/main/protection`.
-Default exit is 0 (advisory): this ADR's settings change is out-of-band and a red
-checker cannot enable protection. `--strict` is for an operator who wants the
-comparison to fail CI after protection is on.
+`--emit-payload` prints the classic-rule PUT body; `--apply` PUTs it and treats a
+403 as not-enabled. Default exit is 0 (advisory): this ADR's settings change is
+out-of-band and a red checker cannot enable protection. `--strict` is for an operator
+who wants the comparison to fail CI after protection is on.
+
+The default PUT posture (zero required approvals, Code-Owner review off, admins
+may bypass) is the single-maintainer recommendation; `--enforce-admins` is the
+stricter alternative. Whichever is applied must be recorded.
 
 `scripts/check_guard_reachability.py` still asserts the complementary fact: every
 protected pattern's guard job appears in the workflow `paths:` filter. Until
