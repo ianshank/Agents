@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
 
 from eval_harness.langfuse_client import NullLangfuseClient, SDKLangfuseClient, langfuse_context, observe
@@ -48,6 +49,36 @@ def test_observe_transparent_fallback():
     """observe() acts as a no-op decorator when langfuse is not installed."""
 
     @observe()
+    def dummy_func(x: int) -> int:
+        return x + 1
+
+    assert dummy_func(5) == 6
+
+
+def test_observe_supports_the_bare_form_without_sdk(monkeypatch):
+    """`@observe` hands the function in directly; the fallback must hand it back.
+
+    Returning the no-op *decorator* here replaced the decorated function with it, so
+    `dummy_func(5)` returned 5 — the argument — instead of 6. Only the parameterised
+    form was covered, which is why it survived; `phoenix_observe` tests both.
+
+    sys.modules injection rather than @patch: the SDK is installed in this venv, and
+    patching a module that must appear absent is the documented idiom (AGENTS.md).
+    """
+    monkeypatch.setitem(sys.modules, "langfuse.decorators", None)
+
+    @observe
+    def dummy_func(x: int) -> int:
+        return x + 1
+
+    assert dummy_func(5) == 6
+
+
+def test_observe_parameterised_form_still_works_without_sdk(monkeypatch):
+    """The form that already worked must keep working once the bare form is handled."""
+    monkeypatch.setitem(sys.modules, "langfuse.decorators", None)
+
+    @observe(name="traced")
     def dummy_func(x: int) -> int:
         return x + 1
 

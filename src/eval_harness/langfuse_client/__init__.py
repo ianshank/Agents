@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Any, overload
+from typing import Any, ParamSpec, TypeVar, overload
+
+#: The bare `@observe` form returns the *same* callable, so its signature is
+#: preserved rather than widened to `Callable[..., Any]` — a decorator that erases
+#: its argument's type silently untypes every function it touches, which is the
+#: thing `disallow_untyped_decorators` exists to prevent.
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 
 
 class LangfuseClient(ABC):
@@ -182,7 +189,7 @@ class SDKLangfuseClient(LangfuseClient):
 
 
 @overload
-def observe(func: Callable[..., Any], /) -> Callable[..., Any]: ...
+def observe(func: Callable[_P, _R], /) -> Callable[_P, _R]: ...
 
 
 @overload
@@ -201,6 +208,13 @@ def observe(*decorator_args: Any, **decorator_kwargs: Any) -> Any:
 
         return lf_observe(*decorator_args, **decorator_kwargs)
     except ImportError:
+        # Bare form: `@observe` hands the function straight in, so returning the
+        # decorator here would REPLACE the decorated function with it — `f(x)` would
+        # then return x. `phoenix_observe` already distinguishes the two forms; this
+        # fallback had not, and only the parameterised `@observe(name=...)` form
+        # survived an SDK-absent install.
+        if len(decorator_args) == 1 and callable(decorator_args[0]) and not decorator_kwargs:
+            return decorator_args[0]
 
         def no_op_decorator(func: Any) -> Any:
             return func

@@ -98,6 +98,11 @@ def require_calibration_for_judge_gating(
 
     from eval_harness.agent_core_adapter import require_report_to_gate
 
+    # `resolved` is whatever `report=`/`load_report=` returned, and both are typed
+    # `object` so this module needs no agent_core import (the adapter is the only
+    # seam onto it — a direct import here is architecture drift). The narrowing
+    # therefore belongs to the authorisation boundary itself, which already knows
+    # the type; see require_report_to_gate.
     require_report_to_gate(resolved, artifact_id)
     logger.debug(
         "judge calibration authorised gating artifact_id=%s targets=%s",

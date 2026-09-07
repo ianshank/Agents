@@ -116,6 +116,40 @@ live generation). Unblocks `add-agent-in-the-loop-testgen` on the security dimen
   rejects the former per-module, and F-039's explicit `__all__` guard already
   covers the latter. `scripts/` and `tests/` strictness remains follow-up work.
 
+#### Fixed from automated review of the same pull request
+
+Both are cases where making a signature *look* typed was mistaken for making the
+value behind it correct.
+
+- **`@observe` in its bare form replaced the decorated function** whenever the
+  Langfuse SDK was absent. The `ImportError` fallback returned `no_op_decorator`
+  unconditionally, but the bare form hands the function straight in, so
+  `@observe def f(x): return x + 1` bound `f` to the decorator itself and `f(5)`
+  returned `5`. Only the parameterised `@observe(...)` form was covered by a
+  test, which is why it survived; `phoenix_observe` has distinguished the two
+  forms all along and is now mirrored. Both forms are tested against an
+  SDK-absent install (`sys.modules` injection, not `@patch`).
+- **`observe`'s overloads erased the wrapped signature.** They returned
+  `Callable[..., Any]`, so a decorated function type-checked as untyped — the
+  precise outcome `disallow_untyped_decorators` exists to prevent. Now
+  `ParamSpec`/`TypeVar`, so a decorated `(int, str) -> float` reveals as itself.
+- **An injected calibration report was never type-checked.** `report=` and
+  `load_report=` are typed `object` to keep `agent_core` out of the module's
+  import scope, so a mapping with the right keys reached `require_report_to_gate`
+  and failed on an attribute lookup inside it with an `AttributeError` about
+  `artifact_id`. `require_report_to_gate` now takes `object` and narrows first, so
+  a wrong type names itself. The check lives at the authorisation boundary rather
+  than at the call site on purpose: narrowing in `gating` would have meant
+  importing `agent_core` there, which is a direct edge past the adapter seam —
+  architecture drift the F-060 guard rejects.
+
+Declined, with reason: rewriting `_otel_tracer`'s `trace.get_tracer(__name__)` as
+a direct `from opentelemetry.trace import get_tracer`. Both forms type-check
+cleanly under the canonical install profile here, so the change would be
+speculative against a failure that does not reproduce — and `pyproject.toml`'s
+note on this exact limitation warns against guessing at it without live
+verification of which `langfuse` major pulls `opentelemetry` transitively.
+
 ### Added — RCA evaluation matrix, synthetic scope (F-067, ADR 0046)
 
 - **Frozen synthetic corpus** at `corpora/rca/v1/` (96 generated items: 4
