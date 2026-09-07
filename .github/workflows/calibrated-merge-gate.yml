@@ -20,13 +20,15 @@ concurrency:
 jobs:
   gate:
     name: calibrated merge decision
-    # Inert by default: the job only runs once a human enables the gate AND wires
-    # the real upstream inputs (mech_pass / touches_protected / raw_confidence /
-    # domain + a populated store). Until then it is skipped (neutral), never
-    # failing PRs. See ADR 0005.
+    # Inert by default: the job only runs once a human enables the gate (ADR 0005).
+    # It is wired to parity with the shadow job below — same store, same context
+    # composition, same decision entry point — so enabling the variable flips
+    # visibility, not behaviour. Before this parity wiring the job decided on
+    # argparse defaults (mech_pass=False), which decide() maps to REJECT: flipping
+    # the variable would have failed every PR regardless of the store's contents.
     if: ${{ vars.ENABLE_CALIBRATED_AUTOMERGE == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30  # the regression gate runs the root suite in both trees
     env:
       # Empty GitHub `vars` stay inert: overlay_from_environ skips blank values
       # so dataclass defaults remain until a human sets a repo variable (I-4).
@@ -49,24 +51,90 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
-          persist-credentials: false
+          fetch-depth: 0  # base diff + regression-gate baseline worktree
+          # Credentials persist so the read-only store pull can FETCH the data
+          # branch on a private repo (same posture as the shadow job; the
+          # workflow-level contents: read keeps the persisted token write-proof).
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip "setuptools>=68"
       - run: pip install -e .
-      # Inputs (mech_pass / touches_protected / raw_confidence / domain) and the
-      # outcome store are produced upstream once seeding is implemented (ADR 0005
-      # seam). Until then STORE points at a (likely absent) file => cold start.
+      # regression_gate runs the offline ROOT suite in both trees; it needs the
+      # same extras quality-gates installs (mirrors the shadow job's install).
+      - run: pip install -e ".[dev,langfuse,openai,archguard,parquet,e2e-matrix,autoevals]"
+        working-directory: ${{ github.workspace }}
+      # Read-only pull; this workflow NEVER pushes the store (F-035). A failed
+      # pull degrades to a cold start, which decide() maps to ESCALATE.
+      - name: Sync store (read-only pull; tolerate failure -> cold start)
+        working-directory: ${{ github.workspace }}
+        env:
+          STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
+        run: |
+          set +e
+          python -m agent_core.store_sync pull --store "$STORE" --repo-dir .
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning::store pull rc=$rc — deciding over an empty store (cold start)"
+          fi
+          exit 0
+      - name: Changed files vs base
+        working-directory: ${{ github.workspace }}
+        env:
+          BASE: ${{ github.base_ref || 'main' }}
+        run: |
+          git diff --name-only "origin/$BASE...HEAD" > changed_files.txt
+          cat changed_files.txt
+      # mech_pass is computed honestly but not wastefully (same skip rule as
+      # shadow): if the PR touches none of the measured paths, baseline ==
+      # worktree on the measured surface and the gate trivially passes. rc 1
+      # (net-new findings) and rc 2 (config error) both map to --no-mech-pass:
+      # an unknown mechanical state is a failure (fail-safe).
+      - name: Mechanical result (regression gate, skipped when unaffected)
+        id: mech
+        working-directory: ${{ github.workspace }}
+        env:
+          BASE: ${{ github.base_ref || 'main' }}
+        run: |
+          set +e
+          if grep -qE '^(src/|tests/|scripts/|pyproject\.toml$)' changed_files.txt; then
+            python scripts/regression_gate.py \
+              --base-ref "origin/$BASE" \
+              --report-path regression_report.json
+            echo "rc=$?" >> "$GITHUB_OUTPUT"
+          else
+            echo "regression gate skipped: no measured path touched (equivalent to pass)"
+            echo "rc=0" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+      # Context composition runs at repo root: config/merge-gate-domains.yaml is
+      # cwd-relative. The optional flag is a bash array (F-047 idiom): an
+      # unquoted $MECH_FLAG would word-split, and argparse is last-wins.
+      - name: Compose change context
+        working-directory: ${{ github.workspace }}
+        env:
+          BASE_REF: origin/${{ github.base_ref || 'main' }}
+          MECH_RC: ${{ steps.mech.outputs.rc }}
+        run: |
+          MECH_ARGS=(--no-mech-pass)
+          [ "$MECH_RC" = "0" ] && MECH_ARGS=(--mech-pass)
+          python scripts/merge_gate_context.py "${MECH_ARGS[@]}" --output context.json
+          cat context.json
       - name: Decide
         id: decide
         env:
           STORE: ${{ vars.MERGE_GATE_STORE || 'merge_outcomes.jsonl' }}
-          DOMAIN: ${{ vars.MERGE_GATE_DOMAIN || 'unknown' }}
         run: |
           set +e
-          python -m agent_core.merge_gate_ci --store "$STORE" --domain "$DOMAIN" \
-            --audit-log merge_decisions.jsonl
+          # STORE is repo-root-relative (the pull above ran at the workspace
+          # root); this step's cwd stays agent-core for MERGE_GATE_POLICY_FILE.
+          case "$STORE" in
+            /*) STORE_PATH="$STORE" ;;
+            *) STORE_PATH="$GITHUB_WORKSPACE/$STORE" ;;
+          esac
+          python -m agent_core.merge_gate_ci --store "$STORE_PATH" \
+            --context "$GITHUB_WORKSPACE/context.json" \
+            --audit-log "$GITHUB_WORKSPACE/merge_decisions.jsonl"
           rc=$?
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
           # Exit-code contract: 0 AUTO_MERGE, 10 ESCALATE, 20 REJECT,
@@ -78,9 +146,21 @@ jobs:
             0 | 10) exit 0 ;;
             *) exit 1 ;;
           esac
+      # The acting decision's audit trail must outlive the runner: unlike
+      # shadow's, this record is what a merge was authorized from.
+      - name: Upload decision audit log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: merge-decisions
+          path: merge_decisions.jsonl
+          if-no-files-found: ignore
       - name: Auto-merge (gated, default-off)
         if: steps.decide.outputs.rc == '0' && vars.ENABLE_CALIBRATED_AUTOMERGE == 'true'
         run: echo "AUTO_MERGE — enabling merge would happen here (human-enabled)."
+        # Real seam (NOT this change): GH_TOKEN + `gh pr merge --auto` requires
+        # elevating the workflow to contents: write — that belongs to the
+        # dedicated human-authored activation change (ADR 0005 checklist).
 
   # F-035 shadow mode (ADR 0005 soak, ADR 0018 persistence): a log-only
   # decision on EVERY PR. It cannot merge, approve, or block — all three
