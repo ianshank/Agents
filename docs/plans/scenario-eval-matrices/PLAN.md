@@ -238,8 +238,8 @@ A deck that ends in "support" gets support and no decisions. End on these:
 - [`./REVIEW.md`](./REVIEW.md) — the two-pass peer review, including Part E's five retractions
 - [`../../../openspec/changes/archive/add-gate-decision-provenance/`](../../../openspec/changes/archive/add-gate-decision-provenance/) — F-062, archived
 - [`../../../openspec/changes/archive/prove-m8-execution/`](../../../openspec/changes/archive/prove-m8-execution/) — F-063, archived (judge `client=` ADR checkbox optional)
-- [`../../../openspec/changes/add-agent-in-the-loop-testgen/`](../../../openspec/changes/add-agent-in-the-loop-testgen/) — Deck B unlock (proposed)
+- [`../../../openspec/changes/add-agent-in-the-loop-testgen/`](../../../openspec/changes/add-agent-in-the-loop-testgen/) — Deck B (F-069 / ADR 0048, in-tree)
 - [`./DECK_A_PLUS.md`](./DECK_A_PLUS.md) — corrected Deck A / A+ speaker notes
 - [`../../../openspec/changes/archive/add-testgen-eval-matrix/`](../../../openspec/changes/archive/add-testgen-eval-matrix/) — Sprint 1, archived
-- [`../../../openspec/changes/add-rca-eval-matrix/`](../../../openspec/changes/add-rca-eval-matrix/) — Sprint 2
-- [`../../../openspec/changes/add-requirements-gen-eval-matrix/`](../../../openspec/changes/add-requirements-gen-eval-matrix/) — Sprint 3
+- [`../../../openspec/changes/archive/add-rca-eval-matrix/`](../../../openspec/changes/archive/add-rca-eval-matrix/) — Sprint 2, archived (F-067)
+- [`../../../openspec/changes/archive/add-requirements-gen-eval-matrix/`](../../../openspec/changes/archive/add-requirements-gen-eval-matrix/) — Sprint 3, archived (F-068)

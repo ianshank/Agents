@@ -1210,8 +1210,8 @@ numbers into specs, which is the worst possible place for them.
    **Done.** The four rewritten packages are in the tree:
    [`add-gate-decision-provenance`](../../../openspec/changes/archive/add-gate-decision-provenance/),
    [`add-testgen-eval-matrix`](../../../openspec/changes/archive/add-testgen-eval-matrix/),
-   [`add-rca-eval-matrix`](../../../openspec/changes/add-rca-eval-matrix/),
-   [`add-requirements-gen-eval-matrix`](../../../openspec/changes/add-requirements-gen-eval-matrix/).
+   [`add-rca-eval-matrix`](../../../openspec/changes/archive/add-rca-eval-matrix/),
+   [`add-requirements-gen-eval-matrix`](../../../openspec/changes/archive/add-requirements-gen-eval-matrix/).
    Scorer count is cut from 35 to 13; every gate rule ships advisory; every corpus starts synthetic;
    each package carries its own `review.md` recording which findings it applied and which it
    retracted.
