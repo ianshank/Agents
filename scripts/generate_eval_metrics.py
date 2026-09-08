@@ -18,13 +18,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Ensure headless execution before importing pyplot
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-
 logger = logging.getLogger("generate_eval_metrics")
 
 DEFAULT_INPUT_PATH = Path("docs/eval_metrics.json")
@@ -78,6 +71,18 @@ def render_comparison_chart(
     dpi: int = DEFAULT_DPI,
 ) -> list[Path]:
     """Render and save the grouped bar chart comparison."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import numpy as np
+    except ImportError as exc:
+        raise RuntimeError(
+            "Rendering evaluation comparison charts requires 'matplotlib' and 'numpy'. "
+            "Please install them via `pip install matplotlib numpy`."
+        ) from exc
+
     tools: list[str] = data["tools"]
     dimensions: list[dict[str, Any]] = data["dimensions"]
     scores: dict[str, dict[str, Any]] = data["scores"]

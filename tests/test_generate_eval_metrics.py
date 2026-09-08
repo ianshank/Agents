@@ -115,6 +115,7 @@ def test_load_and_validate_metrics_missing_keys(tmp_path: Path) -> None:
 
 
 def test_render_comparison_chart(tmp_path: Path, minimal_metrics_data: dict[str, Any]) -> None:
+    pytest.importorskip("matplotlib", reason="matplotlib required for rendering comparison charts")
     out_png = tmp_path / "chart.png"
     saved = render_comparison_chart(minimal_metrics_data, output_path=out_png, output_format="both", dpi=100)
 
@@ -127,6 +128,18 @@ def test_render_comparison_chart(tmp_path: Path, minimal_metrics_data: dict[str,
     assert svg_path.stat().st_size > 0
 
 
+def test_render_comparison_chart_missing_dependencies(
+    monkeypatch: pytest.MonkeyPatch, minimal_metrics_data: dict[str, Any], tmp_path: Path
+) -> None:
+    """Verify informative error when matplotlib is missing at render time."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "matplotlib", None)
+    out_png = tmp_path / "chart.png"
+    with pytest.raises(RuntimeError, match="requires 'matplotlib' and 'numpy'"):
+        render_comparison_chart(minimal_metrics_data, output_path=out_png)
+
+
 def test_main_check_mode(tmp_path: Path, minimal_metrics_data: dict[str, Any]) -> None:
     data_file = tmp_path / "metrics.json"
     with data_file.open("w", encoding="utf-8") as f:
@@ -137,6 +150,7 @@ def test_main_check_mode(tmp_path: Path, minimal_metrics_data: dict[str, Any]) -
 
 
 def test_main_full_generation(tmp_path: Path, minimal_metrics_data: dict[str, Any]) -> None:
+    pytest.importorskip("matplotlib", reason="matplotlib required for full chart generation")
     data_file = tmp_path / "metrics.json"
     out_file = tmp_path / "out_chart.png"
     with data_file.open("w", encoding="utf-8") as f:
