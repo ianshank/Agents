@@ -87,4 +87,5 @@ from . import (  # noqa: E402
     model,  # noqa: F401
     provenance,  # noqa: F401
     rca_baseline,  # noqa: F401
+    testgen_agent,  # noqa: F401
 )

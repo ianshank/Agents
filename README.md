@@ -463,7 +463,10 @@ src/eval_harness/
                      provenance_recorder (wraps an inner target and records
                      retrieval-evidence records; F-068),
                      rca_maxz (deterministic max-|Z| baseline diagnosis over an
-                     item's telemetry; F-067)
+                     item's telemetry; F-067),
+                     testgen_agent (generate a suite from focal+obligations, never
+                     seeing inputs.suite, then execute via run_generated_suite;
+                     F-069)
   sinks/             console, json_file, html_file, langfuse, phoenix, braintrust
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
                      phoenix_evals, panel (aggregates N member judges — median/mean/

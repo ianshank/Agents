@@ -1971,6 +1971,57 @@ PIPELINES: dict[str, PipelineConfig] = {
         ],
         "sinks": [{"type": "console"}],
     },
+    # Agent-in-the-loop pipeline: generate a suite (allowlisted tests fixture), then
+    # execute it. Inline so the cell stays fast; metadata.split is holdout because the
+    # target's default allowlist is the Deck B sequestered split.
+    "testgen_agent": {
+        "schema_version": "1.0",
+        "run": {"name": "testgen-agent-test", "seed": 1},
+        "dataset": {
+            "type": "inline",
+            "params": {
+                "items": [
+                    {
+                        "id": "tg-agent-1",
+                        "inputs": {
+                            "focal_name": "add",
+                            "reference": "def add(n, k):\n    if n < 2:\n        return n + k\n    return k - n\n",
+                            "suite": "SECRET_CORPUS_SUITE",
+                            "mutants": [
+                                {
+                                    "id": "M1",
+                                    "kind": "relational",
+                                    "equivalent": False,
+                                    "source": (
+                                        "def add(n, k):\n    if n <= 2:\n        return n + k\n    return k - n\n"
+                                    ),
+                                    "differs_at": [1],
+                                }
+                            ],
+                            "obligations": [{"id": "OB-1", "witness_mutant": "M1"}],
+                            "grid": [[0, 0], [2, 1]],
+                        },
+                        "metadata": {"split": "holdout"},
+                        "expected": None,
+                    }
+                ]
+            },
+        },
+        "target": {
+            "type": "testgen_agent",
+            "params": {
+                "generator_path": "tests._testgen_agent_fixtures:killing_suite",
+                "allowed_splits": ["holdout"],
+            },
+        },
+        "scorers": [
+            {"type": "test_executability"},
+            {"type": "testgen_mutation_score"},
+            {"type": "testgen_green_on_correct"},
+            {"type": "requirement_obligation_recall"},
+        ],
+        "sinks": [{"type": "console"}],
+    },
     # Ranking RCA scorers over an echo'd diagnosis (prototype; no telemetry target yet).
     "rca_ranking_scorers": {
         "schema_version": "1.0",
@@ -2685,6 +2736,17 @@ class TestM8Composability:
         for component in TESTGEN_SCORERS:
             assert ledger.invoked("scorer", component), component
         assert ledger.invoked("target", "callable")
+
+    def test_m8_testgen_agent_pipeline(self) -> None:
+        """Generate-then-execute: the fixture never sees inputs.suite, then F-065 scorers grade."""
+        _, result, _, ledger = self._run("testgen_agent")
+        assert result.aggregate["test_executability"].pass_rate == 1.0
+        assert result.aggregate["testgen_mutation_score"].mean == 1.0
+        assert result.aggregate["testgen_green_on_correct"].mean == 0.0
+        assert result.aggregate["requirement_obligation_recall"].mean == 1.0
+        for component in TESTGEN_SCORERS:
+            assert ledger.invoked("scorer", component), component
+        assert ledger.invoked("target", "testgen_agent")
 
     def test_m8_rca_ranking_scorers_pipeline(self) -> None:
         """Prototype RCA ranking scorers over an echoed sdlc-shaped diagnosis."""

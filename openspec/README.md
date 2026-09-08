@@ -30,8 +30,9 @@ archived one may — asserted by the *OpenSpec change index* guard in
 before that guard existed.
 
 - [`changes/add-agent-in-the-loop-testgen/`](changes/add-agent-in-the-loop-testgen/) —
-  *in implementation.* Owner defaults recorded 2026-09-06 in `OWNER_DEFAULTS.md`
-  (option (a) sequential pipeline). F-ID claimed at land.
+  *landed in-tree as F-069 / ADR 0048* (`testgen_agent` registered target; suite
+  stripped before generate). Archive after this SHA is an ancestor of `main`.
+  Owner defaults: `changes/add-agent-in-the-loop-testgen/OWNER_DEFAULTS.md`.
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
   *partially implemented.* **WS-0 (the blocking hygiene gate) landed as F-048** — credential scrub,
   `.gitleaks.toml`, and the fail-closed secret scan at `quality-gates.yml`. WS-0 tasks 0.5–0.7

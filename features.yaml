@@ -1487,3 +1487,39 @@ features:
       accepts it from HEAD (the same in-flight stamp F-066 used).
       public_surface_baseline.json is unchanged: the scorers subpackage
       declares no __all__.
+
+  - id: "F-069"
+    epic: "Eval Harness"
+    name: "Agent-in-the-loop test generation (Deck B): generate then execute"
+    description: >-
+      Sequential pipeline TargetRunner (`testgen_agent`) that generates a test
+      suite from focal method + obligations, then executes it in-process via
+      run_generated_suite so the existing F-065 scorers read the same evidence
+      payload. The generator never sees inputs.suite (homework attack).
+      Missing or malformed generation fail-closes with structured empty evidence
+      (ADR 0038). Held-out membership is enforced by target.params.allowed_splits
+      (Deck B profile: holdout only). Registered by name — not an ADR 0039
+      callable path; generator_path is optional and remains deny-by-default.
+      F-065 scorers, the sandbox, and config/testgen_eval.yaml are unchanged.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "testgen_agent is constructed from the registry with no callable allowlist entry (scripts/validations/F_069.py)"
+      - "the generator view does not contain inputs.suite; a generator that only copies that key cannot see it (scripts/validations/F_069.py, tests/test_testgen_agent.py::TestHomeworkAttack)"
+      - "a train item fail-closes when allowed_splits is holdout-only (scripts/validations/F_069.py, tests/test_testgen_agent.py::TestFailClosed)"
+      - "a missing generator fail-closes with structured empty evidence (scripts/validations/F_069.py, tests/test_matrix_testgen_agent.py)"
+      - "a generated killing suite is executed in-process and F-065 scorers read the evidence (scripts/validations/F_069.py)"
+      - "the shipped Deck B profile allowlists holdout only and every gate rule is advisory (scripts/validations/F_069.py, config/testgen_agent_eval.yaml)"
+      - "an unlisted generator_path is refused (ADR 0039) (scripts/validations/F_069.py)"
+      - "4 matrix cells (target row M1/M2/M3/M6) plus an M8 pipeline running the pipeline target under the four F-065 scorers (tests/test_matrix_testgen_agent.py, tests/test_matrix_eval_tools.py::test_m8_testgen_agent_pipeline)"
+    validation_command: "python scripts/validations/F_069.py"
+    implemented_in: "001d30fe6bef4e38d66523450be4d247f8785a6c"
+    depends_on: ["F-065", "F-062", "F-063"]
+    notes: >-
+      ADR 0048 records the sequential-pipeline decision, the suite-stripping
+      homework rule, holdout allowlisting, and the refusal to quote pass^k from
+      a deterministic fake. implemented_in is stamped to this branch's feature
+      commit so F-064's ancestry check resolves it from HEAD. public_surface_baseline.json
+      is unchanged: the new module declares no __all__.

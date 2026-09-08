@@ -15,6 +15,8 @@ these files can alter what the evaluation measures.
 | `agent-authors.yaml` | Agent identification for merge-gate seed routing (ADR 0023, F-042) — head-ref prefixes → `agent_version`. | `scripts/merge_gate_context.py`, `scripts/agent_confidence.py` |
 | `agent-confidence.yaml` | Parameters for the deterministic agent-confidence proxy (F-042, F-061). | `scripts/agent_confidence.py` |
 | `testgen_eval.yaml` | Test-generation evaluation over the shipped corpus (F-065, ADR 0043). Every gate rule is advisory. | `eval-harness run` with `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=eval_harness.targets.testgen` |
+| `testgen_agent_eval.yaml` | Agent-in-the-loop test-generation profile (F-069, ADR 0048). Holdout-only; advisory gates. Missing generator fail-closes. | `eval-harness run --config config/testgen_agent_eval.yaml` |
+| `testgen_agent_empty_eval.yaml` | Weak-slice empty/null baseline beside the agent (OWNER_DEFAULTS). | `eval-harness run --config config/testgen_agent_empty_eval.yaml` |
 | `rca_eval.yaml` | RCA evaluation over the shipped corpus (F-067, ADR 0046). Every gate rule is advisory. | `eval-harness run --config config/rca_eval.yaml` |
 | `requirements_eval.yaml` | Requirements-generation evaluation over the shipped corpus (F-068, ADR 0047). Every gate rule is advisory. | `eval-harness run --config config/requirements_eval.yaml` |
 | `trajectory_eval.yaml` | Agent-trajectory evaluation example (F-051, ADR 0031). | `eval-harness run` with `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=tests` **and `PYTHONPATH=.`** — its target lives in `tests/_sut.py`, which only pytest puts on the path |

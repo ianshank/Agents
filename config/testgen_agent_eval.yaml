@@ -1,0 +1,56 @@
+# Test-generation evaluation — agent-in-the-loop profile (Deck B).
+#
+# Sequential pipeline target: generate a suite from focal + obligations, then
+# execute it in-process via run_generated_suite. F-065 scorers are unchanged.
+#
+# Deck B quotes **thorough holdout only** (11 unique items; holdout IDs are
+# disjoint across the four eval slices). Train items fail closed via
+# `allowed_splits: [holdout]`.
+#
+# `repetitions: 5` is the flake-measurement shape for a *stochastic* generator.
+# An offline fake that always emits the same suite is deterministic
+# (`is_deterministic` True) and will fire the `deterministic_sampling` diagnostic
+# (`pass^k is 1.0 because sampling is deterministic`). Do not quote pass^k or
+# n=55 from that fake.
+#
+# YAML cannot inject a Python callable. Tests inject `generate=`. A committed
+# `generator_path` is optional and is gated by ADR 0039; missing generator
+# fail-closes with structured empty evidence. Never allowlist `eval_harness`.
+#
+# Leave `config/testgen_eval.yaml` as the Deck A+ corpus-supplied-suite path.
+
+schema_version: "1.0"
+
+run:
+  name: "testgen-agent-eval"
+  seed: 7
+  repetitions: 5
+
+dataset:
+  type: jsonl
+  params:
+    path: "corpora/testgen/v1/eval/thorough.jsonl"
+
+target:
+  type: testgen_agent
+  params:
+    allowed_splits: [holdout]
+
+scorers:
+  - type: test_executability
+  - type: testgen_mutation_score
+    params: { denominator: raw }
+  - type: testgen_green_on_correct
+  - type: requirement_obligation_recall
+
+# Every rule is advisory. Bounds are soak starting points, not spec thresholds.
+gate:
+  rules:
+    - { score: test_executability, metric: pass_power_k, min: 0.90, report_only: true }
+    - { score: testgen_mutation_score, metric: mean, min: 0.60, report_only: true }
+    - { score: testgen_green_on_correct, metric: mean, max: 0.05, report_only: true }
+    - { score: requirement_obligation_recall, metric: mean, min: 0.70, report_only: true }
+
+sinks:
+  - type: console
+    params: { verbose: true }

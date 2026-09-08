@@ -1,0 +1,19 @@
+"""Offline generator fixtures for ``testgen_agent`` (M8 + unit tests).
+
+These live under ``tests.`` so ``EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=tests``
+(conftest) admits ``generator_path`` without allowlisting ``eval_harness``.
+"""
+
+from __future__ import annotations
+
+from eval_harness.core.types import EvalItem
+
+#: A suite that drives the input at which the M8 inline mutant diverges.
+KILLING_SUITE = "from focal import add\n\ndef test_boundary():\n    assert add(2, 1) == -1\n"
+
+
+def killing_suite(item: EvalItem) -> str:
+    """Return a killing suite. Raises if the homework ``suite`` key is visible."""
+    if "suite" in item.inputs:
+        raise AssertionError("generator must not see inputs.suite")
+    return KILLING_SUITE

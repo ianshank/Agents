@@ -1,0 +1,40 @@
+# Baseline beside the agent (OWNER_DEFAULTS): weak corpus slice + empty/null suite.
+#
+# No generator is configured, so every holdout item fail-closes with structured
+# empty evidence. Quote this beside Deck B so a slide cannot imply absolute skill.
+# Same holdout allowlist as `testgen_agent_eval.yaml`.
+
+schema_version: "1.0"
+
+run:
+  name: "testgen-agent-empty-baseline"
+  seed: 7
+  repetitions: 1
+
+dataset:
+  type: jsonl
+  params:
+    path: "corpora/testgen/v1/eval/weak.jsonl"
+
+target:
+  type: testgen_agent
+  params:
+    allowed_splits: [holdout]
+
+scorers:
+  - type: test_executability
+  - type: testgen_mutation_score
+    params: { denominator: raw }
+  - type: testgen_green_on_correct
+  - type: requirement_obligation_recall
+
+gate:
+  rules:
+    - { score: test_executability, metric: pass_power_k, min: 0.90, report_only: true }
+    - { score: testgen_mutation_score, metric: mean, min: 0.60, report_only: true }
+    - { score: testgen_green_on_correct, metric: mean, max: 0.05, report_only: true }
+    - { score: requirement_obligation_recall, metric: mean, min: 0.70, report_only: true }
+
+sinks:
+  - type: console
+    params: { verbose: true }

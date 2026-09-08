@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — agent-in-the-loop test generation (F-069, ADR 0048)
+
+Registered `testgen_agent` pipeline: generate a suite from focal method +
+obligations (the generator never sees `inputs.suite`), then execute it in-process
+via `run_generated_suite`. F-065 scorers and `config/testgen_eval.yaml` are
+unchanged. Deck B profile `config/testgen_agent_eval.yaml` is holdout-only with
+advisory gates; quote thorough holdout n=11 unique, never `pass^k` from a
+deterministic fake. Optional empty/null baseline: `config/testgen_agent_empty_eval.yaml`.
+
 ### Added — Executive evaluation report & metrics visualization suite
 
 - `docs/executive-report-eval-tools.md` delivers an executive-level evaluation and decision framework across the three primary AI engineering use cases: Test Case Generation, Root Cause Analysis, and Requirements Generation.

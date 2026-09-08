@@ -1,6 +1,42 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 018 — 2026-09-08
+
+### Changes
+
+Post-#216 next steps (peer-reviewed plan at `39d0311`). Hygiene, ADR 0037 apply,
+and Deck B are independent.
+
+**Hygiene (unprotected, prior commit on this branch):** archived OpenSpec
+`add-rca-eval-matrix` @ `d75028c` and `add-requirements-gen-eval-matrix` @
+`49c7db8`; moved README index Current → Archived (the helper does not); Epic 1
+F-060 → Landed; Epic 4 two-pass marked shipped; NEXT_STEPS F-054 `--cov-config`
+and BR `isfinite` ticked; wedge WS-0 0.5–0.7 marked done, H.1 left. Did **not**
+touch `docs.yml`.
+
+**Human (documented, not executed):** ADR 0037 `--apply` 403s this session;
+live `protected=` last attested in PR #216. Audit issues #200–#215 remain
+human-only (`merge-gate-verdict.yml`); agents must not write `HUMAN_AUDIT`. See
+`docs/plans/vp-strategic-deep-dive/DECISIONS.md` §6.
+
+**Deck B (F-069 / ADR 0048):** new `src/eval_harness/targets/testgen_agent.py`;
+strip `inputs.suite` before generate; `run_generated_suite` in-process;
+`config/testgen_agent_eval.yaml` (thorough holdout n=11 unique; do not quote
+`pass^k` from a deterministic fake). Coding started 2026-09-08 (`DELIVERY.md`).
+
+**After Deck B:** Phase 9 XOR WS-1. WS-1 CHARTER status is a house-doc
+disagreement — do not implement until `DECISIONS.md` §5 is decided.
+
+Protected paths touched (`tests/**`, `config/**`, `features.yaml`,
+`scripts/validations/**`, `.github/workflows/quality-gates.yml`): this PR needs
+the `eval-change-approved` label.
+
+### Validation evidence
+
+Pending the quality-gate pass on this revision.
+
+---
 ## Session 017 — 2026-09-06 / 2026-09-07
 
 ### Changes

@@ -28,6 +28,11 @@
 - [x] **RCA evaluation matrix (F-067, ADR 0046)** — ranked diagnosis against a finite
   candidate set, including correct abstention: frozen synthetic corpus at
   `corpora/rca/v1/`, `rca_maxz` baseline target, five scorers, advisory-only gates.
+- [x] **Agent-in-the-loop test generation (F-069, ADR 0048)** — sequential pipeline
+  target `testgen_agent`: generate from focal+obligations (never sees `inputs.suite`),
+  then execute via `run_generated_suite`. Deck B profile is holdout-only (`n=11`
+  unique thorough items); do not quote `pass^k` from a deterministic fake.
+  `config/testgen_eval.yaml` remains the Deck A+ corpus path.
 - [x] **Requirements-generation evaluation matrix (F-068, ADR 0047)** — deterministic
   synthetic evaluation of generated requirements against declared gold acceptance
   criteria and recorded retrieval evidence: `provenance_recorder` target wrapper,
