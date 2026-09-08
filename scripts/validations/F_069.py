@@ -208,7 +208,7 @@ def _check_empty_baseline_yaml(errors: list[str]) -> None:
     rules = (config.get("gate") or {}).get("rules") or []
     ours = [rule for rule in rules if rule.get("score") in _SCORERS]
     _check(
-        ours and all(rule.get("report_only") is True for rule in ours),
+        bool(ours) and all(rule.get("report_only") is True for rule in ours),
         "every empty-baseline gate rule is advisory",
         errors,
     )
