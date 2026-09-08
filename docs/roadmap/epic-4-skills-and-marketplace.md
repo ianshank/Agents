@@ -9,11 +9,10 @@ Agentic skill development, deterministic generators, reasoning plugins, and comm
 - **[x] Assertion Registries & dataset-lint (F-045, ADR 0024)**: `validate_skill.py` decoupled from assertion types using `ASSERTION_GRADERS` registry; standalone `dataset-lint` skill.
 - **[x] Reasoning & Planning Skills**: Composable skills (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`).
 - **[x] Skill CI Tiers (ADR 0030)**: Multi-tier CI gating (`code`, `generative`, `subjective`) with automated coverage validation.
+- **[x] Two-pass `openspec-peer-review`**: mechanical fact-check against a pinned SHA plus adversarial design critique. Shipped with skill v1.1.0.
 
 ## In Progress & Planned
-1. **Extend `openspec-peer-review`**:
-   - Add two-pass review protocol (mechanical fact-check against pinned SHA + adversarial design critique).
-2. **`test-completeness-guard` Generator Skill**:
+1. **`test-completeness-guard` Generator Skill**:
    - Automated generation of probe/extractor/policy/renderer scaffolds for new test suites.
-3. **`scaffold_change.py` Generator in `openspec-quality-plan`**:
+2. **`scaffold_change.py` Generator in `openspec-quality-plan`**:
    - Automate 5-file change proposal package scaffolding.

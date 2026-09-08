@@ -28,15 +28,16 @@ holds F-040 in flight.
 - [ ] 0.4 Re-number the no-history-rewrite ADR (0019 → size-budget, 0020 →
       deterministic-generator-skills; both were pre-assigned to it and both drifted). Strike
       the unverified "confirmed before this change merged" sentence; cite 0.1 instead.
-- [ ] 0.5 `[P]` `.gitleaks.toml` + gitleaks step in `quality-gates.yml`: **fail-closed on the
+- [x] 0.5 `[P]` `.gitleaks.toml` + gitleaks step in `quality-gates.yml`: **fail-closed on the
       working tree, report-only on history** (keys are already public in remote history;
       rotation is the mitigation and a rewrite invalidates every clone, PR base, pinned
-      `implemented_in` SHA, and the `merge-gate-data` lineage).
-- [ ] 0.6 `[P]` `scripts/validations/F_0NN.py` — config exists, workflow is fail-closed, no
+      `implemented_in` SHA, and the `merge-gate-data` lineage). **Landed as F-048.**
+- [x] 0.6 `[P]` `scripts/validations/F_048.py` — config exists, workflow is fail-closed, no
       `sk-lf-`/`pk-lf-` literal survives. Verify with a seeded canary on a throwaway branch.
-- [ ] 0.7 Correct `SECURITY.md:53` ("Secret scanning runs in CI" — untrue until 0.5 lands) and
+      **Landed as F-048.**
+- [x] 0.7 Correct `SECURITY.md:53` ("Secret scanning runs in CI" — untrue until 0.5 lands) and
       `:49-51` (Snyk; no workflow references it, CHARTER §5 lists it as future). `README.md:9`
-      and `:76` repeat both.
+      and `:76` repeat both. **Landed with F-048.**
 - [ ] 0.8 `.gitignore:62` is `*.html`. Allowlist the sample-report and fixture paths **before**
       WS-2 writes any — the failure mode is silent. Same for `merge_outcomes.jsonl`,
       `context.json`, `agent.json`.

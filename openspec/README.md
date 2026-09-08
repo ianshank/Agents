@@ -29,35 +29,23 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
-- [`changes/add-agent-in-the-loop-testgen/`](changes/add-agent-in-the-loop-testgen/) — *proposed; owner defaults recorded 2026-09-06 in `OWNER_DEFAULTS.md`.*
-  Deck B unlock: sequential pipeline target (generator → existing F-065 suite execution).
-  Docs-only until owner confirms option (a) and evaluation-design questions in `proposal.md`.
+- [`changes/add-agent-in-the-loop-testgen/`](changes/add-agent-in-the-loop-testgen/) —
+  *in implementation.* Owner defaults recorded 2026-09-06 in `OWNER_DEFAULTS.md`
+  (option (a) sequential pipeline). F-ID claimed at land.
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
   *partially implemented.* **WS-0 (the blocking hygiene gate) landed as F-048** — credential scrub,
-  `.gitleaks.toml`, and the fail-closed secret scan at `quality-gates.yml`. WS-1 through WS-5 are
-  open, and its `tasks.md` checkbox ledger still reads 0-done, which is why
-  `docs/plans/eval-delivery-sequencing/REVIEW.md` R1 says not to size this change from it.
-  The system has strong internal validation and no external evidence. Replaces the
-  rejected "add-business-readiness-wedge" (which would have pulled a public
-  `merge_gate_report` CLI into the harness) with a measurement wedge that does not widen the
-  public surface.
+  `.gitleaks.toml`, and the fail-closed secret scan at `quality-gates.yml`. WS-0 tasks 0.5–0.7
+  are done in the checkbox ledger; H.1 (rotation confirmation) remains human. WS-1 through WS-5
+  stay open. House docs disagree on whether WS-1 needs a CHARTER §3 amendment — recorded in
+  [`docs/plans/vp-strategic-deep-dive/DECISIONS.md`](../docs/plans/vp-strategic-deep-dive/DECISIONS.md)
+  §5; do not implement WS-1 until that is decided. Replaces the rejected
+  "add-business-readiness-wedge" (which would have pulled a public `merge_gate_report` CLI into
+  the harness) with a measurement wedge that does not widen the public surface.
 - [`changes/add-production-eval-flywheel/`](changes/add-production-eval-flywheel/) —
   **blocked.** Ingesting production traces back into the golden dataset. Blocked on a
   CHARTER §3 ratified amendment plus its own ADR — §3 lists "a general observability
   platform" as a non-goal. Calibration packages it originally queued behind are archived;
   remaining in-flight dependency is add-measurement-harness-wedge.
-- [`changes/add-rca-eval-matrix/`](changes/add-rca-eval-matrix/) — *proposed (synthetic scope); ranking scorers prototype (tasks 1.1–1.2) in progress.*
-  Ranked root-cause diagnosis over a finite candidate set — AC@k, component match, timezone-pinned
-  onset tolerance, and abstention as a first-class outcome — with a trivial `max-|Z|` baseline
-  shipped as a target so no agent result is reported without its floor. The real-incident corpus is
-  explicitly out of scope: replayed telemetry is host-specific, which needs CHARTER §4 invariant 7
-  relaxed.
-- [`changes/add-requirements-gen-eval-matrix/`](changes/add-requirements-gen-eval-matrix/) —
-  *proposed.* Provenance capture that actually reproduces (revision-scoped export, unpinnable
-  sources recorded as unpinnable) plus four deterministic scorers including an offline,
-  temperature-qualified diversity floor. Ships no judge-backed scorer: which requirement attributes
-  a judge may score is an empirical question for the archived extend-judge-calibration change,
-  not a literature claim.
 
 ## Archived changes
 
@@ -82,6 +70,8 @@ Landed; kept for provenance. Each carries its F-ID and the commit it landed in.
 | [`changes/archive/add-gate-decision-provenance/`](changes/archive/add-gate-decision-provenance/) | F-062 | `14b0101dfb` |
 | [`changes/archive/prove-m8-execution/`](changes/archive/prove-m8-execution/) | F-063 | `7800a3fec5` |
 | [`changes/archive/add-testgen-eval-matrix/`](changes/archive/add-testgen-eval-matrix/) | F-065 | `d0c761d25b` |
+| [`changes/archive/add-rca-eval-matrix/`](changes/archive/add-rca-eval-matrix/) | F-067 | `d75028c62c1f` |
+| [`changes/archive/add-requirements-gen-eval-matrix/`](changes/archive/add-requirements-gen-eval-matrix/) | F-068 | `49c7db829066` |
 
 ## Removing this spike
 
