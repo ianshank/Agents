@@ -69,7 +69,7 @@ Recorded so the next reviewer does not re-raise them.
 | Dependabot / ruff / mypy / numpy bumps | **REFUTED** | No new runtime deps. Ruff/mypy stay lockstep (`F_055`). Numpy is unused on this path. |
 | New marketplace skill or LoopController (option b) | **REFUTED for v1** | Owner default is sequential pipeline; live generator is credential-gated; engine multi-target graphs deferred until a second scenario needs them. |
 | Broaden `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST` to `eval_harness` so YAML can name a generator in-tree | **REFUTED** | ADR 0039 + F_069: never allowlist `eval_harness`. Tests inject `generate=`; optional `generator_path` stays `tests.`-allowlisted. |
-| Add a full thorough.jsonl E2E row in `test_pipeline_e2e.py` | **REFUTED** | Same sandbox cost that excludes `testgen_eval.yaml`; F_069 check 5 + matrix M8 already execute a killing suite. |
+| Add a full thorough.jsonl E2E row in `test_pipeline_e2e.py` | **REFUTED** | Committed Deck B yamls have **no** generator, so every item fail-closes with `TargetOutput.error` and would fail that test's zero-error invariant. `F_069` check 5 + matrix M8 already execute a killing suite. |
 | Restate `architecture.yaml` edges in C4 L3 | **REFUTED** | C4 header forbids restating import edges; L3 documents call semantics only. |
 | Human `--apply` of ADR 0037 or writing `HUMAN_AUDIT` for #200–#215 | **REFUTED** | 403 for unprivileged apply; agents must not write audit verdicts. Documented in `DECISIONS.md` §6, not executed. |
 | Implement Phase 9 XOR WS-1 in this PR | **REFUTED** | Independent of Deck B; WS-1 CHARTER status is a house-doc disagreement (`DECISIONS.md` §5). |
