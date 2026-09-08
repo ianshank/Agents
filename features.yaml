@@ -1515,7 +1515,7 @@ features:
       - "an unlisted generator_path is refused (ADR 0039) (scripts/validations/F_069.py)"
       - "4 matrix cells (target row M1/M2/M3/M6) plus an M8 pipeline running the pipeline target under the four F-065 scorers (tests/test_matrix_testgen_agent.py, tests/test_matrix_eval_tools.py::test_m8_testgen_agent_pipeline)"
     validation_command: "python scripts/validations/F_069.py"
-    implemented_in: "6c985d2346bd885d29895eb86eadd21ccb050cb0"
+    implemented_in: "26e56e0997f77f8385fcf194f57306e31a0e392b"
     depends_on: ["F-065", "F-062", "F-063"]
     notes: >-
       ADR 0048 records the sequential-pipeline decision, the suite-stripping
