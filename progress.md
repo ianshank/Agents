@@ -30,8 +30,10 @@ PR still needs `eval-change-approved`.
 
 ### Validation evidence
 
-Recorded after `./scripts/quality-gate.sh all` and
-`python scripts/validate.py --tier fast --strict-git` in this session.
+- `./scripts/quality-gate.sh all`: PASS (eval_harness 97.33% ≥ 96; scripts 95.52% ≥ 85; 2868 passed, 34 skipped). `testgen_agent.py` 100%.
+- `python scripts/validate.py --tier fast --strict-git`: 67/67 including F-069 (10 checks).
+- `python tests/test_matrix_coverage.py --check`: `docs/matrix-coverage.md` is fresh.
+- Size budget: `testgen_agent.py` and `F_069.py` under 500 (no warnings).
 
 ---
 ## Session 018 — 2026-09-08
