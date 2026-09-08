@@ -15,6 +15,7 @@ import argparse
 import json
 import logging
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -41,8 +42,44 @@ def configure_logging(level: str = "INFO") -> None:
     )
 
 
-def load_and_validate_metrics(input_path: Path) -> dict[str, Any]:
-    """Load and validate the metrics JSON dataset against structural expectations."""
+def _validate_schema_draft7(data: dict[str, Any], schema_path: Path) -> None:
+    """Validate JSON data against Draft-07 schema if jsonschema is available."""
+    if not schema_path.exists():
+        return
+    try:
+        import jsonschema
+
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.validate(instance=data, schema=schema)
+    except ImportError:
+        logger.debug("jsonschema not installed, falling back to manual structural checks")
+    except Exception as exc:
+        raise ValueError(f"Schema validation failed against {schema_path}: {exc}") from exc
+
+
+def _validate_score_matrix(data: dict[str, Any]) -> None:
+    """Ensure all required matrix entries exist and contain valid numeric scores."""
+    tools: list[str] = data["tools"]
+    dimensions: list[dict[str, Any]] = data["dimensions"]
+    scores: dict[str, dict[str, Any]] = data["scores"]
+    tool_profiles: dict[str, Any] = data.get("tool_profiles", {})
+    dim_keys = [d["key"] for d in dimensions]
+
+    for tool_key in tools:
+        if tool_key not in tool_profiles:
+            raise KeyError(f"Tool '{tool_key}' listed in 'tools' but missing from 'tool_profiles'")
+        if tool_key not in scores:
+            raise KeyError(f"Tool '{tool_key}' missing from 'scores'")
+        for d_key in dim_keys:
+            if d_key not in scores[tool_key]:
+                raise ValueError(f"Missing score for tool '{tool_key}' on dimension '{d_key}'")
+            score_entry = scores[tool_key][d_key]
+            if not isinstance(score_entry, dict) or "score" not in score_entry or score_entry["score"] is None:
+                raise ValueError(f"Invalid or missing score value for tool '{tool_key}' on dimension '{d_key}'")
+
+
+def load_and_validate_metrics(input_path: Path, schema_path: Path | None = None) -> dict[str, Any]:
+    """Load and validate the metrics JSON dataset against its Draft-07 schema and structural rules."""
     if not input_path.exists():
         raise FileNotFoundError(f"Metrics dataset not found: {input_path}")
 
@@ -56,11 +93,15 @@ def load_and_validate_metrics(input_path: Path) -> dict[str, Any]:
         raise TypeError(f"Metrics dataset must be a JSON object, got {type(raw_data).__name__}")
     data: dict[str, Any] = raw_data
 
-    required_keys = ["metadata", "tools", "dimensions", "scores", "tool_profiles"]
+    resolved_schema_path = schema_path or (input_path.parent / "eval_metrics_schema.json")
+    _validate_schema_draft7(data, resolved_schema_path)
+
+    required_keys = ["metadata", "use_cases", "tools", "dimensions", "tool_profiles", "scores"]
     for key in required_keys:
         if key not in data:
             raise KeyError(f"Missing required key '{key}' in {input_path}")
 
+    _validate_score_matrix(data)
     return data
 
 
@@ -75,6 +116,7 @@ def render_comparison_chart(
         import matplotlib
 
         matplotlib.use("Agg")
+        matplotlib.rcParams["svg.hashsalt"] = "eval_metrics_salt"
         import matplotlib.pyplot as plt
         import numpy as np
     except ImportError as exc:
@@ -103,8 +145,10 @@ def render_comparison_chart(
     for idx, tool_key in enumerate(tools):
         tool_scores = []
         for d in dim_keys:
-            val = scores.get(tool_key, {}).get(d, {}).get("score", 0.0)
-            tool_scores.append(float(val))
+            score_entry = scores.get(tool_key, {}).get(d)
+            if score_entry is None or "score" not in score_entry:
+                raise ValueError(f"Missing score for tool '{tool_key}' on dimension '{d}'")
+            tool_scores.append(float(score_entry["score"]))
 
         display_name = tool_profiles.get(tool_key, {}).get("display_name", tool_key.capitalize())
         color = DEFAULT_TOOL_COLORS.get(tool_key, FALLBACK_COLORS[idx % len(FALLBACK_COLORS)])
@@ -135,8 +179,13 @@ def render_comparison_chart(
                     color="#334155",
                 )
 
+    # Dynamic scaling based on max_score of declared dimensions
+    max_val = max((float(d.get("max_score", 10.0)) for d in dimensions), default=10.0)
+    y_limit = max(max_val * 1.15, 1.0)
+
     # Formatting and styling
-    ax.set_ylabel("Score (0 – 10.0 scale)", fontsize=12, fontweight="bold", color="#1E293B", labelpad=10)
+    scale_label = f"0 – {int(max_val) if max_val.is_integer() else max_val:.1f}"
+    ax.set_ylabel(f"Score ({scale_label} scale)", fontsize=12, fontweight="bold", color="#1E293B", labelpad=10)
     ax.set_title(
         f"{data['metadata'].get('title', 'Evaluation Tools Benchmark')}\n"
         "Comparative Analysis: Test Case Gen, Root Cause Analysis & Requirement Gen",
@@ -147,7 +196,7 @@ def render_comparison_chart(
     )
     ax.set_xticks(x_indices)
     ax.set_xticklabels(dim_labels, fontsize=11, fontweight="semibold", color="#334155")
-    ax.set_ylim(0, 11.5)
+    ax.set_ylim(0, y_limit)
     ax.yaxis.grid(True, linestyle="--", alpha=0.5, color="#CBD5E1")
     ax.set_axisbelow(True)
 
@@ -189,7 +238,7 @@ def render_comparison_chart(
 
     if output_format in ("svg", "both"):
         svg_path = parent_dir / f"{stem}.svg"
-        fig.savefig(svg_path, format="svg", bbox_inches="tight")
+        fig.savefig(svg_path, format="svg", bbox_inches="tight", metadata={"Date": None})
         saved_paths.append(svg_path)
         logger.info("Generated SVG vector chart: %s", svg_path)
 
@@ -232,7 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Dry run validation: verifies dataset schema integrity without writing charts.",
+        help="Dry run validation: verifies dataset schema integrity and visual asset freshness.",
     )
     parser.add_argument(
         "--log-level",
@@ -257,7 +306,39 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         if args.check:
-            logger.info("Check mode: dataset integrity verified successfully.")
+            # Verify that committed visual assets exist and are non-empty
+            parent_dir = args.output.parent
+            stem = args.output.stem
+            png_target = parent_dir / f"{stem}.png"
+            svg_target = parent_dir / f"{stem}.svg"
+
+            if args.format in ("png", "both") and (not png_target.exists() or png_target.stat().st_size == 0):
+                logger.error("Check mode failed: missing or empty PNG asset '%s'", png_target)
+                return 1
+            if args.format in ("svg", "both") and (not svg_target.exists() or svg_target.stat().st_size == 0):
+                logger.error("Check mode failed: missing or empty SVG asset '%s'", svg_target)
+                return 1
+
+            # When rendering libraries are installed, verify that SVG asset is fresh
+            try:
+                import matplotlib  # noqa: F401
+                import numpy  # noqa: F401
+
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    tmp_out = Path(tmp_dir) / f"{stem}.svg"
+                    render_comparison_chart(data, output_path=tmp_out, output_format="svg", dpi=args.dpi)
+                    tmp_svg = Path(tmp_dir) / f"{stem}.svg"
+                    if tmp_svg.read_bytes() != svg_target.read_bytes():
+                        logger.error(
+                            "Check mode failed: committed SVG asset '%s' is stale. "
+                            "Run `python scripts/generate_eval_metrics.py` to regenerate.",
+                            svg_target,
+                        )
+                        return 1
+            except (ImportError, RuntimeError):
+                logger.info("Visual rendering libraries not present; verified schema and asset existence.")
+
+            logger.info("Check mode: dataset integrity and visual assets verified successfully.")
             return 0
 
         saved = render_comparison_chart(

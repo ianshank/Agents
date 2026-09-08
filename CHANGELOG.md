@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `docs/executive-report-eval-tools.md` delivers an executive-level evaluation and decision framework across the three primary AI engineering use cases: Test Case Generation, Root Cause Analysis, and Requirements Generation.
 - `docs/eval_metrics.json` provides machine-readable benchmark and capability metrics, strictly validated against `docs/eval_metrics_schema.json`.
-- `scripts/generate_eval_metrics.py` generates multi-panel comparative visualizations (`docs/eval_metrics_comparison.png` and `.svg`), with `--check` drift validation for CI and Makefile integration.
+- `scripts/generate_eval_metrics.py` generates grouped-bar comparative visualizations (`docs/eval_metrics_comparison.png` and `.svg`), with `--check` drift validation for CI and Makefile integration.
 - `tests/test_generate_eval_metrics.py` adds comprehensive unit tests verifying data integrity, schema conformance, CLI exit semantics, and visualization generation.
 
 ### Added — Tier A mechanical verification & tiered test automation

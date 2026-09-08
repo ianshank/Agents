@@ -49,7 +49,7 @@ Active engineering epics and architectural roadmap live in [roadmap/](roadmap/RE
 
 ## Evaluations & Analysis
 
-- [executive-report-eval-tools.md](executive-report-eval-tools.md) — Executive evaluation report & strategic decision matrix comparing LLM evaluation frameworks across Test Case Generation, Root Cause Analysis, and Requirements Generation. Accompanied by [eval_metrics.json](eval_metrics.json), [eval_metrics_schema.json](eval_metrics_schema.json), and multi-panel visualizations ([eval_metrics_comparison.png](eval_metrics_comparison.png) / [eval_metrics_comparison.svg](eval_metrics_comparison.svg)).
+- [executive-report-eval-tools.md](executive-report-eval-tools.md) — Executive evaluation report & strategic decision matrix comparing LLM evaluation frameworks across Test Case Generation, Root Cause Analysis, and Requirements Generation. Accompanied by [eval_metrics.json](eval_metrics.json), [eval_metrics_schema.json](eval_metrics_schema.json), and grouped-bar comparative visualizations ([eval_metrics_comparison.png](eval_metrics_comparison.png) / [eval_metrics_comparison.svg](eval_metrics_comparison.svg)).
 
 ## Runbooks & operations
 

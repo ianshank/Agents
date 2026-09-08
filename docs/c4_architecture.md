@@ -407,7 +407,7 @@ Local and CI pre-merge gate pipelines execute through dedicated test automation 
 
 1. **Tier A Mechanical Verification (`scripts/verify_tier_a.py`)**:
    - Executes 11 deterministic quality gates in under 60 seconds with strict isolation.
-   - Gates checked: Charter Invariants, Architecture Drift (`drift_check.py`), Size Budget (`check_size_budget.py`), Guard Reachability, Ruff Formatting, Ruff Linting, Matrix Coverage (`test_matrix_coverage.py`), RCA Corpus Freshness, Requirements Corpus Freshness, TestGen Corpus Freshness, and Fast Feature Validators (`validate.py --tier fast`).
+   - Gates checked: Charter Invariants, Charter Drift (`check_charter_drift.py`), Size Budget (`check_size_budget.py`), Guard Reachability, Ruff Formatting, Ruff Linting, Matrix Coverage (`test_matrix_coverage.py`), RCA Corpus Freshness, Requirements Corpus Freshness, TestGen Corpus Freshness, and Fast Feature Validators (`validate.py --tier fast`). Architecture import-graph drift is verified separately in CI via archguard.
    - Cross-platform shell wrappers provided via `scripts/verify-tier-a.sh` and `scripts/verify-tier-a.ps1`.
 
 2. **Tiered Test Suite Runner (`scripts/run_tiered_tests.py`)**:

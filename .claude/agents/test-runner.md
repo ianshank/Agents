@@ -4,11 +4,7 @@ description: Isolated test execution and log triage agent. Runs targeted test ba
 model: inherit
 effort: medium
 maxTurns: 8
-tools:
-  - run_command
-  - view_file
-  - grep_search
-  - call_mcp_tool
+tools: Bash, Read, Grep, Glob
 ---
 
 # Test Runner & Triage Agent

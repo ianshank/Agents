@@ -165,7 +165,8 @@ def run_step(spec: StepSpec) -> StepResult:
 def get_tier_steps(tier: str, py: str) -> list[StepSpec]:
     steps: list[StepSpec] = []
 
-    if tier in ("1", "no-mock", "all"):
+    # Tier 1 / No-mock / Fast
+    if tier in ("1", "no-mock", "fast", "all"):
         t = "TIER-1 (No-Mock)"
         steps.extend(
             [
@@ -192,7 +193,8 @@ def get_tier_steps(tier: str, py: str) -> list[StepSpec]:
             ]
         )
 
-    if tier in ("2", "mock", "all"):
+    # Tier 2 / Mock-assisted / Integration
+    if tier in ("2", "mock", "integration", "all"):
         t = "TIER-2 (Mock-Assisted)"
         steps.extend(
             [
@@ -211,8 +213,14 @@ def get_tier_steps(tier: str, py: str) -> list[StepSpec]:
             ]
         )
 
-    if tier in ("3", "e2e", "all"):
+    # Tier 3 / Full E2E Journeys
+    if tier in ("3", "e2e", "full", "all"):
         t = "TIER-3 (Full E2E Journeys)"
+        e2e_cmd = (
+            ["powershell", "-NoProfile", "-File", "scripts/run_all_e2e.ps1", "-Tiers", "offline"]
+            if sys.platform == "win32"
+            else ["bash", "scripts/run_all_e2e.sh", "--tiers", "offline"]
+        )
         steps.extend(
             [
                 StepSpec(
@@ -230,21 +238,28 @@ def get_tier_steps(tier: str, py: str) -> list[StepSpec]:
                 StepSpec(
                     t,
                     "All E2E Journeys (Offline Tiers A-C)",
-                    ["powershell", "-NoProfile", "-File", "scripts/run_all_e2e.ps1", "-Tiers", "offline"],
+                    e2e_cmd,
                     timeout_sec=1800,
                 ),
             ]
         )
 
+    # Tier 4 / Live Smoke Triage
     if tier in ("4", "live", "all"):
         t = "TIER-4 (Live Smoke Triage)"
         steps.extend(
             [
                 StepSpec(
                     t,
-                    "Live Integration Smokes (EX_CONFIG Gated)",
-                    ["powershell", "-NoProfile", "-File", "scripts/run_all_e2e.ps1", "-Tiers", "all"],
-                    timeout_sec=1800,
+                    "Langfuse Live Smoke (EX_CONFIG Gated)",
+                    [py, "scripts/smokes/langfuse_smoke.py"],
+                    timeout_sec=180,
+                ),
+                StepSpec(
+                    t,
+                    "Phoenix Live Smoke (EX_CONFIG Gated)",
+                    [py, "scripts/smokes/phoenix_smoke.py"],
+                    timeout_sec=180,
                 ),
             ]
         )
@@ -306,7 +321,11 @@ def write_report(report: TriageReport, out_dir: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run tiered tests with automated failure triage")
-    parser.add_argument("--tier", choices=["1", "2", "3", "4", "no-mock", "mock", "e2e", "live", "all"], default="all")
+    parser.add_argument(
+        "--tier",
+        choices=["1", "2", "3", "4", "no-mock", "mock", "e2e", "live", "all", "fast", "integration", "full"],
+        default="all",
+    )
     parser.add_argument("--fail-fast", action="store_true", help="Halt on first failure")
     args = parser.parse_args()
 
@@ -314,7 +333,7 @@ def main() -> int:
     steps = get_tier_steps(args.tier, py)
     report = TriageReport(timestamp=time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()), total_steps=len(steps))
 
-    for spec in steps:
+    for idx, spec in enumerate(steps):
         res = run_step(spec)
         report.results.append(res)
         if res.status == "PASS":
@@ -324,6 +343,20 @@ def main() -> int:
         else:
             report.failed += 1
             if args.fail_fast:
+                # Record remaining unexecuted steps as SKIP so summary reconciles
+                for unexecuted in steps[idx + 1 :]:
+                    report.results.append(
+                        StepResult(
+                            unexecuted.tier,
+                            unexecuted.name,
+                            unexecuted.command,
+                            "SKIP",
+                            0,
+                            category="CAT-SKIPPED-FAILFAST",
+                            error_signature="Skipped due to --fail-fast",
+                        )
+                    )
+                    report.skipped += 1
                 break
 
     artifacts_dir = REPO_ROOT / "artifacts"

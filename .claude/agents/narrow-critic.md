@@ -4,10 +4,7 @@ description: Read-only security and style critic. Inspects completed diffs for s
 model: inherit
 effort: medium
 maxTurns: 5
-tools:
-  - view_file
-  - grep_search
-  - list_dir
+tools: Read, Grep, Glob
 ---
 
 # Narrow-Scope Critic

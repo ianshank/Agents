@@ -4,10 +4,7 @@ description: Fast read-only repository explorer for locating code patterns, inte
 model: inherit
 effort: low
 maxTurns: 5
-tools:
-  - view_file
-  - grep_search
-  - list_dir
+tools: Read, Grep, Glob
 ---
 
 # Codebase Explorer

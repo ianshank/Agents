@@ -3,7 +3,15 @@
     "title": "LLM Evaluation Platform Comparative Benchmark",
     "version": "1.0.0",
     "generated_date": "2026-09-07",
-    "data_source_policy": "Derived from docs/matrix-coverage.md live census, harness spikes (braintrust-spike.md, phoenix-spike.md), and e2e evaluation runs."
+    "data_source_policy": "Derived from evaluation harness client seams, spike reports (braintrust-spike.md, phoenix-spike.md), and automated test suites.",
+    "scoring_rubric": {
+      "scale": "0.0 - 10.0",
+      "9.0_10.0": "Native, automated, production-verified in harness with offline heuristic/mock coverage",
+      "7.5_8.9": "Supported with first-class SDK/API integration and verified datasets/sinks in harness",
+      "6.0_7.4": "Supported via custom adapter or file transform without native assertion primitives",
+      "under_6.0": "Cloud-tethered, closed-source, or requiring proprietary SaaS egress"
+    },
+    "aggregation_formula": "unweighted_arithmetic_mean: sum(dimension_scores) / len(dimension_scores)"
   },
   "use_cases": {
     "test_case_gen": {
@@ -143,7 +151,7 @@
       "test_case_gen": {
         "score": 7.5,
         "rationale": "Strong dataset versioning and prompt registry (F-026) enable repeatable test case suites, but lacks native mutation score evaluators.",
-        "evidence_ref": "docs/matrix-coverage.md#dataset-floor-m1-m2-m3-m6"
+        "evidence_ref": "docs/decisions/0003-langfuse-integration.md"
       },
       "rca": {
         "score": 8.0,
@@ -153,7 +161,7 @@
       "requirement_gen": {
         "score": 7.0,
         "rationale": "Prompt management playground simplifies iterating on extraction prompts, though requirement obligation scoring requires custom external harness logic.",
-        "evidence_ref": "docs/matrix-coverage.md#sink-floor-m1-m2-m6"
+        "evidence_ref": "src/eval_harness/sinks/__init__.py"
       },
       "observability_tracing": {
         "score": 8.5,
@@ -190,7 +198,7 @@
       "requirement_gen": {
         "score": 8.0,
         "rationale": "Native phoenix-evals pre-built judges assess classification correctness and hallucination detection via LLM-as-a-judge.",
-        "evidence_ref": "docs/matrix-coverage.md#judge-floor-m1-m2-m3-m6"
+        "evidence_ref": "docs/phoenix-spike.md#2-evaluations--llm-as-a-judge"
       },
       "observability_tracing": {
         "score": 9.5,

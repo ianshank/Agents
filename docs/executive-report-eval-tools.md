@@ -54,14 +54,14 @@ The matrix below maps each platform against the verified dimensions defined in o
 
 | Dimension | Category | [Langfuse](https://langfuse.com) | [Arize Phoenix](https://arize.com/phoenix/) | [BrainTrust](https://www.braintrust.dev/) | Evidence / Matrix Link |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **Test Case Generation** | Core Use Case | **7.5** / 10 | **7.0** / 10 | **9.0** / 10 | [`docs/matrix-coverage.md#dataset-floor-m1-m2-m3-m6`](matrix-coverage.md) |
-| **Root Cause Analysis (RCA)** | Core Use Case | **8.0** / 10 | **9.5** / 10 | **7.5** / 10 | [`docs/matrix-coverage.md#target-floor-m1-m2-m3-m6`](matrix-coverage.md) |
-| **Requirement Generation** | Core Use Case | **7.0** / 10 | **8.0** / 10 | **9.0** / 10 | [`docs/matrix-coverage.md#scorer-floor-m1-m2-m3-m5-m6`](matrix-coverage.md) |
+| **Test Case Generation** | Core Use Case | **7.5** / 10 | **7.0** / 10 | **9.0** / 10 | [`docs/decisions/0003-langfuse-integration.md`](decisions/0003-langfuse-integration.md) |
+| **Root Cause Analysis (RCA)** | Core Use Case | **8.0** / 10 | **9.5** / 10 | **7.5** / 10 | [`docs/phoenix-spike.md#two-deliberately-separate-seams`](phoenix-spike.md) |
+| **Requirement Generation** | Core Use Case | **7.0** / 10 | **8.0** / 10 | **9.0** / 10 | [`docs/braintrust-spike.md#what-it-adds`](braintrust-spike.md) |
 | **Trace Observability** | Operational | **8.5** / 10 | **9.5** / 10 | **8.0** / 10 | [`docs/phoenix-spike.md#1-trace-debugging--visibility-openinference`](phoenix-spike.md) |
 | **Air-Gap & Self-Hosting** | Operational | **8.0** / 10 | **9.5** / 10 | **5.0** / 10 | [`docs/quickstart.md`](quickstart.md) |
 | **SDK & Seam Extensibility** | Operational | **8.5** / 10 | **9.0** / 10 | **8.5** / 10 | [`docs/braintrust-spike.md#what-it-adds`](braintrust-spike.md) |
 | **TCO & Cost Efficiency** | Operational | **8.5** / 10 | **9.0** / 10 | **6.0** / 10 | [`docs/CHARTER.md`](CHARTER.md) |
-| **Composite Score** | **Weighted** | **8.0** / 10 | **8.8** / 10 | **7.7** / 10 | *Weighted composite across all 7 axes* |
+| **Composite Score** | **Arithmetic Mean** | **8.0** / 10 | **8.8** / 10 | **7.6** / 10 | *Mean: Langfuse 56.0/7=8.0, Phoenix 61.5/7=8.8, BrainTrust 53.0/7=7.6* |
 
 ---
 

@@ -13,7 +13,7 @@
   `docs/eval_metrics.json`, `docs/eval_metrics_schema.json`, `docs/eval_metrics_comparison.png`,
   `docs/eval_metrics_comparison.svg`, `scripts/generate_eval_metrics.py`, and `tests/test_generate_eval_metrics.py`:
   Delivers complete evaluation landscape and strategic leadership decision matrix across Test Case Generation,
-  Root Cause Analysis, and Requirements Generation. Fully schema-validated with multi-panel chart generation,
+  Root Cause Analysis, and Requirements Generation. Fully schema-validated with grouped-bar comparative visualizations,
   drift check CLI (`--check`), and comprehensive unit test suite.
 - [x] **Tier A Mechanical Verification Harness & Tiered Test Automation** — `scripts/verify_tier_a.py`,
   `scripts/verify-tier-a.sh`, `scripts/verify-tier-a.ps1`, and `scripts/run_tiered_tests.py`:

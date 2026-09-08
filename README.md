@@ -290,8 +290,9 @@ python scripts/check_protected_changes.py --base-ref origin/main
 - **Tier A mechanical gate runner** (`scripts/verify_tier_a.py`) chains 11 non-destructive,
   deterministic quality checks into a unified CLI and script wrapper (`scripts/verify-tier-a.sh`,
   `scripts/verify-tier-a.ps1`) executing in under 60 seconds with strict isolation: Charter Invariants,
-  Architecture Drift, Size Budget, Guard Reachability, Ruff Format, Ruff Lint, Matrix Coverage,
-  RCA Corpus, Requirements Corpus, TestGen Corpus, and Fast Feature Validators.
+  Charter Drift, Size Budget, Guard Reachability, Ruff Format, Ruff Lint, Matrix Coverage,
+  RCA Corpus, Requirements Corpus, TestGen Corpus, and Fast Feature Validators (architecture
+  import-graph drift is enforced via CI archguard).
 - **Tiered test runner** (`scripts/run_tiered_tests.py`) organizes test execution into `fast`,
   `integration`, and `full` tiers, isolating unit suites from heavy integration matrices while
   providing structured diagnostic reporting.

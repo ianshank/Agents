@@ -110,7 +110,7 @@ def test_load_and_validate_metrics_corrupt_json(tmp_path: Path) -> None:
 def test_load_and_validate_metrics_missing_keys(tmp_path: Path) -> None:
     incomplete = tmp_path / "incomplete.json"
     incomplete.write_text('{"metadata": {}}', encoding="utf-8")
-    with pytest.raises(KeyError, match="Missing required key 'tools'"):
+    with pytest.raises(KeyError, match="Missing required key"):
         load_and_validate_metrics(incomplete)
 
 
@@ -140,13 +140,111 @@ def test_render_comparison_chart_missing_dependencies(
         render_comparison_chart(minimal_metrics_data, output_path=out_png)
 
 
+def test_load_and_validate_metrics_schema_invalid_nested_score(
+    tmp_path: Path, minimal_metrics_data: dict[str, Any]
+) -> None:
+    """Verify that an invalid score (>10.0) fails jsonschema validation."""
+    data = json.loads(json.dumps(minimal_metrics_data))
+    data["scores"]["tool_a"]["dim_1"]["score"] = 15.0  # Max is 10.0 in schema
+    data_file = tmp_path / "invalid_score.json"
+    data_file.write_text(json.dumps(data), encoding="utf-8")
+
+    schema_file = Path("docs/eval_metrics_schema.json")
+    with pytest.raises(ValueError, match="Schema validation failed"):
+        load_and_validate_metrics(data_file, schema_path=schema_file)
+
+
+def test_load_and_validate_metrics_missing_use_cases(tmp_path: Path, minimal_metrics_data: dict[str, Any]) -> None:
+    """Verify that omitting the required use_cases key fails validation."""
+    data = json.loads(json.dumps(minimal_metrics_data))
+    del data["use_cases"]
+    data_file = tmp_path / "missing_use_cases.json"
+    data_file.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises((KeyError, ValueError)):
+        load_and_validate_metrics(data_file)
+
+
+def test_load_and_validate_metrics_missing_dimension_score(
+    tmp_path: Path, minimal_metrics_data: dict[str, Any]
+) -> None:
+    """Verify that missing a dimension score for a tool fails closed."""
+    data = json.loads(json.dumps(minimal_metrics_data))
+    del data["scores"]["tool_a"]["dim_1"]
+    data_file = tmp_path / "missing_score.json"
+    data_file.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Missing score for tool 'tool_a'"):
+        load_and_validate_metrics(data_file)
+
+
 def test_main_check_mode(tmp_path: Path, minimal_metrics_data: dict[str, Any]) -> None:
+    pytest.importorskip("matplotlib")
     data_file = tmp_path / "metrics.json"
     with data_file.open("w", encoding="utf-8") as f:
         json.dump(minimal_metrics_data, f)
 
-    exit_code = main(["--input", str(data_file), "--check"])
+    out_file = tmp_path / "chart.png"
+    # First generate the assets so they exist
+    main(["--input", str(data_file), "--output", str(out_file), "--format", "both", "--dpi", "100"])
+
+    # Now verify --check passes
+    exit_code = main(
+        ["--input", str(data_file), "--output", str(out_file), "--format", "both", "--check", "--dpi", "100"]
+    )
     assert exit_code == 0
+
+
+def test_main_check_mode_without_matplotlib(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, minimal_metrics_data: dict[str, Any]
+) -> None:
+    """Verify that --check succeeds when assets exist even if matplotlib is not installed."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "matplotlib", None)
+    data_file = tmp_path / "metrics.json"
+    data_file.write_text(json.dumps(minimal_metrics_data), encoding="utf-8")
+
+    out_file = tmp_path / "chart.png"
+    svg_file = tmp_path / "chart.svg"
+    out_file.write_text("dummy png bytes", encoding="utf-8")
+    svg_file.write_text("<svg>dummy</svg>", encoding="utf-8")
+
+    exit_code = main(["--input", str(data_file), "--output", str(out_file), "--format", "both", "--check"])
+    assert exit_code == 0
+
+
+def test_main_check_mode_missing_asset(tmp_path: Path, minimal_metrics_data: dict[str, Any]) -> None:
+    """Verify that --check fails if the expected chart assets are missing."""
+    data_file = tmp_path / "metrics.json"
+    with data_file.open("w", encoding="utf-8") as f:
+        json.dump(minimal_metrics_data, f)
+
+    out_file = tmp_path / "non_existent_chart.png"
+    exit_code = main(["--input", str(data_file), "--output", str(out_file), "--check"])
+    assert exit_code == 1
+
+
+def test_main_check_mode_stale_asset(tmp_path: Path, minimal_metrics_data: dict[str, Any]) -> None:
+    """Verify that --check fails if the committed SVG chart is stale compared to dataset."""
+    pytest.importorskip("matplotlib")
+    data_file = tmp_path / "metrics.json"
+    with data_file.open("w", encoding="utf-8") as f:
+        json.dump(minimal_metrics_data, f)
+
+    out_file = tmp_path / "chart.png"
+    # Generate original assets
+    main(["--input", str(data_file), "--output", str(out_file), "--format", "both", "--dpi", "100"])
+
+    # Stale the SVG by modifying file content
+    svg_file = tmp_path / "chart.svg"
+    svg_file.write_text("<svg>stale content</svg>", encoding="utf-8")
+
+    # --check must catch this drift and fail with exit code 1
+    exit_code = main(
+        ["--input", str(data_file), "--output", str(out_file), "--format", "both", "--check", "--dpi", "100"]
+    )
+    assert exit_code == 1
 
 
 def test_main_full_generation(tmp_path: Path, minimal_metrics_data: dict[str, Any]) -> None:
