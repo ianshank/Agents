@@ -150,6 +150,7 @@ FROZEN_ALIAS_MAP: dict[str, dict[str, str]] = {
         "python": "callable",
         "provenance-recorder": "provenance_recorder",
         "rca-maxz": "rca_maxz",
+        "testgen-agent": "testgen_agent",
     },
 }
 

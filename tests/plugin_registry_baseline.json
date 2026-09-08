@@ -99,6 +99,8 @@
     "provenance_recorder",
     "python",
     "rca-maxz",
-    "rca_maxz"
+    "rca_maxz",
+    "testgen-agent",
+    "testgen_agent"
   ]
 }

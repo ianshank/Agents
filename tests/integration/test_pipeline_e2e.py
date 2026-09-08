@@ -52,6 +52,9 @@ OFFLINE_CONFIG_JOURNEYS: tuple[tuple[str, dict[str, str]], ...] = (
 
 #: Deliberately NOT in the table: `testgen_eval.yaml` runs generated suites in
 #: subprocesses and takes ~50s, which is a poor fit for a smoke; `F_065` already runs it.
+#: `testgen_agent_eval.yaml` / `testgen_agent_empty_eval.yaml` ship with no generator, so
+#: every item fail-closes with ``TargetOutput.error`` and would fail this test's
+#: zero-error invariant below. `F_069` already runs the pipeline (including execute).
 #: `e2e_nemotron.yaml`, `nemotron_eval.yaml`, `lm_studio_eval.yaml` and `model_target.yaml`
 #: need a live provider, and `legacy.v0_9.yaml` exists to exercise the migration chain.
 _NOT_OFFLINE_JOURNEYS = frozenset(
@@ -65,6 +68,8 @@ _NOT_OFFLINE_JOURNEYS = frozenset(
         "model_target.yaml",
         "nemotron_eval.yaml",
         "testgen_eval.yaml",
+        "testgen_agent_eval.yaml",
+        "testgen_agent_empty_eval.yaml",
     }
 )
 

@@ -246,7 +246,7 @@ Agents/                          # repo root
 │       │   ├── rca/              # RCA ranking scorers (prototype)
 │       │   └── requirements/     # Requirements grounding & diversity scorers (F-068)
 │       ├── datasets/             # Dataset loaders (inline, jsonl, csv, parquet, langfuse, braintrust)
-│       ├── targets/              # System-under-test adapters (echo, callable, model-backed, provenance)
+│       ├── targets/              # System-under-test adapters (echo, callable, model-backed, provenance, rca_maxz, testgen_agent)
 │       ├── langfuse_client/      # Langfuse integration (SDK-optional seam)
 │       ├── phoenix_client/       # Arize Phoenix integration (SDK-optional seam)
 │       ├── braintrust_client/    # BrainTrust integration (SDK-optional seam)

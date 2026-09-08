@@ -28,6 +28,11 @@
 - [x] **RCA evaluation matrix (F-067, ADR 0046)** — ranked diagnosis against a finite
   candidate set, including correct abstention: frozen synthetic corpus at
   `corpora/rca/v1/`, `rca_maxz` baseline target, five scorers, advisory-only gates.
+- [x] **Agent-in-the-loop test generation (F-069, ADR 0048)** — sequential pipeline
+  target `testgen_agent`: generate from focal+obligations (never sees `inputs.suite`;
+  the view is a deep copy), then execute via `run_generated_suite`. Deck B profile
+  is holdout-only (`n=11` unique thorough items); do not quote `pass^k` from a
+  deterministic fake. `config/testgen_eval.yaml` remains the Deck A+ corpus path.
 - [x] **Requirements-generation evaluation matrix (F-068, ADR 0047)** — deterministic
   synthetic evaluation of generated requirements against declared gold acceptance
   criteria and recorded retrieval evidence: `provenance_recorder` target wrapper,
@@ -202,10 +207,9 @@
   field-to-flag mapping had no direct test — a `wilson_floor`/`wilson_z` swap would have
   slipped past every existing assertion; the small-domain fold-collapse fallback was only
   proven safe at N=1, where the sample floor masks it) and corrected a docstring that
-  misattributed its own NaN-guard rationale. Surfaced, not fixed here (different package,
-  its own review): `behavioral-regression`'s config validators lack the same `isfinite`
-  guard — confirmed live (`BRConfig(dist_sigma=float("inf"))` constructs) — recorded in
-  `openspec/changes/archive/merge-gate-health-integrity/tasks.md`'s follow-on section.
+  misattributed its own NaN-guard rationale.   Surfaced, then closed in the sibling package: `BRConfig(dist_sigma=float("inf"))`
+  now raises `ConfigError` because `_require_positive` routes through
+  `flow_corpus.config._require_finite`.
 
 - [x] **Charter alignment audit + fixes + `check_charter_invariants.py` gate (PR #114)** —
   a multi-agent audit (`docs/CHARTER_ALIGNMENT_AUDIT.md`) mechanically re-verified every
@@ -551,25 +555,10 @@
   the activation PR (protected paths); exclude `merge-gate-data` from branch
   protection; enable required reviewers on the `merge-gate-verdict` environment;
   record the first verdict via the dispatch UI.
-- [ ] **Quality-gate tech debt (F-054 dogfood follow-up, `openspec/changes/archive/
-  harden-quality-gate-integrity/review.md`)** — a real `spec-guardian`→`peer-reviewer`
-  dispatch (via `claude --plugin-dir claude-foundation`, the functional proof
-  `add-foundation-reviewer-charters`'s task 4 needed) found one live gate-integrity hole
-  F-054 didn't close: **7 of 7** (corrected from "6 of 7" during the
-  `docs/plans/eval-evidence-integrity/` peer review, 2026-09-02 — root's own generated
-  `do_coverage()` at `scripts/quality-gate.sh:41` also lacks `--cov-config`; the
-  `--cov-config=scripts/.coveragerc` that does exist at `:78` is inside the hand-maintained
-  `do_extra()`, a different stage, F-031's scripts gate, not `do_coverage`) generated
-  `do_coverage()` bodies pass no `--cov-config`, so `COVERAGE_RCFILE` reaches coverage.py
-  unguarded — a pointed-at rc file with a broad `exclude_lines`/`omit` can drive measured
-  coverage to ~100% with no notice and no `unset`, the same evasion class this change exists
-  to close. Fix is one line in `_coverage_command` (add `--cov-config=`) plus a
-  `COVERAGE_RCFILE` scrub alongside the existing `PYTEST_ADDOPTS` guard, tracked as Phase 1
-  of `docs/plans/eval-evidence-integrity/PLAN.md`. The same pass found
-  four now-stale documentation claims in the archived proposal's own `proposal.md`/`design.md`/
-  `spec.md`/`SKILL.md` and one prior review attack-refutation that over-claimed — full detail
-  in the review.md's dated follow-up section; none change the coverage gate's actual
-  correctness today.
+- [x] **Quality-gate `--cov-config` (F-054 dogfood follow-up)** — root
+  `scripts/quality-gate.sh` `do_coverage()` now passes `--cov-config="pyproject.toml"`
+  and unsets `COVERAGE_RCFILE` (lines 41–43). Archived proposal doc claims that
+  over-stated the hole can stay as historical notes; they do not change the live gate.
 - [ ] **Judge-calibration degenerate-message helper (F-057 four-lens review follow-up)** —
   `agent_core/calibration.py`, `agent_core/proxy_analysis.py` and `agent_core/
   judge_calibration.py` each independently implement the same "count < floor → formatted

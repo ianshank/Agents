@@ -69,3 +69,55 @@ Protocol is code, not prose: `LabelingProtocolConfig`, `CorpusProvenanceConfig`,
 and [golden-corpus/README.md](../../golden-corpus/README.md). **This repository
 ships zero synthetic stand-ins for those 50 labels.** A corpus without
 `meta.provenance=human` cannot underwrite a blocking judge-backed gate.
+
+## 5. Measurement-wedge WS-1 vs CHARTER (house-doc disagreement)
+
+**Question:** May `LocalGitSource` / `agent_core/pr_history/` (wedge WS-1) land without a
+CHARTER §3 amendment?
+
+**Status: unresolved. Do not implement WS-1 until this is decided here, not in a
+feature branch.**
+
+House documents currently disagree:
+
+| Document | Claim |
+|---|---|
+| `openspec/changes/add-measurement-harness-wedge/tasks.md` H.2 | A CHARTER §3 amendment + GOVERNANCE sign-off **blocks remaining phases** (the wedge expands scope past "not an autonomous merge bot… not a general observability platform"). H.2 is listed as blocking WS-5; WS-1 is written as if it can proceed as diagnostic ingest that cannot write `HUMAN_AUDIT`. |
+| `docs/plans/eval-delivery-sequencing/PLAN.md` | Remaining wedge blockers are **governance** (CHARTER amendment, rotation confirmation, package rename). An earlier revision also listed WS-1 as genuinely unblocked. |
+| Post-216 sequencing | Weaker reading: diagnostic ingest that cannot write `HUMAN_AUDIT` is charter-free; stronger reading: any external PR-history ingestion is the observability-platform non-goal. |
+
+This is a **house-doc disagreement**, not a closed legal question. The weaker reading
+(diagnostic ingest, no `HUMAN_AUDIT` writer) is not an implementation licence.
+After Deck B, the XOR is eval-evidence Phase 9 (fleet matrix) **or** WS-1 once this
+note is decided. Neither is in the F-069 change.
+
+## 6. Operator remaining after PR #216 (human-only)
+
+These are not agent-completable. Recording them here is the honest close-out.
+
+### 6a. Branch protection (ADR 0037)
+
+`scripts/check_branch_protection.py` derives **23** required contexts. This session's
+`--probe` returns `gh: Resource not accessible by integration (HTTP 403)`. Live
+`"protected": false` is last attested in [PR #216](https://github.com/ianshank/Agents/pull/216),
+not re-GET'd here. ADR 0037 asks for **five** green runs per context before `--apply`;
+#216 documented one soak of two workflows. Confirm five greens (or record an explicit
+weaker soak), then:
+
+```bash
+python scripts/check_branch_protection.py --apply --repository ianshank/Agents
+python scripts/check_branch_protection.py --probe --repository ianshank/Agents
+```
+
+Leave `merge-gate-data` unprotected. Do not wire `--strict` into CI until a successful
+probe. Tick ADR 0037 Accepted only after `protected=true`.
+
+### 6b. Audit queue (issues #200–#215)
+
+`merge-gate-verdict.yml` is the **only automated writer** of `HUMAN_AUDIT`
+(`workflow_dispatch` only; F-034). Library `record_verdict` exists; agents must not
+use it on the live store. 16 open `merge-gate-audit` issues vs 99 unlabelled pending:
+draining the current queue does **not** change `SoakConfig.remaining_by_domain` (380
+HUMAN_AUDIT per decision domain). `human/*` twins are auditable on purpose and isolated
+from agent-domain calibration — do not read 15×380 as the automerge bar.
+

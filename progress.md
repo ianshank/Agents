@@ -1,6 +1,80 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 019 — 2026-09-08
+
+### Changes
+
+Peer review of F-069 vs `main` (`ec1ab39` vs `39d0311`). Findings in
+`openspec/changes/add-agent-in-the-loop-testgen/review.md` (two-pass protocol).
+
+**Fixed:** deep-copy generator view (nested `obligations` isolation); named
+`_MIN_DIGEST_CHARS` / `_MAX_DIGEST_CHARS`; empty `allowed_splits` fail at
+config time; `run()` delegates to `_execute` so success-path debug logs
+hashes (not the suite body). F_069 gained Deck A byte-stability, empty-baseline
+yaml, and mutating-spy checks.
+
+**Docs:** AGENTS.md entry point + seam; C4 L3 runtime subsection; CHANGELOG
+Hardening; NEXT_STEPS F-069 bullet; tasks.md 3.3 ticked.
+
+**Confirmed no-ops (not theater-edited):** `.gitignore`, `.dockerignore`,
+`.gitleaks.toml`, Makefile run target, `architecture.yaml`, Dependabot, ruff/mypy
+pins, numpy, marketplace skill / LoopController, `docs.yml`, `SCHEMA_VERSION`.
+
+**Hooks / skills:** SessionStart extras, PostToolUse size-budget, Stop
+generated-artifacts, `pre-pr-gate`, `openspec-peer-review`, F_069 on
+`validate.py` + `--cov=F_069` already wired. No new hook or skill.
+
+Protected paths touched again (`tests/**`, `scripts/validations/F_069.py`):
+PR still needs `eval-change-approved`.
+
+### Validation evidence
+
+- `./scripts/quality-gate.sh all`: PASS (eval_harness 97.33% ≥ 96; scripts 95.52% ≥ 85; 2868 passed, 34 skipped). `testgen_agent.py` 100%.
+- `python scripts/validate.py --tier fast --strict-git`: 67/67 including F-069 (10 checks).
+- `python tests/test_matrix_coverage.py --check`: `docs/matrix-coverage.md` is fresh.
+- Size budget: `testgen_agent.py` and `F_069.py` under 500 (no warnings).
+
+---
+## Session 018 — 2026-09-08
+
+### Changes
+
+Post-#216 next steps (peer-reviewed plan at `39d0311`). Hygiene, ADR 0037 apply,
+and Deck B are independent.
+
+**Hygiene (unprotected, prior commit on this branch):** archived OpenSpec
+`add-rca-eval-matrix` @ `d75028c` and `add-requirements-gen-eval-matrix` @
+`49c7db8`; moved README index Current → Archived (the helper does not); Epic 1
+F-060 → Landed; Epic 4 two-pass marked shipped; NEXT_STEPS F-054 `--cov-config`
+and BR `isfinite` ticked; wedge WS-0 0.5–0.7 marked done, H.1 left. Did **not**
+touch `docs.yml`.
+
+**Human (documented, not executed):** ADR 0037 `--apply` 403s this session;
+live `protected=` last attested in PR #216. Audit issues #200–#215 remain
+human-only (`merge-gate-verdict.yml`); agents must not write `HUMAN_AUDIT`. See
+`docs/plans/vp-strategic-deep-dive/DECISIONS.md` §6.
+
+**Deck B (F-069 / ADR 0048):** new `src/eval_harness/targets/testgen_agent.py`;
+strip `inputs.suite` before generate; `run_generated_suite` in-process;
+`config/testgen_agent_eval.yaml` (thorough holdout n=11 unique; do not quote
+`pass^k` from a deterministic fake). Coding started 2026-09-08 (`DELIVERY.md`).
+
+**After Deck B:** Phase 9 XOR WS-1. WS-1 CHARTER status is a house-doc
+disagreement — do not implement until `DECISIONS.md` §5 is decided.
+
+Protected paths touched (`tests/**`, `config/**`, `features.yaml`,
+`scripts/validations/**`, `.github/workflows/quality-gates.yml`): this PR needs
+the `eval-change-approved` label.
+
+### Validation evidence
+
+- `./scripts/quality-gate.sh all`: PASS (eval_harness 97.32% ≥ 96; scripts 95.52% ≥ 85; 2863 passed, 34 skipped).
+- `python scripts/validations/F_069.py`: passed.
+- `python tests/test_matrix_coverage.py --check`: `docs/matrix-coverage.md` is fresh.
+- Quote thorough holdout n=11 unique (`tests/test_testgen_agent.py::TestHoldoutQuoting`).
+
+---
 ## Session 017 — 2026-09-06 / 2026-09-07
 
 ### Changes

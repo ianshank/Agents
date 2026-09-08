@@ -1,6 +1,6 @@
 # Change: add-requirements-gen-eval-matrix
 
-**Status:** proposed · **Date:** 2026-09-05 · **Author track:** `claude/` agent lane
+**Status:** implemented (archived; landed `49c7db829066`) · **Date:** 2026-09-05 · **Author track:** `claude/` agent lane
 **Motivated by:** `docs/plans/scenario-eval-matrices/REVIEW.md` §C3.d, §C4
 **Depends on:** `add-gate-decision-provenance`, `prove-m8-execution`
 **Compiles down to:** `docs/plans/scenario-eval-matrices/PLAN.md` + F-IDs (claimed at land) + a design ADR.

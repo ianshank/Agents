@@ -12,11 +12,8 @@ Core evaluation capabilities, trajectory evaluation, matrix coverage completenes
 - **[x] Judge Bias Probing & Calibration (F-057)**: Order-flip, verbosity-preference, and self-preference probes in `agent_core/judge_calibration.py`, isolated from `eval_harness` to preserve the `eval_harness ⇎ flow_corpus` airgap; `JudgeCalibrationReport.may_gate` blocks gating on an uncalibrated or biased judge. Landed as PR #160 (merged 2026-08-18).
 - **[x] RCA evaluation matrix (F-067, ADR 0046)**: ranked diagnosis against a finite candidate set including correct abstention; `rca_maxz` baseline target; five scorers; frozen synthetic corpus at `corpora/rca/v1/`; advisory-only gate rules.
 - **[x] Requirements-generation evaluation (F-068, ADR 0047)**: `provenance_recorder` target wrapper + `EvidenceStore` protocol; four deterministic scorers (`req_ac_recall`, `req_scope_hallucination`, `req_semantic_diversity`, `req_traceability_closure`); frozen synthetic corpus at `corpora/requirements/v1/`; advisory-only gate rules.
+- **[x] Stateful Outcome Evaluation (F-060, `add-stateful-outcome-evaluation`)**: `StateAdapter` protocol (`snapshot`/`evaluate`/`reset`) with the engine bracketing each attempt `reset → snapshot(before) → target.run → snapshot(after) → evaluate` under a lock; `state_transition`/`policy_violation` scorers; four local deterministic adapters (`in_memory`, `filesystem`, `sqlite`, `mock_http`). Landed as PR #163 (merged 2026-08-21).
+- **[x] Agent-in-the-loop test generation (F-069, ADR 0048, Deck B / B5)**: registered `testgen_agent` pipeline: generate from focal+obligations (never sees `inputs.suite`), then `run_generated_suite` in-process. F-065 scorers unchanged. Quote thorough holdout n=11 unique; do not quote `pass^k` from a deterministic fake.
 
 ## In Progress & Planned
-1. **Stateful Outcome Evaluation (F-060, `add-stateful-outcome-evaluation`)**:
-   - Implemented: `StateAdapter` protocol (`snapshot`/`evaluate`/`reset`) with the engine
-     bracketing each attempt `reset → snapshot(before) → target.run → snapshot(after) →
-     evaluate` under a lock; `state_transition`/`policy_violation` scorers; four local
-     deterministic adapters (`in_memory`, `filesystem`, `sqlite`, `mock_http`).
-   - Landed as PR #163 (merged 2026-08-21).
+1. **After Deck B**: eval-evidence Phase 9 (fleet matrix) **xor** measurement-wedge WS-1. WS-1 CHARTER status is a house-doc disagreement — do not implement until `docs/plans/vp-strategic-deep-dive/DECISIONS.md` §5 is decided. Diagnostic ingest that cannot write `HUMAN_AUDIT` is the weaker reading, not a licence.

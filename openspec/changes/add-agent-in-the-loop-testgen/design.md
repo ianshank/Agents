@@ -1,19 +1,19 @@
 ## Owner defaults (recorded)
 
-Locked 2026-09-06 in [`OWNER_DEFAULTS.md`](./OWNER_DEFAULTS.md) (board proceed): option **(a)**, prompt held constant, `repetitions: 5`, held-out via manifest/config allowlist + CI test, offline-only CI with credential-gated live model, weak corpus + empty/null baseline, Deck B CI advisory `report_only`, testgen-only outer allowlisted runner.
+Locked 2026-09-06 in [`OWNER_DEFAULTS.md`](./OWNER_DEFAULTS.md) (board proceed): option **(a)**, prompt held constant, `repetitions: 5`, held-out via config allowlist + CI test, offline-only CI with credential-gated live model, weak corpus + empty/null baseline, Deck B CI advisory `report_only`. Landed 2026-09-08 as F-069 / ADR 0048: registered `testgen_agent` (not an ADR 0039 allowlist entry).
 
 # Design: add-agent-in-the-loop-testgen
 
 ## Recommended composition (option a)
 
 ```
-focal method + obligations  →  GeneratorTarget (model|callable, DI client)
-                            →  suite artifact (same shape as corpora/testgen inputs.suite)
-                            →  eval_harness.targets.testgen:run_generated_suite
-                            →  existing F-065 scorers
+focal + obligations → generator (DI; never sees inputs.suite; view is a deep copy)
+                   → suite artifact
+                   → run_generated_suite (in-process)
+                   → F-065 scorers via TESTGEN_EVIDENCE_KEY
 ```
 
-The outer runner is itself a `TargetRunner` registered under an explicit allowlist entry (ADR 0039). Tests inject a fake generator that returns fixtures; CI offline jobs never open sockets.
+The outer runner is a registered `TargetRunner` (`type: testgen_agent`). That is a registry lookup, not an ADR 0039 path. ADR 0039 applies only when optional `generator_path` names `module:attr`. Never allowlist `eval_harness`. Tests inject `generate=`; YAML cannot. Prefer in-process `run_generated_suite` over a second callable hop. CI offline jobs never open sockets.
 
 ## Artifact contract
 

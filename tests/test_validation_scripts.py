@@ -69,6 +69,7 @@ import F_064  # noqa: E402
 import F_065  # noqa: E402
 import F_067  # noqa: E402
 import F_068  # noqa: E402
+import F_069  # noqa: E402
 
 #: Single source of truth for which validators this file exercises. The ids are derived
 #: from each module's own ``__name__`` rather than restated, so the list cannot drift
@@ -121,6 +122,7 @@ _VALIDATOR_MODULES = (
     F_065,
     F_067,
     F_068,
+    F_069,
 )
 
 

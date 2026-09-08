@@ -213,22 +213,16 @@ is stronger than omitting it: it is the only part a sceptic could otherwise disc
 Deck A plus §3a plus a rehearsal pass. No engineering: run four commands, paste a table, write the
 two sentences that keep it from being read as an agent result. Highest return per hour available.
 
-### Deck B — "first agent results" · **not scorer-blocked; blocked on the subject**
+### Deck B — "first agent results" · **coding started 2026-09-08**
 
-> **Nothing in the harness makes an agent write a test suite**, and nothing chains two targets.
-> `src/eval_harness/config/models.py:384` gives a run exactly one `target: ComponentSpec`. The
-> multi-target feature that exists (`CompareSpec`, F-024, `models.py:266-273`) runs the same dataset
-> against several targets **side by side, not in sequence**. The corpus supplies `inputs.suite`
-> ready-made; the registered targets are `echo`, `callable`, `model`.
+The subject is the sequential pipeline target `testgen_agent` (F-069, ADR 0048).
+Quote **thorough holdout only (11 unique items)**. Do not quote `pass^k` / n=55
+from a deterministic fake — `deterministic_sampling` fires when sampling is
+constant. Four eval slices have disjoint holdout IDs; do not pool them unless the
+slide is explicitly multi-slice.
 
-So Deck B needs a *new composition*: focal method + obligations → generated suite → the existing
-execution target. That is a design decision of the same class as ADR 0043, not a config change.
-Everything downstream of it already exists and is measured.
-
-**Do not estimate it yet.** The engineering is plausibly small; the evaluation design is not — prompt
-held constant or tuned per item, one attempt or many, how the held-out split is enforced, and whether
-a model target inside an eval run may touch the network at all under the offline-suite rule. Write
-the proposal, then estimate.
+> The generator never sees `inputs.suite`. Scoring a corpus-supplied suite as an
+> agent result remains the homework attack Deck A+ already named.
 
 ### Deck C — unchanged, ~3 sprints plus the governance decision
 
@@ -273,7 +267,7 @@ Items 1–5 are Deck A+ and total under a day. Item 6 converts Deck B from a gue
 | B2 | Zero `HUMAN_AUDIT` labels; ~200–350 paired labels per judged scorer | **open**. *(Figure recorded 2026-08-05 — re-query the store before quoting it)* |
 | B3 | Protected-path review latency | **open**. PR #183 is one data point: 18 commits, same-day merge. One sample is not a turnaround target |
 | B4 | `prove-m8-execution` task 4 | **CLOSED** |
-| B5 | *(new)* No agent-in-the-loop step, and no target chaining | **open** — Deck B's critical path |
+| B5 | *(new)* No agent-in-the-loop step, and no target chaining | **coding started 2026-09-08** — `testgen_agent` (F-069) |
 
 PLAN.md's three asks are unchanged and still correct.
 

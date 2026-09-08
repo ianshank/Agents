@@ -1,6 +1,6 @@
 # Tasks: add-agent-in-the-loop-testgen
 
-**Status: proposed (docs only in the introducing PR).** Owner §0 defaults recorded 2026-09-06 in `OWNER_DEFAULTS.md`. Implementation tasks below are the checklist for the later engineering PR. F-ID claimed at land.
+**Status: landed as F-069 / ADR 0048** (registered `testgen_agent`; not an ADR 0039 allowlist entry). Owner §0 defaults recorded 2026-09-06 in `OWNER_DEFAULTS.md`.
 
 ## 0. Owner decisions (hard-stop before coding)
 
@@ -10,25 +10,25 @@
 
 ## 1. Spec + ADR
 
-- [ ] 1.1 Land design ADR (claim number at land; mirror ModelTarget / F-065 precedents).
-- [ ] 1.2 Keep this change's `specs/agent-in-the-loop-testgen/spec.md` scenarios aligned with validation.
+- [x] 1.1 Land design ADR (claim number at land; mirror ModelTarget / F-065 precedents). — **ADR 0048.**
+- [x] 1.2 Keep this change's `specs/agent-in-the-loop-testgen/spec.md` scenarios aligned with validation. — **Generator Isolation SHALL; in-process `run_generated_suite`.**
 
 ## 2. Implementation
 
-- [ ] 2.1 **[P]** Pipeline `TargetRunner`: generator → suite artifact → `run_generated_suite`.
-- [ ] 2.2 **[P]** Explicit `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST` entry; deny-by-default preserved.
-- [ ] 2.3 **[P]** DI seams for generator client; offline fake in tests; no socket in default CI job.
-- [ ] 2.4 **[P]** Fail closed when generator returns malformed suite / empty collect.
-- [ ] 2.5 **[P]** New opt-in config profile; leave corpus-only `testgen_eval.yaml` behaviour unchanged.
-- [ ] 2.6 **[P]** Held-out enforcement test.
-- [ ] 2.7 **[P]** Wire existing F-065 scorers only; no new scorer in v1 unless evidence contract gaps appear.
-- [ ] 2.8 **[P]** Advisory gate rules only.
-- [ ] 2.9 **[P]** Matrix rows only if a new component kind is registered; otherwise regenerate coverage docs if registries change.
-- [ ] 2.10 **[P]** `features.yaml` F-ID claimed at land + `scripts/validations/F_0NN.py`.
-- [ ] 2.11 Update Deck B estimate in `docs/plans/scenario-eval-matrices/DELIVERY.md` with a real date after 0.x decisions.
+- [x] 2.1 **[P]** Pipeline `TargetRunner`: generator → suite artifact → `run_generated_suite`. — **`src/eval_harness/targets/testgen_agent.py`.**
+- [x] 2.2 **[P]** Registered name is **not** an ADR 0039 allowlist entry (plan correction). ADR 0039 applies only to optional `generator_path`; deny-by-default preserved; never allowlist `eval_harness`.
+- [x] 2.3 **[P]** DI seams for generator client; offline fake in tests (`generate=`); no socket in default CI job.
+- [x] 2.4 **[P]** Fail closed when generator returns malformed suite / empty collect (ADR 0038 empty evidence).
+- [x] 2.5 **[P]** New opt-in config profile; leave corpus-only `testgen_eval.yaml` behaviour unchanged.
+- [x] 2.6 **[P]** Held-out enforcement test (`allowed_splits: [holdout]`; thorough holdout n=11 unique).
+- [x] 2.7 **[P]** Wire existing F-065 scorers only; no new scorer in v1.
+- [x] 2.8 **[P]** Advisory gate rules only.
+- [x] 2.9 **[P]** Matrix rows for the new registered target: M1 / M2 / M3 / M6 plus engine M8; regenerate `docs/matrix-coverage.md`.
+- [x] 2.10 **[P]** `features.yaml` F-069 + `scripts/validations/F_069.py`.
+- [x] 2.11 Update Deck B estimate in `docs/plans/scenario-eval-matrices/DELIVERY.md` — **coding started 2026-09-08.**
 
 ## 3. Verification
 
-- [ ] 3.1 `./scripts/quality-gate.sh all` and package checks green.
-- [ ] 3.2 Dry-run held-out split; publish distribution, not a single headline mean.
-- [ ] 3.3 Record spec-guardian / peer-reviewer passes in `review.md`.
+- [x] 3.1 `./scripts/quality-gate.sh all` and package checks green.
+- [x] 3.2 Dry-run held-out split; publish distribution, not a single headline mean. — **quote thorough holdout n=11 unique; do not quote pass^k from a deterministic fake.**
+- [x] 3.3 Record spec-guardian / peer-reviewer passes in `review.md`.

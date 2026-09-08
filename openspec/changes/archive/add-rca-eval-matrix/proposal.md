@@ -1,7 +1,6 @@
 # Change: add-rca-eval-matrix
 
-**Status:** proposed *(synthetic scope only — the real-incident corpus is explicitly out of scope
-and blocked; see "What is deliberately not here")*
+**Status:** implemented (archived; landed `d75028c62c1f`)
 **Date:** 2026-09-05 · **Author track:** `claude/` agent lane
 **Motivated by:** `docs/plans/scenario-eval-matrices/REVIEW.md` §A16, §C1
 **Depends on:** `add-gate-decision-provenance`, `prove-m8-execution`
