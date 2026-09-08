@@ -104,11 +104,15 @@ def _apply_sandbox_limits() -> None:
         )
         return
 
+    setrlimit = getattr(resource, "setrlimit", None)
+    if setrlimit is None:
+        return
+
     limit_map = dict(_RLIMIT_VARS)
     for env_name, value in parsed_limits:
         limit_name = limit_map[env_name]
         limit = getattr(resource, limit_name)
-        resource.setrlimit(limit, (value, value))  # type: ignore[attr-defined]
+        setrlimit(limit, (value, value))
 
 
 def _load(path: Path, name: str) -> Any:

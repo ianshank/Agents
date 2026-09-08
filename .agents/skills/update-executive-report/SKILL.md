@@ -5,15 +5,15 @@ description: Update and regenerate the evaluation tools executive report, compar
 
 # Update Executive Report — E2E Action Skill
 
-Perform the update and maintenance of the LLM Evaluation Tools Executive Report ([`docs/executive-report-eval-tools.md`](../../docs/executive-report-eval-tools.md)) and its companion visual metrics chart ([`docs/eval_metrics_comparison.png`](../../docs/eval_metrics_comparison.png)).
+Perform the update and maintenance of the LLM Evaluation Tools Executive Report ([`docs/executive-report-eval-tools.md`](../../../docs/executive-report-eval-tools.md)) and its companion visual metrics chart ([`docs/eval_metrics_comparison.png`](../../../docs/eval_metrics_comparison.png)).
 
 ## 1. Preconditions (Input Contract)
 
 Confirm these hold before proceeding:
 
-- The schema definition exists at [`docs/eval_metrics_schema.json`](../../docs/eval_metrics_schema.json).
-- The current metrics dataset exists at [`docs/eval_metrics.json`](../../docs/eval_metrics.json).
-- The generator script exists at [`scripts/generate_eval_metrics.py`](../../scripts/generate_eval_metrics.py).
+- The schema definition exists at [`docs/eval_metrics_schema.json`](../../../docs/eval_metrics_schema.json).
+- The current metrics dataset exists at [`docs/eval_metrics.json`](../../../docs/eval_metrics.json).
+- The generator script exists at [`scripts/generate_eval_metrics.py`](../../../scripts/generate_eval_metrics.py).
 - Python environment has `matplotlib` and `numpy` available.
 
 ## 2. Procedure (The E2E Steps)
