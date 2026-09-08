@@ -1,0 +1,254 @@
+{
+  "metadata": {
+    "title": "LLM Evaluation Platform Comparative Benchmark",
+    "version": "1.0.0",
+    "generated_date": "2026-09-07",
+    "data_source_policy": "Derived from docs/matrix-coverage.md live census, harness spikes (braintrust-spike.md, phoenix-spike.md), and e2e evaluation runs."
+  },
+  "use_cases": {
+    "test_case_gen": {
+      "name": "Test Case Generation",
+      "description": "Evaluation of synthetic test suites, mutation coverage, executability, and green-on-correct invariant verification.",
+      "key_metrics": [
+        "testgen_mutation_score",
+        "test_executability",
+        "testgen_green_on_correct"
+      ],
+      "matrix_reference": "docs/matrix-coverage.md#scorer-floor-m1-m2-m3-m5-m6"
+    },
+    "rca": {
+      "name": "Root Cause Analysis (RCA)",
+      "description": "Fault localization, onset detection within tolerance, causal attribution across component topologies, and abstention precision.",
+      "key_metrics": [
+        "rca_onset_within_tolerance",
+        "rca_component_match",
+        "rca_ac_at_k",
+        "rca_false_accusation_rate",
+        "rca_abstention_correctness"
+      ],
+      "matrix_reference": "docs/matrix-coverage.md#target-floor-m1-m2-m3-m6"
+    },
+    "requirement_gen": {
+      "name": "Requirement Generation",
+      "description": "Verification of requirement obligation recall, acceptance criteria coverage, hallucination suppression, and semantic diversity.",
+      "key_metrics": [
+        "req_traceability_closure",
+        "requirement_obligation_recall",
+        "req_ac_recall",
+        "req_scope_hallucination",
+        "req_semantic_diversity"
+      ],
+      "matrix_reference": "docs/matrix-coverage.md#scorer-floor-m1-m2-m3-m5-m6"
+    }
+  },
+  "tools": [
+    "langfuse",
+    "phoenix",
+    "braintrust"
+  ],
+  "dimensions": [
+    {
+      "key": "test_case_gen",
+      "label": "Test Case Gen",
+      "category": "use_case",
+      "max_score": 10.0,
+      "description": "Efficacy in synthetic test case synthesis, mutation verification, and executable assertion grading."
+    },
+    {
+      "key": "rca",
+      "label": "Root Cause Analysis",
+      "category": "use_case",
+      "max_score": 10.0,
+      "description": "Depth of execution trace diagnostics, span drill-down, failure onset detection, and attribution."
+    },
+    {
+      "key": "requirement_gen",
+      "label": "Requirement Gen",
+      "category": "use_case",
+      "max_score": 10.0,
+      "description": "Support for structured schema outputs, obligation recall scoring, and hallucination penalization."
+    },
+    {
+      "key": "observability_tracing",
+      "label": "Trace Observability",
+      "category": "operational",
+      "max_score": 10.0,
+      "description": "Span graph visualization, latency tracking, OpenTelemetry / OpenInference compliance."
+    },
+    {
+      "key": "airgap_self_hosting",
+      "label": "Air-Gap & Self-Host",
+      "category": "operational",
+      "max_score": 10.0,
+      "description": "Ease of air-gapped private deployment, container portability, and local storage simplicity."
+    },
+    {
+      "key": "extensibility",
+      "label": "SDK & Extensibility",
+      "category": "operational",
+      "max_score": 10.0,
+      "description": "Clean modular seams, plugin support, custom scorer integration, and standard API bindings."
+    },
+    {
+      "key": "tco_cost_efficiency",
+      "label": "TCO & Cost Efficiency",
+      "category": "operational",
+      "max_score": 10.0,
+      "description": "Low runtime compute/memory overhead, open licensing, and minimal SaaS subscription exposure."
+    }
+  ],
+  "tool_profiles": {
+    "langfuse": {
+      "display_name": "Langfuse",
+      "licensing": "Open Source (MIT) / Cloud SaaS",
+      "deployment_model": "Self-hosted Docker (Postgres, ClickHouse) / Managed Cloud",
+      "airgap_capable": true,
+      "telemetry_protocol": "Proprietary REST / OTLP bridge",
+      "matrix_components": {
+        "dataset": "langfuse",
+        "sink": "langfuse",
+        "judge": "anthropic/openai via Langfuse prompt registry",
+        "scorers": ["weighted", "policy_violation"]
+      }
+    },
+    "phoenix": {
+      "display_name": "Arize Phoenix",
+      "licensing": "Open Source (ELv2 / Apache-2.0 core) / Enterprise",
+      "deployment_model": "Single Docker container (arizephoenix/phoenix:17.18.0) / Embedded SQLite",
+      "airgap_capable": true,
+      "telemetry_protocol": "Native OpenTelemetry / OpenInference (OTLP)",
+      "matrix_components": {
+        "dataset": "parquet/csv/jsonl",
+        "sink": "phoenix",
+        "judge": "phoenix_evals",
+        "scorers": ["llm_judge", "trajectory_*"]
+      }
+    },
+    "braintrust": {
+      "display_name": "BrainTrust",
+      "licensing": "Proprietary Commercial SaaS / Enterprise VPC",
+      "deployment_model": "Managed Cloud Service (API-based) / Private Cloud (Enterprise)",
+      "airgap_capable": false,
+      "telemetry_protocol": "Native experiment.log API / OTLP span ingest",
+      "matrix_components": {
+        "dataset": "braintrust",
+        "sink": "braintrust",
+        "judge": "autoevals (Levenshtein, Factuality, ClosedQA)",
+        "scorers": ["autoevals"]
+      }
+    }
+  },
+  "scores": {
+    "langfuse": {
+      "test_case_gen": {
+        "score": 7.5,
+        "rationale": "Strong dataset versioning and prompt registry (F-026) enable repeatable test case suites, but lacks native mutation score evaluators.",
+        "evidence_ref": "docs/matrix-coverage.md#dataset-floor-m1-m2-m3-m6"
+      },
+      "rca": {
+        "score": 8.0,
+        "rationale": "High-fidelity trace trees with execution latency, tokens, and metadata; excellent for diagnosing step-level errors.",
+        "evidence_ref": "src/eval_harness/langfuse_client/__init__.py"
+      },
+      "requirement_gen": {
+        "score": 7.0,
+        "rationale": "Prompt management playground simplifies iterating on extraction prompts, though requirement obligation scoring requires custom external harness logic.",
+        "evidence_ref": "docs/matrix-coverage.md#sink-floor-m1-m2-m6"
+      },
+      "observability_tracing": {
+        "score": 8.5,
+        "rationale": "Mature UI with intuitive span drilldown, latency waterfalls, and user feedback tagging.",
+        "evidence_ref": "docs/c4_architecture.md"
+      },
+      "airgap_self_hosting": {
+        "score": 8.0,
+        "rationale": "Fully self-hostable via Docker Compose; requires Postgres and ClickHouse containers for scalable production setups.",
+        "evidence_ref": "docs/quickstart.md"
+      },
+      "extensibility": {
+        "score": 8.5,
+        "rationale": "Clean REST API and SDK client with well-defined dataset and sink registration seams in the harness.",
+        "evidence_ref": "src/eval_harness/sinks/__init__.py"
+      },
+      "tco_cost_efficiency": {
+        "score": 8.5,
+        "rationale": "Open-source self-hosting eliminates software licensing fees; modest database hosting footprint.",
+        "evidence_ref": "docs/CHARTER.md"
+      }
+    },
+    "phoenix": {
+      "test_case_gen": {
+        "score": 7.0,
+        "rationale": "Datasets support Parquet and JSONL imports; leverages open formats for test fixture pipelines.",
+        "evidence_ref": "docs/phoenix-spike.md#roi--demonstrated-in-code-vs-documented-for-live"
+      },
+      "rca": {
+        "score": 9.5,
+        "rationale": "Industry gold standard for RCA: OpenInference tracing reveals exact model inputs, system prompts, function calls, and error cascades with zero vendor lock-in.",
+        "evidence_ref": "docs/phoenix-spike.md#two-deliberately-separate-seams"
+      },
+      "requirement_gen": {
+        "score": 8.0,
+        "rationale": "Native phoenix-evals pre-built judges assess classification correctness and hallucination detection via LLM-as-a-judge.",
+        "evidence_ref": "docs/matrix-coverage.md#judge-floor-m1-m2-m3-m6"
+      },
+      "observability_tracing": {
+        "score": 9.5,
+        "rationale": "Pure OpenTelemetry / OTLP native architecture; works seamlessly alongside any OTel collector.",
+        "evidence_ref": "docs/phoenix-spike.md#1-trace-debugging--visibility-openinference"
+      },
+      "airgap_self_hosting": {
+        "score": 9.5,
+        "rationale": "Unrivaled ease of self-hosting: runs in a single Docker container or standalone local process with embedded SQLite, zero external dependencies required.",
+        "evidence_ref": "docs/phoenix-spike.md#install--run-networked-environment-only"
+      },
+      "extensibility": {
+        "score": 9.0,
+        "rationale": "Strict decoupling of tracing and score export seams; adheres cleanly to repo's NullClient pattern.",
+        "evidence_ref": "src/eval_harness/phoenix_client/__init__.py"
+      },
+      "tco_cost_efficiency": {
+        "score": 9.0,
+        "rationale": "Zero licensing cost for core self-hosted instance, ultra-low infrastructure footprint.",
+        "evidence_ref": "docs/phoenix-spike.md#rollback"
+      }
+    },
+    "braintrust": {
+      "test_case_gen": {
+        "score": 9.0,
+        "rationale": "Exceptional experiment iteration engine; built-in autoevals library (Levenshtein, ExactMatch, JSONDiff) provides instant offline validation.",
+        "evidence_ref": "docs/braintrust-spike.md#concept-mapping-harness--braintrust"
+      },
+      "rca": {
+        "score": 7.5,
+        "rationale": "Experiment logging records full input/output/scores payloads per item, but deep multi-hop trace hierarchy is less prominent than Phoenix.",
+        "evidence_ref": "docs/braintrust-spike.md#why-the-native-experimentlog-write-path"
+      },
+      "requirement_gen": {
+        "score": 9.0,
+        "rationale": "Autoevals Factuality, ClosedQA, and JSON structure evaluators deliver state-of-the-art requirement validation and hallucination scoring.",
+        "evidence_ref": "docs/braintrust-spike.md#what-it-adds"
+      },
+      "observability_tracing": {
+        "score": 8.0,
+        "rationale": "Solid span ingestion via OTLP, but primary product strength centers on evaluation datasets and experiments rather than APM tracing.",
+        "evidence_ref": "docs/braintrust-spike.md#phase-2-status"
+      },
+      "airgap_self_hosting": {
+        "score": 5.0,
+        "rationale": "Cloud-first commercial architecture; requires external API connectivity (BRAINTRUST_API_KEY). Air-gapped self-hosting requires expensive enterprise engagement.",
+        "evidence_ref": "docs/braintrust-spike.md#configuration-no-hardcoded-values"
+      },
+      "extensibility": {
+        "score": 8.5,
+        "rationale": "autoevals is pure Python and standalone; SDK experiment.log seam is lean, though managed prompt integration is currently deferred.",
+        "evidence_ref": "docs/braintrust-spike.md#version-sensitivity-both-sdks-are-pre-10"
+      },
+      "tco_cost_efficiency": {
+        "score": 6.0,
+        "rationale": "Commercial SaaS pricing with tier thresholds and per-seat / per-evaluation charges adds ongoing operational expense.",
+        "evidence_ref": "docs/braintrust-spike.md#rollback"
+      }
+    }
+  }
+}

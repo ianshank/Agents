@@ -270,6 +270,15 @@ weaken the evaluation itself (lower a gate threshold, swap to the `mock` judge, 
 `verification:` clause). Two complementary gates make that hard:
 
 ```bash
+# Tier A mechanical gates — 11 deterministic checks in <60s:
+python scripts/verify_tier_a.py     # or: make verify-tier-a
+
+# Tiered test runner — fast, integration, or full:
+python scripts/run_tiered_tests.py --tier all   # or: make tiered-tests
+
+# Executive eval metrics & comparison verification:
+python scripts/generate_eval_metrics.py --check # or: make eval-metrics-check
+
 # Regression gate — fails only on NET-NEW lint/test findings vs the base ref.
 python scripts/regression_gate.py --base-ref origin/main --report-path regression_report.json
 python scripts/regression_gate.py --mode warn      # annotate-only soak mode
@@ -278,6 +287,18 @@ python scripts/regression_gate.py --mode warn      # annotate-only soak mode
 python scripts/check_protected_changes.py --base-ref origin/main
 ```
 
+- **Tier A mechanical gate runner** (`scripts/verify_tier_a.py`) chains 11 non-destructive,
+  deterministic quality checks into a unified CLI and script wrapper (`scripts/verify-tier-a.sh`,
+  `scripts/verify-tier-a.ps1`) executing in under 60 seconds with strict isolation: Charter Invariants,
+  Architecture Drift, Size Budget, Guard Reachability, Ruff Format, Ruff Lint, Matrix Coverage,
+  RCA Corpus, Requirements Corpus, TestGen Corpus, and Fast Feature Validators.
+- **Tiered test runner** (`scripts/run_tiered_tests.py`) organizes test execution into `fast`,
+  `integration`, and `full` tiers, isolating unit suites from heavy integration matrices while
+  providing structured diagnostic reporting.
+- **Executive evaluation tool matrix & decision framework** (`docs/executive-report-eval-tools.md`)
+  provides strategic leadership trade-off analysis and capability metrics across Test Case Generation,
+  RCA, and Requirements Generation, backed by `docs/eval_metrics.json`, `docs/eval_metrics_schema.json`,
+  and generated comparative charts (`scripts/generate_eval_metrics.py`).
 - **Regression gate** (`F-006`) materialises an isolated `git worktree` baseline and runs
   `ruff` + the offline pytest suite in both trees, blocking only findings that are new
   relative to the base. It never runs live-judge / Langfuse evals.

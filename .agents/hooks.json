@@ -1,0 +1,39 @@
+{
+  "size-budget-guard": {
+    "PostToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/check_size_budget.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "protected-paths-guard": {
+    "PostToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/check_protected_changes.py",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  },
+  "charter-invariants-guard": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python scripts/check_charter_invariants.py",
+        "timeout": 60
+      }
+    ]
+  }
+}

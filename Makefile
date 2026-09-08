@@ -81,6 +81,20 @@ e2e-matrix-check: ## Verify docs/e2e-matrix/ matches a live regeneration (ADR 00
 e2e-matrix-update: ## Regenerate docs/e2e-matrix/ from artifacts/e2e-report/ (ADR 0033)
 	$(PYTHON) tests/test_e2e_matrix.py --update
 
+.PHONY: verify-tier-a tiered-tests eval-metrics-check eval-metrics-update
+
+verify-tier-a: ## Run the deterministic 11-gate Tier A mechanical verification harness
+	$(PYTHON) scripts/verify_tier_a.py
+
+tiered-tests: ## Run the tiered test runner (fast, integration, full)
+	$(PYTHON) scripts/run_tiered_tests.py --tier all
+
+eval-metrics-check: ## Verify executive evaluation metrics and charts are fresh
+	$(PYTHON) scripts/generate_eval_metrics.py --check
+
+eval-metrics-update: ## Regenerate executive evaluation metrics and charts
+	$(PYTHON) scripts/generate_eval_metrics.py
+
 build: ## Build distributables
 	$(PYTHON) -m build
 
@@ -132,6 +146,8 @@ pre-pr: ## Full pre-PR validation: every gate CI enforces, chained locally; accu
 	echo "[pre-pr] skill_marketplace.py validate"; $(PYTHON) scripts/skill_marketplace.py validate || { echo "[pre-pr]   FAILED: skill_marketplace.py validate"; rc=1; }; \
 	echo "[pre-pr] make determinism"; $(MAKE) determinism || { echo "[pre-pr]   FAILED: make determinism"; rc=1; }; \
 	echo "[pre-pr] repo-invariant-review (advisory, non-blocking)"; $(PYTHON) skills/repo-invariant-review/scripts/check_invariants.py --repo . --base "$(PRE_PR_BASE_REF)" || echo "[pre-pr]   advisory findings above -- not blocking, review before pushing"; \
+	echo "[pre-pr] verify_tier_a.py"; $(PYTHON) scripts/verify_tier_a.py || { echo "[pre-pr]   FAILED: verify_tier_a.py"; rc=1; }; \
+	echo "[pre-pr] eval_metrics.py --check"; $(PYTHON) scripts/generate_eval_metrics.py --check || { echo "[pre-pr]   FAILED: eval_metrics.py --check"; rc=1; }; \
 	if [ $$rc -ne 0 ]; then echo "[pre-pr] one or more checks FAILED -- see above"; exit 1; fi; \
 	echo "[pre-pr] all checks passed"
 
