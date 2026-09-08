@@ -108,6 +108,31 @@ class TestFailClosed:
         assert out.error is not None
         assert "metadata.split" in (out.error or "")
 
+    def test_malformed_mutants_do_not_crash_the_empty_evidence_path(self) -> None:
+        it = _item()
+        it.inputs["mutants"] = ["not-a-dict"]
+        out = TestgenAgentTarget().run(it)
+        assert out.error is not None
+        assert out.metadata[TESTGEN_EVIDENCE_KEY]["collected"] == 0
+
+    def test_missing_reference_still_publishes_empty_evidence(self) -> None:
+        it = _item()
+        del it.inputs["reference"]
+        out = TestgenAgentTarget(generate=_killing).run(it)
+        assert out.error is not None
+        assert TESTGEN_EVIDENCE_KEY in out.metadata
+        assert out.metadata[TESTGEN_EVIDENCE_KEY]["collected"] == 0
+        assert out.metadata[PROMPT_HASH_KEY]
+        assert out.metadata[SUITE_HASH_KEY]
+
+    def test_malformed_mutants_on_execute_fail_closed_instead_of_raising(self) -> None:
+        it = _item()
+        it.inputs["mutants"] = ["not-a-dict"]
+        out = TestgenAgentTarget(generate=_killing).run(it)
+        assert out.error is not None
+        assert TESTGEN_EVIDENCE_KEY in out.metadata
+        assert out.metadata[TESTGEN_EVIDENCE_KEY]["collected"] == 0
+
 
 class TestExecution:
     def test_generated_killing_suite_is_executed(self) -> None:

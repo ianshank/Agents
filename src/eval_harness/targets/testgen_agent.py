@@ -104,7 +104,7 @@ def _split_of(item: EvalItem) -> str | None:
 
 def _empty_for(item: EvalItem) -> dict[str, Any]:
     mutants = item.inputs.get("mutants") if isinstance(item.inputs, dict) else None
-    listed = list(mutants) if isinstance(mutants, list) else []
+    listed = [m for m in mutants if isinstance(m, dict)] if isinstance(mutants, list) else []
     return _empty_evidence(listed, timed_out=False)
 
 
@@ -205,8 +205,16 @@ class TestgenAgentTarget(TargetRunner):
     def _execute(self, item: EvalItem, produced: str, extra: dict[str, Any]) -> TargetOutput:
         payload = dict(item.inputs)
         payload["suite"] = produced
-        executed = run_generated_suite(payload)
+        try:
+            executed = run_generated_suite(payload)
+        except Exception as exc:
+            return self._fail(item, f"suite execution raised: {exc}", extra)
         metadata = dict(executed.metadata or {})
+        # run_generated_suite omits TESTGEN_EVIDENCE_KEY when suite/reference/focal_name
+        # are missing. Scorers treat a missing key as not-applicable; ADR 0038 wants
+        # structured empty evidence on every fail-closed path.
+        if TESTGEN_EVIDENCE_KEY not in metadata:
+            metadata[TESTGEN_EVIDENCE_KEY] = _empty_for(item)
         metadata.update(extra)
         logger.debug(
             "testgen_agent: executed %s prompt=%s suite=%s attempt=%s error=%s",

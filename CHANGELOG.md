@@ -21,7 +21,10 @@ The generator view is a deep copy so nested `obligations` / `reference` mutation
 cannot poison the original item or the `run_generated_suite` payload. Digest
 length bounds live on named constants (`_MIN_DIGEST_CHARS` / `_MAX_DIGEST_CHARS`);
 an empty `allowed_splits` after cleaning fails at config time. The success path
-logs attempt / prompt / suite hashes (not the suite body).
+logs attempt / prompt / suite hashes (not the suite body). Execute always
+publishes ``TESTGEN_EVIDENCE_KEY`` even when ``run_generated_suite`` omits it
+(missing reference / focal_name); malformed ``mutants`` entries are skipped on
+the empty-evidence path so fail-closed cannot crash.
 
 ### Added — Executive evaluation report & metrics visualization suite
 

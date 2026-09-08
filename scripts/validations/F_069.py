@@ -17,6 +17,7 @@ Checks:
     8.  Deck A ``config/testgen_eval.yaml`` stays the corpus ``callable`` path.
     9.  The empty/null baseline yaml is holdout-only, advisory, and has no generator_path.
     10. Mutating nested ``obligations`` on the generator view does not poison the original.
+    11. Execute still publishes empty ``TESTGEN_EVIDENCE_KEY`` when reference is missing.
 
 Exit codes:
     0 - all checks passed
@@ -234,6 +235,21 @@ def _check_nested_view_is_isolated(errors: list[str]) -> None:
     )
 
 
+def _check_execute_publishes_evidence_when_reference_missing(errors: list[str]) -> None:
+    from eval_harness.core.types import TESTGEN_EVIDENCE_KEY
+    from eval_harness.targets.testgen_agent import TestgenAgentTarget
+
+    item = _eval_item()
+    del item.inputs["reference"]
+    out = TestgenAgentTarget(generate=lambda _view: _KILLING).run(item)
+    payload = out.metadata.get(TESTGEN_EVIDENCE_KEY) or {}
+    _check(
+        out.error is not None and payload.get("collected") == 0,
+        "execute still publishes empty evidence when reference is missing",
+        errors,
+    )
+
+
 def _check_generator_path_is_allowlisted(errors: list[str]) -> None:
     from eval_harness.core._imports import CALLABLE_ALLOWLIST_ENV
     from eval_harness.targets.testgen_agent import TestgenAgentTarget
@@ -264,6 +280,7 @@ def main() -> int:
     _check_deck_a_yaml_stays_callable(errors)
     _check_empty_baseline_yaml(errors)
     _check_nested_view_is_isolated(errors)
+    _check_execute_publishes_evidence_when_reference_missing(errors)
     return report(logger, "F-069", errors)
 
 
