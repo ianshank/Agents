@@ -59,12 +59,14 @@ ATTEMPT_ID_KEY = "testgen_attempt_id"
 PROMPT_HASH_KEY = "testgen_prompt_hash"
 SUITE_HASH_KEY = "testgen_suite_hash"
 
-GeneratorFn = Callable[[EvalItem], object]
+GeneratorFn = Callable[..., object]
 
 
 @dataclass(frozen=True)
 class TestgenAgentConfig:
     """Operator knobs for :class:`TestgenAgentTarget`. Defaults live here, not at call sites."""
+
+    __test__ = False
 
     allowed_splits: tuple[str, ...] = _DEFAULT_ALLOWED_SPLITS
     """Item ``metadata.split`` values the pipeline will generate for. Deck B is holdout."""
@@ -128,6 +130,8 @@ def _digest(text: str, chars: int) -> str:
 class TestgenAgentTarget(TargetRunner):
     """Generate a suite (DI fake or allowlisted path), then execute it in-process."""
 
+    __test__ = False
+
     def __init__(
         self,
         generate: GeneratorFn | None = None,
@@ -139,12 +143,8 @@ class TestgenAgentTarget(TargetRunner):
         if generate is not None and generator_path:
             raise ValueError("testgen_agent takes generate= or generator_path=, not both")
         self._config = TestgenAgentConfig(
-            allowed_splits=(
-                tuple(allowed_splits) if allowed_splits is not None else _DEFAULT_ALLOWED_SPLITS
-            ),
-            prompt_preamble=(
-                prompt_preamble if prompt_preamble is not None else _DEFAULT_PROMPT_PREAMBLE
-            ),
+            allowed_splits=(tuple(allowed_splits) if allowed_splits is not None else _DEFAULT_ALLOWED_SPLITS),
+            prompt_preamble=(prompt_preamble if prompt_preamble is not None else _DEFAULT_PROMPT_PREAMBLE),
             digest_chars=_DEFAULT_DIGEST_CHARS if digest_chars is None else digest_chars,
         )
         self._generate = generate
@@ -165,16 +165,12 @@ class TestgenAgentTarget(TargetRunner):
         if self._resolved is None:
             module_name, _, attr = self._generator_path.partition(":")
             if not attr:
-                raise ValueError(
-                    f"generator_path {self._generator_path!r} must be 'module:function'"
-                )
+                raise ValueError(f"generator_path {self._generator_path!r} must be 'module:function'")
             module = import_allowed_module(module_name)
             fn = resolve_allowed_attribute(module, attr)
             if not callable(fn):
-                raise TypeError(
-                    f"generator_path {self._generator_path!r} did not resolve to a callable"
-                )
-            self._resolved = fn  # type: ignore[assignment]
+                raise TypeError(f"generator_path {self._generator_path!r} did not resolve to a callable")
+            self._resolved = fn
         return self._resolved
 
     def _fail(self, item: EvalItem, error: str, extra: dict[str, Any] | None = None) -> TargetOutput:
@@ -188,7 +184,7 @@ class TestgenAgentTarget(TargetRunner):
         try:
             return fn(view)
         except TypeError:
-            return fn(view.inputs)  # type: ignore[misc, arg-type]
+            return fn(view.inputs)
 
     def run(self, item: EvalItem) -> TargetOutput:
         if not isinstance(item.inputs, dict):

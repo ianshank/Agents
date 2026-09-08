@@ -29,6 +29,6 @@
 
 ## 3. Verification
 
-- [ ] 3.1 `./scripts/quality-gate.sh all` and package checks green.
+- [x] 3.1 `./scripts/quality-gate.sh all` and package checks green.
 - [x] 3.2 Dry-run held-out split; publish distribution, not a single headline mean. — **quote thorough holdout n=11 unique; do not quote pass^k from a deterministic fake.**
 - [ ] 3.3 Record spec-guardian / peer-reviewer passes in `review.md`.

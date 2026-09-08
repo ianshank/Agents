@@ -12,6 +12,13 @@ from eval_harness.core.types import EvalItem
 KILLING_SUITE = "from focal import add\n\ndef test_boundary():\n    assert add(2, 1) == -1\n"
 
 
+class _NotAGenerator:
+    """Non-callable whose defining module is this tests package (ADR 0039 origin check)."""
+
+
+NOT_A_GENERATOR = _NotAGenerator()
+
+
 def killing_suite(item: EvalItem) -> str:
     """Return a killing suite. Raises if the homework ``suite`` key is visible."""
     if "suite" in item.inputs:

@@ -153,6 +153,7 @@ Aliases (sink):
 | `model` | 1 | 1 | 1 | — | 2 |
 | `provenance_recorder` | 1 | 1 | 1 | — | 1 |
 | `rca_maxz` | 1 | 1 | 1 | — | 1 |
+| `testgen_agent` | 1 | 1 | 1 | — | 1 |
 
 - `echo` M6 waived: no failure modes by design (pure dict access)
 
@@ -164,12 +165,13 @@ Aliases (target):
 | `provenance-recorder` | `provenance_recorder` |
 | `python` | `callable` |
 | `rca-maxz` | `rca_maxz` |
+| `testgen-agent` | `testgen_agent` |
 
 ## Extra suites (non-registry rows)
 
 | suite | floor | dims covered (method counts) |
 |---|---|---|
-| engine | M8 | M8×27 |
+| engine | M8 | M8×28 |
 | gating | M1, M2, M6 | M1×2, M2×2, M6×4 |
 
 ## M8 pipelines — kinds exercised
@@ -188,7 +190,7 @@ invoked it, which is the vacuous credit the ledger exists to refuse.
 | scorer | `autoevals`, `contains`, `exact_match`, `json_keys`, `llm_judge`, `policy_violation`, `rca_abstention_correctness`, `rca_ac_at_k`, `rca_component_match`, `rca_false_accusation_rate`, `rca_onset_within_tolerance`, `regex_match`, `req_ac_recall`, `req_scope_hallucination`, `req_semantic_diversity`, `req_traceability_closure`, `requirement_obligation_recall`, `state_transition`, `test_executability`, `testgen_green_on_correct`, `testgen_mutation_score`, `trajectory_any_order`, `trajectory_exact`, `trajectory_in_order`, `trajectory_loop_detection`, `trajectory_precision_recall`, `trajectory_recovery`, `trajectory_step_efficiency`, `weighted` |
 | sink | `braintrust`, `console`, `html_file`, `json_file`, `langfuse`, `phoenix` |
 | state_adapter | `filesystem`, `in_memory`, `mock_http`, `sqlite` |
-| target | `callable`, `echo`, `model`, `provenance_recorder`, `rca_maxz` |
+| target | `callable`, `echo`, `model`, `provenance_recorder`, `rca_maxz`, `testgen_agent` |
 
 Waived M8 cells — infeasible in the matrix CI job, with the reason. Named here
 rather than left absent: a component missing from the table above with no

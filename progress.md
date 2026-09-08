@@ -34,7 +34,10 @@ the `eval-change-approved` label.
 
 ### Validation evidence
 
-Pending the quality-gate pass on this revision.
+- `./scripts/quality-gate.sh all`: PASS (eval_harness 97.32% ≥ 96; scripts 95.52% ≥ 85; 2863 passed, 34 skipped).
+- `python scripts/validations/F_069.py`: passed.
+- `python tests/test_matrix_coverage.py --check`: `docs/matrix-coverage.md` is fresh.
+- Quote thorough holdout n=11 unique (`tests/test_testgen_agent.py::TestHoldoutQuoting`).
 
 ---
 ## Session 017 — 2026-09-06 / 2026-09-07

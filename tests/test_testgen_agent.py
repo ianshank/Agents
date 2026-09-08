@@ -19,8 +19,8 @@ from eval_harness.targets.testgen_agent import (
     TestgenAgentConfig,
     TestgenAgentTarget,
 )
-from tests._testgen_agent_fixtures import KILLING_SUITE, killing_suite
-from tests.test_testgen_target import FOCAL, GRID, MUTANT, item as _inputs
+from tests._testgen_agent_fixtures import KILLING_SUITE
+from tests.test_testgen_target import item as _inputs
 
 bootstrap()
 
@@ -118,9 +118,7 @@ class TestExecution:
 
 
 class TestGeneratorPath:
-    def test_unlisted_generator_path_is_refused_before_generation(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_unlisted_generator_path_is_refused_before_generation(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "something_else")
         target = TestgenAgentTarget(generator_path="tests._testgen_agent_fixtures:killing_suite")
         out = target.run(_item())
@@ -149,11 +147,18 @@ class TestGeneratorPath:
 
     def test_non_callable_path_fail_closes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "tests")
-        out = TestgenAgentTarget(
-            generator_path="tests._testgen_agent_fixtures:KILLING_SUITE"
-        ).run(_item())
+        out = TestgenAgentTarget(generator_path="tests._testgen_agent_fixtures:NOT_A_GENERATOR").run(_item())
         assert out.error is not None
         assert "could not be resolved" in (out.error or "")
+
+    def test_generator_path_is_cached_across_runs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(CALLABLE_ALLOWLIST_ENV, "tests")
+        target = TestgenAgentTarget(generator_path="tests._testgen_agent_fixtures:killing_suite")
+        first = target.run(_item())
+        second = target.run(_item())
+        assert first.error is None
+        assert second.error is None
+        assert first.metadata[SUITE_HASH_KEY] == second.metadata[SUITE_HASH_KEY]
 
 
 class TestConfig:
