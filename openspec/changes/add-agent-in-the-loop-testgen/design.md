@@ -7,7 +7,7 @@ Locked 2026-09-06 in [`OWNER_DEFAULTS.md`](./OWNER_DEFAULTS.md) (board proceed):
 ## Recommended composition (option a)
 
 ```
-focal + obligations → generator (DI; never sees inputs.suite)
+focal + obligations → generator (DI; never sees inputs.suite; view is a deep copy)
                    → suite artifact
                    → run_generated_suite (in-process)
                    → F-065 scorers via TESTGEN_EVIDENCE_KEY

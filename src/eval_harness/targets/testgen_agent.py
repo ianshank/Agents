@@ -20,6 +20,7 @@ than raising.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import logging
@@ -46,6 +47,8 @@ _DEFAULT_ALLOWED_SPLITS: tuple[str, ...] = ("holdout",)
 
 #: How many hex characters of sha256 to keep on attempt / prompt / suite hashes.
 _DEFAULT_DIGEST_CHARS = 16
+_MIN_DIGEST_CHARS = 8
+_MAX_DIGEST_CHARS = 64
 
 #: Held-constant preamble. Not a ``str.format`` template: focal source can contain
 #: braces, and formatting untrusted code is how a prompt silently drops.
@@ -75,15 +78,20 @@ class TestgenAgentConfig:
     """Constant prefix hashed into ``testgen_prompt_hash``. Not tuned per holdout item."""
 
     digest_chars: int = _DEFAULT_DIGEST_CHARS
-    """Hex characters kept from sha256 digests written into additive metadata."""
+    """Hex characters kept from sha256 digests. Inclusive range is ``[_MIN_DIGEST_CHARS, _MAX_DIGEST_CHARS]``."""
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.digest_chars) or int(self.digest_chars) != self.digest_chars:
             raise ValueError(f"digest_chars must be a finite integer, got {self.digest_chars!r}")
-        if not 8 <= int(self.digest_chars) <= 64:
-            raise ValueError(f"digest_chars must be in [8, 64], got {self.digest_chars!r}")
-        object.__setattr__(self, "digest_chars", int(self.digest_chars))
+        chars = int(self.digest_chars)
+        if not _MIN_DIGEST_CHARS <= chars <= _MAX_DIGEST_CHARS:
+            raise ValueError(
+                f"digest_chars must be in [{_MIN_DIGEST_CHARS}, {_MAX_DIGEST_CHARS}], got {self.digest_chars!r}"
+            )
+        object.__setattr__(self, "digest_chars", chars)
         cleaned = tuple(str(s) for s in self.allowed_splits if str(s))
+        if not cleaned:
+            raise ValueError("allowed_splits must contain at least one non-empty split name")
         object.__setattr__(self, "allowed_splits", cleaned)
 
 
@@ -101,13 +109,17 @@ def _empty_for(item: EvalItem) -> dict[str, Any]:
 
 
 def _generator_view(item: EvalItem) -> EvalItem:
-    """Copy of *item* whose inputs do not contain ``suite``."""
+    """Deep copy of *item* whose inputs do not contain ``suite``.
+
+    A shallow copy would let a generator mutate nested ``obligations`` / ``reference``
+    and poison the original item (and later ``run_generated_suite`` payload).
+    """
     raw = item.inputs if isinstance(item.inputs, dict) else {}
     return EvalItem(
         id=item.id,
-        inputs={k: v for k, v in raw.items() if k not in _STRIPPED_INPUT_KEYS},
-        expected=item.expected,
-        metadata=dict(item.metadata) if isinstance(item.metadata, dict) else {},
+        inputs={k: copy.deepcopy(v) for k, v in raw.items() if k not in _STRIPPED_INPUT_KEYS},
+        expected=copy.deepcopy(item.expected),
+        metadata=copy.deepcopy(item.metadata) if isinstance(item.metadata, dict) else {},
     )
 
 
@@ -181,10 +193,36 @@ class TestgenAgentTarget(TargetRunner):
         return TargetOutput(output=None, error=error, metadata=metadata)
 
     def _invoke(self, fn: GeneratorFn, view: EvalItem) -> object:
+        # Tests inject ``generate(item)``. YAML ``generator_path`` may name a
+        # ``(inputs: dict) -> str`` like ``CallableTarget``. Retry only the
+        # signature mismatch; a TypeError from inside the generator is re-raised
+        # by the second call and recorded by ``run``.
         try:
             return fn(view)
         except TypeError:
             return fn(view.inputs)
+
+    def _execute(self, item: EvalItem, produced: str, extra: dict[str, Any]) -> TargetOutput:
+        payload = dict(item.inputs)
+        payload["suite"] = produced
+        executed = run_generated_suite(payload)
+        metadata = dict(executed.metadata or {})
+        metadata.update(extra)
+        logger.debug(
+            "testgen_agent: executed %s prompt=%s suite=%s attempt=%s error=%s",
+            item.id,
+            extra.get(PROMPT_HASH_KEY),
+            extra.get(SUITE_HASH_KEY),
+            extra.get(ATTEMPT_ID_KEY),
+            executed.error,
+        )
+        return TargetOutput(
+            output=executed.output,
+            latency_ms=executed.latency_ms,
+            error=executed.error,
+            metadata=metadata,
+            trajectory=executed.trajectory,
+        )
 
     def run(self, item: EvalItem) -> TargetOutput:
         if not isinstance(item.inputs, dict):
@@ -227,16 +265,4 @@ class TestgenAgentTarget(TargetRunner):
         suite_hash = _digest(produced, self._config.digest_chars)
         extra[SUITE_HASH_KEY] = suite_hash
         extra[ATTEMPT_ID_KEY] = _digest(f"{item.id}:{prompt_hash}", self._config.digest_chars)
-
-        payload = dict(item.inputs)
-        payload["suite"] = produced
-        executed = run_generated_suite(payload)
-        metadata = dict(executed.metadata or {})
-        metadata.update(extra)
-        return TargetOutput(
-            output=executed.output,
-            latency_ms=executed.latency_ms,
-            error=executed.error,
-            metadata=metadata,
-            trajectory=executed.trajectory,
-        )
+        return self._execute(item, produced, extra)

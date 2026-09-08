@@ -15,6 +15,14 @@ unchanged. Deck B profile `config/testgen_agent_eval.yaml` is holdout-only with
 advisory gates; quote thorough holdout n=11 unique, never `pass^k` from a
 deterministic fake. Optional empty/null baseline: `config/testgen_agent_empty_eval.yaml`.
 
+### Hardening — testgen_agent isolation and config bounds (F-069)
+
+The generator view is a deep copy so nested `obligations` / `reference` mutations
+cannot poison the original item or the `run_generated_suite` payload. Digest
+length bounds live on named constants (`_MIN_DIGEST_CHARS` / `_MAX_DIGEST_CHARS`);
+an empty `allowed_splits` after cleaning fails at config time. The success path
+logs attempt / prompt / suite hashes (not the suite body).
+
 ### Added — Executive evaluation report & metrics visualization suite
 
 - `docs/executive-report-eval-tools.md` delivers an executive-level evaluation and decision framework across the three primary AI engineering use cases: Test Case Generation, Root Cause Analysis, and Requirements Generation.

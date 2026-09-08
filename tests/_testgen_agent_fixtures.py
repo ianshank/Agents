@@ -24,3 +24,11 @@ def killing_suite(item: EvalItem) -> str:
     if "suite" in item.inputs:
         raise AssertionError("generator must not see inputs.suite")
     return KILLING_SUITE
+
+
+def mutating_spy(item: EvalItem) -> str:
+    """Mutate nested ``obligations`` on the view; isolation must keep the original intact."""
+    obligations = item.inputs.get("obligations")
+    if isinstance(obligations, list):
+        obligations.append("MUTATED_BY_GENERATOR")
+    return KILLING_SUITE

@@ -14,6 +14,9 @@ Checks:
     5.  A generated killing suite is executed in-process; F-065 scorers read it.
     6.  The shipped Deck B config is holdout-only and every gate rule is advisory.
     7.  ``generator_path`` is refused when the callable is outside the allowlist.
+    8.  Deck A ``config/testgen_eval.yaml`` stays the corpus ``callable`` path.
+    9.  The empty/null baseline yaml is holdout-only, advisory, and has no generator_path.
+    10. Mutating nested ``obligations`` on the generator view does not poison the original.
 
 Exit codes:
     0 - all checks passed
@@ -48,6 +51,8 @@ _SCORERS = (
     "requirement_obligation_recall",
 )
 _CONFIG = os.path.join(PROJECT_ROOT, "config", "testgen_agent_eval.yaml")
+_EMPTY_CONFIG = os.path.join(PROJECT_ROOT, "config", "testgen_agent_empty_eval.yaml")
+_DECK_A_CONFIG = os.path.join(PROJECT_ROOT, "config", "testgen_eval.yaml")
 _KILLING = "from focal import add\n\ndef test_boundary():\n    assert add(2, 1) == -1\n"
 _FOCAL = "def add(n, k):\n    if n < 2:\n        return n + k\n    return k - n\n"
 _MUTANT = {
@@ -176,6 +181,59 @@ def _check_shipped_profile_is_advisory_holdout(errors: list[str]) -> None:
     )
 
 
+def _check_deck_a_yaml_stays_callable(errors: list[str]) -> None:
+    with open(_DECK_A_CONFIG, encoding="utf-8") as handle:
+        config = yaml.safe_load(handle)
+    target = config.get("target") or {}
+    params = target.get("params") or {}
+    _check(
+        target.get("type") == "callable" and params.get("path") == "eval_harness.targets.testgen:run_generated_suite",
+        "Deck A config/testgen_eval.yaml stays the corpus callable path",
+        errors,
+    )
+
+
+def _check_empty_baseline_yaml(errors: list[str]) -> None:
+    with open(_EMPTY_CONFIG, encoding="utf-8") as handle:
+        config = yaml.safe_load(handle)
+    params = (config.get("target") or {}).get("params") or {}
+    splits = params.get("allowed_splits") or []
+    _check(
+        config.get("target", {}).get("type") == "testgen_agent"
+        and splits == ["holdout"]
+        and "generator_path" not in params,
+        "the empty baseline is holdout-only testgen_agent with no generator_path",
+        errors,
+    )
+    rules = (config.get("gate") or {}).get("rules") or []
+    ours = [rule for rule in rules if rule.get("score") in _SCORERS]
+    _check(
+        ours and all(rule.get("report_only") is True for rule in ours),
+        "every empty-baseline gate rule is advisory",
+        errors,
+    )
+
+
+def _check_nested_view_is_isolated(errors: list[str]) -> None:
+    from eval_harness.targets.testgen_agent import TestgenAgentTarget
+
+    item = _eval_item()
+    snapshot = list(item.inputs["obligations"])
+
+    def spy(view: Any) -> str:
+        obligations = view.inputs.get("obligations")
+        if isinstance(obligations, list):
+            obligations.append("MUTATED_BY_GENERATOR")
+        return _KILLING
+
+    out = TestgenAgentTarget(generate=spy).run(item)
+    _check(
+        out.error is None and item.inputs["obligations"] == snapshot,
+        "mutating the generator view does not poison the original item",
+        errors,
+    )
+
+
 def _check_generator_path_is_allowlisted(errors: list[str]) -> None:
     from eval_harness.core._imports import CALLABLE_ALLOWLIST_ENV
     from eval_harness.targets.testgen_agent import TestgenAgentTarget
@@ -203,6 +261,9 @@ def main() -> int:
     _check_generated_suite_is_executed(errors)
     _check_shipped_profile_is_advisory_holdout(errors)
     _check_generator_path_is_allowlisted(errors)
+    _check_deck_a_yaml_stays_callable(errors)
+    _check_empty_baseline_yaml(errors)
+    _check_nested_view_is_isolated(errors)
     return report(logger, "F-069", errors)
 
 

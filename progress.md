@@ -1,6 +1,39 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 019 — 2026-09-08
+
+### Changes
+
+Peer review of F-069 vs `main` (`ec1ab39` vs `39d0311`). Findings in
+`openspec/changes/add-agent-in-the-loop-testgen/review.md` (two-pass protocol).
+
+**Fixed:** deep-copy generator view (nested `obligations` isolation); named
+`_MIN_DIGEST_CHARS` / `_MAX_DIGEST_CHARS`; empty `allowed_splits` fail at
+config time; `run()` delegates to `_execute` so success-path debug logs
+hashes (not the suite body). F_069 gained Deck A byte-stability, empty-baseline
+yaml, and mutating-spy checks.
+
+**Docs:** AGENTS.md entry point + seam; C4 L3 runtime subsection; CHANGELOG
+Hardening; NEXT_STEPS F-069 bullet; tasks.md 3.3 ticked.
+
+**Confirmed no-ops (not theater-edited):** `.gitignore`, `.dockerignore`,
+`.gitleaks.toml`, Makefile run target, `architecture.yaml`, Dependabot, ruff/mypy
+pins, numpy, marketplace skill / LoopController, `docs.yml`, `SCHEMA_VERSION`.
+
+**Hooks / skills:** SessionStart extras, PostToolUse size-budget, Stop
+generated-artifacts, `pre-pr-gate`, `openspec-peer-review`, F_069 on
+`validate.py` + `--cov=F_069` already wired. No new hook or skill.
+
+Protected paths touched again (`tests/**`, `scripts/validations/F_069.py`):
+PR still needs `eval-change-approved`.
+
+### Validation evidence
+
+Recorded after `./scripts/quality-gate.sh all` and
+`python scripts/validate.py --tier fast --strict-git` in this session.
+
+---
 ## Session 018 — 2026-09-08
 
 ### Changes

@@ -164,6 +164,29 @@ C4Component
     Rel(from_config, config_model, "validated input")
 ```
 
+## Level 3 — Component: testgen_agent pipeline (F-069, ADR 0048)
+
+Runtime/call semantics of the Deck B target. This is **not** an import-edge
+diagram: `targets → core, plugins` is unchanged in
+[`architecture.yaml`](../architecture.yaml). Selecting `type: testgen_agent` is a
+registry lookup; ADR 0039 applies only when optional `generator_path` names
+`module:attr`. Never allowlist `eval_harness`.
+
+```mermaid
+flowchart LR
+    item[EvalItem] --> split{split in allowed_splits?}
+    split -->|no / missing generator / malformed suite| empty[ADR 0038 empty TESTGEN_EVIDENCE_KEY]
+    split -->|yes| view["_generator_view: deepcopy minus inputs.suite"]
+    view --> gen["generator (generate= in tests, or allowlisted generator_path)"]
+    gen -->|str suite| exec["run_generated_suite in-process"]
+    exec --> meta["TESTGEN_EVIDENCE_KEY plus prompt / suite / attempt hashes"]
+```
+
+The original item is not mutated: nested `obligations` / `reference` live on a
+deep copy, so a generator that appends to them cannot poison
+`run_generated_suite`. Execute-path logs carry hashes, not the suite body.
+`config/testgen_eval.yaml` remains the Deck A+ `callable` path.
+
 ## Level 3 — Component: Calibrated Merge Gate (F-010 + F-032…F-035 + F-049, agent_core, default-off)
 
 A pure, deterministic merge-decision subsystem under `agent_core` (ADR 0005; calibrator-health
