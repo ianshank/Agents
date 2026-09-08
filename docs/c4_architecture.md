@@ -27,11 +27,15 @@ C4Context
     System(harness, "Langfuse Eval Harness", "Config-driven LLM evaluation engine with pluggable scorers, judges, and sinks")
 
     System_Ext(langfuse, "Langfuse Cloud", "Observability platform — stores traces, scores, and dataset items")
+    System_Ext(phoenix, "Arize Phoenix", "Observability platform — OTel span tracking and evaluation")
+    System_Ext(braintrust, "BrainTrust", "Observability platform — experiment tracking and dataset store")
     System_Ext(llm_api, "LLM API", "OpenAI-compatible endpoint — NVIDIA Nemotron, LM Studio, GPT-4, etc.")
     System_Ext(snyk, "Snyk", "Dependency vulnerability scanning and monitoring")
 
     Rel(dev, harness, "Runs eval-harness CLI", "YAML config + CLI flags")
     Rel(harness, langfuse, "Logs scores, links traces", "HTTPS / Langfuse SDK")
+    Rel(harness, phoenix, "Logs scores as OTel spans", "OTel gRPC / HTTP")
+    Rel(harness, braintrust, "Logs items & scores", "HTTPS / BrainTrust SDK")
     Rel(harness, llm_api, "Sends judge prompts", "HTTPS / OpenAI SDK")
     Rel(dev, langfuse, "Reviews scores and traces", "Browser")
     Rel(snyk, harness, "Scans dependencies", "Snyk CLI")
@@ -82,6 +86,8 @@ C4Container
     }
 
     System_Ext(langfuse, "Langfuse Cloud", "")
+    System_Ext(phoenix, "Arize Phoenix", "")
+    System_Ext(braintrust, "BrainTrust", "")
     System_Ext(llm_api, "LLM API", "")
 
     Rel(dev, cli, "eval-harness run", "CLI")
@@ -104,7 +110,9 @@ C4Container
     Rel(engine, lf_client, "log_score(), link_dataset_item()")
     Rel(lf_client, langfuse, "HTTPS")
     Rel(sinks, px_client, "log_score() as OTel spans")
+    Rel(px_client, phoenix, "OTel gRPC / HTTP")
     Rel(sinks, bt_client, "log_item() per item")
+    Rel(bt_client, braintrust, "HTTPS")
     Rel(datasets, bt_client, "fetch_dataset_items()")
     Rel(judges, llm_api, "chat.completions.create()")
     Rel(behavioral_regression_pkg, agent_core_pkg, "wilson_interval(), brier_decomposition(), reliability_bins(), logging (runtime calls)")
@@ -392,6 +400,23 @@ it runs every package suite, every `features.yaml` functionality gate (Tier B ca
 a curated set of package CLI journeys (`eval-harness`, `bregress`, `merge_gate_ci`,
 `skill_marketplace`), the skill/hook e2e tests, and credential-gated live integrations, and
 aggregates one report under `artifacts/e2e-report/`. See [e2e-runbook.md](e2e-runbook.md).
+
+### Tier A Mechanical Verification & Tiered Test Automation
+
+Local and CI pre-merge gate pipelines execute through dedicated test automation runners:
+
+1. **Tier A Mechanical Verification (`scripts/verify_tier_a.py`)**:
+   - Executes 11 deterministic quality gates in under 60 seconds with strict isolation.
+   - Gates checked: Charter Invariants, Charter Drift (`check_charter_drift.py`), Size Budget (`check_size_budget.py`), Guard Reachability, Ruff Formatting, Ruff Linting, Matrix Coverage (`test_matrix_coverage.py`), RCA Corpus Freshness, Requirements Corpus Freshness, TestGen Corpus Freshness, and Fast Feature Validators (`validate.py --tier fast`). Architecture import-graph drift is verified separately in CI via archguard.
+   - Cross-platform shell wrappers provided via `scripts/verify-tier-a.sh` and `scripts/verify-tier-a.ps1`.
+
+2. **Tiered Test Suite Runner (`scripts/run_tiered_tests.py`)**:
+   - Organizes test execution into distinct tiers: `fast` (unit tests and smoke checks), `integration` (cross-package component validation), and `full` (complete end-to-end matrix).
+   - Provides structured test output reporting, failure classification, and isolation across the 5 monorepo packages.
+
+3. **Evaluation Tool Matrix & Executive Metrics (`scripts/generate_eval_metrics.py`)**:
+   - Automated data aggregation across the evaluation landscape (Test Case Generation, Root Cause Analysis, and Requirements Generation).
+   - Validates schema conformance against `docs/eval_metrics_schema.json` and produces visual comparative matrices (`docs/eval_metrics_comparison.png`, `.svg`) linking to the executive decision report (`docs/executive-report-eval-tools.md`).
 
 ## Data Flow
 

@@ -9,6 +9,22 @@
 
 ## Recently Landed — Quality & Eval-Integrity Gates
 
+- [x] **Executive Evaluation Suite & Comparative Decision Framework** — `docs/executive-report-eval-tools.md`,
+  `docs/eval_metrics.json`, `docs/eval_metrics_schema.json`, `docs/eval_metrics_comparison.png`,
+  `docs/eval_metrics_comparison.svg`, `scripts/generate_eval_metrics.py`, and `tests/test_generate_eval_metrics.py`:
+  Delivers complete evaluation landscape and strategic leadership decision matrix across Test Case Generation,
+  Root Cause Analysis, and Requirements Generation. Fully schema-validated with grouped-bar comparative visualizations,
+  drift check CLI (`--check`), and comprehensive unit test suite.
+- [x] **Tier A Mechanical Verification Harness & Tiered Test Automation** — `scripts/verify_tier_a.py`,
+  `scripts/verify-tier-a.sh`, `scripts/verify-tier-a.ps1`, and `scripts/run_tiered_tests.py`:
+  Unified 11-gate deterministic pre-merge validator executing in under 60 seconds with strict failure isolation,
+  complemented by a multi-tier test runner (`fast`, `integration`, `full`) and Makefile integration (`make verify-tier-a`,
+  `make tiered-tests`, `make eval-metrics-check`, `make eval-metrics-update`).
+- [x] **Subagent Ecosystem & Automated Report Maintenance Skill** — `.claude/agents/narrow-critic.md`,
+  `.claude/agents/test-runner.md`, `.claude/agents/explorer.md`, `.agents/skills/update-executive-report/SKILL.md`,
+  and `.claude/hooks/post-edit-registry-drift.py`:
+  Configured dedicated subagents and an automated skill for keeping the executive matrix and visualizations
+  synchronized with evaluation framework evolutions.
 - [x] **RCA evaluation matrix (F-067, ADR 0046)** — ranked diagnosis against a finite
   candidate set, including correct abstention: frozen synthetic corpus at
   `corpora/rca/v1/`, `rca_maxz` baseline target, five scorers, advisory-only gates.

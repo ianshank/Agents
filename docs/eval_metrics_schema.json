@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EvalToolsMetricsDataset",
+  "description": "Validation schema for LLM evaluation platform benchmarks across core use cases and operational dimensions.",
+  "type": "object",
+  "required": [
+    "metadata",
+    "use_cases",
+    "tools",
+    "dimensions",
+    "tool_profiles",
+    "scores"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["title", "version", "generated_date", "data_source_policy"],
+      "properties": {
+        "title": { "type": "string" },
+        "version": { "type": "string" },
+        "generated_date": { "type": "string" },
+        "data_source_policy": { "type": "string" }
+      }
+    },
+    "use_cases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["name", "description", "key_metrics", "matrix_reference"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "key_metrics": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "matrix_reference": { "type": "string" }
+        }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "category", "max_score", "description"],
+        "properties": {
+          "key": { "type": "string" },
+          "label": { "type": "string" },
+          "category": { "type": "string", "enum": ["use_case", "operational"] },
+          "max_score": { "type": "number" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "tool_profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "display_name",
+          "licensing",
+          "deployment_model",
+          "airgap_capable",
+          "telemetry_protocol",
+          "matrix_components"
+        ],
+        "properties": {
+          "display_name": { "type": "string" },
+          "licensing": { "type": "string" },
+          "deployment_model": { "type": "string" },
+          "airgap_capable": { "type": "boolean" },
+          "telemetry_protocol": { "type": "string" },
+          "matrix_components": {
+            "type": "object",
+            "properties": {
+              "dataset": { "type": "string" },
+              "sink": { "type": "string" },
+              "judge": { "type": "string" },
+              "scorers": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "required": ["score", "rationale", "evidence_ref"],
+          "properties": {
+            "score": { "type": "number", "minimum": 0, "maximum": 10 },
+            "rationale": { "type": "string" },
+            "evidence_ref": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

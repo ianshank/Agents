@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — Executive evaluation report & metrics visualization suite
+
+- `docs/executive-report-eval-tools.md` delivers an executive-level evaluation and decision framework across the three primary AI engineering use cases: Test Case Generation, Root Cause Analysis, and Requirements Generation.
+- `docs/eval_metrics.json` provides machine-readable benchmark and capability metrics, strictly validated against `docs/eval_metrics_schema.json`.
+- `scripts/generate_eval_metrics.py` generates grouped-bar comparative visualizations (`docs/eval_metrics_comparison.png` and `.svg`), with `--check` drift validation for CI and Makefile integration.
+- `tests/test_generate_eval_metrics.py` adds comprehensive unit tests verifying data integrity, schema conformance, CLI exit semantics, and visualization generation.
+
+### Added — Tier A mechanical verification & tiered test automation
+
+- `scripts/verify_tier_a.py` chains 11 deterministic quality gates in under 60 seconds with isolated subprocess execution, ensuring strict enforcement before pull requests.
+- Cross-platform shell execution scripts `scripts/verify-tier-a.sh` and `scripts/verify-tier-a.ps1`.
+- `scripts/run_tiered_tests.py` orchestrates test execution across tiers (`fast`, `integration`, `full`) with structured reporting and failure isolation.
+- `Makefile` extended with convenience targets: `verify-tier-a`, `tiered-tests`, `eval-metrics-check`, `eval-metrics-update`, and wired into `make pre-pr`.
+
+### Added — Subagent ecosystem & report maintenance skills
+
+- Integrated specialized Claude Code subagents (`.claude/agents/narrow-critic.md`, `.claude/agents/test-runner.md`, `.claude/agents/explorer.md`).
+- Added automated report maintenance skill in `.agents/skills/update-executive-report/SKILL.md` and `.claude/skills/update-executive-report/SKILL.md` to ensure presentation artifacts remain synchronized with evaluation matrix updates.
+- Added drift hooks in `.claude/hooks/post-edit-registry-drift.py` and `.agents/hooks.json`.
+
+### Hardening — Cross-platform safety & container boundaries
+
+- Guarded POSIX resource limits (`resource.setrlimit`) on Windows platforms in `src/eval_harness/targets/_suite_runner.py` with typing and runtime guards.
+- Updated `.dockerignore` to exclude `.agents/` developer tooling from Docker builds.
+- Updated `.gitignore` to ignore transient `.agents/worktrees/` and `.agents/cache/`.
+
 ### Hardening — branch-protection enablement payload is derived, not copied
 
 `scripts/check_branch_protection.py` now emits and (with admin `gh`) applies the

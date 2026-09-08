@@ -89,6 +89,12 @@ def _apply_sandbox_limits() -> None:
     loaded so the limits bind the code they exist to contain. A malformed value fails
     closed into the runner-error path rather than running unlimited.
     """
+    parsed_limits: list[tuple[str, int]] = []
+    for env_name, _ in _RLIMIT_VARS:
+        raw = os.environ.get(env_name)
+        if raw is not None:
+            parsed_limits.append((env_name, int(raw)))
+
     try:
         import resource
     except ImportError:
@@ -97,13 +103,16 @@ def _apply_sandbox_limits() -> None:
             file=sys.stderr,
         )
         return
-    for env_name, limit_name in _RLIMIT_VARS:
-        raw = os.environ.get(env_name)
-        if raw is None:
-            continue
+
+    setrlimit = getattr(resource, "setrlimit", None)
+    if setrlimit is None:
+        return
+
+    limit_map = dict(_RLIMIT_VARS)
+    for env_name, value in parsed_limits:
+        limit_name = limit_map[env_name]
         limit = getattr(resource, limit_name)
-        value = int(raw)
-        resource.setrlimit(limit, (value, value))
+        setrlimit(limit, (value, value))
 
 
 def _load(path: Path, name: str) -> Any:
