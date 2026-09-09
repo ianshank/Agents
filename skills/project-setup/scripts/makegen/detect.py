@@ -90,7 +90,11 @@ def _detect_package_manager(root: Path, data: dict[str, Any]) -> tuple[str, str]
         return "poetry", "poetry install"
     if _has_table(data, "tool", "pdm") or (root / "pdm.lock").is_file():
         return "pdm", "pdm install"
-    if (root / "uv.lock").is_file() or _has_table(data, "tool", "uv"):
+    if (root / "uv.lock").is_file():
+        # A lockfile is a reproducibility contract: CI and `make uv-sync` must
+        # not silently resolve from a lock that is not the committed one.
+        return "uv", "uv sync --locked"
+    if _has_table(data, "tool", "uv"):
         return "uv", "uv sync"
     if _has_table(data, "tool", "hatch"):
         return "hatch", "hatch env create"

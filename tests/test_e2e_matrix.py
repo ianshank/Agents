@@ -1120,6 +1120,200 @@ class TestCommandLine:
         )
         assert "2026-08-13T22:45:39+00:00" in (out / em.ARTIFACT_DOC_NAME).read_text(encoding="utf-8")
 
+    def test_update_refuses_a_monotonicity_drop(self, tmp_path: Path, capsys) -> None:
+        """`--update` must not overwrite a larger render with a smaller one."""
+        report, out = self._seed(tmp_path)
+        assert main(["--update", "--report", str(report), "--out", str(out)]) == EXIT_OK
+        smaller = tmp_path / "small-report"
+        _write_report(smaller, [_record("suite:root", tier="A")])
+        capsys.readouterr()
+        assert main(["--update", "--report", str(smaller), "--out", str(out)]) == EXIT_PROBLEM
+        assert "dropped" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Provenance reachability + monotonicity (ADR 0033 amendment)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _FakeGit:
+    existing: frozenset[str]
+    ancestor_pairs: frozenset[tuple[str, str]]
+
+    def object_exists(self, sha: str) -> bool:
+        return sha in self.existing
+
+    def is_ancestor(self, ancestor: str, head: str) -> bool:
+        return (ancestor, head) in self.ancestor_pairs
+
+
+def _prov_doc(sha: str, *, observed: int = 31, root_tests: int = 2571) -> str:
+    return (
+        f"## Summary\n\n"
+        f"| Metric | Value |\n|---|---|\n"
+        f"| Observed steps | {observed} |\n\n"
+        f"## Coverage Grid\n\n"
+        f"| Unit | Suite Step | Tests |\n|---|---|---|\n"
+        f"| root | suite:root | {root_tests} |\n\n"
+        f"## Provenance\n\n"
+        f"| Field | Value |\n|---|---|\n"
+        f"| Commit | {sha} |\n"
+    )
+
+
+def test_parse_provenance_sha_reads_the_commit_cell() -> None:
+    assert em.parse_provenance_sha(_prov_doc("abc123")) == "abc123"
+    assert em.parse_provenance_sha("# no provenance section\n") == ""
+
+
+def test_parse_evidence_snapshot_reads_summary_and_grid() -> None:
+    snap = em.parse_evidence_snapshot(_prov_doc("abc", observed=31, root_tests=2571))
+    assert snap.observed_steps == 31
+    assert snap.suite_tests["suite:root"] == 2571
+
+
+def test_provenance_requires_an_ancestor_when_the_object_exists() -> None:
+    git = _FakeGit(existing=frozenset({"deadbeef"}), ancestor_pairs=frozenset())
+    problems = em.provenance_integrity_problems(
+        _prov_doc("deadbeef"), git=git, head="HEADSHA", skip_missing_objects=False
+    )
+    assert any("not an ancestor" in p for p in problems)
+
+
+def test_provenance_accepts_an_ancestor_of_head() -> None:
+    git = _FakeGit(existing=frozenset({"deadbeef"}), ancestor_pairs=frozenset({("deadbeef", "HEADSHA")}))
+    assert em.provenance_integrity_problems(_prov_doc("deadbeef"), git=git, head="HEADSHA") == []
+
+
+def test_provenance_skips_a_missing_object_in_a_shallow_clone() -> None:
+    git = _FakeGit(existing=frozenset(), ancestor_pairs=frozenset())
+    assert (
+        em.provenance_integrity_problems(_prov_doc("missing"), git=git, head="HEADSHA", skip_missing_objects=True) == []
+    )
+    problems = em.provenance_integrity_problems(
+        _prov_doc("missing"), git=git, head="HEADSHA", skip_missing_objects=False
+    )
+    assert any("not a commit" in p for p in problems)
+
+
+def test_provenance_waiver_covers_the_errata_stamp() -> None:
+    git = _FakeGit(existing=frozenset(), ancestor_pairs=frozenset())
+    sha = "09337aec16e8b10588efd0e61c9d270d18ada1c4"
+    assert em.provenance_integrity_problems(_prov_doc(sha), git=git, head="HEADSHA", skip_missing_objects=False) == []
+
+
+def test_monotonicity_fails_a_drop_and_accepts_the_errata_waiver() -> None:
+    prev = em.EvidenceSnapshot(observed_steps=38, suite_tests={"suite:root": 1627})
+    dropped = em.EvidenceSnapshot(observed_steps=30, suite_tests={"suite:root": 995})
+    assert em.monotonicity_problems(prev, dropped) == []
+    unwaived = em.EvidenceSnapshot(observed_steps=10, suite_tests={"suite:root": 100})
+    problems = em.monotonicity_problems(prev, unwaived)
+    assert any("observed steps dropped" in p for p in problems)
+    assert any("suite:root tests dropped" in p for p in problems)
+
+
+def test_monotonicity_allows_an_increase() -> None:
+    prev = em.EvidenceSnapshot(observed_steps=31, suite_tests={"suite:root": 995})
+    current = em.EvidenceSnapshot(observed_steps=40, suite_tests={"suite:root": 2571})
+    assert em.monotonicity_problems(prev, current) == []
+
+
+def test_empty_commit_cell_is_a_problem() -> None:
+    git = _FakeGit(existing=frozenset(), ancestor_pairs=frozenset())
+    problems = em.provenance_integrity_problems("## Provenance\n\n| Field | Value |\n", git=git, head="h")
+    assert problems == ["provenance Commit cell is empty"]
+
+
+def test_integrity_problems_combines_both_gates() -> None:
+    git = _FakeGit(existing=frozenset({"abc"}), ancestor_pairs=frozenset({("abc", "h")}))
+    committed = _prov_doc("abc", observed=40, root_tests=2000)
+    rendered = _prov_doc("abc", observed=10, root_tests=2000)
+    problems = em.integrity_problems(committed, rendered, git=git, head="HEAD")
+    assert any("observed steps dropped" in p for p in problems)
+
+
+def test_provenance_empty_head_is_a_problem_when_the_object_exists() -> None:
+    git = _FakeGit(existing=frozenset({"deadbeef"}), ancestor_pairs=frozenset())
+    problems = em.provenance_integrity_problems(_prov_doc("deadbeef"), git=git, head="")
+    assert any("HEAD is empty" in p for p in problems)
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        OSError("git missing"),
+        subprocess.TimeoutExpired(cmd="git", timeout=em.DEFAULT_GIT_QUERY.timeout_seconds),
+    ],
+)
+def test_provenance_git_query_failure_is_a_gate_problem(exc: BaseException) -> None:
+    class _BoomExists:
+        def object_exists(self, sha: str) -> bool:
+            raise exc
+
+        def is_ancestor(self, ancestor: str, head: str) -> bool:
+            raise AssertionError("is_ancestor must not run when object_exists fails")
+
+    problems = em.provenance_integrity_problems(_prov_doc("deadbeef"), git=_BoomExists(), head="HEADSHA")
+    assert problems == [em.git_query_problem("object_exists", exc)]
+
+
+def test_provenance_ancestor_query_failure_is_a_gate_problem() -> None:
+    exc = OSError("git vanished")
+
+    class _BoomAncestor:
+        def object_exists(self, sha: str) -> bool:
+            return True
+
+        def is_ancestor(self, ancestor: str, head: str) -> bool:
+            raise exc
+
+    problems = em.provenance_integrity_problems(_prov_doc("deadbeef"), git=_BoomAncestor(), head="HEADSHA")
+    assert problems == [em.git_query_problem("is_ancestor", exc)]
+
+
+def test_non_numeric_observed_steps_are_treated_as_zero() -> None:
+    doc = _prov_doc("abc", observed=31).replace("| Observed steps | 31 |", "| Observed steps | n/a |")
+    assert em.parse_evidence_snapshot(doc).observed_steps == 0
+
+
+def test_coverage_grid_without_expected_columns_is_empty() -> None:
+    doc = "## Coverage Grid\n\n| Unit | Floor |\n|---|---|\n| root | 96 |\n"
+    assert em.parse_suite_test_counts(doc) == {}
+
+
+def test_coverage_grid_skips_non_numeric_and_header_only() -> None:
+    assert em.parse_suite_test_counts("## Coverage Grid\n\n| Suite Step | Tests |\n") == {}
+    doc = "## Coverage Grid\n\n| Suite Step | Tests |\n|---|---|\n| suite:root | n/a |\n"
+    assert em.parse_suite_test_counts(doc) == {}
+    assert em.parse_markdown_two_col("no tables here", "Summary") == {}
+
+
+def test_subprocess_git_against_a_tmp_repo(tmp_path: Path) -> None:
+    env = {
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@example.invalid",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@example.invalid",
+        "GIT_AUTHOR_DATE": "2026-01-01T00:00:00+00:00",
+        "GIT_COMMITTER_DATE": "2026-01-01T00:00:00+00:00",
+    }
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "f").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "add", "f"], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **env})
+    subprocess.run(
+        ["git", "commit", "-m", "init"], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **env}
+    )
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    git = em.SubprocessGit(cwd=tmp_path)
+    assert git.object_exists(head)
+    assert not git.object_exists("")
+    assert not git.object_exists("0" * 40)
+    assert git.is_ancestor(head, head)
+    assert not git.is_ancestor("0" * 40, head)
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -1238,8 +1432,34 @@ def main(argv: list[str] | None = None) -> int:
         if not fresh:
             print(em.freshness_failure_message(rendered, args.out, sheets), file=sys.stderr)
             return EXIT_PROBLEM
-        print(f"{(args.out / em.ARTIFACT_DOC_NAME).as_posix()} is fresh")
+        committed_doc = args.out / em.ARTIFACT_DOC_NAME
+        git = em.SubprocessGit(
+            cwd=ROOT,
+            config=em.GitQueryConfig(timeout_seconds=float(DEFAULT_SUBPROCESS_CONFIG.git_timeout_seconds)),
+        )
+        integrity = em.integrity_problems(
+            committed_doc.read_text(encoding="utf-8"),
+            rendered,
+            git=git,
+            head=_git("rev-parse", "HEAD"),
+            skip_missing_objects=True,
+        )
+        if integrity:
+            print("e2e-matrix: provenance/monotonicity:\n" + "\n".join(integrity), file=sys.stderr)
+            return EXIT_PROBLEM
+        print(f"{committed_doc.as_posix()} is fresh")
         return EXIT_OK
+
+    rendered = em.render_markdown(sheets)
+    committed_doc = args.out / em.ARTIFACT_DOC_NAME
+    if committed_doc.is_file():
+        drop_problems = em.monotonicity_problems(
+            em.parse_evidence_snapshot(committed_doc.read_text(encoding="utf-8")),
+            em.parse_evidence_snapshot(rendered),
+        )
+        if drop_problems:
+            print("e2e-matrix: monotonicity:\n" + "\n".join(drop_problems), file=sys.stderr)
+            return EXIT_PROBLEM
 
     written = em.write_artifacts(sheets, args.out)
     try:

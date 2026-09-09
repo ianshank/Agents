@@ -84,10 +84,14 @@ WAIVED = {  # snapshot at acceptance; tests/_matrix_coverage.py is authoritative
    obligations (`FOLLOW_ON`, with satisfied-row hygiene) — regenerated via
    `python tests/test_matrix_coverage.py --update`, freshness-gated by the root suite.
 6. **Scope boundary.** The matrix covers the root harness registries plus the gating/engine
-   extra suites; `extend-matrix-to-fleet` extends the same convention to the five sibling
-   packages (per-package floors keyed by package in the same policy module) and the skills
-   layer. `experiments/backend-validation` (temporary, own gate, outside `make check-all`),
-   `demo/`, and `examples/` are out of scope.
+   extra suites. Fleet packages use two mechanisms (amendment 2026-09-08, Phase 9):
+   **derived** where a registry exists (`agent-core` from `CALIBRATOR_FACTORIES`, excluding
+   the `CalibratorRegistry` container; `flow-corpus` from `SPECIMENS.register`), and
+   **checked declaration** otherwise (`behavioral-regression`, `flow-protocol`,
+   `claude-foundation`), each name a subset of that package's frozen public-surface or
+   backwards-compat baseline. `experiments/backend-validation` (temporary, own gate, outside
+   `make check-all`), `demo/`, and `examples/` are out of scope. Sibling packages do not
+   yet carry `MATRIX_KIND` rows; the census is the extension, not a fabricated floor.
 
 ## Consequences
 

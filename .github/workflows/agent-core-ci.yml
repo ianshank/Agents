@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - "agent-core/**"
+      - "uv.lock"
       - ".github/workflows/agent-core-ci.yml"
       - ".github/actions/run-quality-gate/**"
   pull_request:
     paths:
       - "agent-core/**"
+      - "uv.lock"
       - ".github/workflows/agent-core-ci.yml"
       - ".github/actions/run-quality-gate/**"
   workflow_dispatch:
@@ -43,5 +45,5 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           working-directory: agent-core
-          install: pip install -e ".[dev]"
+          install: uv sync --locked --package agent-core --extra dev
           check: make check

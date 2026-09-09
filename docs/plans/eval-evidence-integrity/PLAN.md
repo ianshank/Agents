@@ -178,6 +178,12 @@ Phase 6 closes.
 
 ## Phase 8 — E2E matrix integrity and a POSIX driver
 
+**Status (2026-09-08):** residual landed. Provenance SHA is gated as reachable
+(ancestor of HEAD, never equal-to-HEAD); `--update` refuses a drop unless
+`MONOTONICITY_WAIVERS` names that pair. POSIX driver and nightly freshness were
+already on `main`. Known-stale stamps remain waived until the next full e2e
+`--update` (`docs/e2e-matrix/ERRATA.md`).
+
 - Provenance gated as reachable and consistent (Pass 2 A7), landed as an ADR 0033 amendment
   so the original exemption's reasoning survives and only its scope narrows.
 - Monotonicity check: a render dropping observed steps or test counts fails or carries an
@@ -187,6 +193,9 @@ Phase 6 closes.
 - Unify the split behaviour where the CLI exits 2 and the pytest test skips.
 
 ## Phase 9 — Fleet extension, all five packages
+
+**Status (2026-09-08):** scaffolding landed (`tests/_fleet_matrix.py`, ADR 0032 §6,
+`skills/ci_exempt.yaml`). Sibling packages do not carry `MATRIX_KIND` rows.
 
 - Derived where possible: flow-corpus from its `Registry`; agent-core from
   `CALIBRATOR_FACTORIES`, explicitly excluding the `CalibratorRegistry` false friend with a
@@ -204,6 +213,9 @@ Phase 6 closes.
   be stale.
 
 ## Phase 10 — Depth: canaries, not counts
+
+**Status (2026-09-08):** M2/M6 negative controls landed in
+`tests/test_matrix_coverage_guards.py`. Do not pad M3/M5.
 
 Scoped by P1.3 to M6 and M2 only; M3 and M5 are excluded as single-assertion by nature. The
 instrument is a negative control per floor cell, not a larger test count. No mutation-testing

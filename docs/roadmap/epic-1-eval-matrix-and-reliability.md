@@ -14,6 +14,27 @@ Core evaluation capabilities, trajectory evaluation, matrix coverage completenes
 - **[x] Requirements-generation evaluation (F-068, ADR 0047)**: `provenance_recorder` target wrapper + `EvidenceStore` protocol; four deterministic scorers (`req_ac_recall`, `req_scope_hallucination`, `req_semantic_diversity`, `req_traceability_closure`); frozen synthetic corpus at `corpora/requirements/v1/`; advisory-only gate rules.
 - **[x] Stateful Outcome Evaluation (F-060, `add-stateful-outcome-evaluation`)**: `StateAdapter` protocol (`snapshot`/`evaluate`/`reset`) with the engine bracketing each attempt `reset → snapshot(before) → target.run → snapshot(after) → evaluate` under a lock; `state_transition`/`policy_violation` scorers; four local deterministic adapters (`in_memory`, `filesystem`, `sqlite`, `mock_http`). Landed as PR #163 (merged 2026-08-21).
 - **[x] Agent-in-the-loop test generation (F-069, ADR 0048, Deck B / B5)**: registered `testgen_agent` pipeline: generate from focal+obligations (never sees `inputs.suite`), then `run_generated_suite` in-process. F-065 scorers unchanged. Quote thorough holdout n=11 unique; do not quote `pass^k` from a deterministic fake.
+- **[x] Eval-evidence Phase 8 residual**: Provenance SHA reachable (ancestor of HEAD) plus monotonicity/waiver; ADR 0033 amendment.
+- **[x] Eval-evidence Phase 9 fleet census + Phase 10 M2/M6 canaries**: `tests/_fleet_matrix.py`; no fabricated `MATRIX_KIND` floors on sibling packages.
 
 ## In Progress & Planned
-1. **After Deck B**: eval-evidence Phase 9 (fleet matrix) **xor** measurement-wedge WS-1. WS-1 CHARTER status is a house-doc disagreement — do not implement until `docs/plans/vp-strategic-deep-dive/DECISIONS.md` §5 is decided. Diagnostic ingest that cannot write `HUMAN_AUDIT` is the weaker reading, not a licence.
+
+### Human-critical path (agents must not substitute)
+
+1. **Enable branch protection on `main`** after ADR 0037's five-green soak.
+   Use `docs/runbooks/branch-protection-enablement.md`. Do **not** `--apply`
+   from an agent session; do **not** require CODEOWNERS; leave `merge-gate-data`
+   unprotected.
+2. **Weekly HUMAN_AUDIT** via `merge-gate-audit.yml` / `merge-gate-verdict.yml`
+   only. Agents must not write the live store or fabricate `provenance=human`.
+3. **Golden corpus** floor 50, two annotators, κ ≥ 0.60
+   (`docs/golden-corpus/`). Engineering scaffolding exists; labeling is human.
+
+### Agent follow-ons (not this ranking)
+
+1. **Do not implement** measurement-wedge WS-1 or the production eval flywheel
+   until `docs/plans/vp-strategic-deep-dive/DECISIONS.md` §5 is decided.
+2. **After a full e2e `--update`**: drop `PROVENANCE_SHA_WAIVERS` /
+   `MONOTONICITY_WAIVERS` rows that the restamp retires.
+3. **Fail-closed pip-audit** only once the tree is pinned *and* CHARTER-named
+   Snyk Code (or an explicit CHARTER amendment) owns the gate.

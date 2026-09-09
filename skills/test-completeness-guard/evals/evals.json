@@ -1,0 +1,33 @@
+{
+  "skill": "test-completeness-guard",
+  "evals": [
+    {
+      "id": "complete-surface-passes",
+      "prompt": "Measure a fixture whose tests mention every exported name.",
+      "run": "python scripts/check_completeness.py --baseline evals/fixtures/complete/baseline.json --tests evals/fixtures/complete/tests --min-hit-rate 1 --format json --out .skill-validation/complete.json",
+      "assertions": [
+        {"type": "exit_zero", "text": "a fully mentioned surface meets a 1.0 floor"},
+        {"type": "file_contains", "path": ".skill-validation/complete.json", "contains": "\"passed\": true", "text": "report marks passed"}
+      ]
+    },
+    {
+      "id": "incomplete-surface-fails",
+      "prompt": "Measure a fixture whose tests mention only one of two exported names.",
+      "run": "python scripts/check_completeness.py --baseline evals/fixtures/incomplete/baseline.json --tests evals/fixtures/incomplete/tests --min-hit-rate 1 --format json --out .skill-validation/incomplete.json",
+      "assertions": [
+        {"type": "exit_nonzero", "text": "a partial mention misses a 1.0 floor"},
+        {"type": "file_contains", "path": ".skill-validation/incomplete.json", "contains": "\"passed\": false", "text": "report marks failed"},
+        {"type": "file_contains", "path": ".skill-validation/incomplete.json", "contains": "Beta", "text": "missing name is listed"}
+      ]
+    },
+    {
+      "id": "report-only-default-does-not-invent-a-floor",
+      "prompt": "The default min-hit-rate is report-only so a partial surface still exits 0.",
+      "run": "python scripts/check_completeness.py --baseline evals/fixtures/incomplete/baseline.json --tests evals/fixtures/incomplete/tests --format json --out .skill-validation/report-only.json",
+      "assertions": [
+        {"type": "exit_zero", "text": "default floor 0.0 does not fail a partial mention"},
+        {"type": "file_contains", "path": ".skill-validation/report-only.json", "contains": "\"passed\": true", "text": "exported>0 and rate>=0 passes"}
+      ]
+    }
+  ]
+}

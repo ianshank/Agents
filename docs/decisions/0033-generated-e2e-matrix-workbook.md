@@ -69,6 +69,16 @@ The end-to-end matrix is generated, and the workbook is one rendering of it.
    so no run report exists there and the gate skips rather than pretending to verify. It is
    meaningful exactly where a report is present: after a real run, before a commit.
 
+## Errata (2026-09-08, post-acceptance — Phase 8 residual)
+
+The Provenance section remains excluded from the freshness *byte* comparison (gating
+SHA == HEAD is permanently red on the carrying commit). A second gate now checks that
+the stamped SHA **exists and is an ancestor of HEAD**, and `--update` refuses a render
+that drops observed-step or per-suite test counts unless `MONOTONICITY_WAIVERS` names
+that exact drop. Known-stale stamps are waived in `PROVENANCE_SHA_WAIVERS` until the
+next full e2e `--update`. See `docs/e2e-matrix/ERRATA.md` and
+`openspec/changes/repair-e2e-matrix-provenance/`.
+
 ## Consequences
 
 **Positive.** The requested Excel deliverable exists without reviving the F-045 failure mode:

@@ -1,0 +1,10 @@
+# Inherit the repo-root ruff configuration so the skill lints by the same rules.
+# The vendored scripts/validate_skill.py is a byte-for-byte copy of the repo-root
+# canonical script (pinned by the skill-script drift guard), so it is excluded here —
+# its style is owned by the canonical copy.
+# evals/fixtures hold mention-census trees (test_*.py scanned as text). Root
+# `ruff check "."` discovers this file; excluding the fixtures keeps a future
+# invalid snippet from reddening the harness gate. F-031 forbids a root
+# `[tool.ruff] exclude`/`extend-exclude` because that would also drop scripts/.
+extend = "../../pyproject.toml"
+extend-exclude = ["scripts/validate_skill.py", "evals/fixtures"]

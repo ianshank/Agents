@@ -60,12 +60,14 @@ currently looks the same to the gate as a legitimate incremental update.
 
 ## Disposition
 
-Tracked as Phase 8 of `docs/plans/eval-evidence-integrity/PLAN.md` ("E2E matrix integrity and
-a POSIX driver"): gate the Provenance SHA as *reachable and consistent* (exists, is an
-ancestor of HEAD, and re-rendering at that SHA reproduces the committed body) rather than
-equal to HEAD, and add a monotonicity check so a render that drops observed-step or test
-counts fails or carries an explicit waiver row. Until Phase 8 lands, treat the committed
-`docs/e2e-matrix/` artifact's *results* columns (Status, Detail, Duration, Tests, Failures,
-Skipped, Evidence, and the Coverage Grid's test counts) as stale; its *declared* columns
-(Tier, Area, Step, Command, Workdir, Required Credentials) are independently verified current
-as of this filing.
+Phase 8 residual landed 2026-09-08 (`openspec/changes/repair-e2e-matrix-provenance/`,
+ADR 0033 amendment): Provenance SHA is gated as *reachable* (exists, ancestor of HEAD),
+never equal to HEAD; `--update` refuses a drop in observed-step or suite test counts
+unless `MONOTONICITY_WAIVERS` names that exact pair. The live stamp
+`0b2cbfb7c3f5b976bdcafcbd4ee8ff5c0959d632` and the historical `09337aec…` stamp are
+waived until the next full e2e `--update` restamps the artifact.
+
+Until that restamp, treat the committed `docs/e2e-matrix/` artifact's *results* columns
+(Status, Detail, Duration, Tests, Failures, Skipped, Evidence, and the Coverage Grid's
+test counts) as stale; its *declared* columns (Tier, Area, Step, Command, Workdir,
+Required Credentials) are independently verified current as of the original filing.

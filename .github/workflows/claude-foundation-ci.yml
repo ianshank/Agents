@@ -17,9 +17,9 @@ on:
   # either style.
   push:
     branches: [main]
-    paths: ["claude-foundation/**", ".github/workflows/claude-foundation-ci.yml"]
+    paths: ["claude-foundation/**", ".github/workflows/claude-foundation-ci.yml", "uv.lock"]
   pull_request:
-    paths: ["claude-foundation/**", ".github/workflows/claude-foundation-ci.yml"]
+    paths: ["claude-foundation/**", ".github/workflows/claude-foundation-ci.yml", "uv.lock"]
   workflow_dispatch:
 
 permissions:
@@ -52,5 +52,5 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           working-directory: claude-foundation
-          install: pip install -e ".[dev]"
+          install: uv sync --locked --package claude-foundation-tools --extra dev
           check: make check

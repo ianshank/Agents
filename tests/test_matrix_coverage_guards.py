@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from tests import _fleet_matrix as fm
 from tests import _matrix_coverage as mc
 
 # The live census and cell map, imported rather than recomputed: `registry_census()` is
@@ -297,6 +298,28 @@ def test_guard_reports_a_partially_covered_component() -> None:
     assert any("missing required dim(s)" in p and "'M2'" in p for p in problems)
 
 
+def test_m2_negative_control_fails_when_the_edge_case_row_is_absent() -> None:
+    """Phase 10 canary: M2 is a floor, not a count to pad. A missing edge-case row fails."""
+    thin = {kind: {"names": ["only_one"], "aliases": {}} for kind in CENSUS}
+    problems = mc.coverage_problems(
+        thin, [_synthetic_class(components=("only_one",), dim_counts={1: 1, 3: 1, 5: 1, 6: 1})]
+    )
+    missing_side = [p.split("(have", 1)[0] for p in problems if "missing required dim" in p]
+    assert any("'M2'" in bit for bit in missing_side)
+    assert all("'M5'" not in bit for bit in missing_side)
+
+
+def test_m6_negative_control_fails_when_the_error_path_row_is_absent() -> None:
+    """Phase 10 canary: M6 is the error-handling floor. Do not pad M3/M5 to silence it."""
+    thin = {kind: {"names": ["only_one"], "aliases": {}} for kind in CENSUS}
+    problems = mc.coverage_problems(
+        thin, [_synthetic_class(components=("only_one",), dim_counts={1: 1, 2: 1, 3: 1, 5: 1})]
+    )
+    missing_side = [p.split("(have", 1)[0] for p in problems if "missing required dim" in p]
+    assert any("'M6'" in bit for bit in missing_side)
+    assert all("'M5'" not in bit for bit in missing_side)
+
+
 def test_guard_fails_an_extra_suite_below_its_floor() -> None:
     """gating/engine rows are enforced like kinds — deleting them cannot go unnoticed."""
     problems = mc.coverage_problems(CENSUS, [c for c in CLASSES if c.kind not in mc.EXTRA_SUITES])
@@ -416,3 +439,84 @@ def test_egress_guard_still_permits_loopback() -> None:
         with pytest.raises((ConnectionRefusedError, OSError)) as excinfo:
             sock.connect(("127.0.0.1", 1))
     assert not isinstance(excinfo.value, AssertionError), "loopback must reach the real connect"
+
+
+def test_dict_literal_keys_reads_an_annotated_assignment() -> None:
+    """agent-core types CALIBRATOR_FACTORIES; AnnAssign must not look like an empty census."""
+    src = 'CALIBRATOR_FACTORIES: dict[str, int] = {"isotonic": 1, "temperature": 2}\n'
+    assert fm.dict_literal_keys(src, "CALIBRATOR_FACTORIES") == frozenset({"isotonic", "temperature"})
+    assert fm.dict_literal_keys('CALIBRATOR_FACTORIES = {"isotonic": 1}\n', "CALIBRATOR_FACTORIES") == frozenset(
+        {"isotonic"}
+    )
+    assert fm.dict_literal_keys("X = {1: 2}\n", "CALIBRATOR_FACTORIES") == frozenset()
+
+
+def test_fleet_guard_fails_a_declared_name_absent_from_the_baseline(tmp_path: Path) -> None:
+    """Hand declarations are checked, not trusted: a name missing from the surface fails."""
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text('{"packages": ["p"], "surface": {"p": ["Real"]}}', encoding="utf-8")
+    pkg = fm.FleetPackage(
+        name="synthetic",
+        root="synthetic",
+        kind="detector",
+        baseline_relpath=baseline.name,
+        derivation="hand",
+        declared=("Real", "Invented"),
+    )
+    problems = fm.fleet_problems(root=tmp_path, packages=(pkg,))
+    assert any("Invented" in p for p in problems)
+
+
+def test_fleet_guard_refuses_an_empty_package_list() -> None:
+    assert fm.fleet_problems(packages=()) == ["fleet census is empty"]
+
+
+def test_fleet_guard_reports_a_missing_or_empty_baseline(tmp_path: Path) -> None:
+    missing = fm.FleetPackage(
+        name="gone",
+        root="gone",
+        kind="detector",
+        baseline_relpath="absent.json",
+        derivation="hand",
+        declared=("X",),
+    )
+    assert any("baseline missing" in p for p in fm.fleet_problems(root=tmp_path, packages=(missing,)))
+    empty = tmp_path / "baseline.json"
+    empty.write_text("{}", encoding="utf-8")
+    vacant = fm.FleetPackage(
+        name="vacant",
+        root="vacant",
+        kind="detector",
+        baseline_relpath="baseline.json",
+        derivation="hand",
+        declared=("X",),
+    )
+    assert any("exported no names" in p for p in fm.fleet_problems(root=tmp_path, packages=(vacant,)))
+
+
+def test_register_call_names_reads_first_string_args() -> None:
+    src = 'SPECIMENS.register("baseline", A)\nSPECIMENS.register("mcts", B)\nother.register("nope", C)\n'
+    assert fm.register_call_names(src, "SPECIMENS") == frozenset({"baseline", "mcts"})
+
+
+@pytest.mark.parametrize("exclude", [(), tuple(sorted(fm.CONTAINER_FACTORY_KEYS))])
+def test_derived_census_rejects_calibrator_registry_container(tmp_path: Path, exclude: tuple[str, ...]) -> None:
+    leaked = next(iter(fm.CONTAINER_FACTORY_KEYS))
+    src = tmp_path / "recal.py"
+    src.write_text(f'CALIBRATOR_FACTORIES = {{"isotonic": 1, "{leaked}": 2}}\n', encoding="utf-8")
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text('{"surface": {"p": ["CALIBRATOR_FACTORIES"]}}', encoding="utf-8")
+    pkg = fm.FleetPackage(
+        name="agent-core",
+        root=".",
+        kind="calibrator",
+        baseline_relpath="baseline.json",
+        derivation="assign",
+        exclude=exclude,
+        source_relpath="recal.py",
+        assign_name="CALIBRATOR_FACTORIES",
+    )
+    problems = fm.fleet_problems(root=tmp_path, packages=(pkg,))
+    assert any(f"{leaked} must not be derived" in p for p in problems)
+    published = fm.census_for(pkg, root=tmp_path)
+    assert (leaked in published) == (not exclude)

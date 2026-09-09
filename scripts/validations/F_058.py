@@ -43,10 +43,7 @@ _ROOT = os.path.dirname(_SCRIPTS)
 #: `--cov=` list, and nothing said so. F_062 through F_065 shipped exactly that way. An
 #: entry here is a DECLARED gap a reviewer can see and argue with, which is the whole
 #: difference between this and the silence it replaces.
-_UNMEASURED_BY_DESIGN: frozenset[str] = frozenset(f"F_{n:03d}" for n in range(1, 20)) | {
-    # Temporary until quality-gates.yml --cov=F_066 can be pushed (needs GitHub workflow scope).
-    "F_066",
-}
+_UNMEASURED_BY_DESIGN: frozenset[str] = frozenset(f"F_{n:03d}" for n in range(1, 20))
 
 
 def _get_ledger_features() -> set[str]:

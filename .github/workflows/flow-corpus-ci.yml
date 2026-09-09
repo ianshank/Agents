@@ -6,12 +6,14 @@ on:
     paths:
       - "flow-protocol/**"
       - "flow-corpus/**"
+      - "uv.lock"
       - ".github/workflows/flow-corpus-ci.yml"
       - ".github/actions/run-quality-gate/**"
   pull_request:
     paths:
       - "flow-protocol/**"
       - "flow-corpus/**"
+      - "uv.lock"
       - ".github/workflows/flow-corpus-ci.yml"
       - ".github/actions/run-quality-gate/**"
   workflow_dispatch:
@@ -43,7 +45,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           working-directory: flow-protocol
-          install: pip install -e ".[dev]"
+          install: uv sync --locked --package flow-protocol --extra dev
           check: make check
 
   flow-corpus:
@@ -68,5 +70,5 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           working-directory: flow-corpus
-          install: pip install -e ../agent-core -e ../flow-protocol -e ".[dev]"
+          install: uv sync --locked --package flow-corpus --extra dev
           check: make check

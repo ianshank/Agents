@@ -462,14 +462,20 @@ def importorskip_gates(paths: Iterable[Path]) -> dict[str, str]:
 def ci_installed_imports(workflow_text: str) -> frozenset[str]:
     """Distributions the matrix CI job installs, resolved from its extras.
 
-    Reads the ``install:`` line's ``.[a,b,c]`` extras and maps them through
-    ``_EXTRA_PROVIDES``. An extra with no mapping contributes nothing — unknown extras
-    must not be silently credited with providing an import.
+    Reads extras from either a pip ``.[a,b,c]`` install line or repeatable
+    ``uv sync --extra NAME`` flags, then maps them through ``_EXTRA_PROVIDES``.
+    An extra with no mapping contributes nothing — unknown extras must not be
+    silently credited with providing an import.
     """
     provided: set[str] = set()
-    for extras in re.findall(r"install:[^\n]*\.\[([^\]]+)\]", workflow_text):
+    install_blob = "\n".join(
+        ln for ln in workflow_text.splitlines() if "install:" in ln or "--extra" in ln or 'pip install -e ".[' in ln
+    )
+    for extras in re.findall(r"\.\[([^\]]+)\]", install_blob):
         for extra in extras.split(","):
             provided |= _EXTRA_PROVIDES.get(extra.strip(), frozenset())
+    for extra in re.findall(r"--extra[ =]([A-Za-z0-9_-]+)", install_blob):
+        provided |= _EXTRA_PROVIDES.get(extra, frozenset())
     return frozenset(provided)
 
 

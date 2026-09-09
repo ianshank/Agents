@@ -65,7 +65,13 @@ corpus-write: ## Regenerate committed corpora from their generators
 	$(PYTHON) scripts/gen_rca_corpus.py --write
 	$(PYTHON) scripts/gen_requirements_corpus.py --write
 
-.PHONY: e2e-matrix-check e2e-matrix-update invariants e2e-matrix
+.PHONY: e2e-matrix-check e2e-matrix-update invariants e2e-matrix uv-sync uv-lock-check
+
+uv-sync: ## Install from the committed uv.lock (workspace; does not replace pip `make install`)
+	uv sync --locked --extra dev --extra langfuse --extra openai --extra parquet --extra autoevals
+
+uv-lock-check: ## Fail if uv.lock is stale versus the workspace pyproject.toml files
+	uv lock --check
 
 invariants: ## Verify charter invariants, coverage-floor pins and architecture drift
 	$(PYTHON) scripts/check_charter_invariants.py

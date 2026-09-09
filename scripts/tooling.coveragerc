@@ -1,0 +1,17 @@
+# Coverage config for the quality-gates.yml tooling-coverage steps.
+# Unlike scripts/.coveragerc this file does NOT omit scripts/validations/:
+# those validators are the measured surface. It exists so the steps can stop
+# using --cov-config=/dev/null (which discarded pyproject.toml exclude_lines and
+# taxed every `if __name__ == "__main__"` / sys.path bootstrap).
+[run]
+branch = True
+
+[report]
+show_missing = True
+exclude_also =
+    pragma: no cover
+    if __name__ ==
+    if TYPE_CHECKING:
+    raise NotImplementedError
+    @(abc\.)?abstractmethod
+    ^\s*\.\.\.$

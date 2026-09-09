@@ -6,6 +6,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Hardening — F-069 `implemented_in` restamp (F-064)
+
+Restamped F-069 `implemented_in` from pre-squash `26e56e0` (not an ancestor of
+squash #217) to `f1fd5efa1b8d9e6c99d5832705dc87cf47369d8c` so `validate.py
+--strict-git` / F-064 accept the landed ledger. Archived
+`openspec/changes/add-agent-in-the-loop-testgen/` after the restamp.
+
+### Added — e2e-matrix provenance reachability and monotonicity (Phase 8)
+
+`--check` now requires the Provenance SHA to exist and be an ancestor of HEAD
+(never equal-to-HEAD; ADR 0033 amendment). `--update` refuses a drop in
+observed-step or per-suite test counts unless `MONOTONICITY_WAIVERS` names that
+exact pair. Known-stale stamps stay waived until the next full e2e `--update`
+(`docs/e2e-matrix/ERRATA.md`). Treat committed results columns as stale until then.
+
+### Added — fleet matrix census (Phase 9) and M2/M6 canaries (Phase 10)
+
+`tests/_fleet_matrix.py` derives `CALIBRATOR_FACTORIES` / `SPECIMENS` and
+hand-declares the rest against each package's frozen public-surface baseline
+(ADR 0032 §6). Skills `EXEMPT` collapsed to `skills/ci_exempt.yaml`. Phase 10
+adds negative controls that fail when M2 or M6 is missing; M3/M5 are not padded.
+
+### Added — `test-completeness-guard` skill
+
+Census of frozen public-surface names against a test tree. Default hit-rate
+floor is report-only (`CompletenessConfig.min_hit_rate = 0.0`); the skill does
+not invent a product coverage floor. Skills-CI coverage for the skill itself
+remains 95%.
+
+### Added — workspace `uv.lock` and report-only `pip-audit`
+
+`[tool.uv.workspace]` plus a committed `uv.lock`. CI package jobs and
+`quality-gates.yml` / `eval-harness-ci.yml` / `nightly-e2e.yml` use
+`uv sync --locked`. Skills CI stays on pip. Windows e2e stays on pip (no uv
+requirement on that host). `make uv-sync` / `make uv-lock-check` are the local
+lockfile entry points; `make install` is still pip.
+
+`.github/workflows/pip-audit.yml` is report-only, not a required check, and scans
+the locked CI extra set (not phoenix/bedrock/braintrust). The audit step prints
+findings and exits 0 so GitHub does not paint a red check (job-level
+`continue-on-error` still shows as failed). Do not bump pyarrow past the
+`parquet` extra upper bound (`>=14,<20`) to clear a lockfile finding. CHARTER §5
+still names Snyk Code.
+
+### Changed — packaging and CI hygiene
+
+- `Programming Language :: Python :: 3.13` on every shipping `pyproject.toml`.
+- `claude-foundation` ships `py.typed`.
+- Composite `run-quality-gate` uses `actions/setup-python` v7.0.0 (same SHA as
+  the workflows) and `astral-sh/setup-uv` v6.1.0.
+- Tooling coverage measures F-066; `--cov-config=/dev/null` replaced with
+  `scripts/tooling.coveragerc`.
+- gitleaks 8.18.4 install checks a SHA-256 before extract.
+- `SECURITY.md` cites `.github/workflows/secret-scan.yml`.
+
+### Fixed — CI and review follow-ups on the roadmap/standards branch
+
+- Root `ruff check "."` no longer fails on `test-completeness-guard` eval
+  fixtures: names are string literals (still `\b`-matched) and the skill
+  `ruff.toml` excludes `evals/fixtures`. F-031 still forbids a root
+  `[tool.ruff] exclude`/`extend-exclude` (that would drop `scripts/`).
+- `check_completeness.py --out` now writes the selected `--format` (text was
+  emitting JSON). stdout and `--out` share `render_report`.
+- Fleet census inspects the *unexcluded* `CALIBRATOR_FACTORIES` keys for
+  `CONTAINER_FACTORY_KEYS` so `FleetPackage.exclude` cannot hide a leaked
+  container key. Published census still subtracts `exclude`.
+- Report-only `pip-audit` step exits 0 after printing findings.
+- Provenance `--check` maps git `OSError` / `SubprocessError` (including
+  timeout) to a gate problem string instead of a traceback.
+
 ### Added — agent-in-the-loop test generation (F-069, ADR 0048)
 
 Registered `testgen_agent` pipeline: generate a suite from focal method +

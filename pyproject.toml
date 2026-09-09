@@ -15,6 +15,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
     "Typing :: Typed",
 ]
@@ -174,7 +175,8 @@ ignore_missing_imports = true
 # mypy under python_version = "3.11" cannot parse them. mypy `follow_imports` in
 # `[[tool.mypy.overrides]]` does NOT skip stub parsing, so a per-module override
 # can't fix this. eval-harness-ci.yml's test job intentionally does not install
-# phoenix-evals (`pip install -e ".[dev,langfuse,openai,parquet]"`), so mypy stays
+# phoenix-evals (`uv sync --locked --all-packages --extra dev --extra langfuse
+# --extra openai --extra parquet --extra autoevals`), so mypy stays
 # green in CI. For local mypy runs with the full extras, either pin the mypy venv
 # to CI's install set or bump python_version to 3.12 -- raising the floor to 3.11
 # (ADR 0034) did not itself resolve this, since the stubs specifically need 3.12.
@@ -220,3 +222,23 @@ exclude_lines = [
     "@(abc\\.)?abstractmethod",
     "^\\s*\\.\\.\\.$",
 ]
+
+[tool.uv]
+# `make install` / pip remain valid; CI and `make uv-sync` use the lockfile.
+
+[tool.uv.workspace]
+members = [
+    "agent-core",
+    "behavioral-regression",
+    "flow-corpus",
+    "flow-protocol",
+    "claude-foundation",
+]
+
+[tool.uv.sources]
+agent-core = { workspace = true }
+behavioral-regression = { workspace = true }
+flow-corpus = { workspace = true }
+flow-protocol = { workspace = true }
+claude-foundation-tools = { workspace = true }
+

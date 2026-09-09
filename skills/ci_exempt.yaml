@@ -1,0 +1,8 @@
+# ADR 0030 subjective-skill exemptions (skills-ci all-skills + F-050).
+#
+# Single source. Do not copy this mapping into skills-ci.yml or F_050.py.
+# This is NOT the docs.yml component-README EXEMPT list (different directory set).
+exempt:
+  hierarchical-recursive-brainstorm: "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/"
+  openspec-quality-plan: "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/"
+  openspec-peer-review: "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/"

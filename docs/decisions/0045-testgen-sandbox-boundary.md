@@ -5,7 +5,7 @@
 - Related: ADR 0043 (testgen evaluation seam), ADR 0039 (callable-target allowlist),
   ADR 0038 (item error policy), `src/eval_harness/targets/testgen.py`,
   `src/eval_harness/targets/_sandbox.py`, `src/eval_harness/targets/_suite_runner.py`,
-  `openspec/changes/add-agent-in-the-loop-testgen/` (the change this unblocks).
+  `openspec/changes/archive/add-agent-in-the-loop-testgen/` (the change this unblocks).
 
 ## Context
 

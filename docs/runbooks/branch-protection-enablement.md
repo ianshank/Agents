@@ -1,9 +1,16 @@
 # Runbook: enable branch protection on `main` (ADR 0037)
 
 This is an **admin settings change**. An agent session without repository-admin
-credentials cannot perform it and must not claim that it has. The repository
-ships a derived checker so the candidate required-check set is never restated
-from memory.
+credentials cannot perform it and must not claim that it has. **Agents must
+not `--apply`.** Wait for five green runs of each candidate context against
+`main` in its current state, then a maintainer with admin `gh` auth applies.
+The repository ships a derived checker so the candidate required-check set is
+never restated from memory.
+
+Do **not** write `HUMAN_AUDIT` into the live store from an agent session.
+Weekly labeling is `merge-gate-audit.yml` (queue) + `merge-gate-verdict.yml`
+(human-triggered writer) only. Golden-corpus rows with `provenance=human`
+are also human-only (`docs/golden-corpus/`).
 
 ## Why
 

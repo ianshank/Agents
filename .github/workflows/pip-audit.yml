@@ -1,0 +1,77 @@
+# Report-only dependency CVE scan against the committed lockfile.
+#
+# CHARTER §5 names Snyk Code, not pip-audit. Fail-closed audit against a floating
+# pip resolve is rejected (optional extras expand the CVE surface; SECURITY.md
+# marks those SDKs out of scope). This workflow is deliberately NOT in the
+# required-check set and has no ADR 0040 stub: a missing report must not deadlock
+# a docs-only pull request.
+#
+# Job-level continue-on-error still paints the GitHub check red. Findings must
+# not fail the step: print them, then exit 0. Do not bump pyarrow past the
+# parquet extra upper bound to clear a lockfile finding.
+name: pip-audit (report-only)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "uv.lock"
+      - "pyproject.toml"
+      - "agent-core/pyproject.toml"
+      - "behavioral-regression/pyproject.toml"
+      - "flow-corpus/pyproject.toml"
+      - "flow-protocol/pyproject.toml"
+      - "claude-foundation/pyproject.toml"
+      - ".github/workflows/pip-audit.yml"
+  pull_request:
+    paths:
+      - "uv.lock"
+      - "pyproject.toml"
+      - "agent-core/pyproject.toml"
+      - "behavioral-regression/pyproject.toml"
+      - "flow-corpus/pyproject.toml"
+      - "flow-protocol/pyproject.toml"
+      - "claude-foundation/pyproject.toml"
+      - ".github/workflows/pip-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pip-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pip-audit:
+    name: pip-audit (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af426746bb  # v6.1.0
+        with:
+          enable-cache: true
+      - name: Export the locked CI extra set
+        run: >-
+          uv export --frozen --extra dev --extra langfuse --extra openai
+          --extra parquet --extra autoevals --extra e2e-matrix --extra archguard
+          --no-hashes --no-emit-workspace --no-emit-project
+          -o "${RUNNER_TEMP}/pip-audit-requirements.txt"
+      - name: pip-audit (advisory; findings do not fail the job)
+        shell: bash
+        run: |
+          set +e
+          uvx pip-audit -r "${RUNNER_TEMP}/pip-audit-requirements.txt"
+          status=$?
+          if [ "${status}" -eq 0 ]; then
+            echo "pip-audit: no known vulnerabilities in the locked CI extra set"
+          else
+            echo "::notice::pip-audit exit ${status} (advisory). CHARTER §5 names Snyk Code; this job is not a merge gate. Do not bump pyarrow past the parquet extra upper bound to clear a finding."
+          fi
+          exit 0
