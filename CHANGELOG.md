@@ -43,9 +43,12 @@ remains 95%.
 requirement on that host). `make uv-sync` / `make uv-lock-check` are the local
 lockfile entry points; `make install` is still pip.
 
-`.github/workflows/pip-audit.yml` is report-only (`continue-on-error: true`), not
-a required check, and scans the locked CI extra set (not phoenix/bedrock/braintrust).
-CHARTER §5 still names Snyk Code.
+`.github/workflows/pip-audit.yml` is report-only, not a required check, and scans
+the locked CI extra set (not phoenix/bedrock/braintrust). The audit step prints
+findings and exits 0 so GitHub does not paint a red check (job-level
+`continue-on-error` still shows as failed). Do not bump pyarrow past the
+`parquet` extra upper bound (`>=14,<20`) to clear a lockfile finding. CHARTER §5
+still names Snyk Code.
 
 ### Changed — packaging and CI hygiene
 
@@ -57,6 +60,19 @@ CHARTER §5 still names Snyk Code.
   `scripts/tooling.coveragerc`.
 - gitleaks 8.18.4 install checks a SHA-256 before extract.
 - `SECURITY.md` cites `.github/workflows/secret-scan.yml`.
+
+### Fixed — CI and review follow-ups on the roadmap/standards branch
+
+- Root `ruff check "."` no longer fails on `test-completeness-guard` eval
+  fixtures: names are string literals (still `\b`-matched) and the skill
+  `ruff.toml` excludes `evals/fixtures`. F-031 still forbids a root
+  `[tool.ruff] exclude`/`extend-exclude` (that would drop `scripts/`).
+- `check_completeness.py --out` now writes the selected `--format` (text was
+  emitting JSON). stdout and `--out` share `render_report`.
+- Fleet census inspects the *unexcluded* `CALIBRATOR_FACTORIES` keys for
+  `CONTAINER_FACTORY_KEYS` so `FleetPackage.exclude` cannot hide a leaked
+  container key. Published census still subtracts `exclude`.
+- Report-only `pip-audit` step exits 0 after printing findings.
 
 ### Added — agent-in-the-loop test generation (F-069, ADR 0048)
 

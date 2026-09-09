@@ -153,6 +153,13 @@ def render_json(report: CompletenessReport, *, indent: int = DEFAULT_CONFIG.json
     return json.dumps(payload, indent=indent, sort_keys=True) + "\n"
 
 
+def render_report(report: CompletenessReport, fmt: str) -> str:
+    """Serialise ``report`` for both stdout and ``--out`` (same ``--format``)."""
+    if fmt == "json":
+        return render_json(report)
+    return render_text(report) + "\n"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline", type=Path, required=True)
@@ -177,11 +184,11 @@ def main(argv: list[str] | None = None) -> int:
     except CompletenessUsageError as exc:
         print(f"test-completeness-guard: {exc}", file=sys.stderr)
         return 2
-    text = render_json(report) if args.format == "json" else render_text(report) + "\n"
+    text = render_report(report, args.format)
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(text if args.format == "json" else render_json(report), encoding="utf-8")
-    sys.stdout.write(text if args.format == "json" else render_text(report) + "\n")
+        args.out.write_text(text, encoding="utf-8")
+    sys.stdout.write(text)
     if not report.passed:
         return 1
     return 0

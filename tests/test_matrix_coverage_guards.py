@@ -499,9 +499,11 @@ def test_register_call_names_reads_first_string_args() -> None:
     assert fm.register_call_names(src, "SPECIMENS") == frozenset({"baseline", "mcts"})
 
 
-def test_derived_census_rejects_calibrator_registry_container(tmp_path: Path) -> None:
+@pytest.mark.parametrize("exclude", [(), tuple(sorted(fm.CONTAINER_FACTORY_KEYS))])
+def test_derived_census_rejects_calibrator_registry_container(tmp_path: Path, exclude: tuple[str, ...]) -> None:
+    leaked = next(iter(fm.CONTAINER_FACTORY_KEYS))
     src = tmp_path / "recal.py"
-    src.write_text('CALIBRATOR_FACTORIES = {"isotonic": 1, "CalibratorRegistry": 2}\n', encoding="utf-8")
+    src.write_text(f'CALIBRATOR_FACTORIES = {{"isotonic": 1, "{leaked}": 2}}\n', encoding="utf-8")
     baseline = tmp_path / "baseline.json"
     baseline.write_text('{"surface": {"p": ["CALIBRATOR_FACTORIES"]}}', encoding="utf-8")
     pkg = fm.FleetPackage(
@@ -510,9 +512,11 @@ def test_derived_census_rejects_calibrator_registry_container(tmp_path: Path) ->
         kind="calibrator",
         baseline_relpath="baseline.json",
         derivation="assign",
-        exclude=(),
+        exclude=exclude,
         source_relpath="recal.py",
         assign_name="CALIBRATOR_FACTORIES",
     )
     problems = fm.fleet_problems(root=tmp_path, packages=(pkg,))
-    assert any("CalibratorRegistry must not be derived" in p for p in problems)
+    assert any(f"{leaked} must not be derived" in p for p in problems)
+    published = fm.census_for(pkg, root=tmp_path)
+    assert (leaked in published) == (not exclude)

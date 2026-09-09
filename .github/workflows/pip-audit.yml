@@ -5,6 +5,10 @@
 # marks those SDKs out of scope). This workflow is deliberately NOT in the
 # required-check set and has no ADR 0040 stub: a missing report must not deadlock
 # a docs-only pull request.
+#
+# Job-level continue-on-error still paints the GitHub check red. Findings must
+# not fail the step: print them, then exit 0. Do not bump pyarrow past the
+# parquet extra upper bound to clear a lockfile finding.
 name: pip-audit (report-only)
 
 on:
@@ -43,7 +47,6 @@ jobs:
     name: pip-audit (report-only)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
@@ -60,5 +63,15 @@ jobs:
           --extra parquet --extra autoevals --extra e2e-matrix --extra archguard
           --no-hashes --no-emit-workspace --no-emit-project
           -o "${RUNNER_TEMP}/pip-audit-requirements.txt"
-      - name: pip-audit (does not fail the workflow)
-        run: uvx pip-audit -r "${RUNNER_TEMP}/pip-audit-requirements.txt"
+      - name: pip-audit (advisory; findings do not fail the job)
+        shell: bash
+        run: |
+          set +e
+          uvx pip-audit -r "${RUNNER_TEMP}/pip-audit-requirements.txt"
+          status=$?
+          if [ "${status}" -eq 0 ]; then
+            echo "pip-audit: no known vulnerabilities in the locked CI extra set"
+          else
+            echo "::notice::pip-audit exit ${status} (advisory). CHARTER §5 names Snyk Code; this job is not a merge gate. Do not bump pyarrow past the parquet extra upper bound to clear a finding."
+          fi
+          exit 0

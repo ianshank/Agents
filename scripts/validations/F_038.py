@@ -82,9 +82,7 @@ def validate() -> int:
 
     # 5. CI discipline (offline job installs autoevals, not the braintrust SDK).
     ci = _read(".github/workflows/eval-harness-ci.yml")
-    install = " ".join(
-        ln for ln in ci.splitlines() if "uv sync --locked" in ln or 'pip install -e ".[' in ln
-    )
+    install = " ".join(ln for ln in ci.splitlines() if "uv sync --locked" in ln or 'pip install -e ".[' in ln)
     check("autoevals" in install, "autoevals is installed in the offline CI job", errors)
     check("braintrust" not in install, "braintrust SDK is kept OUT of the offline CI job", errors)
 

@@ -44,6 +44,7 @@ CI coverage gate.
 - Exit 1 when the floor is missed or the baseline exported nothing (vacuity refusal).
 - Exit 2 on usage errors (missing files).
 - JSON is sorted and path-stable (POSIX paths, no timestamps).
+- stdout and `--out` use the same `--format` (text or json).
 
 ## 4. Validation gate
 

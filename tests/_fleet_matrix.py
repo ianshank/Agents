@@ -47,6 +47,10 @@ class FleetPackage:
 
 #: ``CalibratorRegistry`` is the false friend: it is exported, it sounds like a
 #: registry census, and it is *not* a factory in ``CALIBRATOR_FACTORIES``.
+#: Inspected on the *unexcluded* derived key set so listing it in
+#: ``FleetPackage.exclude`` cannot hide a leaked factory-dict key.
+CONTAINER_FACTORY_KEYS: frozenset[str] = frozenset({"CalibratorRegistry"})
+
 FLEET_PACKAGES: tuple[FleetPackage, ...] = (
     FleetPackage(
         name="agent-core",
@@ -54,7 +58,7 @@ FLEET_PACKAGES: tuple[FleetPackage, ...] = (
         kind="calibrator",
         baseline_relpath="agent-core/tests/public_surface_baseline.json",
         derivation="assign",
-        exclude=("CalibratorRegistry",),
+        exclude=tuple(sorted(CONTAINER_FACTORY_KEYS)),
         source_relpath="agent-core/agent_core/recalibration.py",
         assign_name="CALIBRATOR_FACTORIES",
     ),
@@ -187,15 +191,33 @@ def load_baseline(path: Path) -> frozenset[str]:
     return baseline_names(data)
 
 
-def census_for(package: FleetPackage, *, root: Path = _REPO_ROOT) -> frozenset[str]:
-    """Component names this package contributes to the fleet census."""
+def derived_keys(package: FleetPackage, *, root: Path = _REPO_ROOT) -> frozenset[str]:
+    """Unfiltered assign-dict keys or register names. Empty for hand declaration."""
     if package.derivation == "assign":
-        src = _read(root / package.source_relpath)
-        return dict_literal_keys(src, package.assign_name) - frozenset(package.exclude)
+        return dict_literal_keys(_read(root / package.source_relpath), package.assign_name)
     if package.derivation == "register":
-        src = _read(root / package.source_relpath)
-        return register_call_names(src, package.assign_name)
+        return register_call_names(_read(root / package.source_relpath), package.assign_name)
+    return frozenset()
+
+
+def census_for(package: FleetPackage, *, root: Path = _REPO_ROOT) -> frozenset[str]:
+    """Component names this package contributes to the fleet census.
+
+    ``exclude`` is subtracted here for the *published* set only. Container-key
+    regression inspects :func:`derived_keys` so a name listed in ``exclude``
+    cannot mask a leaked factory-dict key.
+    """
+    if package.derivation in {"assign", "register"}:
+        return derived_keys(package, root=root) - frozenset(package.exclude)
     return frozenset(package.declared)
+
+
+def _container_key_problems(package: FleetPackage, *, root: Path) -> list[str]:
+    """Fail if a known container appears as a factory-dict key (unexcluded set)."""
+    if package.derivation != "assign":
+        return []
+    leaked = CONTAINER_FACTORY_KEYS & derived_keys(package, root=root)
+    return [f"{package.name}: {name} must not be derived from {package.assign_name}" for name in sorted(leaked)]
 
 
 def fleet_problems(*, root: Path = _REPO_ROOT, packages: tuple[FleetPackage, ...] = FLEET_PACKAGES) -> list[str]:
@@ -212,6 +234,7 @@ def fleet_problems(*, root: Path = _REPO_ROOT, packages: tuple[FleetPackage, ...
         if not exported:
             problems.append(f"{package.name}: baseline exported no names")
             continue
+        problems.extend(_container_key_problems(package, root=root))
         names = census_for(package, root=root)
         if not names:
             problems.append(f"{package.name}: fleet census is empty")
@@ -225,6 +248,4 @@ def fleet_problems(*, root: Path = _REPO_ROOT, packages: tuple[FleetPackage, ...
             problems.append(
                 f"{package.name}: derived registry {package.assign_name!r} is not in {package.baseline_relpath}"
             )
-        if "CalibratorRegistry" in names:
-            problems.append(f"{package.name}: CalibratorRegistry must not be derived from CALIBRATOR_FACTORIES")
     return problems

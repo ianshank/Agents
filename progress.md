@@ -1,6 +1,20 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 021 — 2026-09-09
+
+### Changes
+
+Triage of PR #219 CI and Copilot review: valid mention-census fixtures + skill
+ruff exclude of `evals/fixtures` (no root ruff exclude — F-031), `--out` matches
+`--format`, fleet container-key check on the unexcluded derived set, pip-audit
+step exits 0 after printing findings.
+
+### Validation evidence
+
+Targeted ruff, skill gate, fleet/completeness tests, `validate.py --tier fast`.
+
+---
 ## Session 020 — 2026-09-08
 
 ### Changes

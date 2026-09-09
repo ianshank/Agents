@@ -74,8 +74,10 @@ Security is enforced continuously, not just on report:
   [README](README.md#security-scanning)). It is **not** wired into CI; CHARTER
   §5 names Snyk Code, not pip-audit. A **report-only** `pip-audit` job
   (`.github/workflows/pip-audit.yml`) runs against the committed `uv.lock` CI
-  extra set (`continue-on-error: true`) and is not a required check. Optional
-  extras phoenix/bedrock/braintrust are out of that extra set.
+  extra set, prints findings, and exits 0 so the check stays green. It is not a
+  required check. Optional extras phoenix/bedrock/braintrust are out of that
+  extra set. The `parquet` extra stays `pyarrow>=14,<20`; do not bump past that
+  upper bound to clear an advisory finding.
 - **Eval-integrity guardrails** — evaluation-defining files are protected paths
   requiring reviewed approval, so the meaning of a gate cannot be silently
   weakened (see [CONTRIBUTING.md](CONTRIBUTING.md#protected-paths-require-a-labeled-approval)).

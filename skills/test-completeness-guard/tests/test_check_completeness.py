@@ -112,6 +112,20 @@ def test_text_cli_fail_exit(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
     assert "FAIL" in capsys.readouterr().out
 
 
+def test_text_cli_writes_text_not_json_to_out(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    baseline = _baseline(tmp_path / "baseline.json", ["Foo"])
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_foo.py").write_text("Foo\n", encoding="utf-8")
+    out = tmp_path / "report.txt"
+    assert main(["--baseline", str(baseline), "--tests", str(tests), "--format", "text", "--out", str(out)]) == 0
+    body = out.read_text(encoding="utf-8")
+    assert "PASS" in body
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(body)
+    assert "PASS" in capsys.readouterr().out
+
+
 def test_baseline_that_is_not_an_object_is_a_usage_error(tmp_path: Path) -> None:
     path = tmp_path / "baseline.json"
     path.write_text("[]\n", encoding="utf-8")
