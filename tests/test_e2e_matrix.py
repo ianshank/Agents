@@ -1239,6 +1239,39 @@ def test_provenance_empty_head_is_a_problem_when_the_object_exists() -> None:
     assert any("HEAD is empty" in p for p in problems)
 
 
+@pytest.mark.parametrize(
+    "exc",
+    [
+        OSError("git missing"),
+        subprocess.TimeoutExpired(cmd="git", timeout=em.DEFAULT_GIT_QUERY.timeout_seconds),
+    ],
+)
+def test_provenance_git_query_failure_is_a_gate_problem(exc: BaseException) -> None:
+    class _BoomExists:
+        def object_exists(self, sha: str) -> bool:
+            raise exc
+
+        def is_ancestor(self, ancestor: str, head: str) -> bool:
+            raise AssertionError("is_ancestor must not run when object_exists fails")
+
+    problems = em.provenance_integrity_problems(_prov_doc("deadbeef"), git=_BoomExists(), head="HEADSHA")
+    assert problems == [em.git_query_problem("object_exists", exc)]
+
+
+def test_provenance_ancestor_query_failure_is_a_gate_problem() -> None:
+    exc = OSError("git vanished")
+
+    class _BoomAncestor:
+        def object_exists(self, sha: str) -> bool:
+            return True
+
+        def is_ancestor(self, ancestor: str, head: str) -> bool:
+            raise exc
+
+    problems = em.provenance_integrity_problems(_prov_doc("deadbeef"), git=_BoomAncestor(), head="HEADSHA")
+    assert problems == [em.git_query_problem("is_ancestor", exc)]
+
+
 def test_non_numeric_observed_steps_are_treated_as_zero() -> None:
     doc = _prov_doc("abc", observed=31).replace("| Observed steps | 31 |", "| Observed steps | n/a |")
     assert em.parse_evidence_snapshot(doc).observed_steps == 0

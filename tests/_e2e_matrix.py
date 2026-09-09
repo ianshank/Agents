@@ -1543,6 +1543,18 @@ class GitOps(Protocol):
     def is_ancestor(self, ancestor: str, head: str) -> bool: ...
 
 
+def git_query_problem(action: str, exc: BaseException) -> str:
+    """Deterministic gate line for a git subprocess failure (timeout, missing binary)."""
+    return f"provenance git {action} failed ({type(exc).__name__})"
+
+
+def _git_bool(op: Callable[[], bool], *, action: str) -> tuple[bool | None, str | None]:
+    try:
+        return op(), None
+    except (OSError, subprocess.SubprocessError) as exc:
+        return None, git_query_problem(action, exc)
+
+
 @dataclass(frozen=True)
 class SubprocessGit:
     """GitOps backed by the real ``git`` binary."""
@@ -1734,14 +1746,20 @@ def provenance_integrity_problems(
         return ["provenance Commit cell is empty"]
     if sha in waivers:
         return []
-    if not git.object_exists(sha):
+    exists, err = _git_bool(lambda: git.object_exists(sha), action="object_exists")
+    if err is not None:
+        return [err]
+    if not exists:
         if skip_missing_objects:
             logger.warning("provenance SHA %s is not in this clone; skipping ancestor check", sha)
             return []
         return [f"provenance SHA {sha} is not a commit in this repository"]
     if not head:
         return ["HEAD is empty; cannot test ancestry"]
-    if not git.is_ancestor(sha, head):
+    ancestral, err = _git_bool(lambda: git.is_ancestor(sha, head), action="is_ancestor")
+    if err is not None:
+        return [err]
+    if not ancestral:
         return [f"provenance SHA {sha} is not an ancestor of HEAD {head}"]
     return []
 

@@ -73,6 +73,8 @@ still names Snyk Code.
   `CONTAINER_FACTORY_KEYS` so `FleetPackage.exclude` cannot hide a leaked
   container key. Published census still subtracts `exclude`.
 - Report-only `pip-audit` step exits 0 after printing findings.
+- Provenance `--check` maps git `OSError` / `SubprocessError` (including
+  timeout) to a gate problem string instead of a traceback.
 
 ### Added — agent-in-the-loop test generation (F-069, ADR 0048)
 
