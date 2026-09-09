@@ -76,6 +76,12 @@ still names Snyk Code.
 - Provenance `--check` maps git `OSError` / `SubprocessError` (including
   timeout) to a gate problem string instead of a traceback.
 
+### Fixed — vanished Coverage Grid rows are a monotonicity drop
+
+A suite step present in the previous e2e-matrix artifact and absent from the new
+render is a drop to `MonotonicityConfig.missing_suite_tests` (0), not skipped.
+`--update` / `--check` refuse unless `MONOTONICITY_WAIVERS` names that pair.
+
 ### Added — agent-in-the-loop test generation (F-069, ADR 0048)
 
 Registered `testgen_agent` pipeline: generate a suite from focal method +

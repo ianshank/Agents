@@ -26,7 +26,14 @@ and SHALL NOT require that SHA to equal HEAD.
 
 The system SHALL refuse `--update` when observed-step count or a Coverage Grid suite test
 count drops, unless `MONOTONICITY_WAIVERS` contains that exact (metric, previous, current)
-triple.
+triple. A suite step present in the previous grid and absent from the new grid SHALL be
+treated as a drop to `MonotonicityConfig.missing_suite_tests`.
+
+#### Scenario: A vanished Coverage Grid row is a drop to zero
+
+- WHEN a suite step was present previously and is absent from the new grid
+- THEN the gate treats its current count as `MonotonicityConfig.missing_suite_tests`
+- AND refuses unless a waiver names that exact pair
 
 #### Scenario: The ERRATA 1627→995 drop is waived and only that pair
 
