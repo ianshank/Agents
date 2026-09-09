@@ -1,12 +1,37 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 020 — 2026-09-08
+
+### Changes
+
+Peer-reviewed next-steps ranking: restamp F-069 `implemented_in` to squash #217
+(`f1fd5ef`), archive OpenSpec `add-agent-in-the-loop-testgen`, Phase 8 e2e
+provenance/monotonicity (ADR 0033), Phase 9 fleet census + Phase 10 M2/M6
+canaries, hygiene (3.13 classifiers, F-066 coverage, tooling.coveragerc,
+setup-python v7, claude-foundation `py.typed`, SECURITY.md + gitleaks checksum),
+`uv.lock` workspace + `uv sync --locked` in package/quality-gates/nightly CI
+(skills and Windows e2e stay on pip), report-only `pip-audit.yml` (not a required
+check; CHARTER still names Snyk Code), `skills/test-completeness-guard`.
+
+Did **not** implement WS-1 or the production flywheel. Did **not** `--apply`
+branch protection or write `HUMAN_AUDIT`.
+
+Protected paths: `features.yaml`, `.github/**`, `tests/**`,
+`scripts/validations/**`, `*/pyproject.toml`. Needs `eval-change-approved`.
+
+### Validation evidence
+
+Targeted: `validate.py --tier fast --strict-git`, e2e-matrix tests, fleet
+census, skill gate, `skill_marketplace.py validate`, skill-script drift.
+
+---
 ## Session 019 — 2026-09-08
 
 ### Changes
 
 Peer review of F-069 vs `main` (`ec1ab39` vs `39d0311`). Findings in
-`openspec/changes/add-agent-in-the-loop-testgen/review.md` (two-pass protocol).
+`openspec/changes/archive/add-agent-in-the-loop-testgen/review.md` (two-pass protocol).
 
 **Fixed:** deep-copy generator view (nested `obligations` isolation); named
 `_MIN_DIGEST_CHARS` / `_MAX_DIGEST_CHARS`; empty `allowed_splits` fail at

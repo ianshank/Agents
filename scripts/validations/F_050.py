@@ -50,11 +50,17 @@ _SKILLS_CI = os.path.join(".github", "workflows", "skills-ci.yml")
 _QUALITY_GATES_CI = os.path.join(".github", "workflows", "quality-gates.yml")
 _TEST_VALIDATION_SCRIPTS = os.path.join("tests", "test_validation_scripts.py")
 
-_EXEMPT_SKILLS = (
-    "hierarchical-recursive-brainstorm",
-    "openspec-quality-plan",
-    "openspec-peer-review",
-)
+_EXEMPT_FILE = os.path.join("skills", "ci_exempt.yaml")
+
+
+def _exempt_map() -> dict[str, str]:
+    import yaml
+
+    payload = yaml.safe_load(_read(_EXEMPT_FILE)) or {}
+    exempt = payload.get("exempt") if isinstance(payload, dict) else None
+    if not isinstance(exempt, dict):
+        return {}
+    return {str(k): str(v) for k, v in exempt.items()}
 
 
 def _read(rel_path: str) -> str:
@@ -98,15 +104,13 @@ def main() -> int:
         errors,
     )
 
-    # 3. The registration + job-coverage guard enumerates the ADR 0030 exemptions and
-    # self-checks each against evals/evals.json so a stale exemption fails loudly.
-    _check("EXEMPT" in skills_ci, "all-skills job defines an EXEMPT mapping", errors)
-    for name in _EXEMPT_SKILLS:
-        _check(
-            f'"{name}"' in skills_ci,
-            f"EXEMPT covers {name}",
-            errors,
-        )
+    # 3. The registration + job-coverage guard loads skills/ci_exempt.yaml (one source)
+    # and self-checks each entry against evals/evals.json so a stale exemption fails loudly.
+    _check("ci_exempt.yaml" in skills_ci, "all-skills job loads skills/ci_exempt.yaml", errors)
+    exempt = _exempt_map()
+    _check(len(exempt) > 0, "skills/ci_exempt.yaml names at least one subjective skill", errors)
+    for name, reason in exempt.items():
+        _check(bool(name) and bool(reason), f"EXEMPT {name} has a non-empty reason", errors)
     _check(
         "evals.json" in skills_ci and "stale" in skills_ci,
         "EXEMPT entries are re-checked against evals/evals.json (a stale exemption fails, not drifts silently)",

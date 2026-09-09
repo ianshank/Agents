@@ -7,6 +7,17 @@
 > - [Epic 4: Skills & Marketplace](docs/roadmap/epic-4-skills-and-marketplace.md)
 > - [Epic 5: Integrations & Plugins](docs/roadmap/epic-5-integrations-and-plugins.md)
 
+## Human-critical path (not agent-completable)
+
+These stay human. Agents must not `--apply` branch protection, must not write
+`HUMAN_AUDIT` into the live store, and must not fabricate `provenance=human`.
+
+- [ ] **Branch protection on `main`** after ADR 0037's five-green soak —
+  [`docs/runbooks/branch-protection-enablement.md`](docs/runbooks/branch-protection-enablement.md).
+  Do not require CODEOWNERS. Leave `merge-gate-data` unprotected.
+- [ ] **Weekly HUMAN_AUDIT** via `merge-gate-audit.yml` / `merge-gate-verdict.yml` only.
+- [ ] **Golden corpus** floor 50, two annotators, κ ≥ 0.60 (`docs/golden-corpus/`).
+
 ## Recently Landed — Quality & Eval-Integrity Gates
 
 - [x] **Executive Evaluation Suite & Comparative Decision Framework** — `docs/executive-report-eval-tools.md`,
@@ -33,6 +44,19 @@
   the view is a deep copy), then execute via `run_generated_suite`. Deck B profile
   is holdout-only (`n=11` unique thorough items); do not quote `pass^k` from a
   deterministic fake. `config/testgen_eval.yaml` remains the Deck A+ corpus path.
+  `implemented_in` restamped to squash #217 (`f1fd5ef`); OpenSpec change archived.
+- [x] **Eval-evidence Phase 8 residual** — Provenance SHA reachable (ancestor of
+  HEAD, never equal-to-HEAD) plus monotonicity/waiver. ADR 0033 amended.
+  Committed e2e-matrix *results* columns stay stale per `docs/e2e-matrix/ERRATA.md`
+  until the next full e2e `--update`.
+- [x] **Eval-evidence Phase 9 + Phase 10 canaries** — fleet census
+  (`tests/_fleet_matrix.py`); M2/M6 negative controls only. Do not implement
+  measurement-wedge WS-1 or the production eval flywheel.
+- [x] **`uv.lock` workspace + report-only pip-audit** — `uv sync --locked` in
+  package CI / quality-gates / nightly; skills and Windows e2e stay on pip.
+  pip-audit is not a required check and is not the CHARTER §5 scanner.
+- [x] **`test-completeness-guard` skill** — mention census, report-only default
+  floor, 95% pytest-cov on the skill itself. Not a Phase 9 blocker.
 - [x] **Requirements-generation evaluation matrix (F-068, ADR 0047)** — deterministic
   synthetic evaluation of generated requirements against declared gold acceptance
   criteria and recorded retrieval evidence: `provenance_recorder` target wrapper,

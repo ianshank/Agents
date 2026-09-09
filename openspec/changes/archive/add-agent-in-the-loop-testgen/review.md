@@ -92,7 +92,7 @@ Recorded so the next reviewer does not re-raise them.
 
 ## Spec-guardian
 
-`openspec/changes/add-agent-in-the-loop-testgen/specs/agent-in-the-loop-testgen/spec.md`
+`openspec/changes/archive/add-agent-in-the-loop-testgen/specs/agent-in-the-loop-testgen/spec.md`
 Generator Isolation SHALL still holds; this pass tightens the *copy* from shallow to
 deep without changing the requirement. In-process `run_generated_suite` unchanged.
 Holdout allowlist unchanged. Advisory gates unchanged.

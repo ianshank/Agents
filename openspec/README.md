@@ -29,10 +29,15 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
-- [`changes/add-agent-in-the-loop-testgen/`](changes/add-agent-in-the-loop-testgen/) —
-  *landed in-tree as F-069 / ADR 0048* (`testgen_agent` registered target; suite
-  stripped before generate). Archive after this SHA is an ancestor of `main`.
-  Owner defaults: `changes/add-agent-in-the-loop-testgen/OWNER_DEFAULTS.md`.
+- [`changes/repair-e2e-matrix-provenance/`](changes/repair-e2e-matrix-provenance/) —
+  eval-evidence **Phase 8 residual.** Provenance SHA reachable (ancestor of HEAD, never
+  equal-to-HEAD) plus monotonicity/waiver. Amends ADR 0033. Until the next full e2e
+  `--update`, treat committed results columns as stale per `docs/e2e-matrix/ERRATA.md`.
+- [`changes/extend-matrix-to-fleet/`](changes/extend-matrix-to-fleet/) —
+  eval-evidence **Phase 9.** Fleet census: derive `CALIBRATOR_FACTORIES` /
+  `SPECIMENS`, hand-declare the rest against public-surface baselines. Amends ADR 0032 §6.
+  Phase 10 M2/M6 canaries ship in the same change. Not blocked on `test-completeness-guard`.
+
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
   *partially implemented.* **WS-0 (the blocking hygiene gate) landed as F-048** — credential scrub,
   `.gitleaks.toml`, and the fail-closed secret scan at `quality-gates.yml`. WS-0 tasks 0.5–0.7
@@ -73,6 +78,7 @@ Landed; kept for provenance. Each carries its F-ID and the commit it landed in.
 | [`changes/archive/add-testgen-eval-matrix/`](changes/archive/add-testgen-eval-matrix/) | F-065 | `d0c761d25b` |
 | [`changes/archive/add-rca-eval-matrix/`](changes/archive/add-rca-eval-matrix/) | F-067 | `d75028c62c1f` |
 | [`changes/archive/add-requirements-gen-eval-matrix/`](changes/archive/add-requirements-gen-eval-matrix/) | F-068 | `49c7db829066` |
+| [`changes/archive/add-agent-in-the-loop-testgen/`](changes/archive/add-agent-in-the-loop-testgen/) | F-069 | `f1fd5efa1b8d` |
 
 ## Removing this spike
 

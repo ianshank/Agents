@@ -58,7 +58,15 @@ def test_pdm_and_uv_and_hatch(tmp_path: Path) -> None:
     _write(hatch, "pyproject.toml", "[tool.hatch]\n")
     assert detect(pdm).package_manager == "pdm"
     assert detect(uv).package_manager == "uv"
+    assert detect(uv).install_cmd == "uv sync --locked"
     assert detect(hatch).package_manager == "hatch"
+
+
+def test_uv_tool_table_without_lockfile_stays_unlocked(tmp_path: Path) -> None:
+    _write(tmp_path, "pyproject.toml", "[tool.uv]\n")
+    facts = detect(tmp_path)
+    assert facts.package_manager == "uv"
+    assert facts.install_cmd == "uv sync"
 
 
 def test_requirements_only_project(tmp_path: Path) -> None:

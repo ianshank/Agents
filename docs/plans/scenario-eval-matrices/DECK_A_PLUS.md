@@ -3,7 +3,7 @@
 **Companion to:** [`PLAN.md`](./PLAN.md), [`DELIVERY.md`](./DELIVERY.md) revision 2  
 **Purpose:** presentation-ready wording for Deck A / A+. Not the slide deck itself.  
 **Status:** ready after day-of rehearsal (checklist below).  
-**Deck B:** still blocked on agent-in-the-loop + target chaining — see `openspec/changes/add-agent-in-the-loop-testgen/`.
+**Deck B:** agent-in-the-loop testgen landed as F-069 / ADR 0048 (`#217`); remaining Deck B work is a live agent writing a suite, not the design. See [`openspec/changes/archive/add-agent-in-the-loop-testgen/`](../../../openspec/changes/archive/add-agent-in-the-loop-testgen/).
 
 ---
 
@@ -130,5 +130,5 @@ Volunteer before asked:
 
 - [`DELIVERY.md`](./DELIVERY.md) — D1–D5, work items 1–8  
 - [`PLAN.md`](./PLAN.md) — deck ladder, blockers B1–B4  
-- [`openspec/changes/add-agent-in-the-loop-testgen/`](../../../openspec/changes/add-agent-in-the-loop-testgen/) — Deck B unlock proposal  
+- [`openspec/changes/archive/add-agent-in-the-loop-testgen/`](../../../openspec/changes/archive/add-agent-in-the-loop-testgen/) — Deck B unlock proposal (archived; F-069 landed)  
 - [`docs/matrix-coverage.md`](../../matrix-coverage.md) — M8 execution census  

@@ -81,3 +81,8 @@ skills:
     path: skills/pre-pr-gate
     description: Chains every quality/regression/architecture gate this repo's CI enforces into one local command (make pre-pr), accumulating failures instead of stopping at the first, so a branch can be validated end to end before opening or updating a PR.
     compatibility: python>=3.10, GNU make
+  - name: test-completeness-guard
+    version: 1.0.0
+    path: skills/test-completeness-guard
+    description: Census frozen public-surface names against a test tree and fail only when an explicit hit-rate floor is missed. Does not invent coverage floors.
+    compatibility: python>=3.10

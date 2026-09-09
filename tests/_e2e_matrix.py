@@ -29,10 +29,12 @@ import io
 import json
 import logging
 import re
+import subprocess
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -1492,3 +1494,269 @@ def freshness_failure_message(rendered: str, out_dir: Path, sheets: Sequence[She
     if not diff and stale_csvs:
         return f"{out_dir.as_posix()} has stale CSV mirror(s): {', '.join(stale_csvs)} - {REGEN_HINT}"
     return f"{doc.as_posix()} is stale - {REGEN_HINT}\n" + "\n".join(shown)
+
+
+# ---------------------------------------------------------------------------
+# Provenance reachability + monotonicity (ADR 0033 amendment, Phase 8)
+# ---------------------------------------------------------------------------
+#
+# Freshness still excludes the Provenance *section* from the markdown/CSV byte
+# comparison: gating SHA == HEAD is permanently red on the carrying commit. These
+# helpers gate a different claim: the stamped SHA exists and is an ancestor of
+# HEAD (reachable, not equal-to-HEAD), and a new render may not drop observed-step
+# or per-suite test counts unless an explicit waiver row names that drop.
+
+
+@dataclass(frozen=True)
+class GitQueryConfig:
+    """Timeouts for git provenance queries. Call sites never restate these."""
+
+    timeout_seconds: float = 30.0
+
+
+DEFAULT_GIT_QUERY = GitQueryConfig()
+
+
+@dataclass(frozen=True)
+class EvidenceSnapshot:
+    """Counts the monotonicity gate compares across two renders of the same artifact."""
+
+    observed_steps: int
+    suite_tests: Mapping[str, int]
+
+
+@dataclass(frozen=True)
+class MonotonicityWaiver:
+    """One permitted drop. Both endpoints are part of the key so a later drop still fails."""
+
+    metric: str
+    previous: int
+    current: int
+    reason: str
+
+
+class GitOps(Protocol):
+    """Git queries the provenance gate needs. Tests inject a fake; production uses subprocess."""
+
+    def object_exists(self, sha: str) -> bool: ...
+
+    def is_ancestor(self, ancestor: str, head: str) -> bool: ...
+
+
+@dataclass(frozen=True)
+class SubprocessGit:
+    """GitOps backed by the real ``git`` binary."""
+
+    cwd: Path
+    config: GitQueryConfig = DEFAULT_GIT_QUERY
+
+    def _run(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args],
+            cwd=self.cwd,
+            capture_output=True,
+            text=True,
+            timeout=self.config.timeout_seconds,
+            check=False,
+        )
+
+    def object_exists(self, sha: str) -> bool:
+        if not sha:
+            return False
+        return self._run("cat-file", "-e", f"{sha}^{{commit}}").returncode == 0
+
+    def is_ancestor(self, ancestor: str, head: str) -> bool:
+        return self._run("merge-base", "--is-ancestor", ancestor, head).returncode == 0
+
+
+#: Known-stale stamps documented in ``docs/e2e-matrix/ERRATA.md``. A still-stamped
+#: SHA in this map is accepted so ``--check`` on a shallow clone or a not-yet-restamped
+#: artifact does not go red; remove an entry once a fresh ``--update`` restamps it.
+PROVENANCE_SHA_WAIVERS: Mapping[str, str] = {
+    "09337aec16e8b10588efd0e61c9d270d18ada1c4": ("ERRATA.md: stamp is not the tree it claims; 3272006 aborted render"),
+    "0b2cbfb7c3f5b976bdcafcbd4ee8ff5c0959d632": (
+        "ERRATA.md: POSIX-driver restamp still predates the Phase 8 gate; waived until the next full e2e --update"
+    ),
+}
+
+#: The 1627→995 / 38→30 drop at 3272006. Live comparisons that are not this pair still fail.
+MONOTONICITY_WAIVERS: tuple[MonotonicityWaiver, ...] = (
+    MonotonicityWaiver(
+        metric="observed_steps",
+        previous=38,
+        current=30,
+        reason="ERRATA.md: 3272006 aborted/interrupted render",
+    ),
+    MonotonicityWaiver(
+        metric="suite:root",
+        previous=1627,
+        current=995,
+        reason="ERRATA.md: 3272006 aborted/interrupted render",
+    ),
+)
+
+
+def markdown_section(document: str, heading: str) -> str:
+    """Body under ``## heading`` until the next ATX H2, or empty if absent.
+
+    Matches a heading at the start of the document as well as after a newline, so a
+    fixture that *is* the section does not look empty.
+    """
+    needle = f"## {heading}\n"
+    if document.startswith(needle):
+        rest = document[len(needle) :]
+    else:
+        parts = document.split(f"\n{needle}", 1)
+        if len(parts) < 2:
+            return ""
+        rest = parts[1]
+    return rest.split("\n## ", 1)[0]
+
+
+def parse_markdown_two_col(document: str, heading: str) -> dict[str, str]:
+    """Parse a two-column markdown table under ``## heading`` into {first: second}."""
+    body = markdown_section(document, heading)
+    out: dict[str, str] = {}
+    header_seen = False
+    for line in body.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in _MD_CELL_SPLIT_RE.split(line)[1:-1]]
+        if len(cells) < 2:
+            continue
+        if not header_seen:
+            header_seen = True
+            continue
+        if all(set(cell) <= {"-", ":"} for cell in cells):
+            continue
+        key, value = cells[0], cells[1]
+        if key:
+            out[key] = value
+    return out
+
+
+def parse_suite_test_counts(document: str) -> dict[str, int]:
+    """Coverage Grid: Suite Step → Tests. Empty cells are omitted, not zero."""
+    body = markdown_section(document, "Coverage Grid")
+    rows = [line for line in body.splitlines() if line.startswith("|")]
+    if len(rows) < 2:
+        return {}
+    header = [cell.strip() for cell in _MD_CELL_SPLIT_RE.split(rows[0])[1:-1]]
+    try:
+        step_idx = header.index("Suite Step")
+        tests_idx = header.index("Tests")
+    except ValueError:
+        return {}
+    counts: dict[str, int] = {}
+    for line in rows[1:]:
+        cells = [cell.strip() for cell in _MD_CELL_SPLIT_RE.split(line)[1:-1]]
+        if len(cells) <= max(step_idx, tests_idx):
+            continue
+        if all(set(cell) <= {"-", ":"} for cell in cells):
+            continue
+        step, raw = cells[step_idx], cells[tests_idx]
+        if not step or not raw:
+            continue
+        try:
+            counts[step] = int(raw)
+        except ValueError:
+            continue
+    return counts
+
+
+def parse_evidence_snapshot(document: str) -> EvidenceSnapshot:
+    """Observed-step and per-suite test counts from a rendered matrix document."""
+    summary = parse_markdown_two_col(document, "Summary")
+    raw_observed = summary.get("Observed steps", "0")
+    try:
+        observed = int(raw_observed)
+    except ValueError:
+        observed = 0
+    return EvidenceSnapshot(observed_steps=observed, suite_tests=parse_suite_test_counts(document))
+
+
+def parse_provenance_sha(document: str) -> str:
+    """The Provenance table's Commit cell, or empty if the section is missing."""
+    return parse_markdown_two_col(document, PROVENANCE_SHEET_NAME).get("Commit", "").strip()
+
+
+def _waiver_reason(metric: str, previous: int, current: int, waivers: Sequence[MonotonicityWaiver]) -> str | None:
+    for row in waivers:
+        if row.metric == metric and row.previous == previous and row.current == current:
+            return row.reason
+    return None
+
+
+def monotonicity_problems(
+    previous: EvidenceSnapshot,
+    current: EvidenceSnapshot,
+    *,
+    waivers: Sequence[MonotonicityWaiver] = MONOTONICITY_WAIVERS,
+) -> list[str]:
+    """Problems when *current* drops observed steps or a suite's test count vs *previous*."""
+    problems: list[str] = []
+    if current.observed_steps < previous.observed_steps:
+        reason = _waiver_reason("observed_steps", previous.observed_steps, current.observed_steps, waivers)
+        if reason is None:
+            problems.append(
+                f"observed steps dropped {previous.observed_steps} -> {current.observed_steps} "
+                "(add a MONOTONICITY_WAIVERS row or regenerate from a complete run)"
+            )
+    for step, prev_n in previous.suite_tests.items():
+        cur_n = current.suite_tests.get(step)
+        if cur_n is None or cur_n >= prev_n:
+            continue
+        reason = _waiver_reason(step, prev_n, cur_n, waivers)
+        if reason is None:
+            problems.append(
+                f"{step} tests dropped {prev_n} -> {cur_n} "
+                "(add a MONOTONICITY_WAIVERS row or regenerate from a complete run)"
+            )
+    return problems
+
+
+def provenance_integrity_problems(
+    document: str,
+    *,
+    git: GitOps,
+    head: str,
+    waivers: Mapping[str, str] = PROVENANCE_SHA_WAIVERS,
+    skip_missing_objects: bool = True,
+) -> list[str]:
+    """Reachable-and-consistent provenance: SHA exists and is an ancestor of HEAD.
+
+    Not equal-to-HEAD (ADR 0033 §3). A SHA absent from a shallow clone is skipped when
+    ``skip_missing_objects`` is true so CI pytest never gates the live stamp. Known-stale
+    stamps in *waivers* are accepted with their documented reason.
+    """
+    sha = parse_provenance_sha(document)
+    if not sha:
+        return ["provenance Commit cell is empty"]
+    if sha in waivers:
+        return []
+    if not git.object_exists(sha):
+        if skip_missing_objects:
+            logger.warning("provenance SHA %s is not in this clone; skipping ancestor check", sha)
+            return []
+        return [f"provenance SHA {sha} is not a commit in this repository"]
+    if not head:
+        return ["HEAD is empty; cannot test ancestry"]
+    if not git.is_ancestor(sha, head):
+        return [f"provenance SHA {sha} is not an ancestor of HEAD {head}"]
+    return []
+
+
+def integrity_problems(
+    committed: str,
+    rendered: str,
+    *,
+    git: GitOps,
+    head: str,
+    skip_missing_objects: bool = True,
+) -> list[str]:
+    """Provenance reachability of *committed* plus monotonicity vs *rendered*."""
+    problems = list(
+        provenance_integrity_problems(committed, git=git, head=head, skip_missing_objects=skip_missing_objects)
+    )
+    problems.extend(monotonicity_problems(parse_evidence_snapshot(committed), parse_evidence_snapshot(rendered)))
+    return problems

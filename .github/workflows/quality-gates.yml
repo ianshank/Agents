@@ -10,6 +10,7 @@ on:
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
+      - "uv.lock"
       # The gates job installs `./agent-core` and the suites it runs import `agent_core`
       # directly, so an agent-core source change can break these gates. Only
       # `agent-core/tests/**` was listed (and only on pull_request), which covered the
@@ -63,6 +64,7 @@ on:
       # (`agent-core/pyproject.toml`, `agent-core/scripts/quality-gate.sh`).
       - "agent-core/agent_core/**"
       - "pyproject.toml"
+      - "uv.lock"
       # Broadened from workflows/ + actions/ to all of .github/**: CODEOWNERS is what makes
       # the label gate meaningful, and it sat outside both narrower prefixes.
       - ".github/**"
@@ -158,8 +160,11 @@ jobs:
               sys.exit(1)
           print(f"merge-conflict marker guard OK; {len(files)} tracked file(s) checked")
           PY
-      - run: python -m pip install --upgrade pip "setuptools>=68"
-      - run: pip install -e "./agent-core"
+      - uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af426746bb  # v6.1.0
+        with:
+          enable-cache: true
+      - name: Verify the workspace lockfile is current
+        run: uv lock --check
       # archguard pulls grimp (pinned): F-011's airgap negative test shells out to
       # drift_check.py, which needs grimp to build the import graph. (F-011..F-015 add
       # flow-protocol/flow-corpus to sys.path themselves, so no editable install needed.)
@@ -172,7 +177,14 @@ jobs:
       # raises at construction when the package is absent. Before it, every autoevals test
       # used `importorskip` and this job could skip them silently; an M8 pipeline is a dict
       # and cannot. Caught by this job's own regression gate rather than by review.
-      - run: pip install -e ".[dev,langfuse,openai,archguard,parquet,e2e-matrix,autoevals]"
+      # phoenix/bedrock/braintrust stay out of this extra set: they expand the CVE
+      # surface and are not required by the offline gates (SECURITY.md / CHARTER §5).
+      - name: Install from the workspace lockfile
+        run: >-
+          uv sync --locked --all-packages --extra dev --extra langfuse --extra openai
+          --extra archguard --extra parquet --extra e2e-matrix --extra autoevals
+      - name: Prefer the uv workspace venv
+        run: echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
       # Feature ledger: schema + DAG + git provenance + tier-fast validation commands.
       # --strict makes an unresolvable `implemented_in` an ERROR, not a warning. Without it
       # the provenance check was decorative: 6 SHAs from squash-merged branches had rotted
@@ -226,6 +238,7 @@ jobs:
           tests/test_audit_issue_sync.py tests/test_check_size_budget.py
           tests/test_check_charter_drift.py tests/test_check_charter_invariants.py
           tests/test_check_guard_reachability.py tests/test_matrix_coverage.py
+          tests/test_matrix_coverage_guards.py
           tests/test_agent_confidence.py tests/test_extract_registries.py
           tests/test_required_check_stubs.py tests/test_workflow_paths.py
           tests/test_check_coverage_floors.py
@@ -237,9 +250,9 @@ jobs:
           --cov=check_guard_reachability --cov=check_coverage_floors --cov=agent_confidence
           --cov=skill_marketplace --cov=_common --cov=extract_registries
           --cov=workflow_paths
-          --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023 --cov=F_024 --cov=F_025 --cov=F_026 --cov=F_027 --cov=F_028 --cov=F_029 --cov=F_030 --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037 --cov=F_038 --cov=F_039 --cov=F_040 --cov=F_041 --cov=F_042 --cov=F_043 --cov=F_044 --cov=F_045 --cov=F_046 --cov=F_047 --cov=F_048 --cov=F_049 --cov=F_050 --cov=F_051 --cov=F_052 --cov=F_053 --cov=F_054 --cov=F_055 --cov=F_056 --cov=F_057 --cov=F_058 --cov=F_059 --cov=F_060 --cov=F_061 --cov=F_062 --cov=F_063 --cov=F_064 --cov=F_065 --cov=F_067 --cov=F_068 --cov=F_069
-          --cov=tests._matrix_coverage
-          --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=85
+          --cov=F_020 --cov=F_021 --cov=F_022 --cov=F_023 --cov=F_024 --cov=F_025 --cov=F_026 --cov=F_027 --cov=F_028 --cov=F_029 --cov=F_030 --cov=F_031 --cov=F_032 --cov=F_033 --cov=F_034 --cov=F_035 --cov=F_037 --cov=F_038 --cov=F_039 --cov=F_040 --cov=F_041 --cov=F_042 --cov=F_043 --cov=F_044 --cov=F_045 --cov=F_046 --cov=F_047 --cov=F_048 --cov=F_049 --cov=F_050 --cov=F_051 --cov=F_052 --cov=F_053 --cov=F_054 --cov=F_055 --cov=F_056 --cov=F_057 --cov=F_058 --cov=F_059 --cov=F_060 --cov=F_061 --cov=F_062 --cov=F_063 --cov=F_064 --cov=F_065 --cov=F_066 --cov=F_067 --cov=F_068 --cov=F_069
+          --cov=tests._matrix_coverage --cov=tests._fleet_matrix
+          --cov-branch --cov-config=scripts/tooling.coveragerc --cov-report=term-missing --cov-fail-under=85
       # Dedicated floor for the e2e-matrix generator. Deliberately its own step: folded into
       # the aggregate above it would sit among ~40 modules, where a regression in it is
       # absorbed by everything else's headroom. Runs in about a second.
@@ -248,7 +261,7 @@ jobs:
           python -m pytest tests/test_e2e_matrix.py
           --override-ini addopts=""
           --cov=tests._e2e_matrix --cov=tests._e2e_matrix_xlsx
-          --cov-branch --cov-config=/dev/null --cov-report=term-missing --cov-fail-under=97
+          --cov-branch --cov-config=scripts/tooling.coveragerc --cov-report=term-missing --cov-fail-under=97
       # Net-new lint/test regressions vs the PR base (or main on push). Blocks on net-new.
       - name: Regression gate
         run: >-

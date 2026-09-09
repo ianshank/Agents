@@ -1,6 +1,6 @@
 # Change: add-agent-in-the-loop-testgen
 
-**Status:** proposed · **Date:** 2026-09-06 · **Author track:** Cody / docs lane
+**Status:** implemented (archived; landed `f1fd5efa1b8d9e6c99d5832705dc87cf47369d8c`) · **Date:** 2026-09-06 · **Author track:** Cody / docs lane
 **Motivated by:** `docs/plans/scenario-eval-matrices/DELIVERY.md` revision 2 §4-§7 (Deck B blocked on subject, not scorers) and `DECK_A_PLUS.md`.
 **Depends on:** `add-testgen-eval-matrix` (implemented — F-065 scorers, corpus, allowlisted callable target).
 **Compiles down to:** a design ADR claimed at land + F-ID claimed at land (never reserved here).

@@ -10,9 +10,8 @@ Agentic skill development, deterministic generators, reasoning plugins, and comm
 - **[x] Reasoning & Planning Skills**: Composable skills (`hierarchical-recursive-brainstorm`, `openspec-quality-plan`, `openspec-peer-review`).
 - **[x] Skill CI Tiers (ADR 0030)**: Multi-tier CI gating (`code`, `generative`, `subjective`) with automated coverage validation.
 - **[x] Two-pass `openspec-peer-review`**: mechanical fact-check against a pinned SHA plus adversarial design critique. Shipped with skill v1.1.0.
+- **[x] `test-completeness-guard`**: census of frozen public-surface names against a test tree. Default floor is report-only; does not invent product coverage floors. Skills-CI coverage for the skill itself is 95%.
 
 ## In Progress & Planned
-1. **`test-completeness-guard` Generator Skill**:
-   - Automated generation of probe/extractor/policy/renderer scaffolds for new test suites.
-2. **`scaffold_change.py` Generator in `openspec-quality-plan`**:
+1. **`scaffold_change.py` Generator in `openspec-quality-plan`**:
    - Automate 5-file change proposal package scaffolding.

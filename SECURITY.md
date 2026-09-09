@@ -65,13 +65,17 @@ A configuration that escapes any of these is in scope for a report.
 Security is enforced continuously, not just on report:
 
 - **Secret scanning** — gitleaks runs in CI on every push and pull request
-  (`.github/workflows/quality-gates.yml`, job `secret-scan`), fail-closed on the
-  working tree and report-only over history (ADR 0027).
+  (`.github/workflows/secret-scan.yml`, job `secret-scan`), fail-closed on the
+  working tree and report-only over history (ADR 0027). The job used to live in
+  `quality-gates.yml`; it was extracted so path filters cannot skip a scan.
+  The pinned gitleaks 8.18.4 tarball is checksummed before extract.
 - **Dependency scanning** — Snyk is available as a documented manual step
   (`snyk test` / `snyk monitor`; see the "Security Scanning" section of the
-  [README](README.md#security-scanning)). It is **not** wired into CI; automated
-  dependency and SAST scanning is planned, not active
-  (see `docs/CHARTER.md` §5).
+  [README](README.md#security-scanning)). It is **not** wired into CI; CHARTER
+  §5 names Snyk Code, not pip-audit. A **report-only** `pip-audit` job
+  (`.github/workflows/pip-audit.yml`) runs against the committed `uv.lock` CI
+  extra set (`continue-on-error: true`) and is not a required check. Optional
+  extras phoenix/bedrock/braintrust are out of that extra set.
 - **Eval-integrity guardrails** — evaluation-defining files are protected paths
   requiring reviewed approval, so the meaning of a gate cannot be silently
   weakened (see [CONTRIBUTING.md](CONTRIBUTING.md#protected-paths-require-a-labeled-approval)).

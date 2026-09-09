@@ -34,6 +34,7 @@ if __package__ in (None, ""):
         if _p not in sys.path:
             sys.path.insert(0, _p)
 
+from tests import _fleet_matrix as fm
 from tests import _matrix_coverage as mc
 from tests.test_matrix_eval_tools import PIPELINES
 
@@ -64,6 +65,23 @@ def test_census_is_populated() -> None:
     baseline_scorers = {key for key in _BASELINE["scorer"] if key not in mc.FROZEN_ALIAS_MAP["scorer"]}
     assert set(mc.census_names(CENSUS, "scorer")) == baseline_scorers
     assert all(mc.census_names(CENSUS, kind) for kind in CENSUS)
+
+
+def test_fleet_census_meets_the_adr_0032_section_6_policy() -> None:
+    """Phase 9 scaffolding: derived where a registry exists, else checked declaration."""
+    problems = fm.fleet_problems()
+    assert not problems, "fleet matrix policy violations:\n  " + "\n  ".join(problems)
+
+
+def test_agent_core_derives_calibrator_factories_not_the_registry_container() -> None:
+    names = fm.census_for(fm.FLEET_PACKAGES[0])
+    assert names == frozenset({"isotonic", "temperature"})
+    assert "CalibratorRegistry" not in names
+
+
+def test_flow_corpus_derives_specimen_register_names() -> None:
+    names = fm.census_for(fm.FLEET_PACKAGES[1])
+    assert names == frozenset({"baseline", "mcts", "react"})
 
 
 def test_cell_map_is_populated() -> None:
@@ -101,6 +119,15 @@ def test_no_literal_parametrize_in_designated_registry_classes() -> None:
 
 def _matrix_ci_workflow_text() -> str:
     return (Path(__file__).resolve().parent.parent / mc.MATRIX_CI_WORKFLOW).read_text(encoding="utf-8")
+
+
+def test_ci_installed_imports_reads_uv_extra_flags_and_pip_extras() -> None:
+    """Workspace CI uses ``uv sync --extra``; the pip ``.[extras]`` form must still parse."""
+    uv = "install: uv sync --locked --all-packages --extra dev --extra openai --extra parquet --extra autoevals\n"
+    installed = mc.ci_installed_imports(uv)
+    assert {"anthropic", "openai", "pyarrow", "autoevals"} <= installed
+    pip = 'install: pip install -e ".[dev,openai,parquet,autoevals]"\n'
+    assert {"anthropic", "openai", "pyarrow", "autoevals"} <= mc.ci_installed_imports(pip)
 
 
 def test_every_skip_gated_cell_actually_executes_in_ci() -> None:

@@ -90,6 +90,10 @@ pip install -e '.[autoevals]'  # add the autoevals scorer library
 pip install -e '.[dev]'      # pytest, coverage, ruff, mypy, hypothesis, jsonschema
 ```
 
+CI uses a committed [`uv.lock`](uv.lock) (`uv sync --locked`). Local `pip install -e`
+remains valid. `make uv-sync` / `make uv-lock-check` are the lockfile entry points.
+Windows e2e stays on pip.
+
 ## Environment Variables
 
 | Variable | Required | Description |

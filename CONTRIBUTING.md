@@ -38,6 +38,7 @@ Root package:
 
 ```bash
 pip install -e '.[dev]'              # editable install + pinned toolchain
+# optional, once uv is installed: make uv-sync && make uv-lock-check
 ./scripts/quality-gate.sh all        # lint + format-check + mypy + pytest --cov
 make check                           # same, via the generated Makefile
 make check-all                       # root gate + every sibling package's gate

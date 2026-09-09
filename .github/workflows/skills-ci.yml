@@ -223,6 +223,25 @@ jobs:
           install: pip install pytest pytest-cov "ruff==0.15.20" "mypy==2.1.0"
           check: ./scripts/quality-gate.sh all
 
+  test-completeness-guard:
+    name: test-completeness-guard py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/run-quality-gate
+        with:
+          python-version: ${{ matrix.python-version }}
+          working-directory: skills/test-completeness-guard
+          install: pip install pytest pytest-cov "ruff==0.15.20" "mypy==2.1.0"
+          check: ./scripts/quality-gate.sh all
+
   common:
     name: common py${{ matrix.python-version }}
     runs-on: ubuntu-latest
@@ -352,15 +371,11 @@ jobs:
           ROOT = pathlib.Path(".")
 
           # Skills exempt from a dedicated lint/type/pytest job: the template's own
-          # "Subjective skills" class (docs/SKILL_TEMPLATE.md Sec.5.B) -- structural tier +
-          # marketplace registration + drift guard is their complete CI contract (ADR 0030).
-          # Each reason is re-checked below against evals/evals.json so a skill that later
-          # grows real evals and library code can't stay silently exempted forever.
-          EXEMPT = {
-              "hierarchical-recursive-brainstorm": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",
-              "openspec-quality-plan": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",
-              "openspec-peer-review": "subjective skill (SKILL_TEMPLATE.md Sec.5.B); no evals/",
-          }
+          # "Subjective skills" class (docs/SKILL_TEMPLATE.md Sec.5.B). Single-sourced
+          # in skills/ci_exempt.yaml (F-050); do not restate the mapping here.
+          exempt_path = ROOT / "skills" / "ci_exempt.yaml"
+          payload = yaml.safe_load(exempt_path.read_text()) or {}
+          EXEMPT = dict(payload.get("exempt") or {})
 
           marketplace = yaml.safe_load((ROOT / "skills" / "marketplace.yaml").read_text())
           registered = {s["name"] for s in marketplace.get("skills", [])}

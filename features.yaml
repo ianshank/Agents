@@ -1515,11 +1515,12 @@ features:
       - "an unlisted generator_path is refused (ADR 0039) (scripts/validations/F_069.py)"
       - "4 matrix cells (target row M1/M2/M3/M6) plus an M8 pipeline running the pipeline target under the four F-065 scorers (tests/test_matrix_testgen_agent.py, tests/test_matrix_eval_tools.py::test_m8_testgen_agent_pipeline)"
     validation_command: "python scripts/validations/F_069.py"
-    implemented_in: "26e56e0997f77f8385fcf194f57306e31a0e392b"
+    implemented_in: "f1fd5efa1b8d9e6c99d5832705dc87cf47369d8c"
     depends_on: ["F-065", "F-062", "F-063"]
     notes: >-
       ADR 0048 records the sequential-pipeline decision, the suite-stripping
       homework rule, holdout allowlisting, and the refusal to quote pass^k from
-      a deterministic fake. implemented_in is stamped to this branch's feature
-      commit so F-064's ancestry check resolves it from HEAD. public_surface_baseline.json
+      a deterministic fake. implemented_in is the squash merge of PR #217
+      (`f1fd5ef`) so F-064's ancestry check resolves against main; the pre-squash
+      feature commit `26e56e0` is not an ancestor of that merge. public_surface_baseline.json
       is unchanged: the new module declares no __all__.

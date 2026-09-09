@@ -28,7 +28,8 @@ the marketplace itself doesn't provide.
 | [`repo-invariant-review`](repo-invariant-review/) | 1.0.0 | Predict CI collisions with this repo's enforced invariants (protected paths, airgap, size budget, frozen baselines, CHARTER invariant 1) before pushing |
 | [`openspec-implementation-review`](openspec-implementation-review/) | 1.0.0 | Review a shipped OpenSpec change's implementation against its own plan, producing a dated, two-pass `review.md` (dispatches `spec-guardian`/`peer-reviewer` when loaded, degrades to a `general-purpose` subagent with the method inlined otherwise) |
 | [`pre-pr-gate`](pre-pr-gate/) | 1.0.0 | Chain every quality/regression/architecture gate this repo's CI enforces into one local command (`make pre-pr`) before opening or updating a PR |
-| [`common`](common/) | 1.0.0 | Shared skill validator and utility library — a library, not a standalone skill (no evals; `EXEMPT` in `skills-ci.yml`'s registration guard) |
+| [`test-completeness-guard`](test-completeness-guard/) | 1.0.0 | Census frozen public-surface names against tests; fail only on an explicit hit-rate floor (does not invent floors) |
+| [`common`](common/) | 1.0.0 | Shared skill validator and utility library — a library, not a standalone skill (no evals; dedicated `common` job in skills-ci.yml) |
 
 ## Three kinds of skill
 
@@ -37,7 +38,8 @@ the marketplace itself doesn't provide.
 
 - **Inference skills** consume a model (e.g. `openai-judge`, `model-bench`).
 - **Guard/review skills** (`architecture-drift-guard`, `dataset-lint`,
-  `repo-invariant-review`, `openspec-implementation-review`, `pre-pr-gate`) mechanically
+  `repo-invariant-review`, `openspec-implementation-review`, `pre-pr-gate`,
+  `test-completeness-guard`) mechanically
   check a tree or a dataset against rules that already exist, so a finding predicts a
   concrete failure rather than expressing an opinion. They carry the full CI contract —
   library code, tests at the coverage floor, and behavioral evals against committed

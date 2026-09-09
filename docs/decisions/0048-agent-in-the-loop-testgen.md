@@ -2,7 +2,7 @@
 
 - Status: **Accepted.**
 - Date: 2026-09-08
-- Related: `openspec/changes/add-agent-in-the-loop-testgen/` (design, tasks, owner defaults),
+- Related: `openspec/changes/archive/add-agent-in-the-loop-testgen/` (design, tasks, owner defaults),
   ADR 0043 (the target executes, the scorers read), ADR 0038 (item error policy),
   ADR 0039 (callable allowlist, only for optional `generator_path`), F-065, F-069.
 
