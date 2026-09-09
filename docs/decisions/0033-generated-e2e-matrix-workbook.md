@@ -75,7 +75,10 @@ The Provenance section remains excluded from the freshness *byte* comparison (ga
 SHA == HEAD is permanently red on the carrying commit). A second gate now checks that
 the stamped SHA **exists and is an ancestor of HEAD**, and `--update` refuses a render
 that drops observed-step or per-suite test counts unless `MONOTONICITY_WAIVERS` names
-that exact drop. Known-stale stamps are waived in `PROVENANCE_SHA_WAIVERS` until the
+that exact drop. A Coverage Grid suite present previously and absent from the new
+render is a drop to `MonotonicityConfig.missing_suite_tests` (0), not a skip — a
+vanished or unparsable grid is therefore a drop of every prior row. Known-stale stamps
+are waived in `PROVENANCE_SHA_WAIVERS` until the
 next full e2e `--update`. See `docs/e2e-matrix/ERRATA.md` and
 `openspec/changes/repair-e2e-matrix-provenance/`.
 

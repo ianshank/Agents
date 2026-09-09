@@ -1219,6 +1219,19 @@ def test_monotonicity_allows_an_increase() -> None:
     assert em.monotonicity_problems(prev, current) == []
 
 
+def test_monotonicity_treats_a_missing_suite_as_a_drop_to_zero() -> None:
+    missing = em.DEFAULT_MONOTONICITY.missing_suite_tests
+    prev = em.EvidenceSnapshot(observed_steps=10, suite_tests={"suite:root": 100, "suite:agent-core": 50})
+    vanished = em.EvidenceSnapshot(observed_steps=10, suite_tests={"suite:root": 100})
+    problems = em.monotonicity_problems(prev, vanished)
+    assert any(f"suite:agent-core tests dropped 50 -> {missing}" in p for p in problems)
+    empty_grid = em.EvidenceSnapshot(observed_steps=10, suite_tests={})
+    empty_problems = em.monotonicity_problems(prev, empty_grid)
+    assert any(f"suite:root tests dropped 100 -> {missing}" in p for p in empty_problems)
+    waived = (em.MonotonicityWaiver(metric="suite:agent-core", previous=50, current=missing, reason="test"),)
+    assert em.monotonicity_problems(prev, vanished, waivers=waived) == []
+
+
 def test_empty_commit_cell_is_a_problem() -> None:
     git = _FakeGit(existing=frozenset(), ancestor_pairs=frozenset())
     problems = em.provenance_integrity_problems("## Provenance\n\n| Field | Value |\n", git=git, head="h")

@@ -1535,6 +1535,16 @@ class MonotonicityWaiver:
     reason: str
 
 
+@dataclass(frozen=True)
+class MonotonicityConfig:
+    """A vanished Coverage Grid row counts as this test count (not 'no drop')."""
+
+    missing_suite_tests: int = 0
+
+
+DEFAULT_MONOTONICITY = MonotonicityConfig()
+
+
 class GitOps(Protocol):
     """Git queries the provenance gate needs. Tests inject a fake; production uses subprocess."""
 
@@ -1704,8 +1714,14 @@ def monotonicity_problems(
     current: EvidenceSnapshot,
     *,
     waivers: Sequence[MonotonicityWaiver] = MONOTONICITY_WAIVERS,
+    config: MonotonicityConfig = DEFAULT_MONOTONICITY,
 ) -> list[str]:
-    """Problems when *current* drops observed steps or a suite's test count vs *previous*."""
+    """Problems when *current* drops observed steps or a suite's test count vs *previous*.
+
+    A suite step present in *previous* and absent from *current* is a drop to
+    ``config.missing_suite_tests``, not a skip. A vanished or unparsable grid is
+    therefore a drop of every prior row unless waived.
+    """
     problems: list[str] = []
     if current.observed_steps < previous.observed_steps:
         reason = _waiver_reason("observed_steps", previous.observed_steps, current.observed_steps, waivers)
@@ -1715,8 +1731,8 @@ def monotonicity_problems(
                 "(add a MONOTONICITY_WAIVERS row or regenerate from a complete run)"
             )
     for step, prev_n in previous.suite_tests.items():
-        cur_n = current.suite_tests.get(step)
-        if cur_n is None or cur_n >= prev_n:
+        cur_n = current.suite_tests.get(step, config.missing_suite_tests)
+        if cur_n >= prev_n:
             continue
         reason = _waiver_reason(step, prev_n, cur_n, waivers)
         if reason is None:
