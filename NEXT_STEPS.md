@@ -80,18 +80,16 @@ These stay human. Agents must not `--apply` branch protection, must not write
   - [ ] **Deferred from the same scan, each would touch `.github/**` (a protected
     path needing the `eval-change-approved` label + CODEOWNER review) or shared
     hook behavior for every future session in this repo, so left for a follow-up
-    with that review rather than folded in here**: wiring `repo-invariant-review`
-    non-blocking into `quality-gates.yml` (its own scoping is already CI-safe —
-    `{base}...HEAD` is immune to a stale `base`; verified several of its checks
-    already duplicate gates that block elsewhere, which is why non-blocking is the
-    right shape, not a new hard gate); a stale-local-`main` warning in
+    with that review rather than folded in here**: ~~wiring `repo-invariant-review`
+    non-blocking into `quality-gates.yml`~~ — **shipped** (advisory, never `--strict`).
+    Remaining: a stale-local-`main` warning in
     `.claude/hooks/session-start.sh` (the exact failure mode that produced
     misleading `regression_gate.py` output mid-session — a local `main` 9 commits
     behind `origin/main` — `git fetch origin main:main` fixed it, but nothing
     detects it proactively). (The third deferred item — extending `nightly-e2e.yml`'s
     invariant-check step with the size-budget, guard-reachability,
-    architecture-drift, and marketplace guards — has since shipped; lint/mypy/coverage
-    still do not run nightly.)
+    architecture-drift, and marketplace guards — has since shipped; lint/mypy
+    now run nightly in a separate `lint-typecheck` job. Coverage still does not.)
 - [x] **God-file decomposition: `engine.py` + `agent_core_adapter` (ADR 0036)** — split
   along existing seams, following the `store_sync/` package-split precedent (ADR 0019):
   `engine.py` (500 → 425 lines) delegates its two execution strategies to a new

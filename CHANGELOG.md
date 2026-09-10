@@ -76,6 +76,14 @@ still names Snyk Code.
 - Provenance `--check` maps git `OSError` / `SubprocessError` (including
   timeout) to a gate problem string instead of a traceback.
 
+### Hardening — advisory repo-invariant-review and nightly lint
+
+`quality-gates.yml` runs `repo-invariant-review` after charter invariants with
+`continue-on-error` and never `--strict`. Push-to-main without
+`github.event.before` is skipped rather than faked as `origin/main`. Nightly
+`lint-typecheck` is a separate short job (`quality-gate.sh lint` + `typecheck`),
+not folded into the 30-minute pytest job or the 60-minute freshness job.
+
 ### Hardening — nightly e2e-freshness installs archguard
 
 The `e2e-freshness` job omitted `--extra archguard` while the sibling `e2e py*`

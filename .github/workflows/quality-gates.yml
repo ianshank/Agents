@@ -226,6 +226,20 @@ jobs:
       # drift that check_charter_drift.py could not have caught.
       - name: Charter invariants guard
         run: python scripts/check_charter_invariants.py
+      # Advisory soak: predicts protected-path / size-budget / airgap collisions.
+      # continue-on-error: never --strict. On pull_request the base is
+      # origin/${{ github.base_ref }}; on push-to-main, github.event.before is
+      # required — a missing or zero SHA is not treated as origin/main.
+      - name: Repo-invariant review (advisory)
+        continue-on-error: true
+        env:
+          INVARIANT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          if [ -z "${INVARIANT_BASE}" ] || [ "${INVARIANT_BASE}" = "0000000000000000000000000000000000000000" ]; then
+            echo "repo-invariant-review: skip — no meaningful push base"
+            exit 0
+          fi
+          python skills/repo-invariant-review/scripts/check_invariants.py --repo . --base "$INVARIANT_BASE"
       # Coverage gate for the quality-gate tooling itself (separate from the library's
       # eval_harness coverage, since scripts/ is omitted from that config).
       - name: Quality-gate tooling coverage (>=85%)
