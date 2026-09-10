@@ -47,8 +47,8 @@ These stay human. Agents must not `--apply` branch protection, must not write
   `implemented_in` restamped to squash #217 (`f1fd5ef`); OpenSpec change archived.
 - [x] **Eval-evidence Phase 8 residual** — Provenance SHA reachable (ancestor of
   HEAD, never equal-to-HEAD) plus monotonicity/waiver. ADR 0033 amended.
-  Committed e2e-matrix *results* columns stay stale per `docs/e2e-matrix/ERRATA.md`
-  until the next full e2e `--update`.
+  Restamped 2026-09-10 from a 31/31 offline POSIX driver (`suite:root` 2978).
+  OpenSpec `repair-e2e-matrix-provenance` archived.
 - [x] **Eval-evidence Phase 9 + Phase 10 canaries** — fleet census
   (`tests/_fleet_matrix.py`); M2/M6 negative controls only. Do not implement
   measurement-wedge WS-1 or the production eval flywheel.

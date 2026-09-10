@@ -80,7 +80,8 @@ render is a drop to `MonotonicityConfig.missing_suite_tests` (0), not a skip —
 vanished or unparsable grid is therefore a drop of every prior row. Known-stale stamps
 are waived in `PROVENANCE_SHA_WAIVERS` until the
 next full e2e `--update`. See `docs/e2e-matrix/ERRATA.md` and
-`openspec/changes/repair-e2e-matrix-provenance/`.
+`openspec/changes/archive/repair-e2e-matrix-provenance/`. The 2026-09-10 restamp
+retired those waiver rows.
 
 ## Consequences
 

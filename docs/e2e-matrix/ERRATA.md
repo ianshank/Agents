@@ -60,14 +60,13 @@ currently looks the same to the gate as a legitimate incremental update.
 
 ## Disposition
 
-Phase 8 residual landed 2026-09-08 (`openspec/changes/repair-e2e-matrix-provenance/`,
+Phase 8 residual landed 2026-09-08 (`openspec/changes/archive/repair-e2e-matrix-provenance/`,
 ADR 0033 amendment): Provenance SHA is gated as *reachable* (exists, ancestor of HEAD),
 never equal to HEAD; `--update` refuses a drop in observed-step or suite test counts
-unless `MONOTONICITY_WAIVERS` names that exact pair. The live stamp
-`0b2cbfb7c3f5b976bdcafcbd4ee8ff5c0959d632` and the historical `09337aec…` stamp are
-waived until the next full e2e `--update` restamps the artifact.
+unless `MONOTONICITY_WAIVERS` names that exact pair.
 
-Until that restamp, treat the committed `docs/e2e-matrix/` artifact's *results* columns
-(Status, Detail, Duration, Tests, Failures, Skipped, Evidence, and the Coverage Grid's
-test counts) as stale; its *declared* columns (Tier, Area, Step, Command, Workdir,
-Required Credentials) are independently verified current as of the original filing.
+A full offline POSIX driver restamp landed 2026-09-10: PASS 31 / FAIL 0 / SKIP 0,
+Provenance SHA `27e5b8cb588569f021e8bc83b7592fa67be91015` (`suite:root` 2978). The
+historical `09337aec…` / `0b2cbfb7…` waiver rows and the 1627→995 / 38→30
+monotonicity waivers are retired. Treat committed *results* columns as current as of
+that restamp.

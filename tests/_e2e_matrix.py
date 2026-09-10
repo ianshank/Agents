@@ -1591,31 +1591,12 @@ class SubprocessGit:
         return self._run("merge-base", "--is-ancestor", ancestor, head).returncode == 0
 
 
-#: Known-stale stamps documented in ``docs/e2e-matrix/ERRATA.md``. A still-stamped
-#: SHA in this map is accepted so ``--check`` on a shallow clone or a not-yet-restamped
-#: artifact does not go red; remove an entry once a fresh ``--update`` restamps it.
-PROVENANCE_SHA_WAIVERS: Mapping[str, str] = {
-    "09337aec16e8b10588efd0e61c9d270d18ada1c4": ("ERRATA.md: stamp is not the tree it claims; 3272006 aborted render"),
-    "0b2cbfb7c3f5b976bdcafcbd4ee8ff5c0959d632": (
-        "ERRATA.md: POSIX-driver restamp still predates the Phase 8 gate; waived until the next full e2e --update"
-    ),
-}
+#: Known-stale stamps documented in ``docs/e2e-matrix/ERRATA.md``. Empty after the
+#: 2026-09-10 restamp from a 31/31 offline driver; add a row only for a still-stamped SHA.
+PROVENANCE_SHA_WAIVERS: Mapping[str, str] = {}
 
-#: The 1627→995 / 38→30 drop at 3272006. Live comparisons that are not this pair still fail.
-MONOTONICITY_WAIVERS: tuple[MonotonicityWaiver, ...] = (
-    MonotonicityWaiver(
-        metric="observed_steps",
-        previous=38,
-        current=30,
-        reason="ERRATA.md: 3272006 aborted/interrupted render",
-    ),
-    MonotonicityWaiver(
-        metric="suite:root",
-        previous=1627,
-        current=995,
-        reason="ERRATA.md: 3272006 aborted/interrupted render",
-    ),
-)
+#: Historical 1627→995 / 38→30 drop at 3272006. Retired after the 31/31 restamp.
+MONOTONICITY_WAIVERS: tuple[MonotonicityWaiver, ...] = ()
 
 
 def markdown_section(document: str, heading: str) -> str:

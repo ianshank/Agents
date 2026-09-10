@@ -1197,18 +1197,40 @@ def test_provenance_skips_a_missing_object_in_a_shallow_clone() -> None:
     assert any("not a commit" in p for p in problems)
 
 
-def test_provenance_waiver_covers_the_errata_stamp() -> None:
+def test_provenance_waiver_covers_an_explicit_stamp() -> None:
     git = _FakeGit(existing=frozenset(), ancestor_pairs=frozenset())
     sha = "09337aec16e8b10588efd0e61c9d270d18ada1c4"
-    assert em.provenance_integrity_problems(_prov_doc(sha), git=git, head="HEADSHA", skip_missing_objects=False) == []
+    waived = {sha: "ERRATA.md: historical stamp"}
+    assert (
+        em.provenance_integrity_problems(
+            _prov_doc(sha), git=git, head="HEADSHA", skip_missing_objects=False, waivers=waived
+        )
+        == []
+    )
+    problems = em.provenance_integrity_problems(_prov_doc(sha), git=git, head="HEADSHA", skip_missing_objects=False)
+    assert any("not a commit" in p for p in problems)
 
 
-def test_monotonicity_fails_a_drop_and_accepts_the_errata_waiver() -> None:
+def test_monotonicity_fails_a_drop_and_accepts_an_explicit_waiver() -> None:
     prev = em.EvidenceSnapshot(observed_steps=38, suite_tests={"suite:root": 1627})
     dropped = em.EvidenceSnapshot(observed_steps=30, suite_tests={"suite:root": 995})
-    assert em.monotonicity_problems(prev, dropped) == []
+    waivers = (
+        em.MonotonicityWaiver(
+            metric="observed_steps",
+            previous=38,
+            current=30,
+            reason="ERRATA.md: 3272006 aborted/interrupted render",
+        ),
+        em.MonotonicityWaiver(
+            metric="suite:root",
+            previous=1627,
+            current=995,
+            reason="ERRATA.md: 3272006 aborted/interrupted render",
+        ),
+    )
+    assert em.monotonicity_problems(prev, dropped, waivers=waivers) == []
     unwaived = em.EvidenceSnapshot(observed_steps=10, suite_tests={"suite:root": 100})
-    problems = em.monotonicity_problems(prev, unwaived)
+    problems = em.monotonicity_problems(prev, unwaived, waivers=waivers)
     assert any("observed steps dropped" in p for p in problems)
     assert any("suite:root tests dropped" in p for p in problems)
 

@@ -29,10 +29,6 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
-- [`changes/repair-e2e-matrix-provenance/`](changes/repair-e2e-matrix-provenance/) —
-  eval-evidence **Phase 8 residual.** Provenance SHA reachable (ancestor of HEAD, never
-  equal-to-HEAD) plus monotonicity/waiver. Amends ADR 0033. Until the next full e2e
-  `--update`, treat committed results columns as stale per `docs/e2e-matrix/ERRATA.md`.
 - [`changes/extend-matrix-to-fleet/`](changes/extend-matrix-to-fleet/) —
   eval-evidence **Phase 9.** Fleet census: derive `CALIBRATOR_FACTORIES` /
   `SPECIMENS`, hand-declare the rest against public-surface baselines. Amends ADR 0032 §6.
@@ -79,6 +75,7 @@ Landed; kept for provenance. Each carries its F-ID and the commit it landed in.
 | [`changes/archive/add-rca-eval-matrix/`](changes/archive/add-rca-eval-matrix/) | F-067 | `d75028c62c1f` |
 | [`changes/archive/add-requirements-gen-eval-matrix/`](changes/archive/add-requirements-gen-eval-matrix/) | F-068 | `49c7db829066` |
 | [`changes/archive/add-agent-in-the-loop-testgen/`](changes/archive/add-agent-in-the-loop-testgen/) | F-069 | `f1fd5efa1b8d` |
+| [`changes/archive/repair-e2e-matrix-provenance/`](changes/archive/repair-e2e-matrix-provenance/) | — | `27e5b8cb5885` |
 
 ## Removing this spike
 
