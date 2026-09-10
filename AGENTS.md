@@ -191,6 +191,7 @@ Standard library `logging` module. Modules obtain a logger via `logger = logging
 - **Hooks**:
   - `SessionStart` → `.claude/hooks/session-start.sh` — installs every sibling package + extras
     (hypothesis, pydantic, etc.) so a fresh session's toolchain matches CI before any work starts;
+    fail-open `git fetch origin main` before the stale-local-`main` warning (never `main:main`);
     idempotent, never fails the session.
   - `PostToolUse` (Edit|Write) → `.claude/hooks/post-edit-size-budget.py` — fail-open, advisory
     re-check of the ADR 0019 500-line file budget on just the edited `.py` file.

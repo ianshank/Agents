@@ -19,11 +19,12 @@ and report a single pass/fail with evidence.
   (`make install` / `make install-all`).
 - The working tree state to validate is already the checked-out state — this skill
   does not stash, commit, or switch branches.
-- The local base ref (`main` by default) should be up to date with its remote. A
-  stale local ref produces misleading `regression_gate.py`/`repo-invariant-review`
+- The comparison base should be an up-to-date remote-tracking ref. A stale local
+  `main` produces misleading `regression_gate.py`/`repo-invariant-review`
   findings that point at already-merged, unrelated commits rather than the branch
-  under review — `git fetch origin main:main` first if in doubt; this gate does not
-  do that for you.
+  under review — `git fetch origin main` first if in doubt (tracking ref only);
+  this gate does not do that for you. `make pre-pr` already compares against
+  `origin/main` (`PRE_PR_BASE_REF`).
 
 ## 2. Procedure (the E2E steps)
 

@@ -62,11 +62,18 @@ else
   log "SKIP_SESSION_BOOTSTRAP set — skipping dependency install"
 fi
 
+# Refresh origin/main so the behind-count is not a stale remote-tracking ref.
+# Never `git fetch origin main:main` — that updates local main under the session.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  GIT_TERMINAL_PROMPT=0 git fetch --quiet origin main \
+    || log "WARNING: git fetch failed (offline?). Stale-main warning may be inaccurate."
+fi
+
 # Check for stale local main
 if git rev-parse --verify origin/main >/dev/null 2>&1 && git rev-parse --verify main >/dev/null 2>&1; then
   BEHIND="$(git rev-list --count main..origin/main 2>/dev/null || echo 0)"
   if [ "${BEHIND:-0}" -gt 0 ]; then
-    log "WARNING: local 'main' is behind 'origin/main' by $BEHIND commit(s). Run 'git fetch origin main:main' to update your local main ref without switching branches."
+    log "WARNING: local 'main' is behind 'origin/main' by $BEHIND commit(s). This hook refreshed origin/main. Compare against origin/main (make pre-pr / PRE_PR_BASE_REF). Do not update local main from this session."
   fi
 fi
 

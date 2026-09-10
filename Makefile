@@ -133,7 +133,8 @@ check-all: check check-agent-core check-behavioral-regression check-claude-found
 # Overridable: the ref regression_gate.py / repo-invariant-review compare this branch
 # against, e.g. `make pre-pr PRE_PR_BASE_REF=origin/develop`. A stale local ref (as
 # opposed to its remote-tracking counterpart) produces misleading findings unrelated
-# to the branch under review -- `git fetch origin main:main` first if in doubt.
+# to the branch under review -- `git fetch origin main` first if in doubt
+# (tracking ref only; do not update local main from the session).
 PRE_PR_BASE_REF ?= origin/main
 
 pre-pr: ## Full pre-PR validation: every gate CI enforces, chained locally; accumulates failures
