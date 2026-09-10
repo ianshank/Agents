@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Hardening — vanished README registry headings are drift
+
+`check_docs_drift` treated a missing or renamed registry heading as a skip
+(`continue` when `extract_section_text` returned `None`). A listed doc with no
+extractable section is now a problem (posix path + registry key); there is no
+disable flag. Soak stays `docs.yml` `continue-on-error`. Session-start fetches
+`origin main` fail-open before the stale-main warning (never `main:main`).
+
 ### Hardening — F-069 `implemented_in` restamp (F-064)
 
 Restamped F-069 `implemented_in` from pre-squash `26e56e0` (not an ancestor of

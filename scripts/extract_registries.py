@@ -22,9 +22,22 @@ import pathlib
 import re
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger("extract_registries")
+
+
+@dataclass(frozen=True)
+class DocsDriftConfig:
+    """README/registry drift policy (ADR 0009). Defaults match the CLI.
+
+    A listed doc with no extractable section is a problem, not a skip. There is
+    no missing-section disable flag: soak stays ``docs.yml`` ``continue-on-error``.
+    """
+
+    src_dir: str = "src/eval_harness"
+    plugins_path: str = "src/eval_harness/plugins.py"
 
 
 def configure_logging(verbose: bool = False) -> None:
@@ -199,12 +212,19 @@ def check_docs_drift(
     src_dir: str | pathlib.Path = "src/eval_harness",
     plugins_path: str | pathlib.Path = "src/eval_harness/plugins.py",
     doc_paths: Sequence[str | pathlib.Path] | None = None,
+    *,
+    config: DocsDriftConfig | None = None,
 ) -> list[str]:
     """Check that all registered components are documented in the specified markdown docs.
 
     Returns:
         List of problem descriptions (empty if no drift).
     """
+    if config is None:
+        config = DocsDriftConfig(src_dir=str(src_dir), plugins_path=str(plugins_path))
+    src_dir = config.src_dir
+    plugins_path = config.plugins_path
+
     registries = discover_registries(plugins_path)
     if not registries:
         return ["No registries discovered from plugins file"]
@@ -234,12 +254,15 @@ def check_docs_drift(
 
         for doc_name, doc_content in docs.items():
             section_text = extract_section_text(doc_content, key)
+            posix = pathlib.Path(doc_name).as_posix()
             if section_text is None:
+                logger.warning("listed doc %s has no extractable %s/ section", posix, key)
+                problems.append(f"{posix}: missing {key}/ section")
                 continue
 
             missing = sorted(n for n in names if not re.search(rf"\b{re.escape(str(n))}\b", section_text))
             if missing:
-                problems.append(f"{doc_name}: {key}/ omits registered component(s): {missing}")
+                problems.append(f"{posix}: {key}/ omits registered component(s): {missing}")
 
     return problems
 

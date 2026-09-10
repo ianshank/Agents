@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -259,6 +260,65 @@ class TestCheckDocsDrift:
             doc_paths=[readme],
         )
         assert problems == []
+
+    def test_docs_drift_config_has_no_disable_flag(self) -> None:
+        assert "missing_section_is_error" not in extract_registries.DocsDriftConfig.__dataclass_fields__
+
+    def test_live_tree_has_no_docs_drift(self) -> None:
+        assert extract_registries.check_docs_drift() == []
+
+    def test_renamed_heading_is_a_problem(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        src = tmp_path / "src"
+        src.mkdir()
+        plugins = src / "plugins.py"
+        plugins.write_text('SCORERS: Registry[Any] = Registry("scorer")', encoding="utf-8")
+        (src / "comp.py").write_text('@SCORERS.register("valid_scorer")\ndef f(): pass', encoding="utf-8")
+        readme = tmp_path / "README.md"
+        readme.write_text("  scoring/\n    valid_scorer\n", encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING, logger="extract_registries"):
+            problems = extract_registries.check_docs_drift(
+                src_dir=src,
+                plugins_path=plugins,
+                doc_paths=[readme],
+            )
+        assert len(problems) == 1
+        assert "scorers" in problems[0]
+        assert readme.as_posix() in problems[0]
+        assert "missing" in problems[0]
+        assert any("no extractable scorers/ section" in rec.message for rec in caplog.records)
+
+    def test_two_docs_one_renamed_heading_is_one_problem(self, tmp_path: Path) -> None:
+        src = tmp_path / "src"
+        src.mkdir()
+        plugins = src / "plugins.py"
+        plugins.write_text('SCORERS: Registry[Any] = Registry("scorer")', encoding="utf-8")
+        (src / "comp.py").write_text('@SCORERS.register("valid_scorer")\ndef f(): pass', encoding="utf-8")
+        good = tmp_path / "README.md"
+        good.write_text("  scorers/\n    valid_scorer\n", encoding="utf-8")
+        renamed = tmp_path / "pkg_README.md"
+        renamed.write_text("  scoring/\n    valid_scorer\n", encoding="utf-8")
+
+        problems = extract_registries.check_docs_drift(
+            src_dir=src,
+            plugins_path=plugins,
+            doc_paths=[good, renamed],
+        )
+        assert len(problems) == 1
+        assert renamed.as_posix() in problems[0]
+        assert "scorers" in problems[0]
+        assert good.as_posix() not in problems[0]
+
+    def test_docs_drift_config_kwarg_selects_paths(self, tmp_path: Path) -> None:
+        src = tmp_path / "src"
+        src.mkdir()
+        plugins = src / "plugins.py"
+        plugins.write_text('SCORERS: Registry[Any] = Registry("scorer")', encoding="utf-8")
+        (src / "comp.py").write_text('@SCORERS.register("valid_scorer")\ndef f(): pass', encoding="utf-8")
+        readme = tmp_path / "README.md"
+        readme.write_text("  scorers/\n    valid_scorer\n", encoding="utf-8")
+        cfg = extract_registries.DocsDriftConfig(src_dir=str(src), plugins_path=str(plugins))
+        assert extract_registries.check_docs_drift(config=cfg, doc_paths=[readme]) == []
 
 
 class TestCLIExecution:

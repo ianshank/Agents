@@ -84,11 +84,9 @@ These stay human. Agents must not `--apply` branch protection, must not write
     non-blocking into `quality-gates.yml` (its own scoping is already CI-safe —
     `{base}...HEAD` is immune to a stale `base`; verified several of its checks
     already duplicate gates that block elsewhere, which is why non-blocking is the
-    right shape, not a new hard gate); a stale-local-`main` warning in
-    `.claude/hooks/session-start.sh` (the exact failure mode that produced
-    misleading `regression_gate.py` output mid-session — a local `main` 9 commits
-    behind `origin/main` — `git fetch origin main:main` fixed it, but nothing
-    detects it proactively). (The third deferred item — extending `nightly-e2e.yml`'s
+    right shape, not a new hard gate). ~~a stale-local-`main` warning in
+    `.claude/hooks/session-start.sh`~~ — **shipped**: fail-open `git fetch origin main`
+    (never `main:main`) before the behind-count. (The third deferred item — extending `nightly-e2e.yml`'s
     invariant-check step with the size-budget, guard-reachability,
     architecture-drift, and marketplace guards — has since shipped; lint/mypy/coverage
     still do not run nightly.)
@@ -298,16 +296,15 @@ These stay human. Agents must not `--apply` branch protection, must not write
     `scripts/extract_registries.py --check`, which discovers all six registries via AST
     (`discover_registries()`), including `STATE_ADAPTERS` — both `README.md` and
     `src/eval_harness/README.md` already document its four adapters. This bullet's premise
-    was stale by the time it was written. The one real, narrower residual: `check_docs_drift`
-    silently `continue`s when a registry's doc section heading is absent or renamed, and the
-    job itself is `continue-on-error: true` — worth folding into a future pass, not F-054.
-  - **`--cov-config=/dev/null`** in the tooling-coverage step discards
-    `pyproject.toml`'s `exclude_lines`, so every validator is charged for its
-    `raise SystemExit(main())` and `sys.path` bootstrap — a systematic tax absorbed by the
-    85% floor. Point it at a real rcfile, or `# pragma: no cover` the `__main__` guards.
-  - **`EvalConfig` is not in `eval_harness.config.__all__`** — the single `mypy --strict`
-    error in the new guard library, and it also lands on the matrix suite. Worth fixing in
-    the library regardless.
+    was stale by the time it was written. ~~The one real, narrower residual:
+    `check_docs_drift` silently `continue`s when a registry's doc section heading is
+    absent or renamed~~ — **shipped**: a listed doc with no extractable section is a
+    problem (`DocsDriftConfig`; no disable flag). `docs.yml` stays
+    `continue-on-error: true`.
+  - ~~**`--cov-config=/dev/null`** in the tooling-coverage step discards
+    `pyproject.toml`'s `exclude_lines`~~ — **shipped**: tooling coverage uses
+    `scripts/tooling.coveragerc`.
+  - ~~**`EvalConfig` is not in `eval_harness.config.__all__`**~~ — **shipped**.
   - **`mypy --strict` over root `tests/`** — 18 errors in `test_matrix_eval_tools.py`
     (11 missing annotations on `setup_class`/helpers, 7 bare generics). The four sibling
     packages already run `strict = true` over their tests; enabling
@@ -343,7 +340,9 @@ These stay human. Agents must not `--apply` branch protection, must not write
      advisory — the opposite of what these blocking gates need. A ~15-line
      `freshness_main(render, path, hint)` helper is the right size; candidate 3 subsumes the
      rest.
-  6. **`openspec-archive` mechanical helper — reconsidered, not rejected.** A 2026-08-18
+  6. ~~**`openspec-archive` mechanical helper — reconsidered, not rejected.**~~
+     **shipped**: `scripts/openspec_archive.py` (`git mv` + outbound relative-link
+     rewrite). Historical notes: a 2026-08-18
      ledger-refresh pass archiving 6 proposals by hand made two real mistakes a script
      wouldn't: an ad-hoc `grep ... | grep -v "changes/archive"` link check silently excluded
      its own results (grepping *inside* `changes/archive/` means the matched filename itself
