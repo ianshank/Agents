@@ -17,7 +17,8 @@ evidence log the runner wrote.
 ## Regenerating
 
 ```bash
-bash scripts/run_all_e2e.sh --tiers all --hypothesis-profile ci   # POSIX (canonical)
+bash scripts/run_all_e2e.sh --tiers offline --hypothesis-profile ci   # POSIX (nightly freshness / committed restamp)
+# or: bash scripts/run_all_e2e.sh --tiers all --hypothesis-profile ci   # + Tier D live
 # or: pwsh -NoProfile -File scripts/run_all_e2e.ps1 -Tiers all -HypothesisProfile ci
 python tests/test_e2e_matrix.py --update      # rewrite this directory
 python tests/test_e2e_matrix.py --check       # exit 1 if it is stale

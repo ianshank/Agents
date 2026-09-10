@@ -38,12 +38,14 @@ went from 7 SKIP to 7 NOT-RUN, and `matrix:coverage-check` from PASS to NOT-RUN.
 as a run that was aborted or interrupted partway through, then committed anyway with a stamp
 that does not match its own tree.
 
-## Actual current numbers
+## Historical checkout snapshot (not current)
 
-As measured on this checkout (`9eb0520`), both suites are substantially larger than the
-committed artifact claims:
+As measured on checkout `9eb0520` *before* the 2026-09-10 restamp, both suites
+were substantially larger than the then-committed interrupted artifact claimed.
+The restamp superseded these counts (`suite:root` 2978 at
+`27e5b8cb588569f021e8bc83b7592fa67be91015`).
 
-| Suite | Artifact claims | Actual (this checkout) |
+| Suite | Artifact claimed (interrupted render) | Actual (`9eb0520`) |
 |---|---|---|
 | `suite:root` | 995 | 1993 |
 | `suite:agent-core` | 714 | 876 |

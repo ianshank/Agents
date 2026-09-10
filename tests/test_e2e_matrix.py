@@ -67,6 +67,21 @@ class SubprocessConfig:
 
 DEFAULT_SUBPROCESS_CONFIG = SubprocessConfig()
 
+
+@dataclass(frozen=True)
+class ProvenanceRenderConfig:
+    """How the committed artifact records the run that produced it.
+
+    Nightly ``e2e-freshness`` is the CI producer (``run_all_e2e.sh --tiers offline
+    --hypothesis-profile ci``). ``--tiers all`` would enter Tier D and record
+    credential-gated SKIPs, not the NOT-RUN rows this artifact carries.
+    """
+
+    runner_invocation: str = "bash scripts/run_all_e2e.sh --tiers offline --hypothesis-profile ci"
+
+
+DEFAULT_PROVENANCE_RENDER = ProvenanceRenderConfig()
+
 FIXED_PROVENANCE = em.Provenance(
     sha="0" * 40,
     branch="test",
@@ -1212,27 +1227,58 @@ def test_provenance_waiver_covers_an_explicit_stamp() -> None:
 
 
 def test_monotonicity_fails_a_drop_and_accepts_an_explicit_waiver() -> None:
-    prev = em.EvidenceSnapshot(observed_steps=38, suite_tests={"suite:root": 1627})
-    dropped = em.EvidenceSnapshot(observed_steps=30, suite_tests={"suite:root": 995})
-    waivers = (
-        em.MonotonicityWaiver(
-            metric="observed_steps",
-            previous=38,
-            current=30,
-            reason="ERRATA.md: 3272006 aborted/interrupted render",
-        ),
-        em.MonotonicityWaiver(
-            metric="suite:root",
-            previous=1627,
-            current=995,
-            reason="ERRATA.md: 3272006 aborted/interrupted render",
-        ),
-    )
+    drop = em.ERRATA_3272006_DROP
+    prev, dropped = drop.previous_snapshot(), drop.current_snapshot()
+    waivers = drop.waivers()
     assert em.monotonicity_problems(prev, dropped, waivers=waivers) == []
-    unwaived = em.EvidenceSnapshot(observed_steps=10, suite_tests={"suite:root": 100})
+    unwaived = em.EvidenceSnapshot(observed_steps=10, suite_tests={drop.suite_step: 100})
     problems = em.monotonicity_problems(prev, unwaived, waivers=waivers)
     assert any("observed steps dropped" in p for p in problems)
-    assert any("suite:root tests dropped" in p for p in problems)
+    assert any(f"{drop.suite_step} tests dropped" in p for p in problems)
+
+
+def test_default_monotonicity_waivers_reject_the_historical_errata_drop() -> None:
+    """Empty live waivers must still fail the ERRATA 3272006 pair.
+
+    ``test_monotonicity_fails_a_drop_and_accepts_an_explicit_waiver`` always passes
+    ``waivers=``; without this default-path assertion, retiring
+    ``MONOTONICITY_WAIVERS`` would not be covered.
+    """
+    drop = em.ERRATA_3272006_DROP
+    problems = em.monotonicity_problems(drop.previous_snapshot(), drop.current_snapshot())
+    assert em.MONOTONICITY_WAIVERS == ()
+    assert any("observed steps dropped" in p for p in problems)
+    assert any(f"{drop.suite_step} tests dropped" in p for p in problems)
+
+
+def test_provenance_records_the_configured_runner_invocation() -> None:
+    custom = ProvenanceRenderConfig(runner_invocation="custom-driver --flag")
+    prov = _provenance(sha="abc", stamp=FIXED_STAMP, config=custom)
+    assert prov.runner_invocation == custom.runner_invocation
+
+
+def test_default_provenance_invocation_matches_nightly_freshness() -> None:
+    """The recorded recipe is the freshness job's driver line, not a restated copy."""
+    from tests.test_e2e_driver_parity import NIGHTLY_WORKFLOW, freshness_driver_invocation
+
+    recorded = freshness_driver_invocation(NIGHTLY_WORKFLOW.read_text(encoding="utf-8"))
+    assert DEFAULT_PROVENANCE_RENDER.runner_invocation == recorded
+
+
+def test_committed_provenance_records_the_default_offline_invocation() -> None:
+    """Hand-edited md/csv/xlsx must not drift back to ``--tiers all``."""
+    import zipfile
+
+    invocation = DEFAULT_PROVENANCE_RENDER.runner_invocation
+    md = (em.DEFAULT_OUT_DIR / em.ARTIFACT_DOC_NAME).read_text(encoding="utf-8")
+    csv_name = em.csv_filename(em.Sheet(name=em.PROVENANCE_SHEET_NAME, columns=()))
+    csv_text = (em.DEFAULT_OUT_DIR / em.CSV_DIR_NAME / csv_name).read_text(encoding="utf-8")
+    assert invocation in md
+    assert invocation in csv_text
+    workbook = em.DEFAULT_OUT_DIR / em.WORKBOOK_FILENAME
+    with zipfile.ZipFile(workbook) as archive:
+        blob = b"".join(archive.read(name) for name in archive.namelist())
+    assert invocation.encode("utf-8") in blob
 
 
 def test_monotonicity_allows_an_increase() -> None:
@@ -1368,7 +1414,11 @@ def _display_path(path: Path) -> str:
 
 
 def build_committed_sheets(
-    report_dir: Path = em.DEFAULT_REPORT_DIR, *, sha: str | None = None, stamp: str | None = None
+    report_dir: Path = em.DEFAULT_REPORT_DIR,
+    *,
+    sha: str | None = None,
+    stamp: str | None = None,
+    config: ProvenanceRenderConfig = DEFAULT_PROVENANCE_RENDER,
 ) -> tuple[tuple[em.Sheet, ...], em.Provenance]:
     """The sheets exactly as the committed artifact is written, with the provenance used.
 
@@ -1381,7 +1431,7 @@ def build_committed_sheets(
     ``generated_at`` (the xlsx writer's pinned timestamp, say) can use the value that was
     actually rendered instead of re-deriving it or scraping it back out of a rendered row.
     """
-    provenance = _provenance(sha, stamp)
+    provenance = _provenance(sha, stamp, config=config)
     return em.build_sheets(report_dir, provenance=provenance, scrub=_load_scrubber()), provenance
 
 
@@ -1422,7 +1472,12 @@ def _to_utc_iso(stamp: str) -> str:
     return dt.datetime.fromisoformat(stamp).astimezone(dt.UTC).isoformat()
 
 
-def _provenance(sha: str | None = None, stamp: str | None = None) -> em.Provenance:
+def _provenance(
+    sha: str | None = None,
+    stamp: str | None = None,
+    *,
+    config: ProvenanceRenderConfig = DEFAULT_PROVENANCE_RENDER,
+) -> em.Provenance:
     """Run identity. Volatile values are overridable so a render can be reproduced."""
     return em.Provenance(
         sha=sha or _git("rev-parse", "HEAD"),
@@ -1430,9 +1485,7 @@ def _provenance(sha: str | None = None, stamp: str | None = None) -> em.Provenan
         generated_at=_to_utc_iso(stamp or _git("log", "-1", "--format=%cI")),
         host=platform.platform(),
         python_version=platform.python_version(),
-        # Canonical generation environment is the POSIX driver on Linux (the nightly
-        # freshness job runs it); the .ps1 remains the Windows driver.
-        runner_invocation="bash scripts/run_all_e2e.sh --tiers all --hypothesis-profile ci",
+        runner_invocation=config.runner_invocation,
     )
 
 

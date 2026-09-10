@@ -178,11 +178,11 @@ Phase 6 closes.
 
 ## Phase 8 — E2E matrix integrity and a POSIX driver
 
-**Status (2026-09-08):** residual landed. Provenance SHA is gated as reachable
+**Status (2026-09-10):** restamp landed. Provenance SHA is gated as reachable
 (ancestor of HEAD, never equal-to-HEAD); `--update` refuses a drop unless
 `MONOTONICITY_WAIVERS` names that pair. POSIX driver and nightly freshness were
-already on `main`. Known-stale stamps remain waived until the next full e2e
-`--update` (`docs/e2e-matrix/ERRATA.md`).
+already on `main`. The 2026-09-10 31/31 offline restamp retired the known-stale
+`PROVENANCE_SHA_WAIVERS` / `MONOTONICITY_WAIVERS` rows (`docs/e2e-matrix/ERRATA.md`).
 
 - Provenance gated as reachable and consistent (Pass 2 A7), landed as an ADR 0033 amendment
   so the original exemption's reasoning survives and only its scope narrows.

@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Regenerated `docs/e2e-matrix/` from a POSIX `run_all_e2e.sh --tiers offline`
 run that recorded PASS 31 / FAIL 0 / SKIP 0 (`suite:root` 2978). Retired
 `PROVENANCE_SHA_WAIVERS` / `MONOTONICITY_WAIVERS` rows for the ERRATA stamps.
-Archived `openspec/changes/archive/repair-e2e-matrix-provenance/`.
+Archived `openspec/changes/archive/repair-e2e-matrix-provenance/`. Provenance
+`runner_invocation` is `ProvenanceRenderConfig` (nightly `e2e-freshness`
+command), not `--tiers all`.
 
 ### Hardening — vanished README registry headings are drift
 
