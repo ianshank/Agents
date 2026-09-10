@@ -100,6 +100,6 @@
 | Generated at (UTC) | 2026-09-09T01:57:55+00:00 |
 | Host | Linux-6.12.94+-x86_64-with-glibc2.39 |
 | Python | 3.12.3 |
-| Runner invocation | bash scripts/run_all_e2e.sh --tiers all --hypothesis-profile ci |
+| Runner invocation | bash scripts/run_all_e2e.sh --tiers offline --hypothesis-profile ci |
 | Regenerate | python tests/test_e2e_matrix.py --update |
 | Policy | Generated artifact per ADR 0032/0033 - do not edit by hand. |
