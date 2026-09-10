@@ -73,7 +73,7 @@ fi
 if git rev-parse --verify origin/main >/dev/null 2>&1 && git rev-parse --verify main >/dev/null 2>&1; then
   BEHIND="$(git rev-list --count main..origin/main 2>/dev/null || echo 0)"
   if [ "${BEHIND:-0}" -gt 0 ]; then
-    log "WARNING: local 'main' is behind 'origin/main' by $BEHIND commit(s). Run 'git fetch origin main:main' to update your local main ref without switching branches."
+    log "WARNING: local 'main' is behind 'origin/main' by $BEHIND commit(s). This hook refreshed origin/main. Compare against origin/main (make pre-pr / PRE_PR_BASE_REF). Do not update local main from this session."
   fi
 fi
 

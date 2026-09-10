@@ -12,7 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 (`continue` when `extract_section_text` returned `None`). A listed doc with no
 extractable section is now a problem (posix path + registry key); there is no
 disable flag. Soak stays `docs.yml` `continue-on-error`. Session-start fetches
-`origin main` fail-open before the stale-main warning (never `main:main`).
+`origin main` fail-open before the stale-main warning (never `main:main`); the
+WARNING compares against `origin/main` and does not recommend updating local
+`main` from the session.
 
 ### Hardening — F-069 `implemented_in` restamp (F-064)
 

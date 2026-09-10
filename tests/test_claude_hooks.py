@@ -72,6 +72,19 @@ def test_every_configured_hook_file_exists_and_is_executable() -> None:
     assert not not_executable, f"hooks are not executable: {not_executable}"
 
 
+def test_session_start_warning_does_not_recommend_updating_local_main() -> None:
+    """Agents follow the WARNING; recommending ``main:main`` updates local main under the session.
+
+    The hook already fail-open fetches ``origin main``. The explanatory comment may
+    still name ``main:main``; the ``log "WARNING:`` lines must not.
+    """
+    text = (HOOK_DIR / "session-start.sh").read_text(encoding="utf-8")
+    warnings = [line for line in text.splitlines() if 'log "WARNING:' in line]
+    assert warnings, "session-start.sh no longer emits log WARNING lines"
+    offenders = [line for line in warnings if "main:main" in line]
+    assert not offenders, f"session-start WARNING recommends updating local main: {offenders}"
+
+
 def _hook_module(hook: str, alias: str) -> Any:
     """Import a hook by path so its internals can be driven directly.
 
