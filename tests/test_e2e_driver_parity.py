@@ -7,7 +7,7 @@ runner: it exists so the nightly freshness job can produce a run report on
 ``ubuntu-latest`` (the .ps1 driver has never run in CI). The mirror is only safe
 if the two drivers can never drift apart, so this module derives both inventories
 and compares them -- the same derive-never-allowlist idiom as
-``test_required_check_stubs.py``.
+    ``test_required_check_stubs.py``.
 
 Bash call convention the extraction relies on (keep it when editing the driver):
 step-recording helpers take the tier as ``$1`` and the step name as ``$2``, both
@@ -17,16 +17,48 @@ as literal words or single-quoted strings -- never variables. Calls that use
 
 from __future__ import annotations
 
+import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 from tests import _e2e_matrix as em
 
+logger = logging.getLogger(__name__)
+
 ROOT = Path(__file__).resolve().parent.parent
 BASH_DRIVER = ROOT / "scripts" / "run_all_e2e.sh"
 PS1_DRIVER = ROOT / "scripts" / "run_all_e2e.ps1"
+
+
+@dataclass(frozen=True)
+class NightlyExtraPinConfig:
+    """Which nightly jobs must share extras, and which extra the driver needs.
+
+    Job ids are YAML keys under ``jobs:``, not display names. ``required_extra``
+    is ``archguard`` because F-009/F-011 and the drift-guard e2e import grimp.
+    ``comment_prefix`` is stripped before extra names are collected so a comment
+    that mentions ``--extra archguard`` cannot credit the omitted extra.
+    """
+
+    workflow_relpath: str = ".github/workflows/nightly-e2e.yml"
+    matrix_job: str = "e2e-matrix"
+    freshness_job: str = "e2e-freshness"
+    required_extra: str = "archguard"
+    comment_prefix: str = "#"
+
+
+NIGHTLY_EXTRA_PIN = NightlyExtraPinConfig()
+NIGHTLY_WORKFLOW = ROOT / NIGHTLY_EXTRA_PIN.workflow_relpath
+
+#: Same extra-flag / pip-extras regexes as ``tests._matrix_coverage.ci_installed_imports``.
+#: Kept as extra *names* here: ``archguard`` has no ``_EXTRA_PROVIDES`` row (it is not
+#: an importorskip matrix gate), so mapping through that helper would silently drop it.
+_UV_EXTRA_RE = re.compile(r"--extra[ =]([A-Za-z0-9_-]+)")
+_PIP_EXTRAS_RE = re.compile(r"\.\[([^\]]+)\]")
+_JOB_HEADER_RE = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$", re.MULTILINE)
 
 #: Step-recording call sites in the bash driver: `helper TIER NAME ...` where both
 #: arguments are literal (bare word or single-quoted). Variable arguments (``$tier``)
@@ -140,3 +172,189 @@ def test_step_helpers_capture_the_real_exit_code() -> None:
     assert call_sites, "run_py is no longer called; this guard has gone stale"
     uncaptured = [ln for ln in call_sites if "|| rc=$?" not in ln]
     assert not uncaptured, f"run_py call sites that drop the exit code: {uncaptured}"
+
+
+def _without_yaml_comment(line: str, *, pin: NightlyExtraPinConfig) -> str:
+    """Return the code portion of a YAML line; empty when the line is a comment.
+
+    Full-line comments and unquoted trailing comments are dropped. ``#`` inside
+    single or double quotes is left in place (an extra name will not appear there).
+    """
+    prefix = pin.comment_prefix
+    stripped = line.lstrip()
+    if stripped.startswith(prefix):
+        logger.debug("dropped full-line YAML comment on extra-pin scan: %s", line.rstrip())
+        return ""
+    in_single = False
+    in_double = False
+    for index, char in enumerate(line):
+        if char == "'" and not in_double:
+            in_single = not in_single
+        elif char == '"' and not in_single:
+            in_double = not in_double
+        elif (
+            not in_single
+            and not in_double
+            and line.startswith(prefix, index)
+            and (index == 0 or line[index - 1].isspace())
+        ):
+            logger.debug("dropped trailing YAML comment on extra-pin scan: %s", line[index:].rstrip())
+            return line[:index]
+    return line
+
+
+def _declared_extra_names(
+    text: str,
+    *,
+    pin: NightlyExtraPinConfig = NIGHTLY_EXTRA_PIN,
+) -> frozenset[str]:
+    """Extra names from uv ``--extra`` flags or pip ``.[a,b]`` install lines."""
+    names: set[str] = set()
+    code_lines = [_without_yaml_comment(ln, pin=pin) for ln in text.splitlines()]
+    install_blob = "\n".join(
+        ln for ln in code_lines if "install:" in ln or "--extra" in ln or 'pip install -e ".[' in ln
+    )
+    for extras in _PIP_EXTRAS_RE.findall(install_blob):
+        for extra in extras.split(","):
+            name = extra.strip()
+            if name:
+                names.add(name)
+    names.update(_UV_EXTRA_RE.findall(install_blob))
+    return frozenset(names)
+
+
+def _github_job_bodies(workflow_text: str) -> dict[str, str]:
+    """Map indent-2 job ids under ``jobs:`` to their body text.
+
+    Not a YAML parser: CI job ids in this repo are bare keys at indent 2 after
+    ``jobs:``. Nested keys are indent 4+, so they are not treated as jobs.
+    """
+    jobs_match = re.search(r"^jobs:\s*$", workflow_text, re.MULTILINE)
+    if jobs_match is None:
+        return {}
+    jobs_block = workflow_text[jobs_match.end() :]
+    headers = list(_JOB_HEADER_RE.finditer(jobs_block))
+    bodies: dict[str, str] = {}
+    for index, match in enumerate(headers):
+        end = headers[index + 1].start() if index + 1 < len(headers) else len(jobs_block)
+        bodies[match.group(1)] = jobs_block[match.end() : end]
+    return bodies
+
+
+def nightly_extra_problems(
+    workflow_text: str,
+    *,
+    pin: NightlyExtraPinConfig = NIGHTLY_EXTRA_PIN,
+) -> list[str]:
+    """Problems in a nightly-e2e workflow's extra sets.
+
+    Equality is between the named pytest job and the freshness job only — a
+    later short lint job must not be forced onto the same extra set. A whole-file
+    search for ``archguard`` is not enough: the pytest job already had it while
+    freshness omitted it.
+    """
+    jobs = _github_job_bodies(workflow_text)
+    problems: list[str] = []
+    extras_by_job: dict[str, frozenset[str]] = {}
+    for job_id, body in jobs.items():
+        extras = _declared_extra_names(body, pin=pin)
+        extras_by_job[job_id] = extras
+        logger.debug("nightly job %s extras: %s", job_id, sorted(extras))
+        if "run_all_e2e.sh" in body and pin.required_extra not in extras:
+            problems.append(f"job {job_id!r} runs run_all_e2e.sh but does not install extra {pin.required_extra!r}")
+
+    if pin.matrix_job not in extras_by_job:
+        problems.append(f"nightly workflow has no {pin.matrix_job!r} job")
+        return problems
+    if pin.freshness_job not in extras_by_job:
+        problems.append(f"nightly workflow has no {pin.freshness_job!r} job")
+        return problems
+
+    matrix_extras = extras_by_job[pin.matrix_job]
+    freshness_extras = extras_by_job[pin.freshness_job]
+    if matrix_extras != freshness_extras:
+        logger.warning(
+            "nightly extra-set mismatch: %s=%s %s=%s",
+            pin.matrix_job,
+            sorted(matrix_extras),
+            pin.freshness_job,
+            sorted(freshness_extras),
+        )
+        problems.append(
+            f"{pin.matrix_job} extras {sorted(matrix_extras)} != {pin.freshness_job} extras {sorted(freshness_extras)}"
+        )
+    if pin.required_extra not in freshness_extras:
+        problems.append(f"{pin.freshness_job} extras {sorted(freshness_extras)} omit {pin.required_extra!r}")
+    return problems
+
+
+def test_nightly_e2e_jobs_share_uv_extras_and_include_archguard() -> None:
+    """The freshness job is the restamp path; it must install what the driver imports."""
+    text = NIGHTLY_WORKFLOW.read_text(encoding="utf-8")
+    problems = nightly_extra_problems(text)
+    assert not problems, "\n".join(problems)
+
+
+def test_nightly_archguard_pin_is_per_job_not_whole_file() -> None:
+    """A file-wide ``archguard`` search stays green when only the pytest job has it.
+
+    That is the defect that kept nightly freshness red: the sibling job installed
+    grimp, so a whole-file extra scan (and ``ci_installed_imports`` on the same
+    blob) would credit the omitted extra.
+    """
+    text = """
+name: nightly-e2e
+jobs:
+  e2e-matrix:
+    steps:
+      - run: >-
+          uv sync --locked --all-packages --extra dev --extra archguard
+      - run: python skills/architecture-drift-guard/scripts/drift_check.py
+  e2e-freshness:
+    steps:
+      - run: >-
+          uv sync --locked --all-packages --extra dev --extra e2e-matrix
+      - run: bash scripts/run_all_e2e.sh --tiers offline
+"""
+    problems = nightly_extra_problems(text)
+    assert problems, "omitting archguard from freshness must be a problem"
+    joined = "\n".join(problems)
+    assert "e2e-freshness" in joined
+    assert "archguard" in joined
+    # Whole-file credit would miss this: the pytest job still names archguard.
+    assert "archguard" in text
+    assert NIGHTLY_EXTRA_PIN.required_extra not in _declared_extra_names(
+        _github_job_bodies(text)[NIGHTLY_EXTRA_PIN.freshness_job]
+    )
+
+
+def test_nightly_archguard_pin_ignores_comment_mentions() -> None:
+    """A comment that names ``--extra archguard`` must not credit the extra.
+
+    Whole-file and per-line scans that keep ``#`` lines stay green when freshness
+    only mentions the extra in a comment — the same credit bug as searching the
+    whole workflow, one layer down.
+    """
+    text = """
+name: nightly-e2e
+jobs:
+  e2e-matrix:
+    steps:
+      - run: >-
+          uv sync --locked --all-packages --extra dev --extra archguard
+  e2e-freshness:
+    steps:
+      - run: >-
+          uv sync --locked --all-packages --extra dev
+      # still needs --extra archguard
+      - run: bash scripts/run_all_e2e.sh --tiers offline
+"""
+    problems = nightly_extra_problems(text)
+    assert problems, "comment-only archguard on freshness must be a problem"
+    joined = "\n".join(problems)
+    assert "e2e-freshness" in joined
+    assert "archguard" in joined
+    assert "archguard" in text
+    freshness = _github_job_bodies(text)[NIGHTLY_EXTRA_PIN.freshness_job]
+    assert NIGHTLY_EXTRA_PIN.required_extra not in _declared_extra_names(freshness)
+    assert "--extra archguard" in freshness

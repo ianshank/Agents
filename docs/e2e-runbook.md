@@ -57,9 +57,12 @@ pwsh scripts/run_all_e2e.ps1 -Tiers offline -FailFast           # stop at first 
 
 `scripts/run_all_e2e.sh` is the POSIX mirror (same tiers, same step inventory, same
 report layout) for Linux/macOS hosts and CI — the nightly e2e-matrix freshness job runs
-it. It falls back to the ambient `python3` when no `.venv` exists (CI installs into the
-runner interpreter), and needs coreutils `timeout` (on macOS: `brew install coreutils`,
-which provides `gtimeout`).
+it. Freshness `uv sync` must use the same extras as the pytest job, including
+`archguard` (F-009/F-011 and `architecture-drift-guard` e2e import grimp); without
+it the driver FAIL-2s and `--check` never runs. It falls back to the ambient
+`python3` when no `.venv` exists (CI installs into the runner interpreter), and
+needs coreutils `timeout` (on macOS: `brew install coreutils`, which provides
+`gtimeout`).
 
 ```bash
 bash scripts/run_all_e2e.sh --tiers offline                     # Tiers A–C, no network, no creds

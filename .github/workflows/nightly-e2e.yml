@@ -91,10 +91,16 @@ jobs:
       - uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af426746bb  # v6.1.0
         with:
           enable-cache: true
+      # archguard pulls grimp (pinned): F-009's dogfood and F-011's airgap
+      # negative test shell out to drift_check.py, which needs grimp to build
+      # the import graph. run_all_e2e.sh always invokes those (and
+      # skills/architecture-drift-guard/tests/test_end_to_end.py). Omitting the
+      # extra made the driver FAIL 2 and skipped the freshness --check — the
+      # same install-line skew quality-gates.yml documents on its uv sync.
       - name: Install from the workspace lockfile
         run: >-
           uv sync --locked --all-packages --extra dev --extra langfuse --extra openai
-          --extra parquet --extra autoevals --extra e2e-matrix
+          --extra parquet --extra autoevals --extra e2e-matrix --extra archguard
       - name: Prefer the uv workspace venv
         run: echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
 
