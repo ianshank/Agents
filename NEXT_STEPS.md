@@ -737,7 +737,8 @@ These stay human. Agents must not `--apply` branch protection, must not write
   sat inside the freshness comparison (no rerun can reproduce wall-clock values —
   it is now masked, alongside the Provenance exemption), and the committed
   artifact's canonical environment was a stale Windows/py3.11 render (regenerated
-  from the Linux driver).
+  from the Linux driver). Freshness now also installs `--extra archguard` (F-009 /
+  F-011 / drift-guard e2e need grimp); lint/mypy still do not run nightly.
 - [x] **BedrockJudge Tests** — Add mocked boto3 tests (similar to OpenAIJudge
   pattern) to close the last coverage gap.
 - [x] **Decide the root package's typing policy, then raise it to `mypy --strict`** —
