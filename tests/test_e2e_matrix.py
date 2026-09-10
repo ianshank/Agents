@@ -14,7 +14,9 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as dt
+import io
 import json
 import logging
 import os
@@ -1258,7 +1260,7 @@ def test_provenance_records_the_configured_runner_invocation() -> None:
 
 
 def test_default_provenance_invocation_matches_nightly_freshness() -> None:
-    """The recorded recipe is the freshness job's driver line, not a restated copy."""
+    """Dataclass default must equal freshness_driver_invocation of the nightly workflow."""
     from tests.test_e2e_driver_parity import NIGHTLY_WORKFLOW, freshness_driver_invocation
 
     recorded = freshness_driver_invocation(NIGHTLY_WORKFLOW.read_text(encoding="utf-8"))
@@ -1266,19 +1268,25 @@ def test_default_provenance_invocation_matches_nightly_freshness() -> None:
 
 
 def test_committed_provenance_records_the_default_offline_invocation() -> None:
-    """Hand-edited md/csv/xlsx must not drift back to ``--tiers all``."""
-    import zipfile
+    """The Provenance *cell* is the nightly command, not a substring that could grow flags."""
+    from tests.test_e2e_driver_parity import NIGHTLY_EXTRA_PIN
 
     invocation = DEFAULT_PROVENANCE_RENDER.runner_invocation
     md = (em.DEFAULT_OUT_DIR / em.ARTIFACT_DOC_NAME).read_text(encoding="utf-8")
+    recorded = em.parse_markdown_two_col(md, em.PROVENANCE_SHEET_NAME)
+    assert recorded[em.PROVENANCE_FIELD_RUNNER] == invocation
+
     csv_name = em.csv_filename(em.Sheet(name=em.PROVENANCE_SHEET_NAME, columns=()))
     csv_text = (em.DEFAULT_OUT_DIR / em.CSV_DIR_NAME / csv_name).read_text(encoding="utf-8")
-    assert invocation in md
-    assert invocation in csv_text
+    csv_map = {row[0]: row[1] for row in csv.reader(io.StringIO(csv_text)) if len(row) >= 2}
+    assert csv_map[em.PROVENANCE_FIELD_RUNNER] == invocation
+
     workbook = em.DEFAULT_OUT_DIR / em.WORKBOOK_FILENAME
     with zipfile.ZipFile(workbook) as archive:
         blob = b"".join(archive.read(name) for name in archive.namelist())
-    assert invocation.encode("utf-8") in blob
+    driver = NIGHTLY_EXTRA_PIN.driver_filename.encode("ascii")
+    cells = re.findall(rb"<t>([^<]*" + re.escape(driver) + rb"[^<]*)</t>", blob)
+    assert cells == [invocation.encode("utf-8")]
 
 
 def test_monotonicity_allows_an_increase() -> None:

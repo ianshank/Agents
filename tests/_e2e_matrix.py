@@ -1055,6 +1055,9 @@ COVERAGE_COLUMNS = (
 )
 CREDENTIAL_COLUMNS = ("Live Step", "Required Env Vars", "Run Outcome")
 PROVENANCE_COLUMNS = ("Field", "Value")
+#: Provenance table keys. ``parse_provenance_sha`` and the invocation pin share these.
+PROVENANCE_FIELD_COMMIT = "Commit"
+PROVENANCE_FIELD_RUNNER = "Runner invocation"
 
 
 def _junit_for(step: DeclaredStep, junit: Mapping[str, SuiteArtifact]) -> SuiteArtifact | None:
@@ -1187,12 +1190,12 @@ def build_credentials_sheet(credentials: Mapping[str, tuple[str, ...]], run: Seq
 def build_provenance_sheet(prov: Provenance) -> Sheet:
     """Run identity and the exact recipe that reproduces this artifact."""
     rows: list[tuple[str, str]] = [
-        ("Commit", prov.sha),
+        (PROVENANCE_FIELD_COMMIT, prov.sha),
         ("Branch", prov.branch),
         ("Generated at (UTC)", prov.generated_at),
         ("Host", prov.host),
         ("Python", prov.python_version),
-        ("Runner invocation", prov.runner_invocation),
+        (PROVENANCE_FIELD_RUNNER, prov.runner_invocation),
         ("Regenerate", REGEN_COMMAND),
         ("Policy", "Generated artifact per ADR 0032/0033 - do not edit by hand."),
     ]
@@ -1734,7 +1737,7 @@ def parse_evidence_snapshot(document: str) -> EvidenceSnapshot:
 
 def parse_provenance_sha(document: str) -> str:
     """The Provenance table's Commit cell, or empty if the section is missing."""
-    return parse_markdown_two_col(document, PROVENANCE_SHEET_NAME).get("Commit", "").strip()
+    return parse_markdown_two_col(document, PROVENANCE_SHEET_NAME).get(PROVENANCE_FIELD_COMMIT, "").strip()
 
 
 def _waiver_reason(metric: str, previous: int, current: int, waivers: Sequence[MonotonicityWaiver]) -> str | None:

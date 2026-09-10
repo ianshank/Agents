@@ -105,9 +105,8 @@ two extra sets equal and requires `archguard` on the job that runs
 `run_all_e2e.sh`. A whole-file extra scan would stay green (the pytest job already
 had the extra). Comment lines that mention `--extra archguard` are stripped
 before the pin collects extras. Do not `--update` the e2e-matrix from a
-FAIL-2 report; committed results columns stay stale per
-`docs/e2e-matrix/ERRATA.md` until a 31/31 driver restamp (see Added —
-e2e-matrix restamp when that lands).
+FAIL-2 report; the 31/31 offline restamp (Added — e2e-matrix restamp) is the
+current committed results.
 
 ### Fixed — vanished Coverage Grid rows are a monotonicity drop
 
