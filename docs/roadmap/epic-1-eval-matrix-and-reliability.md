@@ -34,7 +34,8 @@ Core evaluation capabilities, trajectory evaluation, matrix coverage completenes
 
 1. **Do not implement** measurement-wedge WS-1 or the production eval flywheel
    until `docs/plans/vp-strategic-deep-dive/DECISIONS.md` §5 is decided.
-2. **After a full e2e `--update`**: drop `PROVENANCE_SHA_WAIVERS` /
-   `MONOTONICITY_WAIVERS` rows that the restamp retires.
+2. **Done (2026-09-10 restamp):** `PROVENANCE_SHA_WAIVERS` /
+   `MONOTONICITY_WAIVERS` no longer carry ERRATA rows. Add a row only for a
+   still-stamped SHA or an explicit future drop.
 3. **Fail-closed pip-audit** only once the tree is pinned *and* CHARTER-named
    Snyk Code (or an explicit CHARTER amendment) owns the gate.

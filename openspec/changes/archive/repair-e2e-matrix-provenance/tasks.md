@@ -9,4 +9,4 @@
 - [x] `[P]` `--check` / `--update` wiring.
 - [x] ADR 0033 amendment.
 - [x] `docs/e2e-matrix/ERRATA.md` disposition update.
-- [ ] Next full e2e run: `--update` to restamp and drop the POSIX SHA waiver.
+- [x] Next full e2e run: `--update` to restamp and drop the POSIX SHA waiver.

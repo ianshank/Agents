@@ -48,6 +48,10 @@ class NightlyExtraPinConfig:
     freshness_job: str = "e2e-freshness"
     required_extra: str = "archguard"
     comment_prefix: str = "#"
+    #: Basename of the POSIX driver the freshness job must invoke.
+    driver_filename: str = "run_all_e2e.sh"
+    #: YAML mapping key for a step body; stripped before the command is compared.
+    yaml_run_key: str = "run:"
 
 
 NIGHTLY_EXTRA_PIN = NightlyExtraPinConfig()
@@ -260,8 +264,10 @@ def nightly_extra_problems(
         extras = _declared_extra_names(body, pin=pin)
         extras_by_job[job_id] = extras
         logger.debug("nightly job %s extras: %s", job_id, sorted(extras))
-        if "run_all_e2e.sh" in body and pin.required_extra not in extras:
-            problems.append(f"job {job_id!r} runs run_all_e2e.sh but does not install extra {pin.required_extra!r}")
+        if pin.driver_filename in body and pin.required_extra not in extras:
+            problems.append(
+                f"job {job_id!r} runs {pin.driver_filename} but does not install extra {pin.required_extra!r}"
+            )
 
     if pin.matrix_job not in extras_by_job:
         problems.append(f"nightly workflow has no {pin.matrix_job!r} job")
@@ -286,6 +292,34 @@ def nightly_extra_problems(
     if pin.required_extra not in freshness_extras:
         problems.append(f"{pin.freshness_job} extras {sorted(freshness_extras)} omit {pin.required_extra!r}")
     return problems
+
+
+def freshness_driver_invocation(
+    workflow_text: str,
+    *,
+    pin: NightlyExtraPinConfig = NIGHTLY_EXTRA_PIN,
+) -> str:
+    """POSIX driver command the freshness job actually runs (comments stripped).
+
+    The committed e2e-matrix Provenance row must record this command, not a
+    restated ``--tiers all`` recipe that would enter credential-gated Tier D.
+    """
+    jobs = _github_job_bodies(workflow_text)
+    body = jobs.get(pin.freshness_job)
+    if body is None:
+        raise AssertionError(f"nightly workflow has no {pin.freshness_job!r} job")
+    found: list[str] = []
+    for line in body.splitlines():
+        code = _without_yaml_comment(line, pin=pin).strip()
+        if pin.driver_filename not in code:
+            continue
+        key = pin.yaml_run_key
+        if key in code:
+            code = code.split(key, 1)[1].strip()
+        found.append(code)
+    if len(found) != 1:
+        raise AssertionError(f"expected one {pin.driver_filename} run line in {pin.freshness_job}; found {found!r}")
+    return found[0]
 
 
 def test_nightly_e2e_jobs_share_uv_extras_and_include_archguard() -> None:
@@ -358,3 +392,21 @@ jobs:
     freshness = _github_job_bodies(text)[NIGHTLY_EXTRA_PIN.freshness_job]
     assert NIGHTLY_EXTRA_PIN.required_extra not in _declared_extra_names(freshness)
     assert "--extra archguard" in freshness
+
+
+def test_freshness_driver_invocation_ignores_commented_commands() -> None:
+    """A commented ``--tiers all`` driver line must not become the recorded recipe."""
+    pin = NIGHTLY_EXTRA_PIN
+    live = f"bash scripts/{pin.driver_filename} --tiers offline --hypothesis-profile ci"
+    commented = f"bash scripts/{pin.driver_filename} --tiers all --hypothesis-profile ci"
+    text = f"""
+jobs:
+  {pin.matrix_job}:
+    steps: []
+  {pin.freshness_job}:
+    steps:
+      - {pin.yaml_run_key} {live}
+      # - {pin.yaml_run_key} {commented}
+"""
+    assert freshness_driver_invocation(text, pin=pin) == live
+    assert commented in text

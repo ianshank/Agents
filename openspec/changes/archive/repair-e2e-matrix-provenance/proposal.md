@@ -1,6 +1,6 @@
 # Change: repair-e2e-matrix-provenance
 
-**Status:** proposed · **Date:** 2026-09-08 · **Author track:** agent lane
+**Status:** implemented (archived; landed `27e5b8cb588569f021e8bc83b7592fa67be91015`) · **Date:** 2026-09-08 · **Author track:** agent lane
 **Motivated by:** `docs/plans/eval-evidence-integrity/PLAN.md` Phase 8 residual +
 `docs/e2e-matrix/ERRATA.md` (finding P1.9).
 **Compiles down to:** ADR 0033 amendment + `tests/_e2e_matrix.py` provenance/monotonicity

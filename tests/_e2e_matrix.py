@@ -1517,6 +1517,10 @@ class GitQueryConfig:
 DEFAULT_GIT_QUERY = GitQueryConfig()
 
 
+#: Waiver metric for the Summary "Observed steps" count. Call sites never restate it.
+OBSERVED_STEPS_METRIC = "observed_steps"
+
+
 @dataclass(frozen=True)
 class EvidenceSnapshot:
     """Counts the monotonicity gate compares across two renders of the same artifact."""
@@ -1543,6 +1547,55 @@ class MonotonicityConfig:
 
 
 DEFAULT_MONOTONICITY = MonotonicityConfig()
+
+
+@dataclass(frozen=True)
+class ErrataDropConfig:
+    """Historical 3272006 drop documented in ``docs/e2e-matrix/ERRATA.md``.
+
+    Live ``MONOTONICITY_WAIVERS`` is empty after the 2026-09-10 restamp. Tests
+    construct this drop from these fields so the numbers are not restated at
+    call sites.
+    """
+
+    previous_observed_steps: int = 38
+    current_observed_steps: int = 30
+    previous_suite_tests: int = 1627
+    current_suite_tests: int = 995
+    suite_step: str = "suite:root"
+    observed_metric: str = OBSERVED_STEPS_METRIC
+    reason: str = "ERRATA.md: 3272006 aborted/interrupted render"
+
+    def previous_snapshot(self) -> EvidenceSnapshot:
+        return EvidenceSnapshot(
+            observed_steps=self.previous_observed_steps,
+            suite_tests={self.suite_step: self.previous_suite_tests},
+        )
+
+    def current_snapshot(self) -> EvidenceSnapshot:
+        return EvidenceSnapshot(
+            observed_steps=self.current_observed_steps,
+            suite_tests={self.suite_step: self.current_suite_tests},
+        )
+
+    def waivers(self) -> tuple[MonotonicityWaiver, ...]:
+        return (
+            MonotonicityWaiver(
+                metric=self.observed_metric,
+                previous=self.previous_observed_steps,
+                current=self.current_observed_steps,
+                reason=self.reason,
+            ),
+            MonotonicityWaiver(
+                metric=self.suite_step,
+                previous=self.previous_suite_tests,
+                current=self.current_suite_tests,
+                reason=self.reason,
+            ),
+        )
+
+
+ERRATA_3272006_DROP = ErrataDropConfig()
 
 
 class GitOps(Protocol):
@@ -1591,31 +1644,13 @@ class SubprocessGit:
         return self._run("merge-base", "--is-ancestor", ancestor, head).returncode == 0
 
 
-#: Known-stale stamps documented in ``docs/e2e-matrix/ERRATA.md``. A still-stamped
-#: SHA in this map is accepted so ``--check`` on a shallow clone or a not-yet-restamped
-#: artifact does not go red; remove an entry once a fresh ``--update`` restamps it.
-PROVENANCE_SHA_WAIVERS: Mapping[str, str] = {
-    "09337aec16e8b10588efd0e61c9d270d18ada1c4": ("ERRATA.md: stamp is not the tree it claims; 3272006 aborted render"),
-    "0b2cbfb7c3f5b976bdcafcbd4ee8ff5c0959d632": (
-        "ERRATA.md: POSIX-driver restamp still predates the Phase 8 gate; waived until the next full e2e --update"
-    ),
-}
+#: Known-stale stamps documented in ``docs/e2e-matrix/ERRATA.md``. Empty after the
+#: 2026-09-10 restamp from a 31/31 offline driver; add a row only for a still-stamped SHA.
+PROVENANCE_SHA_WAIVERS: Mapping[str, str] = {}
 
-#: The 1627→995 / 38→30 drop at 3272006. Live comparisons that are not this pair still fail.
-MONOTONICITY_WAIVERS: tuple[MonotonicityWaiver, ...] = (
-    MonotonicityWaiver(
-        metric="observed_steps",
-        previous=38,
-        current=30,
-        reason="ERRATA.md: 3272006 aborted/interrupted render",
-    ),
-    MonotonicityWaiver(
-        metric="suite:root",
-        previous=1627,
-        current=995,
-        reason="ERRATA.md: 3272006 aborted/interrupted render",
-    ),
-)
+#: Historical drop at 3272006 (see :data:`ERRATA_3272006_DROP`). Empty after the
+#: 2026-09-10 restamp from a 31/31 offline driver; add a row only for a still-named drop.
+MONOTONICITY_WAIVERS: tuple[MonotonicityWaiver, ...] = ()
 
 
 def markdown_section(document: str, heading: str) -> str:
@@ -1724,7 +1759,7 @@ def monotonicity_problems(
     """
     problems: list[str] = []
     if current.observed_steps < previous.observed_steps:
-        reason = _waiver_reason("observed_steps", previous.observed_steps, current.observed_steps, waivers)
+        reason = _waiver_reason(OBSERVED_STEPS_METRIC, previous.observed_steps, current.observed_steps, waivers)
         if reason is None:
             problems.append(
                 f"observed steps dropped {previous.observed_steps} -> {current.observed_steps} "
