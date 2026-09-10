@@ -84,8 +84,11 @@ job installed it. F-009/F-011 and `architecture-drift-guard` e2e then exited 2
 `uv sync` now matches the pytest job; `tests/test_e2e_driver_parity.py` pins the
 two extra sets equal and requires `archguard` on the job that runs
 `run_all_e2e.sh`. A whole-file extra scan would stay green (the pytest job already
-had the extra). Do not `--update` the e2e-matrix from a FAIL-2 report; committed
-results columns stay stale per `docs/e2e-matrix/ERRATA.md` until a 31/31 driver.
+had the extra). Comment lines that mention `--extra archguard` are stripped
+before the pin collects extras. Do not `--update` the e2e-matrix from a
+FAIL-2 report; committed results columns stay stale per
+`docs/e2e-matrix/ERRATA.md` until a 31/31 driver restamp (see Added —
+e2e-matrix restamp when that lands).
 
 ### Fixed — vanished Coverage Grid rows are a monotonicity drop
 

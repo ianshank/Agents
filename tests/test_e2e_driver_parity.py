@@ -39,12 +39,15 @@ class NightlyExtraPinConfig:
 
     Job ids are YAML keys under ``jobs:``, not display names. ``required_extra``
     is ``archguard`` because F-009/F-011 and the drift-guard e2e import grimp.
+    ``comment_prefix`` is stripped before extra names are collected so a comment
+    that mentions ``--extra archguard`` cannot credit the omitted extra.
     """
 
     workflow_relpath: str = ".github/workflows/nightly-e2e.yml"
     matrix_job: str = "e2e-matrix"
     freshness_job: str = "e2e-freshness"
     required_extra: str = "archguard"
+    comment_prefix: str = "#"
 
 
 NIGHTLY_EXTRA_PIN = NightlyExtraPinConfig()
@@ -171,11 +174,45 @@ def test_step_helpers_capture_the_real_exit_code() -> None:
     assert not uncaptured, f"run_py call sites that drop the exit code: {uncaptured}"
 
 
-def _declared_extra_names(text: str) -> frozenset[str]:
+def _without_yaml_comment(line: str, *, pin: NightlyExtraPinConfig) -> str:
+    """Return the code portion of a YAML line; empty when the line is a comment.
+
+    Full-line comments and unquoted trailing comments are dropped. ``#`` inside
+    single or double quotes is left in place (an extra name will not appear there).
+    """
+    prefix = pin.comment_prefix
+    stripped = line.lstrip()
+    if stripped.startswith(prefix):
+        logger.debug("dropped full-line YAML comment on extra-pin scan: %s", line.rstrip())
+        return ""
+    in_single = False
+    in_double = False
+    for index, char in enumerate(line):
+        if char == "'" and not in_double:
+            in_single = not in_single
+        elif char == '"' and not in_single:
+            in_double = not in_double
+        elif (
+            not in_single
+            and not in_double
+            and line.startswith(prefix, index)
+            and (index == 0 or line[index - 1].isspace())
+        ):
+            logger.debug("dropped trailing YAML comment on extra-pin scan: %s", line[index:].rstrip())
+            return line[:index]
+    return line
+
+
+def _declared_extra_names(
+    text: str,
+    *,
+    pin: NightlyExtraPinConfig = NIGHTLY_EXTRA_PIN,
+) -> frozenset[str]:
     """Extra names from uv ``--extra`` flags or pip ``.[a,b]`` install lines."""
     names: set[str] = set()
+    code_lines = [_without_yaml_comment(ln, pin=pin) for ln in text.splitlines()]
     install_blob = "\n".join(
-        ln for ln in text.splitlines() if "install:" in ln or "--extra" in ln or 'pip install -e ".[' in ln
+        ln for ln in code_lines if "install:" in ln or "--extra" in ln or 'pip install -e ".[' in ln
     )
     for extras in _PIP_EXTRAS_RE.findall(install_blob):
         for extra in extras.split(","):
@@ -220,7 +257,7 @@ def nightly_extra_problems(
     problems: list[str] = []
     extras_by_job: dict[str, frozenset[str]] = {}
     for job_id, body in jobs.items():
-        extras = _declared_extra_names(body)
+        extras = _declared_extra_names(body, pin=pin)
         extras_by_job[job_id] = extras
         logger.debug("nightly job %s extras: %s", job_id, sorted(extras))
         if "run_all_e2e.sh" in body and pin.required_extra not in extras:
@@ -289,3 +326,35 @@ jobs:
     assert NIGHTLY_EXTRA_PIN.required_extra not in _declared_extra_names(
         _github_job_bodies(text)[NIGHTLY_EXTRA_PIN.freshness_job]
     )
+
+
+def test_nightly_archguard_pin_ignores_comment_mentions() -> None:
+    """A comment that names ``--extra archguard`` must not credit the extra.
+
+    Whole-file and per-line scans that keep ``#`` lines stay green when freshness
+    only mentions the extra in a comment — the same credit bug as searching the
+    whole workflow, one layer down.
+    """
+    text = """
+name: nightly-e2e
+jobs:
+  e2e-matrix:
+    steps:
+      - run: >-
+          uv sync --locked --all-packages --extra dev --extra archguard
+  e2e-freshness:
+    steps:
+      - run: >-
+          uv sync --locked --all-packages --extra dev
+      # still needs --extra archguard
+      - run: bash scripts/run_all_e2e.sh --tiers offline
+"""
+    problems = nightly_extra_problems(text)
+    assert problems, "comment-only archguard on freshness must be a problem"
+    joined = "\n".join(problems)
+    assert "e2e-freshness" in joined
+    assert "archguard" in joined
+    assert "archguard" in text
+    freshness = _github_job_bodies(text)[NIGHTLY_EXTRA_PIN.freshness_job]
+    assert NIGHTLY_EXTRA_PIN.required_extra not in _declared_extra_names(freshness)
+    assert "--extra archguard" in freshness
