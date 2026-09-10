@@ -224,9 +224,7 @@ def nightly_extra_problems(
         extras_by_job[job_id] = extras
         logger.debug("nightly job %s extras: %s", job_id, sorted(extras))
         if "run_all_e2e.sh" in body and pin.required_extra not in extras:
-            problems.append(
-                f"job {job_id!r} runs run_all_e2e.sh but does not install extra {pin.required_extra!r}"
-            )
+            problems.append(f"job {job_id!r} runs run_all_e2e.sh but does not install extra {pin.required_extra!r}")
 
     if pin.matrix_job not in extras_by_job:
         problems.append(f"nightly workflow has no {pin.matrix_job!r} job")
@@ -246,13 +244,10 @@ def nightly_extra_problems(
             sorted(freshness_extras),
         )
         problems.append(
-            f"{pin.matrix_job} extras {sorted(matrix_extras)} != "
-            f"{pin.freshness_job} extras {sorted(freshness_extras)}"
+            f"{pin.matrix_job} extras {sorted(matrix_extras)} != {pin.freshness_job} extras {sorted(freshness_extras)}"
         )
     if pin.required_extra not in freshness_extras:
-        problems.append(
-            f"{pin.freshness_job} extras {sorted(freshness_extras)} omit {pin.required_extra!r}"
-        )
+        problems.append(f"{pin.freshness_job} extras {sorted(freshness_extras)} omit {pin.required_extra!r}")
     return problems
 
 
