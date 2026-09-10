@@ -85,8 +85,8 @@ These stay human. Agents must not `--apply` branch protection, must not write
     Remaining: a stale-local-`main` warning in
     `.claude/hooks/session-start.sh` (the exact failure mode that produced
     misleading `regression_gate.py` output mid-session — a local `main` 9 commits
-    behind `origin/main` — `git fetch origin main:main` fixed it, but nothing
-    detects it proactively). (The third deferred item — extending `nightly-e2e.yml`'s
+    behind `origin/main`). Compare against `origin/main`; do not update local
+    `main` from the session. (The third deferred item — extending `nightly-e2e.yml`'s
     invariant-check step with the size-budget, guard-reachability,
     architecture-drift, and marketplace guards — has since shipped; lint/mypy
     now run nightly in a separate `lint-typecheck` job. Coverage still does not.)
@@ -736,7 +736,9 @@ These stay human. Agents must not `--apply` branch protection, must not write
   it is now masked, alongside the Provenance exemption), and the committed
   artifact's canonical environment was a stale Windows/py3.11 render (regenerated
   from the Linux driver). Freshness now also installs `--extra archguard` (F-009 /
-  F-011 / drift-guard e2e need grimp); lint/mypy still do not run nightly.
+  F-011 / drift-guard e2e need grimp). lint/mypy now run nightly in a separate
+  `lint-typecheck` job (`quality-gate.sh lint` then `typecheck`, `--extra dev`
+  only). Coverage still does not run nightly.
 - [x] **BedrockJudge Tests** — Add mocked boto3 tests (similar to OpenAIJudge
   pattern) to close the last coverage gap.
 - [x] **Decide the root package's typing policy, then raise it to `mypy --strict`** —

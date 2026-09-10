@@ -209,6 +209,8 @@ Standard library `logging` module. Modules obtain a logger via `logger = logging
 Before opening a PR, run all of:
 
 ```bash
+make pre-pr                                        # full local CI chain vs origin/main
+                                                   # (advisory repo-invariant-review last)
 python scripts/verify_tier_a.py                    # 11-gate mechanical gate in <60s (or: make verify-tier-a)
 python scripts/generate_eval_metrics.py --check    # eval metrics freshness (or: make eval-metrics-check)
 make check-all                                     # root + every sibling package gate
@@ -222,9 +224,11 @@ If the matrix freshness gate fails (`docs/matrix-coverage.md` stale), the remedy
 `python tests/test_matrix_coverage.py --update` — never a hand edit to the generated file
 (`--update` refuses to write while the matrix itself has holes; fix the rows first).
 Note `make check-all` is not the whole CI surface: `quality-gates.yml` additionally runs
-the merge-marker sweep, size budget, guard reachability, charter drift/invariants, the
+the merge-marker sweep, size budget, guard reachability, charter drift/invariants,
+advisory `repo-invariant-review` (`continue-on-error`, never `--strict`), the
 validator battery (`python scripts/validate.py --tier fast --strict-git`) and the tooling
 coverage step — run those too when touching `scripts/`, workflows, or `features.yaml`.
+`make pre-pr` chains that local surface.
 
 On Windows, `pwsh scripts/run_all_e2e.ps1 -Tiers offline` is the equivalent whole-repo pass
 (it applies the WMI shim and per-package coverage floors). If any step fails, do NOT push —

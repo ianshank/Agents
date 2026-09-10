@@ -355,7 +355,9 @@ they can never be mistaken for the harness's unbiased human-audit sample.
 
 ## Quality & Eval-Integrity Gates
 
-These gates run in CI (`.github/workflows/quality-gates.yml`; the operational-scripts
+These gates run in CI (`.github/workflows/quality-gates.yml`; after charter
+invariants an advisory `repo-invariant-review` runs with `continue-on-error` and
+never `--strict`; the operational-scripts
 lint/type/coverage gate, F-031, runs in `eval-harness-ci.yml`) and guard the harness
 against the Goodhart failure mode where the cheapest path to "green" is weakening the
 evaluation itself rather than fixing the code.
@@ -370,6 +372,7 @@ flowchart TB
     PR --> DRIFT[check_skill_script_drift.py<br/>vendored skill copies == canonical]
     PR --> CHARTER[check_charter_drift.py<br/>docs/CHARTER.md references resolve — via test suite]
     PR --> CHARTERINV[check_charter_invariants.py<br/>docs/CHARTER.md's claims still hold in the code]
+    PR --> INVREV[advisory repo-invariant-review<br/>continue-on-error, never --strict]
     PR --> COVFLOOR[check_coverage_floors.py<br/>coverage-floors.yaml pinned minimums — ADR: lowering a floor now fails CI]
     PR --> STUBS[required-check-stubs.yml<br/>posts a green stub for a required check its real workflow's paths: filter skipped — ADR 0040]
     PR --> MG[calibrated-merge-gate.yml<br/>F-010 acting job — default-off]
