@@ -630,7 +630,7 @@ These stay human. Agents must not `--apply` branch protection, must not write
   | Site | Signature | `force` | Notes |
   |---|---|---|---|
   | `scripts/_cli.py` | `verbose: bool`, `level: int \| None` | absent (stdlib default False) | Canonical CLI helper. Under pytest, `basicConfig` is a no-op once a handler exists. |
-  | `experiments/backend-validation/.../logging_util.py` | `_cli`-shaped | hardcoded `True` in the body (explicit `force` parameter is a follow-on) | Tests depend on reconfiguration under pytest. Do not import `_cli` or `agent_core`. |
+  | `experiments/backend-validation/.../logging_util.py` | `_cli`-shaped | explicit `force: bool = True` | Default stays True so pytest's handler does not make `basicConfig` a no-op. Not interchangeable with `_cli` (absent/`False`). Do not import `_cli` or `agent_core`. |
   | `agent_core/logging_util.py` | `level: str`, `LoggingConfig` + `configure_from_config` | explicit, default `False` | ~75 lines. `debug_span` EXIT is `"EXIT  %s elapsed_ms=%.3f"` and omits fields on EXIT. |
   | `skills/.../adguard/logging_util.py` | `level: str = "INFO"` | explicit, default `False` | **Deliberate subset** of agent-core (~62 lines): no `LoggingConfig`, empty-field ENTER omits the trailing space. Not in `TRACKED_DUPLICATES`. |
 

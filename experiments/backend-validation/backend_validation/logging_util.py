@@ -15,10 +15,20 @@ from contextlib import contextmanager
 LOG_FORMAT = "%(levelname)-8s %(name)s: %(message)s"
 
 
-def configure_logging(verbose: bool = False, *, level: int | None = None, fmt: str = LOG_FORMAT) -> None:
-    """Configure root logging once for a CLI entry point (scripts/_cli.py pattern)."""
+def configure_logging(
+    verbose: bool = False,
+    *,
+    level: int | None = None,
+    fmt: str = LOG_FORMAT,
+    force: bool = True,
+) -> None:
+    """Configure root logging once for a CLI entry point (scripts/_cli.py pattern).
+
+    ``force`` defaults True so pytest's already-installed handler does not make
+    ``basicConfig`` a no-op. Existing tests depend on that reconfiguration.
+    """
     resolved = level if level is not None else (logging.DEBUG if verbose else logging.INFO)
-    logging.basicConfig(level=resolved, format=fmt, force=True)
+    logging.basicConfig(level=resolved, format=fmt, force=force)
 
 
 def get_logger(name: str) -> logging.Logger:
