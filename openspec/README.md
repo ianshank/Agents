@@ -71,7 +71,7 @@ Landed; kept for provenance. Each carries its F-ID and the commit it landed in.
 | [`changes/archive/add-requirements-gen-eval-matrix/`](changes/archive/add-requirements-gen-eval-matrix/) | F-068 | `49c7db829066` |
 | [`changes/archive/add-agent-in-the-loop-testgen/`](changes/archive/add-agent-in-the-loop-testgen/) | F-069 | `f1fd5efa1b8d` |
 | [`changes/archive/repair-e2e-matrix-provenance/`](changes/archive/repair-e2e-matrix-provenance/) | — | `27e5b8cb5885` |
-| [`changes/archive/extend-matrix-to-fleet/`](changes/archive/extend-matrix-to-fleet/) | — | `334fd3fac26d63e835c9b1843d148f33d214177a` |
+| [`changes/archive/extend-matrix-to-fleet/`](changes/archive/extend-matrix-to-fleet/) | — | `334fd3fac26d` |
 
 ## Removing this spike
 
