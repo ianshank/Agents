@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `SKIP_SESSION_BOOTSTRAP` still skips pip only; the fetch runs either way.
 WARNING lines still must not recommend `main:main`.
 
+### Hardening — experiment `configure_logging` `force` is an explicit parameter
+
+`experiments/backend-validation/backend_validation/logging_util.py` keeps the
+`_cli`-shaped `verbose`/`level`/`fmt` signature and now takes
+`*, force: bool = True` (passed through to `basicConfig`). Default stays True:
+pytest already has a handler, and existing tests depend on reconfiguration.
+Does not import `scripts/_cli` or `agent_core`; `debug_span` is unchanged.
+
 ### Hardening — archive Phase 9 OpenSpec `extend-matrix-to-fleet`
 
 Archived `openspec/changes/archive/extend-matrix-to-fleet/` at
