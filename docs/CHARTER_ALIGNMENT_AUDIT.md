@@ -47,7 +47,7 @@ confirmed drift.
 | 5 | `claude-foundation` consumed as a pinned plugin, never vendored | ⚠️ **DRIFTED** | See [Findings requiring escalation](#findings-requiring-escalation) §1 |
 | 6 | `SCHEMA_VERSION` bumps only in dedicated release commits w/ migration code | ✅ | `src/eval_harness/version.py:16`; sole historical bump (`367a2a4`) paired with a migration in `config/migrations.py` |
 | 7 | No permissive config parsing (`from_dict` strict) | ✅ | `agent-core/agent_core/config.py:199-224` and `behavioral-regression/behavioral_regression/config.py:188-196` both raise on unknown keys |
-| 8 | Offline suite depends on nothing external | ✅ | All Langfuse/OpenAI/Anthropic/Bedrock SDK imports are deferred + `try/except ImportError` guarded (e.g. `judges/__init__.py:56-60`, `targets/model.py:106-123`) |
+| 8 | Offline suite depends on nothing external | ✅ | All Langfuse/OpenAI/Anthropic/Bedrock SDK imports are deferred + `try/except ImportError` guarded (e.g. `judges/openai.py:66-71`, `judges/anthropic.py:55-60`, `judges/bedrock.py:26-31`; Langfuse wrapping stays lazy in `OpenAIJudge.attach_client` at `judges/openai.py:182-189`; `targets/model.py:182-208`) |
 
 **Section verdict:** 7 of 8 confirmed; 1 drifted (claude-foundation vendoring — escalation item).
 
