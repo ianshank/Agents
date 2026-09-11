@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Hardening — split `judges/__init__.py` into per-file modules
+
+`MockJudge`, `BedrockJudge`, `OpenAIJudge`, `AnthropicJudge`, and
+`PhoenixEvalJudge` live in sibling modules (`judges/panel.py` pattern).
+`judges/__init__.py` re-exports the classes, `JUDGES`, and the `DEFAULT_*`
+constants. No new `__all__`. No new architecture edges. Langfuse wrapping
+stays lazy inside `OpenAIJudge.attach_client`.
+
 ### Hardening — pin `_cli.configure_logging` not to pass `force=True`
 
 `tests/test_cli_logging.py` asserts `force` is absent or falsey on the
@@ -27,7 +35,6 @@ WARNING lines still must not recommend `main:main`.
 `*, force: bool = True` (passed through to `basicConfig`). Default stays True:
 pytest already has a handler, and existing tests depend on reconfiguration.
 Does not import `scripts/_cli` or `agent_core`; `debug_span` is unchanged.
-
 
 ### Hardening — archive Phase 9 OpenSpec `extend-matrix-to-fleet`
 
