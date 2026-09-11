@@ -4,7 +4,7 @@ Split from ``agent_core_adapter/__init__.py`` purely to stay under the 500-line
 file budget (the same reason ``scorers/__init__.py`` keeps ``trajectory.py`` and
 ``judges/`` keeps one implementation file per judge as sibling modules) -- re-exported from
 ``__init__.py`` since, unlike those two, there is no registry decorator here to
-trigger via a bottom-of-file side-effect import; this is an ordinary function.
+trigger via a registration side-effect import; this is an ordinary function.
 
 ``PanelJudge.evaluate``'s own ``raw["spread"]``/``raw["stdev"]`` describe
 disagreement *within one call*. Kappa answers a different, longer-horizon
