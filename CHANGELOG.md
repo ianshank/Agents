@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 pytest already has a handler, and existing tests depend on reconfiguration.
 Does not import `scripts/_cli` or `agent_core`; `debug_span` is unchanged.
 
+### Hardening — archive Phase 9 OpenSpec `extend-matrix-to-fleet`
+
+Archived `openspec/changes/archive/extend-matrix-to-fleet/` at
+`334fd3fac26d63e835c9b1843d148f33d214177a` (merge of #219; no Phase 8/9
+F-ID). Index F-ID column is `—`. Leave
+`add-measurement-harness-wedge` and `add-production-eval-flywheel` in-flight.
+
 ### Added — e2e-matrix restamp (31/31 offline driver)
 
 Regenerated `docs/e2e-matrix/` from a POSIX `run_all_e2e.sh --tiers offline`

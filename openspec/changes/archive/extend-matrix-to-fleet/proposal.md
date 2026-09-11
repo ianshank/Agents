@@ -1,6 +1,6 @@
 # Change: extend-matrix-to-fleet
 
-**Status:** proposed · **Date:** 2026-09-08 · **Author track:** agent lane
+**Status:** implemented (archived; landed `334fd3fac26d63e835c9b1843d148f33d214177a`) · **Date:** 2026-09-08 · **Author track:** agent lane
 **Motivated by:** `docs/plans/eval-evidence-integrity/PLAN.md` Phase 9.
 **Compiles down to:** ADR 0032 §6 amendment + `tests/_fleet_matrix.py`.
 

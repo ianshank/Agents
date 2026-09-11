@@ -623,15 +623,19 @@ These stay human. Agents must not `--apply` branch protection, must not write
   implementations across two incompatible signature families still coexist (`scripts/_cli.py`
   is the one `AGENTS.md` names as canonical) — `9d68d44` migrated 7 stray
   `logging.basicConfig()` callers onto the canonical helpers but did not unify the
-  implementations themselves. `agent_core/logging_util.py` and
-  `skills/architecture-drift-guard/scripts/adguard/logging_util.py` are genuinely
-  byte-identical to each other (`level: str = "INFO"`, explicit `force` kwarg) but share
-  neither shape nor behavior with the canonical `scripts/_cli.py`
-  (`verbose: bool, level: int | None`, no `force`). `experiments/backend-validation`'s copy
-  matches `scripts/_cli.py`'s *signature* but silently hardcodes `force=True` in the body —
-  every call there tears down and replaces existing handlers, where the canonical version is a
-  no-op once one exists; a future dedup that trusts these as interchangeable would silently
-  change that reconfiguration behavior.
+  implementations themselves. Do **not** treat the copies as a drift-guarded twin.
+
+  Two families, plus a `force` matrix:
+
+  | Site | Signature | `force` | Notes |
+  |---|---|---|---|
+  | `scripts/_cli.py` | `verbose: bool`, `level: int \| None` | absent (stdlib default False) | Canonical CLI helper. Under pytest, `basicConfig` is a no-op once a handler exists. |
+  | `experiments/backend-validation/.../logging_util.py` | `_cli`-shaped | hardcoded `True` in the body (explicit `force` parameter is a follow-on) | Tests depend on reconfiguration under pytest. Do not import `_cli` or `agent_core`. |
+  | `agent_core/logging_util.py` | `level: str`, `LoggingConfig` + `configure_from_config` | explicit, default `False` | ~75 lines. `debug_span` EXIT is `"EXIT  %s elapsed_ms=%.3f"` and omits fields on EXIT. |
+  | `skills/.../adguard/logging_util.py` | `level: str = "INFO"` | explicit, default `False` | **Deliberate subset** of agent-core (~62 lines): no `LoggingConfig`, empty-field ENTER omits the trailing space. Not in `TRACKED_DUPLICATES`. |
+
+  Unifying signatures is out of scope. A future dedup that trusts these as interchangeable
+  would silently change reconfiguration and EXIT-span formatting.
 - [ ] **Merge-gate soak** — accumulate shadow decisions and weekly audits before
   revisiting the ADR 0005 enablement checklist. **The "N≥20" this entry used to quote is a
   soak *counter*, not the activation bar**: the peer review in
@@ -752,14 +756,12 @@ These stay human. Agents must not `--apply` branch protection, must not write
   (`observe` overloads, the `migration` decorator factory), 1 ignore recoded to
   the error its line actually raises, 1 bare-dict return. `scripts/` and `tests/`
   strictness remains follow-up work.
-- [ ] **Adopt `uv` with a committed lockfile** — dependencies are declared as open floors
-  (`pydantic>=2`, `langfuse>=2`) and installed with `pip install -e`, with no lockfile
-  anywhere in the repo, so two CI runs a week apart are not guaranteed to resolve the same
-  dependency tree. That quietly undercuts the reproducibility the pinned `ruff`/`mypy`/
-  `grimp`/`openpyxl` versions exist to protect. **Deliberately deferred out of the
-  2026-09-04 peer-review PR**: it rewrites the install step of every workflow and the
-  `install` target of seven Makefiles, so it is a large, purely-infrastructural diff that
-  should not ride along with security fixes and should be bisectable on its own.
+- [x] **Adopt `uv` with a committed lockfile** — `[tool.uv.workspace]` plus a committed
+  `uv.lock`. CI package jobs and `quality-gates.yml` / `eval-harness-ci.yml` /
+  `nightly-e2e.yml` use `uv sync --locked`. Skills CI stays on pip. Windows e2e stays
+  on pip (no uv requirement on that host). `make uv-sync` / `make uv-lock-check` are
+  the local lockfile entry points; `make install` is still pip. Report-only
+  `pip-audit.yml` is not a required check.
 
 ## Short Term (v1.2.0)
 
