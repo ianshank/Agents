@@ -29,11 +29,6 @@ archived one may — asserted by the *OpenSpec change index* guard in
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml). This section listed 2 of 9
 before that guard existed.
 
-- [`changes/extend-matrix-to-fleet/`](changes/extend-matrix-to-fleet/) —
-  eval-evidence **Phase 9.** Fleet census: derive `CALIBRATOR_FACTORIES` /
-  `SPECIMENS`, hand-declare the rest against public-surface baselines. Amends ADR 0032 §6.
-  Phase 10 M2/M6 canaries ship in the same change. Not blocked on `test-completeness-guard`.
-
 - [`changes/add-measurement-harness-wedge/`](changes/add-measurement-harness-wedge/) —
   *partially implemented.* **WS-0 (the blocking hygiene gate) landed as F-048** — credential scrub,
   `.gitleaks.toml`, and the fail-closed secret scan at `quality-gates.yml`. WS-0 tasks 0.5–0.7
@@ -76,6 +71,7 @@ Landed; kept for provenance. Each carries its F-ID and the commit it landed in.
 | [`changes/archive/add-requirements-gen-eval-matrix/`](changes/archive/add-requirements-gen-eval-matrix/) | F-068 | `49c7db829066` |
 | [`changes/archive/add-agent-in-the-loop-testgen/`](changes/archive/add-agent-in-the-loop-testgen/) | F-069 | `f1fd5efa1b8d` |
 | [`changes/archive/repair-e2e-matrix-provenance/`](changes/archive/repair-e2e-matrix-provenance/) | — | `27e5b8cb5885` |
+| [`changes/archive/extend-matrix-to-fleet/`](changes/archive/extend-matrix-to-fleet/) | — | `334fd3fac26d` |
 
 ## Removing this spike
 
