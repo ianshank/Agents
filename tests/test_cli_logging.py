@@ -41,3 +41,13 @@ def test_explicit_level_overrides_verbose(captured_basic_config: dict[str, Any])
 def test_custom_format(captured_basic_config: dict[str, Any]) -> None:
     _cli.configure_logging(fmt="%(message)s")
     assert captured_basic_config["format"] == "%(message)s"
+
+
+def test_force_is_absent_or_falsey(captured_basic_config: dict[str, Any]) -> None:
+    """Adding force=True to _cli would stay green without this pin.
+
+    pytest already has a handler, so force=True would reconfigure the root logger
+    and change behavior relative to the stdlib default (force absent / False).
+    """
+    _cli.configure_logging()
+    assert "force" not in captured_basic_config or captured_basic_config["force"] is False
