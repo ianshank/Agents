@@ -4,9 +4,9 @@
 
 # End-to-end test matrix
 
-The rendered result of a full `scripts/run_all_e2e.ps1` run: one row per declared step,
-with the tier, command, credential requirements, observed status, test counts, and the
-evidence log the runner wrote.
+The rendered result of the nightly POSIX offline driver restamp: one row per
+declared step, with the tier, command, credential requirements, observed status,
+test counts, and the evidence log the runner wrote.
 
 | File | What it is |
 |------|------------|
