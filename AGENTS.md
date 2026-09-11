@@ -191,12 +191,17 @@ Standard library `logging` module. Modules obtain a logger via `logger = logging
 - **Hooks**:
   - `SessionStart` → `.claude/hooks/session-start.sh` — installs every sibling package + extras
     (hypothesis, pydantic, etc.) so a fresh session's toolchain matches CI before any work starts;
-    fail-open `git fetch origin main` before the stale-local-`main` warning (never `main:main`);
-    idempotent, never fails the session.
+    fail-open `git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main` before the
+    stale-local-`main` warning (never updates local `refs/heads/main`; never `main:main`);
+    `SKIP_SESSION_BOOTSTRAP` skips pip only; idempotent, never fails the session.
   - `PostToolUse` (Edit|Write) → `.claude/hooks/post-edit-size-budget.py` — fail-open, advisory
     re-check of the ADR 0019 500-line file budget on just the edited `.py` file.
+  - `PostToolUse` (Edit|Write) → `.claude/hooks/post-edit-protected-path.py` — fail-open, advisory
+    reminder when an edit lands on a protected eval path without `eval-change-approved`.
   - `PostToolUse` (Edit|Write) → `.claude/hooks/post-edit-registry-drift.py` — advisory check that
     edits to plugin registries do not introduce silent drift against `docs/matrix-coverage.md`.
+  - `Stop` → `.claude/hooks/stop-generated-artifacts.py` — fail-open, advisory reminder when
+    generated artifacts (e2e-matrix, public-surface, eval metrics) look stale.
 
 ## Where to put a design decision
 
