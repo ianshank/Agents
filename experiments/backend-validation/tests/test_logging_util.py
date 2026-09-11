@@ -18,6 +18,13 @@ def test_configure_logging_levels() -> None:
     assert logging.getLogger().level == logging.WARNING
 
 
+def test_configure_logging_force_defaults_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(logging, "basicConfig", lambda **kw: captured.update(kw))
+    configure_logging()
+    assert captured["force"] is True
+
+
 def test_debug_span_emits_enter_and_exit_with_fields(caplog: pytest.LogCaptureFixture) -> None:
     logger = get_logger("bv.test")
     with caplog.at_level(logging.DEBUG, logger="bv.test"), debug_span(logger, "phase", backend="opik"):
