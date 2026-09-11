@@ -64,9 +64,10 @@ fi
 
 # Refresh origin/main so the behind-count is not a stale remote-tracking ref.
 # Never `git fetch origin main:main` — that updates local main under the session.
+# SKIP_SESSION_BOOTSTRAP skips pip only; this fetch still runs.
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  GIT_TERMINAL_PROMPT=0 git fetch --quiet origin main \
-    || log "WARNING: git fetch failed (offline?). Stale-main warning may be inaccurate."
+  GIT_TERMINAL_PROMPT=0 git fetch --quiet --no-tags origin +refs/heads/main:refs/remotes/origin/main \
+    || log "WARNING: could not fetch origin/main"
 fi
 
 # Check for stale local main

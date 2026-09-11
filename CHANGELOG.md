@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Hardening — session-start fetch updates only tracking `origin/main`
+
+`.claude/hooks/session-start.sh` fail-open fetches
+`+refs/heads/main:refs/remotes/origin/main` (`--no-tags`). Source is
+`refs/heads/main`; the command never updates **local** `refs/heads/main`.
+`SKIP_SESSION_BOOTSTRAP` still skips pip only; the fetch runs either way.
+WARNING lines still must not recommend `main:main`.
+
 ### Hardening — experiment `configure_logging` `force` is an explicit parameter
 
 `experiments/backend-validation/backend_validation/logging_util.py` keeps the
