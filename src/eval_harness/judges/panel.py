@@ -3,7 +3,7 @@
 Split into its own module rather than inlined in ``judges/__init__.py`` purely
 to stay under the 500-line hard file budget (``scripts/check_size_budget.py``)
 -- the same reason ``scorers/__init__.py`` keeps ``trajectory.py`` as a sibling
-module, imported at the bottom for its registration side effect.
+module, imported for its registration side effect.
 
 A single LLM judge is a single point of *systematic* failure -- order bias,
 verbosity preference, self-preference (``extend-judge-calibration``'s own

@@ -18,7 +18,7 @@ for Phoenix and BrainTrust.
 | `datasets/` | inline, jsonl, langfuse, braintrust, csv, parquet — file-backed sources confined by `DATA_ROOT` |
 | `targets/` | echo, callable (dynamic import — gated by `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST`, unset denies), model (alias llm), provenance_recorder (wraps an inner target; records retrieval evidence on the output metadata; F-068), rca_maxz (deterministic max-abs-Z baseline diagnosis over item telemetry; F-067), testgen_agent (generate a suite from focal+obligations then execute; F-069) |
 | `sinks/` | console, json_file, html_file, langfuse, phoenix, braintrust — file-backed sinks confined by `OUTPUT_ROOT` |
-| `judges/` | mock, openai (Nemotron/GPT), anthropic, bedrock, phoenix_evals, panel (aggregates N member judges — see `judges/panel.py`) |
+| `judges/` | mock, openai (Nemotron/GPT), anthropic, bedrock, phoenix_evals, panel — one module per implementation (`judges/mock.py`, `openai.py`, `anthropic.py`, `bedrock.py`, `phoenix_evals.py`, `panel.py`); package `__init__.py` re-exports |
 | `state_adapters/` | in_memory, filesystem, sqlite, mock_http (F-060) — deterministic local adapters the engine snapshots around `target.run` when `state_adapter` is configured |
 | `langfuse_client/`, `phoenix_client/`, `braintrust_client/` | SDK-optional tracing/export seams |
 | `agent_core_adapter/` | bridge to `agent-core` (budget ledger, calibration surface, BudgetedJudge cost-cap wrapper) |

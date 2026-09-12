@@ -92,18 +92,20 @@ These stay human. Agents must not `--apply` branch protection, must not write
     still do not run nightly.)
 - [x] **God-file decomposition: `engine.py` + `agent_core_adapter` (ADR 0036)** — split
   along existing seams, following the `store_sync/` package-split precedent (ADR 0019):
-  `engine.py` (500 → 425 lines) delegates its two execution strategies to a new
+  `engine.py` (500 → 425 lines at the ADR 0036 split; **492** as of this writing) delegates its two execution strategies to a new
   `core/_execution_strategies.py`; `agent_core_adapter/__init__.py` (469 → 48 lines)
   becomes a re-export shim over new `config.py`/`bridge.py`/`budget.py`/
   `gate_authorization.py` submodules. Pure, behavior-preserving move — no public-API
   change (`tests/test_public_surface.py` pins the unchanged `__all__`), and
   `skills/architecture-drift-guard` confirms zero new cross-component import edges.
-  - [ ] **Deferred from the same audit, each a legitimate follow-up candidate**:
-    `src/eval_harness/judges/__init__.py` and `src/eval_harness/scorers/__init__.py`
-    (both protected paths — need the `eval-change-approved` label; `judges/panel.py`
-    already proves the per-implementation-file split this repo's convention expects,
-    and AGENTS.md already documents the judges seam as a `judges/*.py` glob the code
-    hasn't caught up to yet), and `skills/common/skill_validator.py` (the widest
+  - [x] **`src/eval_harness/judges/__init__.py` split** to per-file modules
+    (`mock.py`, `bedrock.py`, `openai.py`, `anthropic.py`, `phoenix_evals.py`)
+    following `judges/panel.py`. Re-exports keep
+    `from eval_harness.judges import OpenAIJudge` (and `JUDGES`, the
+    `DEFAULT_*` constants) working. No new `__all__`.
+  - [ ] **Deferred from the same audit**:
+    `src/eval_harness/scorers/__init__.py`
+    (protected path — needs the `eval-change-approved` label), and `skills/common/skill_validator.py` (the widest
     blast radius in the repo — synced byte-for-byte into every skill directory;
     splitting it needs `check_skill_script_drift.py` updated to sync a small package
     instead of one file, as a prerequisite, not just a code change).
