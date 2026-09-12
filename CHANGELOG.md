@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Hardening — pin `_cli.configure_logging` not to pass `force=True`
+
+`tests/test_cli_logging.py` asserts `force` is absent or falsey on the
+kwargs passed to `logging.basicConfig`. Adding `force=True` to
+`scripts/_cli.py` would previously stay green.
+
 ### Hardening — session-start fetch updates only tracking `origin/main`
 
 `.claude/hooks/session-start.sh` fail-open fetches
@@ -21,6 +27,7 @@ WARNING lines still must not recommend `main:main`.
 `*, force: bool = True` (passed through to `basicConfig`). Default stays True:
 pytest already has a handler, and existing tests depend on reconfiguration.
 Does not import `scripts/_cli` or `agent_core`; `debug_span` is unchanged.
+
 
 ### Hardening — archive Phase 9 OpenSpec `extend-matrix-to-fleet`
 
