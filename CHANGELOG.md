@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Changed — VP decision package for eval-tool selection
+
+- `docs/executive-report-eval-tools.md` is a VP review brief, not an approval stamp: scores are **expert judgment** (not a three-vendor bake-off); the harness owns testgen/RCA/requirements scorers; vendors are sinks/UIs. Adds a one-page memo, Option 4 (defer / keep all three optional), CHARTER and package-name constraints, and F-067/F-068/F-069 grounding without attributing corpus self-grades to vendors.
+- Speaker-ready deck: `docs/plans/scenario-eval-matrices/VP_DECK.md` (12 slides, 20-minute cut, hostile Q&A). `DECK_A_PLUS.md` honesty/M8/census lines restamped (67 done + 2 deferred of 69; F-069 has no committed `generator_path`).
+- `docs/eval_metrics.json` v1.1.0 records `scoring_basis: expert_judgment` and a chart subtitle; optional schema fields only (no new required keys). `scripts/generate_eval_metrics.py` renders the subtitle so screenshots stay honest.
+
 ### Hardening — split `judges/__init__.py` into per-file modules
 
 `MockJudge`, `BedrockJudge`, `OpenAIJudge`, `AnthropicJudge`, and

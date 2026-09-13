@@ -186,13 +186,19 @@ def render_comparison_chart(
     # Formatting and styling
     scale_label = f"0 – {int(max_val) if max_val.is_integer() else max_val:.1f}"
     ax.set_ylabel(f"Score ({scale_label} scale)", fontsize=12, fontweight="bold", color="#1E293B", labelpad=10)
-    ax.set_title(
-        f"{data['metadata'].get('title', 'Evaluation Tools Benchmark')}\n"
+    title_lines = [
+        str(data["metadata"].get("title", "Evaluation Tools Benchmark")),
         "Comparative Analysis: Test Case Gen, Root Cause Analysis & Requirement Gen",
-        fontsize=15,
+    ]
+    chart_subtitle = data["metadata"].get("chart_subtitle")
+    if isinstance(chart_subtitle, str) and chart_subtitle.strip():
+        title_lines.append(chart_subtitle.strip())
+    ax.set_title(
+        "\n".join(title_lines),
+        fontsize=13 if len(title_lines) > 2 else 15,
         fontweight="bold",
         color="#0F172A",
-        pad=18,
+        pad=22 if len(title_lines) > 2 else 18,
     )
     ax.set_xticks(x_indices)
     ax.set_xticklabels(dim_labels, fontsize=11, fontweight="semibold", color="#334155")

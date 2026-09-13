@@ -19,7 +19,11 @@
         "title": { "type": "string" },
         "version": { "type": "string" },
         "generated_date": { "type": "string" },
-        "data_source_policy": { "type": "string" }
+        "data_source_policy": { "type": "string" },
+        "scoring_basis": { "type": "string" },
+        "chart_subtitle": { "type": "string" },
+        "scoring_rubric": { "type": "object" },
+        "aggregation_formula": { "type": "string" }
       }
     },
     "use_cases": {

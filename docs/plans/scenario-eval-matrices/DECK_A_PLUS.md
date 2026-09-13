@@ -2,15 +2,15 @@
 
 **Companion to:** [`PLAN.md`](./PLAN.md), [`DELIVERY.md`](./DELIVERY.md) revision 2  
 **Purpose:** presentation-ready wording for Deck A / A+. Not the slide deck itself.  
-**Status:** ready after day-of rehearsal (checklist below).  
-**Deck B:** agent-in-the-loop testgen landed as F-069 / ADR 0048 (`#217`); remaining Deck B work is a live agent writing a suite, not the design. See [`openspec/changes/archive/add-agent-in-the-loop-testgen/`](../../../openspec/changes/archive/add-agent-in-the-loop-testgen/).
+**Status:** speaker notes only. The slide deck is [`VP_DECK.md`](./VP_DECK.md) (vendor UI decision + A+ trust frame).  
+**Deck B:** agent-in-the-loop testgen landed as F-069 / ADR 0048 (`#217`). Remaining work is a **live** `generator_path` (ADR 0039; never allowlist `eval_harness`), not the pipeline design. Committed `config/testgen_agent_eval.yaml` has no generator — do not quote `pass^k`. See [`openspec/changes/archive/add-agent-in-the-loop-testgen/`](../../../openspec/changes/archive/add-agent-in-the-loop-testgen/).
 
 ---
 
 ## Frame (say this once, up front)
 
 We are presenting the **measurement system**, not agent league tables.  
-The shipped test-generation config can score **1.000 on every axis** today. That number is the corpus grading its own known-good reference suite. No agent wrote those tests. Deck B is where agent-generated suites enter; it needs a design change first.
+The shipped test-generation config can score **1.000 on every axis** today. That number is the corpus grading its own known-good reference suite. No agent wrote those tests. F-069 is the agent-in-the-loop *pipeline*; a live generator is still the missing subject. For the vendor-UI decision, use [`VP_DECK.md`](./VP_DECK.md).
 
 ---
 
@@ -33,13 +33,13 @@ The shipped test-generation config can score **1.000 on every axis** today. That
 
 ### Slide 3 — Capabilities vs proofs (D2 wording)
 **Say exactly:**  
-"We declare **65** capabilities. **63** have executable proofs that run on every pull request. **Two** are declared and deferred — F-008 and F-036 — their proofs do not run, and the ledger says so."
+"We declare **69** capabilities. **67** have executable proofs that run on every pull request. **Two** are declared and deferred — F-008 and F-036 — their proofs do not run, and the ledger says so."
 
-**Do not say:** "63/63" or "65 capabilities, 63 proofs" without naming the deferred pair. The validator runs exactly the `done` set, so a bare 63/63 ratio cannot fail on the count.
+**Do not say:** "67/67" or "69 capabilities, 67 proofs" without naming the deferred pair. The validator runs exactly the `done` set, so a bare 67/67 ratio cannot fail on the count. Census from `features.yaml` on 2026-09-13.
 
 ### Slide 4 — What the matrix actually measures
 - M1–M7: method-count floors with waivers named in `docs/matrix-coverage.md`.
-- M8: **execution-verified** pipelines — a cell is not credit for appearing in config. Tip credits **39 of 41** components; `bedrock` and `phoenix_evals` are waived with reasons (CI install / pin conflicts).
+- M8: **execution-verified** pipelines — a cell is not credit for appearing in config. Named M8 waivers: `judge/bedrock` (boto3 absent from eval-harness-ci.yml) and `judge/phoenix_evals` (phoenix-evals extra + pyarrow pin; see `docs/matrix-coverage.md`). Do not quote a frozen "39 of 41" — the census is generated.
 - Stale plan text that said "M8 task 4 outstanding" is wrong on tip — breadth landed.
 
 ### Slide 5 — Test-generation instrument (honest)
@@ -69,6 +69,8 @@ EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=eval_harness.targets.testgen \
 
 **Denominator rule (D1):** Never say n=300. `repetitions: 5` × 60 deterministic items is a 5× multiplier with **zero new information** until a stochastic target exists. Honest figure: **n=60 per slice, 240 across four slices**.
 
+**Re-measured 2026-09-13** (`run.repetitions=1`): thorough 1.000/1.000/0.000/1.000; weak mutation **0.322** / recall **0.260**; false-alarm **0.397** — matches [`DELIVERY.md`](./DELIVERY.md) §3a. On `broken`, dependents print a mean with `pass_rate=n/a`; quote n/a for the pass-rate channel.
+
 **Weak separation (D3):** Say "we built the weak slice to discriminate, then verified that it does" — not "our corpus was discovered to discriminate."
 
 ### Slide 7 — Live fail-closed demo
@@ -77,19 +79,22 @@ Pre-open `out/demo/report-fail.html`.
 Know cold: `helpfulness.mean=0.844` against `min 0.95`, process exit 1. The point is CI stops.
 
 ### Slide 8 — What is not measured yet
-- No agent-written suites in the loop (Deck B blocked on target chaining).
-- RCA and requirements scenario matrices: OpenSpec proposed, not implemented.
+- No **live** agent-written suites: F-069 pipeline shipped; committed Deck B YAML has no `generator_path`. Quote thorough holdout n=11 unique only after a live generator exists. Do not quote `pass^k` from the fake.
+- RCA (F-067 / ADR 0046) and requirements (F-068 / ADR 0047) **scenario matrices shipped** — synthetic corpora, advisory gates. Not unimplemented; not a live-incident or live-generator result.
 - Judge-gated metrics stay advisory until HUMAN_AUDIT mass exists (~200–350 paired labels per judged scorer is the planning figure; re-query the store before quoting live counts).
 - `main` branch protection / required checks: owner action (ADR 0037) — gates are still advisory at merge until applied.
 
 ### Slide 9 — Honesty (rehearse out loud)
 Volunteer before asked:
-1. No agent performance numbers yet.
-2. Perfect testgen scores on the shipped config are self-grading.
-3. Deck B needs an agent-in-the-loop design, not more scorers.
+1. No live agent performance numbers yet (F-069 has no committed generator).
+2. Perfect testgen scores on the shipped Deck A+ config are self-grading.
+3. RCA and requirements matrices are shipped and still synthetic / advisory.
 4. Calibration figures without labels are empty queries.
 
 ### Slide 10 — The ask (three decisions)
+
+Vendor-UI choice (Phoenix / Langfuse / BrainTrust / defer) lives on [`VP_DECK.md`](./VP_DECK.md) slide 12. This measurement deck still ends on:
+
 1. **B1:** Real incident telemetry under a CHARTER §3 amendment, or synthetic-only RCA permanently.
 2. **B2:** Who produces HUMAN_AUDIT labels, and by when.
 3. **B3:** CODEOWNER / `eval-change-approved` turnaround target so sprint dates mean something.
@@ -101,8 +106,8 @@ Volunteer before asked:
 | Do not say | Why | Say instead |
 |---|---|---|
 | "n=300" for any testgen figure | 5 identical repetitions of 60 deterministic items (D1) | **"n=60"** |
-| "we measured our agents at test generation" | No agent generates a suite; no target chaining | "scorers, corpus, and sandbox are done; agent-in-the-loop is next" |
-| "63/63 proofs" as coverage | Validator runs only `done` features | Name 63 runnable + 2 deferred |
+| "we measured our agents at test generation" | No committed live generator | "scorers, corpus, and sandbox are done; live generator is next" |
+| "67/67 proofs" as coverage | Validator runs only `done` features | Name 67 runnable + 2 deferred (F-008, F-036) |
 | "the audit found 24 issues" | Audit 20; review +4 (D4) | "20 from the audit, 4 from an automated review afterwards" |
 | "OpenRCA agents went 10% → 33%" | Vendor self-report vs independent 12.5% | Independent full-benchmark figures only |
 | "a trivial heuristic scores 36.5%, beating agents" | Invalid cross-pool comparison | Measure our floor on our corpus |
@@ -120,7 +125,7 @@ Volunteer before asked:
 - [ ] Know `helpfulness.mean=0.844` vs min 0.95, exit 1
 - [ ] Optional: `validate.py --tier fast` only if the room is technical
 - [ ] Rehearse slide 9 out loud (volunteer gaps; do not apologize)
-- [ ] Rehearse answer to "why 65 and 63?" — two deferred features, named
+- [ ] Rehearse answer to "why 69 and 67?" — two deferred features, named (F-008, F-036)
 - [ ] Discrimination table printed at n=60; no n=300 anywhere in the deck
 - [ ] Confirm `repetitions` story: inert for deterministic callable until stochastic target
 
@@ -128,7 +133,8 @@ Volunteer before asked:
 
 ## Related
 
-- [`DELIVERY.md`](./DELIVERY.md) — D1–D5, work items 1–8  
-- [`PLAN.md`](./PLAN.md) — deck ladder, blockers B1–B4  
-- [`openspec/changes/archive/add-agent-in-the-loop-testgen/`](../../../openspec/changes/archive/add-agent-in-the-loop-testgen/) — Deck B unlock proposal (archived; F-069 landed)  
+- [`VP_DECK.md`](./VP_DECK.md) — vendor-UI decision deck (the slides)
+- [`DELIVERY.md`](./DELIVERY.md) — D1–D5, work items 1–8
+- [`PLAN.md`](./PLAN.md) — deck ladder, blockers B1–B4
+- [`openspec/changes/archive/add-agent-in-the-loop-testgen/`](../../../openspec/changes/archive/add-agent-in-the-loop-testgen/) — Deck B unlock proposal (archived; F-069 landed)
 - [`docs/matrix-coverage.md`](../../matrix-coverage.md) — M8 execution census  

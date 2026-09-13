@@ -49,7 +49,7 @@ Active engineering epics and architectural roadmap live in [roadmap/](roadmap/RE
 
 ## Evaluations & Analysis
 
-- [executive-report-eval-tools.md](executive-report-eval-tools.md) — Executive evaluation report & strategic decision matrix comparing LLM evaluation frameworks across Test Case Generation, Root Cause Analysis, and Requirements Generation. Accompanied by [eval_metrics.json](eval_metrics.json), [eval_metrics_schema.json](eval_metrics_schema.json), and grouped-bar comparative visualizations ([eval_metrics_comparison.png](eval_metrics_comparison.png) / [eval_metrics_comparison.svg](eval_metrics_comparison.svg)).
+- [executive-report-eval-tools.md](executive-report-eval-tools.md) — VP decision brief comparing Langfuse, Phoenix, and BrainTrust as **operations UIs / sinks** (not as scorers). Expert judgment, not a bake-off. One-page memo, four options including defer. Metrics: [eval_metrics.json](eval_metrics.json), [eval_metrics_schema.json](eval_metrics_schema.json), charts ([eval_metrics_comparison.png](eval_metrics_comparison.png) / [eval_metrics_comparison.svg](eval_metrics_comparison.svg)). Speaker deck: [plans/scenario-eval-matrices/VP_DECK.md](plans/scenario-eval-matrices/VP_DECK.md).
 
 ## Runbooks & operations
 
@@ -125,7 +125,7 @@ before this index existed:
 | eval-evidence-integrity | [PLAN](plans/eval-evidence-integrity/PLAN.md) · [REVIEW](plans/eval-evidence-integrity/REVIEW.md) |
 | orbital-drift-alignment | [PLAN](plans/orbital-drift-alignment/PLAN.md) |
 | real-data-activation | [PLAN](plans/real-data-activation/PLAN.md) · [REVIEW](plans/real-data-activation/REVIEW.md) |
-| scenario-eval-matrices | [PLAN](plans/scenario-eval-matrices/PLAN.md) · [REVIEW](plans/scenario-eval-matrices/REVIEW.md) · [DELIVERY](plans/scenario-eval-matrices/DELIVERY.md) · [DECK_A_PLUS](plans/scenario-eval-matrices/DECK_A_PLUS.md) |
+| scenario-eval-matrices | [PLAN](plans/scenario-eval-matrices/PLAN.md) · [REVIEW](plans/scenario-eval-matrices/REVIEW.md) · [DELIVERY](plans/scenario-eval-matrices/DELIVERY.md) · [DECK_A_PLUS](plans/scenario-eval-matrices/DECK_A_PLUS.md) · [VP_DECK](plans/scenario-eval-matrices/VP_DECK.md) |
 | vp-strategic-deep-dive | [EXECUTIVE_BRIEF](plans/vp-strategic-deep-dive/EXECUTIVE_BRIEF.md) · [ANALYSIS](plans/vp-strategic-deep-dive/ANALYSIS.md) · [DECISIONS](plans/vp-strategic-deep-dive/DECISIONS.md) |
 
 ## Per-package docs
