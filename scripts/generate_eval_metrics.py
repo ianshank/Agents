@@ -25,9 +25,7 @@ logger = logging.getLogger("generate_eval_metrics")
 DEFAULT_INPUT_PATH = Path("docs/eval_metrics.json")
 DEFAULT_OUTPUT_PATH = Path("docs/eval_metrics_comparison.png")
 DEFAULT_DPI = 300
-DEFAULT_CHART_TAGLINE = (
-    "Comparative Analysis: Test Case Gen, Root Cause Analysis & Requirement Gen"
-)
+DEFAULT_CHART_TAGLINE = "Comparative Analysis: Test Case Gen, Root Cause Analysis & Requirement Gen"
 DEFAULT_CHART_TITLE = "Evaluation Tools Benchmark"
 
 
