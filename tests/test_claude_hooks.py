@@ -174,6 +174,13 @@ def test_a_corpus_generator_exists_to_discover() -> None:
     assert _corpus_generators()
 
 
+def test_eval_metrics_generator_is_watched_by_the_stop_hook() -> None:
+    """Eval-metrics PNG/SVG freshness is a Stop-hook row, not an AGENTS.md-only claim."""
+    module = _hook_module("stop-generated-artifacts.py", "_stop_hook_eval_metrics")
+    watched = {argv[0] for _label, argv, _fix in module._CHECKERS}
+    assert "scripts/generate_eval_metrics.py" in watched
+
+
 @pytest.mark.parametrize("generator", _corpus_generators())
 def test_every_corpus_generator_is_watched_by_the_stop_hook(generator: str) -> None:
     """A new corpus that no checker row names goes stale exactly as silently as before.

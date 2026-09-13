@@ -12,8 +12,10 @@ from typing import Any
 
 import pytest
 from generate_eval_metrics import (
+    DEFAULT_CHART_TAGLINE,
     DEFAULT_INPUT_PATH,
     build_parser,
+    chart_title_lines,
     load_and_validate_metrics,
     main,
     render_comparison_chart,
@@ -267,11 +269,66 @@ def test_main_missing_file_error() -> None:
 
 def test_default_file_validation() -> None:
     """Verify that the repository's default metrics file passes validation."""
-    if DEFAULT_INPUT_PATH.exists():
-        data = load_and_validate_metrics(DEFAULT_INPUT_PATH)
-        assert "langfuse" in data["tools"]
-        assert "phoenix" in data["tools"]
-        assert "braintrust" in data["tools"]
+    assert DEFAULT_INPUT_PATH.exists()
+    data = load_and_validate_metrics(DEFAULT_INPUT_PATH)
+    assert "langfuse" in data["tools"]
+    assert "phoenix" in data["tools"]
+    assert "braintrust" in data["tools"]
+    assert data["metadata"]["scoring_basis"] == "expert_judgment"
+
+
+def test_chart_title_lines_default_two_line_without_optional_keys(
+    minimal_metrics_data: dict[str, Any],
+) -> None:
+    """Fixtures that omit tagline/subtitle keep the historic two-line title."""
+    lines = chart_title_lines(minimal_metrics_data["metadata"])
+    assert lines == ["Test Benchmark", DEFAULT_CHART_TAGLINE]
+
+
+def test_chart_title_lines_appends_nonempty_subtitle() -> None:
+    subtitle = "Expert judgment from spike reports"
+    lines = chart_title_lines({"title": "T", "chart_subtitle": subtitle})
+    assert lines == ["T", DEFAULT_CHART_TAGLINE, subtitle]
+
+
+@pytest.mark.parametrize("subtitle", ["   ", "\n\t", 123, None, {"k": "v"}])
+def test_chart_title_lines_ignores_blank_or_non_string_subtitle(subtitle: object) -> None:
+    lines = chart_title_lines({"title": "T", "chart_subtitle": subtitle})
+    assert lines == ["T", DEFAULT_CHART_TAGLINE]
+
+
+def test_chart_title_lines_uses_metadata_tagline() -> None:
+    lines = chart_title_lines({"title": "T", "chart_tagline": "Custom tagline"})
+    assert lines == ["T", "Custom tagline"]
+
+
+def test_chart_title_lines_whitespace_tagline_falls_back() -> None:
+    lines = chart_title_lines({"title": "T", "chart_tagline": "  "})
+    assert lines == ["T", DEFAULT_CHART_TAGLINE]
+
+
+def test_render_comparison_chart_svg_contains_subtitle(
+    tmp_path: Path, minimal_metrics_data: dict[str, Any]
+) -> None:
+    pytest.importorskip("matplotlib", reason="matplotlib required for rendering comparison charts")
+    data = json.loads(json.dumps(minimal_metrics_data))
+    subtitle = "Expert judgment not a bake-off"
+    data["metadata"]["chart_subtitle"] = subtitle
+    render_comparison_chart(data, tmp_path / "chart.png", output_format="svg", dpi=100)
+    svg = (tmp_path / "chart.svg").read_text(encoding="utf-8")
+    assert subtitle in svg
+
+
+def test_render_comparison_chart_svg_contains_custom_tagline(
+    tmp_path: Path, minimal_metrics_data: dict[str, Any]
+) -> None:
+    pytest.importorskip("matplotlib", reason="matplotlib required for rendering comparison charts")
+    data = json.loads(json.dumps(minimal_metrics_data))
+    tagline = "Custom comparative tagline for tests"
+    data["metadata"]["chart_tagline"] = tagline
+    render_comparison_chart(data, tmp_path / "chart.png", output_format="svg", dpi=100)
+    svg = (tmp_path / "chart.svg").read_text(encoding="utf-8")
+    assert tagline in svg
 
 
 def test_build_parser() -> None:

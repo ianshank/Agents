@@ -187,7 +187,7 @@ Standard library `logging` module. Modules obtain a logger via `logger = logging
   - `test-runner.md` — Dedicated test execution, log capture, and failure isolation worker.
   - `explorer.md` — Fast codebase discovery and semantic file reconnaissance agent.
 - **Skills & Maintenance Workflows**:
-  - `update-executive-report` (`.agents/skills/update-executive-report/SKILL.md` & `.claude/skills/update-executive-report/SKILL.md`) — Automated skill to keep `docs/executive-report-eval-tools.md`, `docs/eval_metrics.json`, and figures synchronized with benchmark evolutions.
+  - `update-executive-report` (`.agents/skills/update-executive-report/SKILL.md` & `.claude/skills/update-executive-report/SKILL.md`) — keep `docs/executive-report-eval-tools.md`, `docs/eval_metrics.json`, figures, and `docs/plans/scenario-eval-matrices/VP_DECK.md` aligned; scores are expert judgment (`scoring_basis`), not bake-off outcomes. Do not silently retune the 0–10 cells.
 - **Hooks**:
   - `SessionStart` → `.claude/hooks/session-start.sh` — installs every sibling package + extras
     (hypothesis, pydantic, etc.) so a fresh session's toolchain matches CI before any work starts;
@@ -201,7 +201,9 @@ Standard library `logging` module. Modules obtain a logger via `logger = logging
   - `PostToolUse` (Edit|Write) → `.claude/hooks/post-edit-registry-drift.py` — advisory check that
     edits to plugin registries do not introduce silent drift against `docs/matrix-coverage.md`.
   - `Stop` → `.claude/hooks/stop-generated-artifacts.py` — fail-open, advisory reminder when
-    generated artifacts (e2e-matrix, public-surface, eval metrics) look stale.
+    generated artifacts look stale. `_CHECKERS` is matrix coverage, the three corpora, and
+    eval-metrics (`scripts/generate_eval_metrics.py --check` → `docs/eval_metrics_comparison.svg`).
+    e2e-matrix and public-surface are deliberately **not** in this hook (too slow / no `--check`).
 
 ## Where to put a design decision
 

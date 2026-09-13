@@ -301,9 +301,10 @@ python scripts/check_protected_changes.py --base-ref origin/main
   `integration`, and `full` tiers, isolating unit suites from heavy integration matrices while
   providing structured diagnostic reporting.
 - **Executive evaluation tool matrix & decision framework** (`docs/executive-report-eval-tools.md`)
-  provides strategic leadership trade-off analysis and capability metrics across Test Case Generation,
-  RCA, and Requirements Generation, backed by `docs/eval_metrics.json`, `docs/eval_metrics_schema.json`,
-  and generated comparative charts (`scripts/generate_eval_metrics.py`).
+  is a VP ops-UI / sink choice (Langfuse, Phoenix, BrainTrust), scored by **expert judgment**
+  (`docs/eval_metrics.json` `scoring_basis`), not a three-vendor bake-off of harness scorers.
+  Speaker deck: [`docs/plans/scenario-eval-matrices/VP_DECK.md`](docs/plans/scenario-eval-matrices/VP_DECK.md).
+  Charts are rendered from that JSON by `scripts/generate_eval_metrics.py`.
 - **Regression gate** (`F-006`) materialises an isolated `git worktree` baseline and runs
   `ruff` + the offline pytest suite in both trees, blocking only findings that are new
   relative to the base. It never runs live-judge / Langfuse evals.

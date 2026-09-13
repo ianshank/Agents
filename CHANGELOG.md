@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Speaker-ready deck: `docs/plans/scenario-eval-matrices/VP_DECK.md` (12 slides, 20-minute cut, hostile Q&A). `DECK_A_PLUS.md` honesty/M8/census lines restamped (67 done + 2 deferred of 69; F-069 has no committed `generator_path`).
 - `docs/eval_metrics.json` v1.1.0 records `scoring_basis: expert_judgment` and a chart subtitle; optional schema fields only (no new required keys). `scripts/generate_eval_metrics.py` renders the subtitle so screenshots stay honest.
 
+### Hardening — eval-metrics title config, Stop-hook row, and VP_DECK skill DoD
+
+Chart titles use `ChartTitleStyle` field defaults plus optional `metadata.chart_tagline` / `chart_subtitle` (missing keys keep the historic two-line title). Stop-hook `_CHECKERS` watches `docs/eval_metrics_comparison.svg` via `scripts/generate_eval_metrics.py --check` (also wired from `.agents/hooks.json`). The `update-executive-report` skill DoD points at `VP_DECK.md`, preserves `scoring_basis: expert_judgment`, and forbids silently retuning the 0–10 scores.
+
 ### Hardening — split `judges/__init__.py` into per-file modules
 
 `MockJudge`, `BedrockJudge`, `OpenAIJudge`, `AnthropicJudge`, and
