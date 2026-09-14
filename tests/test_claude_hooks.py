@@ -182,7 +182,10 @@ def test_eval_metrics_generator_is_watched_by_the_stop_hook() -> None:
 
 
 def _agents_hooks() -> dict[str, Any]:
-    return json.loads((REPO_ROOT / ".agents" / "hooks.json").read_text(encoding="utf-8"))
+    payload = json.loads((REPO_ROOT / ".agents" / "hooks.json").read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise TypeError(".agents/hooks.json must be a JSON object")
+    return payload
 
 
 def _stop_commands(node: object) -> list[str]:

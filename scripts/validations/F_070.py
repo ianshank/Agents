@@ -27,12 +27,17 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 from _common import check as _check
 from _common import configure_logging, report
+
+if TYPE_CHECKING:
+    from eval_harness.core.types import AgentTrajectory
+    from eval_harness.replay.envelope import ReplayEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +48,7 @@ sys.path.insert(0, PROJECT_ROOT)
 _AQ_CONFIG = os.path.join(PROJECT_ROOT, "config", "answer_quality_eval.yaml")
 
 
-def _traj() -> object:
+def _traj() -> AgentTrajectory:
     from eval_harness.core.types import AgentTrajectory, ToolCallRecord, TrajectoryStep
 
     search = ToolCallRecord(name="search", arguments={"q": "x"})
@@ -56,7 +61,7 @@ def _traj() -> object:
     )
 
 
-def _envelope(*, item_id: str, freshness: str) -> object:
+def _envelope(*, item_id: str, freshness: str) -> ReplayEnvelope:
     from eval_harness.replay.envelope import ReplayEnvelope, canonical_hash
 
     traj = _traj()
@@ -69,7 +74,7 @@ def _envelope(*, item_id: str, freshness: str) -> object:
         agent_version="v1",
         input_hash=canonical_hash(item_id),
         output_hash=canonical_hash("ok"),
-        trajectory=traj,  # type: ignore[arg-type]
+        trajectory=traj,
         output="ok",
         tags={"freshness": freshness},
     )
@@ -112,7 +117,7 @@ def _check_exact_and_counterfactual(errors: list[str]) -> None:
     _check(in_order.passed is True and recovery.passed is True, "exact replay re-emits recorded verdicts", errors)
 
     counter = ReplayTarget(
-        envelopes=[sensitive, normal],  # type: ignore[list-item]
+        envelopes=[sensitive, normal],
         mode="counterfactual",
         overrides={"search": "error:stale"},
         override_tag_value="sensitive",
@@ -131,7 +136,7 @@ def _check_exact_and_counterfactual(errors: list[str]) -> None:
     _check(
         results[0].output.trajectory is not None
         and any(step.kind == "tool_error" for step in results[0].output.trajectory.steps)
-        and results[1].output.trajectory == normal.trajectory,  # type: ignore[union-attr]
+        and results[1].output.trajectory == normal.trajectory,
         "counterfactual changes only the tagged search observation",
         errors,
     )

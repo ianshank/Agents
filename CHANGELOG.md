@@ -19,6 +19,11 @@ beat 6 uses `demo/replay/baseline.jsonl`. Advisory answer-quality corpus at
 (unsigned, not in `make check-all`). ClickHouse, production ingest, and
 reconstructing trajectories from Langfuse/Phoenix spans remain out of scope.
 
+### Fixed — chart_title_lines metadata narrowing
+
+`scripts/generate_eval_metrics.py` binds `metadata` through a local `dict` after
+`isinstance(..., dict)` so mypy 2.1 accepts `chart_title_lines` (left open on #232).
+
 ### Changed — VP decision package for eval-tool selection
 
 - `docs/executive-report-eval-tools.md` is a VP review brief, not an approval stamp: scores are **expert judgment** (not a three-vendor bake-off); the harness owns testgen/RCA/requirements scorers; vendors are sinks/UIs. Adds a one-page memo, Option 4 (defer / keep all three optional), CHARTER and package-name constraints, and F-067/F-068/F-069 grounding without attributing corpus self-grades to vendors.
