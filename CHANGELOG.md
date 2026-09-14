@@ -19,6 +19,16 @@ beat 6 uses `demo/replay/baseline.jsonl`. Advisory answer-quality corpus at
 (unsigned, not in `make check-all`). ClickHouse, production ingest, and
 reconstructing trajectories from Langfuse/Phoenix spans remain out of scope.
 
+### Fixed — fixture-replay format, fail-closed archive, and CLI last-wins
+
+`ruff format` on `replay/envelope.py`. CLI error rows use
+`ReplayConfig.error_score` (no call-site `0.0`). Duplicate `item_id` lines
+are last-write-wins before scoring, matching the target index. Invalid UTF-8
+archives wrap as `ReplayError`. `DATA_ROOT` confinement `ValueError` becomes
+a scored `TargetOutput.error`. Callable overrides declare
+`is_deterministic() is None`. Demo/PLAN counterfactual commands export
+`PYTHONPATH` and `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo`.
+
 ### Fixed — chart_title_lines metadata narrowing
 
 `scripts/generate_eval_metrics.py` binds `metadata` through a local `dict` after

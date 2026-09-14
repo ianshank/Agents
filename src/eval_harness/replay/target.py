@@ -152,7 +152,10 @@ class ReplayTarget(TargetRunner):
         self._injected = tuple(envelopes) if envelopes is not None else None
         self._index: dict[str, ReplayEnvelope] | None = None
 
-    def is_deterministic(self) -> bool:
+    def is_deterministic(self) -> bool | None:
+        """Literal/no overrides are constant; a callable override is undeclared."""
+        if any(_looks_like_callable_path(value) for value in self._overrides.values()):
+            return None
         return True
 
     def _load_index(self) -> dict[str, ReplayEnvelope]:
@@ -176,7 +179,7 @@ class ReplayTarget(TargetRunner):
     def run(self, item: EvalItem) -> TargetOutput:
         try:
             index = self._load_index()
-        except ReplayError as exc:
+        except (ReplayError, ValueError) as exc:
             logger.debug("replay archive failed closed for item %s: %s", item.id, exc)
             return TargetOutput(output=None, error=str(exc))
         envelope = index.get(item.id)

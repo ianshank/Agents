@@ -23,6 +23,7 @@ counterfactual observation swap. **Not** the blocked production-eval flywheel.
 
 ```bash
 eval-harness replay --archive demo/replay/baseline.jsonl --mode exact --offline
+PYTHONPATH=. EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo \
 eval-harness replay --archive demo/replay/baseline.jsonl --mode counterfactual \
   --override tool.search=demo.replay_stubs:search_v2 \
   --override tool.fetch=error:stale_index \

@@ -142,8 +142,15 @@ def test_exact_replay_is_idempotent() -> None:
 
 
 def test_counterfactual_changes_only_tagged_search_observation() -> None:
-    sensitive = _envelope(item_id="s", tags={"freshness": "sensitive"})
-    normal = _envelope(item_id="n", tags={"freshness": "normal"})
+    traj = trajectory(
+        tool_call("search", {"q": "x"}),
+        observation("hit", name="search"),
+        tool_call("fetch", {"id": "1"}),
+        observation("body", name="fetch"),
+        final("ok"),
+    )
+    sensitive = _envelope(item_id="s", tags={"freshness": "sensitive"}, trajectory=traj)
+    normal = _envelope(item_id="n", tags={"freshness": "normal"}, trajectory=traj)
     target = ReplayTarget(
         envelopes=[sensitive, normal],
         mode="counterfactual",
@@ -154,7 +161,8 @@ def test_counterfactual_changes_only_tagged_search_observation() -> None:
     out_s = target.run(EvalItem(id="s", inputs={}))
     out_n = target.run(EvalItem(id="n", inputs={}))
     assert out_s.trajectory is not None
-    assert any(step.kind == "tool_error" for step in out_s.trajectory.steps)
+    assert out_s.trajectory.steps[1].kind == "tool_error"
+    assert out_s.trajectory.steps[2:] == traj.steps[2:]
     assert out_n.trajectory == normal.trajectory
 
 
@@ -218,6 +226,24 @@ def test_parse_overrides_and_cli_help() -> None:
     assert exc.value.code == 0
 
 
+def test_cli_duplicate_item_id_last_wins(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "dup.jsonl"
+    first = _envelope(item_id="same", envelope_id="e1", tags={"freshness": "normal"})
+    second = _envelope(item_id="same", envelope_id="e2", tags={"freshness": "sensitive"})
+    ReplayArchive(path, for_write=True).append([first, second])
+    json_out = tmp_path / "summary.json"
+    args = build_parser().parse_args(
+        ["replay", "--archive", str(path), "--mode", "exact", "--json", str(json_out), "--offline"]
+    )
+    assert run_replay(args) == 0
+    captured = capsys.readouterr()
+    assert "passed=1 n=1" in captured.out
+    payload = json.loads(json_out.read_text(encoding="utf-8"))
+    assert payload["global"]["n"] == 1
+    slices = {row["tag_value"]: row["n"] for row in payload["slices"]}
+    assert slices == {"sensitive": 1}
+
+
 def test_cli_replay_exact_on_temp_archive(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     path = tmp_path / "baseline.jsonl"
     ReplayArchive(path, for_write=True).append([_envelope()])
@@ -248,6 +274,23 @@ def test_archive_read_refuses_data_root_escape(tmp_path: Path, monkeypatch: pyte
     monkeypatch.setenv(DATA_ROOT_ENV, str(root))
     with pytest.raises(ValueError, match=r"\.\."):
         ReplayArchive(root / ".." / "escape.jsonl")
+
+
+def test_archive_non_utf8_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / "bad.jsonl"
+    path.write_bytes(b"\xff\xfe not utf-8\n")
+    with pytest.raises(ReplayError, match="could not read"):
+        ReplayArchive(path).load()
+    out = ReplayTarget(archive=str(path), mode="exact").run(EvalItem(id="i1", inputs={}))
+    assert out.error is not None
+
+
+def test_confined_archive_escape_is_a_scored_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = tmp_path / "data"
+    root.mkdir()
+    monkeypatch.setenv(DATA_ROOT_ENV, str(root))
+    out = ReplayTarget(archive=str(root / ".." / "escape.jsonl"), mode="exact").run(EvalItem(id="i", inputs={}))
+    assert out.error is not None
 
 
 def test_archive_last_item_id_wins(tmp_path: Path) -> None:
@@ -592,6 +635,21 @@ def test_replay_target_loads_archive_and_is_deterministic(tmp_path: Path) -> Non
     out = target.run(EvalItem(id="i1", inputs={}))
     assert out.trajectory is not None
     assert out.error is None
+
+
+def test_callable_override_is_undeclared_determinism() -> None:
+    callable_target = ReplayTarget(
+        envelopes=[_envelope()],
+        mode="counterfactual",
+        overrides={"search": "demo.replay_stubs:search_v2"},
+    )
+    assert callable_target.is_deterministic() is None
+    literal = ReplayTarget(
+        envelopes=[_envelope()],
+        mode="counterfactual",
+        overrides={"search": "error:stale"},
+    )
+    assert literal.is_deterministic() is True
 
 
 def test_replay_target_without_archive_is_a_scored_error() -> None:

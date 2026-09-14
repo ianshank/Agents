@@ -14,11 +14,13 @@ ship / hold / escalate** decisions that fail safe to a human.
 ```bash
 pip install -e . -e ./agent-core -e ./flow-protocol -e ./flow-corpus -e ./behavioral-regression
 export PYTHONPATH=.        # required: lets the demo's callable target import
+export EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo
 ```
 
 `PYTHONPATH=.` is needed because the demo's system-under-test is
 `demo.support_bot_target:answer` (a deterministic offline "support bot"); the
-harness imports it by dotted path.
+harness imports it by dotted path. The allowlist is required for that import
+and for beat 6's `demo.replay_stubs:search_v2` override (ADR 0039; unset denies).
 
 ## Fastest path — run everything
 
@@ -120,6 +122,7 @@ then decides. Open any `out/demo/bregress_*.html` for the reliability diagram.
 
 ```bash
 eval-harness replay --archive demo/replay/baseline.jsonl --mode exact --offline
+PYTHONPATH=. EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo \
 eval-harness replay --archive demo/replay/baseline.jsonl --mode counterfactual \
   --override tool.search=demo.replay_stubs:search_v2 \
   --override tool.fetch=error:stale_index \

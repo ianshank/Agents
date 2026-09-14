@@ -193,6 +193,9 @@ class ReplayConfig:
     default_agent_version: str = "unknown"
     pass_rate_digits: int = 2
     slice_score: str = "trajectory_recovery"
+    error_score: float = 0.0
+    # in_order: recorded tool_calls still emit (counterfactual pins calls).
+    # recovery: observation-sensitive slice. CLI expected is the recording.
     default_scorers: tuple[str, ...] = ("trajectory_in_order", "trajectory_recovery")
     html_title: str = "Fixture replay"
     allowed_modes: tuple[str, ...] = ("exact", "counterfactual")
@@ -304,9 +307,7 @@ def envelope_from_dict(raw: object) -> ReplayEnvelope:
     prompt_version = _optional_str(raw.get("prompt_version"), "envelope.prompt_version")
     model_id = _optional_str(raw.get("model_id"), "envelope.model_id")
     model_parameters_hash = _optional_str(raw.get("model_parameters_hash"), "envelope.model_parameters_hash")
-    dependency_snapshot_id = _optional_str(
-        raw.get("dependency_snapshot_id"), "envelope.dependency_snapshot_id"
-    )
+    dependency_snapshot_id = _optional_str(raw.get("dependency_snapshot_id"), "envelope.dependency_snapshot_id")
     return ReplayEnvelope(
         envelope_id=str(raw["envelope_id"]),
         recorded_run_id=str(raw["recorded_run_id"]),

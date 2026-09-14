@@ -109,10 +109,17 @@ def items_from_envelopes(envelopes: Sequence[ReplayEnvelope]) -> list[EvalItem]:
     return items
 
 
-def _score_one(item: EvalItem, output: TargetOutput, names: Sequence[str]) -> ItemResult:
+def _score_one(
+    item: EvalItem,
+    output: TargetOutput,
+    names: Sequence[str],
+    config: ReplayConfig,
+) -> ItemResult:
     ctx = RunContext(config=None)
     if output.error is not None:
-        scores = [ScoreResult(name=name, value=0.0, passed=False, comment=output.error) for name in names]
+        scores = [
+            ScoreResult(name=name, value=config.error_score, passed=False, comment=output.error) for name in names
+        ]
     else:
         scores = [SCORERS.create(name, {}).score(item, output, ctx) for name in names]
     return ItemResult(item=item, output=output, scores=scores)
@@ -175,7 +182,8 @@ def run_replay(args: argparse.Namespace) -> int:
         return 2
     bootstrap()
     try:
-        envelopes = ReplayArchive(args.archive).load()
+        # Last write wins, matching ReplayTarget's by_item_id index.
+        envelopes = tuple(ReplayArchive(args.archive).by_item_id().values())
     except (ReplayError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
@@ -188,7 +196,7 @@ def run_replay(args: argparse.Namespace) -> int:
         override_tag_value=tag_value,
         envelopes=envelopes,
     )
-    results = [_score_one(item, target.run(item), cfg.default_scorers) for item in items]
+    results = [_score_one(item, target.run(item), cfg.default_scorers, cfg) for item in items]
     slice_key = args.slice_tag if args.slice_tag is not None else cfg.override_tag_key
     print(render_text(results, tag_key=slice_key, config=cfg))
     if args.html_out:

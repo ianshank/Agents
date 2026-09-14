@@ -16,7 +16,7 @@ optional export/UI adapters — they are not the evaluation architecture (see th
 are **target-owned** and scored in-process (exact / in-order / recovery / loops).
 Calibrated `ship / hold / escalate` lives in the `behavioral-regression` package.
 
-**Fixture replay (offline).** `eval-harness replay --mode exact` re-scores recorded
+**Fixture replay (offline).** `eval-harness replay --archive demo/replay/baseline.jsonl --mode exact` re-scores recorded
 `AgentTrajectory` envelopes. `--mode counterfactual` pins recorded tool
 observations and swaps one declared stub. Slice tags expose regressions that a
 global pass-rate can hide. Vendors remain optional sinks. The engine never

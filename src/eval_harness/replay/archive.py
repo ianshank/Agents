@@ -28,7 +28,7 @@ class ReplayArchive:
         envelopes: list[ReplayEnvelope] = []
         try:
             text = self.path.read_text(encoding="utf-8")
-        except OSError as exc:
+        except (OSError, UnicodeError) as exc:
             raise ReplayError(f"could not read replay archive {self.path}: {exc}") from exc
         for line_no, line in enumerate(text.splitlines(), start=1):
             stripped = line.strip()
