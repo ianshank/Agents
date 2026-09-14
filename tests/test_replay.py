@@ -357,6 +357,33 @@ def test_cli_json_and_bad_override(tmp_path: Path, capsys: pytest.CaptureFixture
     assert "ERROR" in captured.err
 
 
+def test_cli_counts_replay_errors_as_failed_results(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "baseline.jsonl"
+    ReplayArchive(path, for_write=True).append([_envelope()])
+    json_out = tmp_path / "summary.json"
+    args = build_parser().parse_args(
+        [
+            "replay",
+            "--archive",
+            str(path),
+            "--mode",
+            "counterfactual",
+            "--override",
+            "search=error:late",
+            "--from-span",
+            "missing-span",
+            "--json",
+            str(json_out),
+            "--offline",
+        ]
+    )
+    assert run_replay(args) == 0
+    captured = capsys.readouterr()
+    assert "pass_rate=0.00 passed=0 n=1" in captured.out
+    payload = json.loads(json_out.read_text(encoding="utf-8"))
+    assert payload["global"] == {"passed": 0, "n": 1, "pass_rate": 0.0, "score": "trajectory_recovery"}
+
+
 def test_parse_tag_filter_and_empty_override() -> None:
     assert parse_tag_filter(None) == (None, "")
     with pytest.raises(ReplayError, match="tag=value"):
@@ -415,6 +442,34 @@ def test_envelope_constructor_rejects_unknown_schema_version() -> None:
             },
             "output_metadata must be a mapping",
         ),
+        (
+            {
+                **envelope_to_dict(_envelope()),
+                "prompt_version": [],
+            },
+            "prompt_version must be a string",
+        ),
+        (
+            {
+                **envelope_to_dict(_envelope()),
+                "model_id": {},
+            },
+            "model_id must be a string",
+        ),
+        (
+            {
+                **envelope_to_dict(_envelope()),
+                "model_parameters_hash": [],
+            },
+            "model_parameters_hash must be a string",
+        ),
+        (
+            {
+                **envelope_to_dict(_envelope()),
+                "dependency_snapshot_id": {},
+            },
+            "dependency_snapshot_id must be a string",
+        ),
         ({**envelope_to_dict(_envelope()), "tags": ["x"]}, "tags must be a mapping"),
         ({**envelope_to_dict(_envelope()), "tags": {1: "x"}}, "keys and values must be strings"),
     ],
@@ -431,6 +486,10 @@ def test_envelope_from_dict_rejects_malformed_payloads(payload: object, match: s
         ({"schema_version": "0.0.1", "steps": []}, "unsupported trajectory schema_version"),
         ({"schema_version": "1.0.0", "steps": {}}, "trajectory.steps must be a list"),
         ({"schema_version": "1.0.0", "steps": ["x"]}, "trajectory step must be a mapping"),
+        (
+            {"schema_version": "1.0.0", "steps": [{"kind": []}]},
+            "trajectory step.kind must be a string",
+        ),
         (
             {"schema_version": "1.0.0", "steps": [{"kind": "final", "extra": 1}]},
             "unknown keys",
@@ -541,6 +600,18 @@ def test_replay_target_without_archive_is_a_scored_error() -> None:
     assert "archive" in out.error
 
 
+def test_replay_target_uses_config_mode_when_constructor_mode_omitted() -> None:
+    env = _envelope()
+    target = ReplayTarget(
+        envelopes=[env],
+        config=ReplayConfig(mode="counterfactual"),
+        overrides={"search": "error:late"},
+    )
+    out = target.run(EvalItem(id="i1", inputs={}))
+    assert out.trajectory is not None
+    assert any(step.kind == "tool_error" for step in out.trajectory.steps)
+
+
 def test_empty_override_tool_name_on_target_raises() -> None:
     with pytest.raises(ReplayError, match="override tool name is empty"):
         ReplayTarget(envelopes=[_envelope()], overrides={"tool.": "x"})
@@ -616,6 +687,18 @@ def test_non_callable_override_is_a_scored_error(monkeypatch: pytest.MonkeyPatch
     ).run(EvalItem(id="i1", inputs={}))
     assert out.error is not None
     assert "not callable" in out.error
+
+
+def test_missing_callable_override_attribute_is_a_scored_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST", "demo")
+    env = _envelope()
+    out = ReplayTarget(
+        envelopes=[env],
+        mode="counterfactual",
+        overrides={"search": "demo.replay_stubs:missing_attr"},
+    ).run(EvalItem(id="i1", inputs={}))
+    assert out.error is not None
+    assert out.trajectory == env.trajectory
 
 
 def test_callable_override_stringifies_non_str(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ..core._paths import OUTPUT_ROOT_ENV, resolve_confined_path
-from ..core.types import EvalItem, ItemResult, RunContext, TargetOutput
+from ..core.types import EvalItem, ItemResult, RunContext, ScoreResult, TargetOutput
 from ..plugins import SCORERS, bootstrap
 from .archive import ReplayArchive
 from .envelope import ReplayConfig, ReplayEnvelope, ReplayError
@@ -111,7 +111,10 @@ def items_from_envelopes(envelopes: Sequence[ReplayEnvelope]) -> list[EvalItem]:
 
 def _score_one(item: EvalItem, output: TargetOutput, names: Sequence[str]) -> ItemResult:
     ctx = RunContext(config=None)
-    scores = [SCORERS.create(name, {}).score(item, output, ctx) for name in names]
+    if output.error is not None:
+        scores = [ScoreResult(name=name, value=0.0, passed=False, comment=output.error) for name in names]
+    else:
+        scores = [SCORERS.create(name, {}).score(item, output, ctx) for name in names]
     return ItemResult(item=item, output=output, scores=scores)
 
 

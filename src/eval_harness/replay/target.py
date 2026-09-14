@@ -128,7 +128,7 @@ class ReplayTarget(TargetRunner):
     def __init__(
         self,
         archive: str = "",
-        mode: str = "exact",
+        mode: str | None = None,
         overrides: Mapping[str, str] | None = None,
         from_span: str | None = None,
         override_tag_key: str | None = None,
@@ -137,11 +137,12 @@ class ReplayTarget(TargetRunner):
         config: ReplayConfig | None = None,
     ) -> None:
         base = config or ReplayConfig()
-        if mode not in base.allowed_modes:
-            raise ReplayError(f"invalid replay mode: {mode!r}")
+        resolved_mode = base.mode if mode is None else mode
+        if resolved_mode not in base.allowed_modes:
+            raise ReplayError(f"invalid replay mode: {resolved_mode!r}")
         self.config = replace(
             base,
-            mode=cast(ReplayMode, mode),
+            mode=cast(ReplayMode, resolved_mode),
             archive_path=archive if archive else base.archive_path,
             from_span=from_span if from_span is not None else base.from_span,
             override_tag_key=override_tag_key if override_tag_key is not None else base.override_tag_key,
@@ -192,6 +193,9 @@ class ReplayTarget(TargetRunner):
                     config=self.config,
                 )
             except ReplayError as exc:
+                return TargetOutput(output=None, error=str(exc), trajectory=envelope.trajectory)
+            except Exception as exc:
+                logger.debug("replay override failed for item %s", item.id, exc_info=exc)
                 return TargetOutput(output=None, error=str(exc), trajectory=envelope.trajectory)
         metadata = dict(envelope.output_metadata)
         metadata["replay_envelope_id"] = envelope.envelope_id

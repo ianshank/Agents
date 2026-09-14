@@ -11,7 +11,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from ..core.types import (
     TRAJECTORY_SCHEMA_VERSION,
@@ -79,8 +79,11 @@ def _step_from_dict(raw: object) -> TrajectoryStep:
         raise ReplayError(f"trajectory step must be a mapping, got {type(raw).__name__}")
     _reject_unknown(raw, _STEP_KEYS, "trajectory step")
     kind = raw.get("kind")
+    if not isinstance(kind, str):
+        raise ReplayError("trajectory step.kind must be a string")
     if kind not in _STEP_KINDS:
         raise ReplayError(f"unknown step kind: {kind!r}")
+    step_kind = cast(Literal["model_decision", "tool_call", "tool_observation", "tool_error", "final"], kind)
     timestamp_ms = raw.get("timestamp_ms")
     if timestamp_ms is not None and not isinstance(timestamp_ms, int):
         raise ReplayError("timestamp_ms must be an int when present")
@@ -90,7 +93,7 @@ def _step_from_dict(raw: object) -> TrajectoryStep:
     if not isinstance(metadata, Mapping):
         raise ReplayError("step metadata must be a mapping")
     return TrajectoryStep(
-        kind=kind,
+        kind=step_kind,
         timestamp_ms=timestamp_ms,
         tool_call=tool_call,
         content=raw.get("content"),
@@ -164,6 +167,14 @@ def _str_map(raw: object, label: str) -> dict[str, str]:
             raise ReplayError(f"{label} keys and values must be strings")
         out[key] = value
     return out
+
+
+def _optional_str(raw: object, label: str) -> str | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise ReplayError(f"{label} must be a string when present")
+    return raw
 
 
 @dataclass(frozen=True)
@@ -290,6 +301,12 @@ def envelope_from_dict(raw: object) -> ReplayEnvelope:
     metadata_raw = raw.get("output_metadata", {})
     if not isinstance(metadata_raw, Mapping):
         raise ReplayError("output_metadata must be a mapping")
+    prompt_version = _optional_str(raw.get("prompt_version"), "envelope.prompt_version")
+    model_id = _optional_str(raw.get("model_id"), "envelope.model_id")
+    model_parameters_hash = _optional_str(raw.get("model_parameters_hash"), "envelope.model_parameters_hash")
+    dependency_snapshot_id = _optional_str(
+        raw.get("dependency_snapshot_id"), "envelope.dependency_snapshot_id"
+    )
     return ReplayEnvelope(
         envelope_id=str(raw["envelope_id"]),
         recorded_run_id=str(raw["recorded_run_id"]),
@@ -300,10 +317,10 @@ def envelope_from_dict(raw: object) -> ReplayEnvelope:
         input_hash=str(raw["input_hash"]),
         output_hash=str(raw["output_hash"]),
         trajectory=trajectory_from_dict(raw["trajectory"]),
-        prompt_version=raw.get("prompt_version"),
-        model_id=raw.get("model_id"),
-        model_parameters_hash=raw.get("model_parameters_hash"),
-        dependency_snapshot_id=raw.get("dependency_snapshot_id"),
+        prompt_version=prompt_version,
+        model_id=model_id,
+        model_parameters_hash=model_parameters_hash,
+        dependency_snapshot_id=dependency_snapshot_id,
         state_before=state_snapshot_from_dict(raw.get("state_before")),
         state_after=state_snapshot_from_dict(raw.get("state_after")),
         tags=_str_map(raw.get("tags", {}), "tags"),
