@@ -8,6 +8,7 @@ never a scorer (ADR 0046 / ADR 0049).
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any, cast
@@ -131,9 +132,9 @@ class ReplayTarget(TargetRunner):
 
     Missing envelopes degrade to a scored error (ADR 0038), not a crash.
     Invalid mode / corrupt archive fail closed at construction or first load.
-    The replay CLI turns ``TargetOutput.error`` into failed scores; the engine
-    leaves a missing trajectory as F-051 not-applicable (``on_missing`` still
-    enters the mean, so a min-mean gate fails closed).
+    Override failures omit the recorded trajectory so engine scorers cannot
+    treat a healthy recording as a pass. The replay CLI also turns
+    ``TargetOutput.error`` into failed scores.
     """
 
     def __init__(
@@ -162,6 +163,8 @@ class ReplayTarget(TargetRunner):
         self._overrides = _normalize_overrides(overrides, self.config.override_key_prefix)
         self._injected = tuple(envelopes) if envelopes is not None else None
         self._index: dict[str, ReplayEnvelope] | None = None
+        self._load_error: str | None = None
+        self._index_lock = threading.Lock()
 
     def is_deterministic(self) -> bool | None:
         """Literal/exact/no overrides are constant; a counterfactual callable is undeclared."""
@@ -175,18 +178,29 @@ class ReplayTarget(TargetRunner):
     def _load_index(self) -> dict[str, ReplayEnvelope]:
         if self._index is not None:
             return self._index
-        if self._injected is not None:
-            self._index = {env.item_id: env for env in self._injected}
-            return self._index
-        path = self.config.archive_path
-        if not path:
-            raise ReplayError("replay target requires archive= or injected envelopes")
-        self._index = dict(ReplayArchive(path).by_item_id())
-        return self._index
+        if self._load_error is not None:
+            raise ReplayError(self._load_error)
+        with self._index_lock:
+            if self._index is not None:
+                return self._index
+            if self._load_error is not None:
+                raise ReplayError(self._load_error)
+            try:
+                if self._injected is not None:
+                    self._index = {env.item_id: env for env in self._injected}
+                    return self._index
+                path = self.config.archive_path
+                if not path:
+                    raise ReplayError("replay target requires archive= or injected envelopes")
+                self._index = dict(ReplayArchive(path).by_item_id())
+                return self._index
+            except (ReplayError, ValueError) as exc:
+                self._load_error = str(exc)
+                raise ReplayError(self._load_error) from exc
 
     def _should_override(self, envelope: ReplayEnvelope) -> bool:
         wanted = self.config.override_tag_value
-        if not wanted:
+        if wanted is None:
             return True
         return envelope.tags.get(self.config.override_tag_key) == wanted
 
@@ -210,10 +224,10 @@ class ReplayTarget(TargetRunner):
                     config=self.config,
                 )
             except ReplayError as exc:
-                return TargetOutput(output=None, error=str(exc), trajectory=envelope.trajectory)
+                return TargetOutput(output=None, error=str(exc))
             except Exception as exc:
                 logger.debug("replay override failed for item %s", item.id, exc_info=exc)
-                return TargetOutput(output=None, error=str(exc), trajectory=envelope.trajectory)
+                return TargetOutput(output=None, error=str(exc))
         metadata = dict(envelope.output_metadata)
         metadata["replay_envelope_id"] = envelope.envelope_id
         metadata["replay_mode"] = mode

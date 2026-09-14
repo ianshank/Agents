@@ -22,6 +22,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import sys
@@ -181,8 +182,17 @@ def _check_cli_and_registry(errors: list[str]) -> None:
     parser = build_parser()
     exact = parser.parse_args(["replay", "--archive", "x", "--mode", "exact", "--offline"])
     counter = parser.parse_args(["replay", "--archive", "x", "--mode", "counterfactual"])
+    replay_parser = next(
+        action.choices["replay"] for action in parser._actions if isinstance(action, argparse._SubParsersAction)
+    )
+    help_text = replay_parser.format_help()
     _check(
         exact.mode == "exact" and counter.mode == "counterfactual" and exact.offline is True,
+        "eval-harness replay accepts exact and counterfactual",
+        errors,
+    )
+    _check(
+        "exact" in help_text and "counterfactual" in help_text,
         "eval-harness replay --help lists exact and counterfactual",
         errors,
     )

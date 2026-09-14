@@ -359,7 +359,7 @@ def test_unknown_from_span_is_a_scored_error() -> None:
     )
     out = target.run(EvalItem(id="i1", inputs={}))
     assert out.error is not None
-    assert out.trajectory == env.trajectory
+    assert out.trajectory is None
 
 
 def test_callable_override_uses_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -773,10 +773,12 @@ def test_non_callable_override_is_a_scored_error(monkeypatch: pytest.MonkeyPatch
     ).run(EvalItem(id="i1", inputs={}))
     assert out.error is not None
     assert "not callable" in out.error
+    assert out.trajectory is None
 
 
 def test_missing_callable_override_attribute_is_a_scored_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST", "demo")
+    bootstrap()
     env = _envelope()
     out = ReplayTarget(
         envelopes=[env],
@@ -784,7 +786,10 @@ def test_missing_callable_override_attribute_is_a_scored_error(monkeypatch: pyte
         overrides={"search": "demo.replay_stubs:missing_attr"},
     ).run(EvalItem(id="i1", inputs={}))
     assert out.error is not None
-    assert out.trajectory == env.trajectory
+    assert out.trajectory is None
+    ctx = RunContext(config=None)
+    recovery = SCORERS.create("trajectory_recovery", {}).score(EvalItem(id="i1", inputs={}), out, ctx)
+    assert recovery.passed is None
 
 
 def test_callable_override_stringifies_non_str(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -816,6 +821,58 @@ def test_cli_reports_archive_and_override_when_errors(tmp_path: Path, capsys: py
     assert run_replay(bad_when) == 2
     captured = capsys.readouterr()
     assert "ERROR" in captured.err
+
+
+def test_empty_override_when_matches_only_empty_tag() -> None:
+    empty = _envelope(item_id="e", tags={"freshness": ""})
+    tagged = _envelope(item_id="s", tags={"freshness": "sensitive"})
+    target = ReplayTarget(
+        envelopes=[empty, tagged],
+        mode="counterfactual",
+        overrides={"search": "STALE"},
+        override_tag_key="freshness",
+        override_tag_value="",
+    )
+    out_empty = target.run(EvalItem(id="e", inputs={}))
+    out_tagged = target.run(EvalItem(id="s", inputs={}))
+    assert out_empty.trajectory is not None
+    obs = [step.content for step in out_empty.trajectory.steps if step.kind == "tool_observation"]
+    assert obs == ["STALE"]
+    assert out_tagged.trajectory == tagged.trajectory
+
+
+def test_cli_html_outside_output_root_is_exit_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    archive = tmp_path / "baseline.jsonl"
+    ReplayArchive(archive, for_write=True).append([_envelope()])
+    root = tmp_path / "out"
+    root.mkdir()
+    monkeypatch.setenv(OUTPUT_ROOT_ENV, str(root))
+    args = build_parser().parse_args(
+        ["replay", "--archive", str(archive), "--mode", "exact", "--html", str(tmp_path / "outside.html"), "--offline"]
+    )
+    assert run_replay(args) == 2
+    captured = capsys.readouterr()
+    assert "ERROR" in captured.err
+
+
+def test_corrupt_archive_load_is_cached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "bad.jsonl"
+    path.write_text("{not json\n", encoding="utf-8")
+    calls = {"n": 0}
+    original = ReplayArchive.by_item_id
+
+    def counted(self: ReplayArchive) -> object:
+        calls["n"] += 1
+        return original(self)
+
+    monkeypatch.setattr(ReplayArchive, "by_item_id", counted)
+    target = ReplayTarget(archive=str(path), mode="exact")
+    first = target.run(EvalItem(id="i1", inputs={}))
+    second = target.run(EvalItem(id="i2", inputs={}))
+    assert first.error is not None and second.error is not None
+    assert calls["n"] == 1
 
 
 def test_cli_main_dispatches_replay(tmp_path: Path) -> None:

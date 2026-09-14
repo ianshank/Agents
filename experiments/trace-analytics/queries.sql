@@ -26,9 +26,14 @@
 -- SELECT item_id, MIN(recorded_at) AS session_start, MAX(recorded_at) AS session_end,
 --        COUNT(*) AS n FROM envelopes GROUP BY item_id;
 
--- 6. Deduplicate retries: latest recorded_at per item_id
--- SELECT e.item_id, e.envelope_id, e.recorded_at FROM envelopes e
--- JOIN (SELECT item_id, MAX(recorded_at) AS latest FROM envelopes GROUP BY item_id) t
---   ON e.item_id = t.item_id AND e.recorded_at = t.latest;
+-- 6. Deduplicate retries: latest instant per item_id, ingest_order tie-break
+-- SELECT item_id, envelope_id, recorded_at FROM (
+--   SELECT item_id, envelope_id, recorded_at,
+--          ROW_NUMBER() OVER (
+--            PARTITION BY item_id
+--            ORDER BY recorded_at_epoch DESC, ingest_order DESC
+--          ) AS rn
+--   FROM envelopes
+-- ) ranked WHERE rn = 1;
 
 -- 7. Judge vs human disagreement — empty until a human-label subset exists.

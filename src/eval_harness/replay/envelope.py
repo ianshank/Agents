@@ -185,7 +185,7 @@ class ReplayConfig:
     archive_path: str = ""
     from_span: str | None = None
     override_tag_key: str = "freshness"
-    override_tag_value: str = ""
+    override_tag_value: str | None = None
     missing_envelope_error: str = "no recorded envelope for item"
     error_override_prefix: str = "error:"
     override_key_prefix: str = "tool."

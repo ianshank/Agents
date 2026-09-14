@@ -32,7 +32,11 @@ CLI text reports strip newlines and ANSI from archive fields. `timestamp_ms`
 rejects bool. Override maps require string keys/values. One-component
 `module:attr` callables (e.g. `demo:search_v2`) are imported; `error:` stays
 a literal. Trace-analytics sketches join `passed = 0` for first-fail and
-dedupe retries by `item_id`. F-070 restores a pre-existing `OUTPUT_ROOT`.
+dedupe retries by parsed UTC instant plus JSONL ingest order. F-070 restores
+a pre-existing `OUTPUT_ROOT` and checks replay `--help` text. Override
+failures omit the recorded trajectory so engine scorers cannot pass a healthy
+recording. Empty `--override-when tag=` matches only empty tags. Report
+writes outside `OUTPUT_ROOT` exit 2. Archive load failures are cached.
 
 ### Fixed — chart_title_lines metadata narrowing
 

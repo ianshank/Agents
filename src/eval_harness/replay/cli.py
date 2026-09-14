@@ -193,17 +193,21 @@ def run_replay(args: argparse.Namespace) -> int:
         overrides=overrides,
         from_span=args.from_span,
         override_tag_key=tag_key if tag_key is not None else cfg.override_tag_key,
-        override_tag_value=tag_value,
+        override_tag_value=tag_value if tag_key is not None else None,
         envelopes=envelopes,
     )
     results = [_score_one(item, target.run(item), cfg.default_scorers, cfg) for item in items]
     slice_key = args.slice_tag if args.slice_tag is not None else cfg.override_tag_key
     print(render_text(results, tag_key=slice_key, config=cfg))
-    if args.html_out:
-        _write(args.html_out, render_html(results, tag_key=slice_key, config=cfg))
-    if args.json_out:
-        payload = _summary_payload(results, mode=args.mode, tag_key=slice_key, config=cfg)
-        _write(args.json_out, json.dumps(payload, indent=2, sort_keys=True))
+    try:
+        if args.html_out:
+            _write(args.html_out, render_html(results, tag_key=slice_key, config=cfg))
+        if args.json_out:
+            payload = _summary_payload(results, mode=args.mode, tag_key=slice_key, config=cfg)
+            _write(args.json_out, json.dumps(payload, indent=2, sort_keys=True))
+    except (ReplayError, ValueError, OSError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
     _ = args.offline  # documented no-op: replay has no network client
     return 0
 

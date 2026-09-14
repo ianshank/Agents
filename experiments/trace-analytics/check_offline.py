@@ -10,12 +10,25 @@ import argparse
 import json
 import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
 FIXTURES = HERE / "fixtures" / "envelopes.jsonl"
 EXPECTED = HERE / "expected.json"
+
+
+def _recorded_at_epoch(value: object) -> float:
+    """Chronological instant for ISO-8601; unparseable values sort last."""
+    text = str(value).replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return float("-inf")
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
 
 
 def load_rows() -> list[dict[str, Any]]:
@@ -32,21 +45,25 @@ def load_rows() -> list[dict[str, Any]]:
 
 def populate(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> None:
     conn.execute(
-        "CREATE TABLE envelopes (envelope_id TEXT, item_id TEXT, recorded_at TEXT, tag_freshness TEXT, passed INTEGER)"
+        "CREATE TABLE envelopes ("
+        "envelope_id TEXT, item_id TEXT, recorded_at TEXT, tag_freshness TEXT, "
+        "passed INTEGER, ingest_order INTEGER, recorded_at_epoch REAL)"
     )
     conn.execute(
         "CREATE TABLE steps (envelope_id TEXT, item_id TEXT, step_index INTEGER, "
         "kind TEXT, tool_name TEXT, timestamp_ms INTEGER)"
     )
-    for row in rows:
+    for ingest_order, row in enumerate(rows, start=1):
         conn.execute(
-            "INSERT INTO envelopes VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO envelopes VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 row["envelope_id"],
                 row["item_id"],
                 row["recorded_at"],
                 row["tag_freshness"],
                 int(row["passed"]),
+                ingest_order,
+                _recorded_at_epoch(row["recorded_at"]),
             ),
         )
         steps = row.get("steps")
@@ -91,11 +108,12 @@ def query_results(conn: sqlite3.Connection) -> dict[str, Any]:
         "FROM envelopes GROUP BY item_id ORDER BY item_id"
     ).fetchall()
     latest = conn.execute(
-        "SELECT e.item_id, e.envelope_id, e.recorded_at AS latest "
-        "FROM envelopes e "
-        "JOIN (SELECT item_id, MAX(recorded_at) AS latest FROM envelopes GROUP BY item_id) t "
-        "ON e.item_id = t.item_id AND e.recorded_at = t.latest "
-        "ORDER BY e.item_id"
+        "SELECT item_id, envelope_id, recorded_at AS latest FROM ("
+        "SELECT item_id, envelope_id, recorded_at, "
+        "ROW_NUMBER() OVER ("
+        "PARTITION BY item_id ORDER BY recorded_at_epoch DESC, ingest_order DESC"
+        ") AS rn FROM envelopes"
+        ") ranked WHERE rn = 1 ORDER BY item_id"
     ).fetchall()
     return {
         "first_failing_step": [dict(row) for row in first_fail],
@@ -104,6 +122,52 @@ def query_results(conn: sqlite3.Connection) -> dict[str, Any]:
         "sessions": [dict(row) for row in sessions],
         "latest_per_item": [dict(row) for row in latest],
     }
+
+
+def _self_check_latest() -> None:
+    """Prove UTC instants beat lexical ISO strings, and ties use ingest_order."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    rows = [
+        {
+            "envelope_id": "e-off",
+            "item_id": "tz",
+            "recorded_at": "2026-09-14T20:00:00+05:00",
+            "tag_freshness": "n",
+            "passed": 1,
+            "steps": [],
+        },
+        {
+            "envelope_id": "e-utc",
+            "item_id": "tz",
+            "recorded_at": "2026-09-14T18:00:00+00:00",
+            "tag_freshness": "n",
+            "passed": 1,
+            "steps": [],
+        },
+        {
+            "envelope_id": "e-dup-a",
+            "item_id": "tie",
+            "recorded_at": "2026-09-14T00:00:00+00:00",
+            "tag_freshness": "n",
+            "passed": 1,
+            "steps": [],
+        },
+        {
+            "envelope_id": "e-dup-b",
+            "item_id": "tie",
+            "recorded_at": "2026-09-14T00:00:00+00:00",
+            "tag_freshness": "n",
+            "passed": 1,
+            "steps": [],
+        },
+    ]
+    populate(conn, rows)
+    latest = {row["item_id"]: row["envelope_id"] for row in query_results(conn)["latest_per_item"]}
+    if latest.get("tz") != "e-utc":
+        raise SystemExit(f"latest_per_item must prefer later UTC instant, got {latest!r}")
+    if latest.get("tie") != "e-dup-b":
+        raise SystemExit(f"latest_per_item must tie-break by ingest_order, got {latest!r}")
 
 
 def run() -> dict[str, Any]:
@@ -118,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--update", action="store_true", help="rewrite expected.json")
     args = parser.parse_args(argv)
+    _self_check_latest()
     actual = run()
     rendered = json.dumps(actual, indent=2, sort_keys=True) + "\n"
     if args.update:
