@@ -10,7 +10,7 @@ import argparse
 import json
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +27,7 @@ def _recorded_at_epoch(value: object) -> float:
     except ValueError:
         return float("-inf")
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed.timestamp()
 
 
