@@ -1541,7 +1541,7 @@ features:
       or F-036.
     category: "functional"
     priority: "high"
-    status: "in_progress"
+    status: "done"
     tier: "fast"
     verification:
       - "trajectory_from_dict is the inverse of trajectory_to_dict on a two-call trajectory; unknown keys raise"
@@ -1552,9 +1552,11 @@ features:
       - "registered name replay appears in plugin_registry_baseline.json"
       - "slice report shows a tag whose pass_rate drops while the global pass_rate is unchanged, on committed demo fixtures"
     validation_command: "python scripts/validations/F_070.py"
+    implemented_in: "4ea0789a604695e509dacce4ca7c442445171340"
     depends_on: ["F-051", "F-039", "F-053"]
     notes: >
       Not Change 5 of docs/plans/agent-eval-coverage/PLAN.md. CHARTER §3 observability
-      non-goal is not amended. ADR 0049. implemented_in is stamped after the landing
-      commit so F-064's ancestry check resolves against HEAD.
+      non-goal is not amended. ADR 0049. implemented_in is the first landing commit
+      on this branch so F-064's ancestry check resolves against HEAD.
+      public_surface_baseline.json is unchanged: replay/ declares no __all__.
 
