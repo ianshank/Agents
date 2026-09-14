@@ -153,6 +153,7 @@ Aliases (sink):
 | `model` | 1 | 1 | 1 | — | 2 |
 | `provenance_recorder` | 1 | 1 | 1 | — | 1 |
 | `rca_maxz` | 1 | 1 | 1 | — | 1 |
+| `replay` | 1 | 1 | 1 | — | 1 |
 | `testgen_agent` | 1 | 1 | 1 | — | 1 |
 
 - `echo` M6 waived: no failure modes by design (pure dict access)

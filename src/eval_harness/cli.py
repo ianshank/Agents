@@ -65,6 +65,10 @@ def build_parser() -> argparse.ArgumentParser:
     campaign.add_argument("--json", dest="json_out", help="write the analysis result here (JSON)")
 
     sub.add_parser("list-plugins", help="list all registered components")
+
+    from .replay.cli import add_replay_parser
+
+    add_replay_parser(sub)
     return parser
 
 
@@ -188,6 +192,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_campaign(args)
     if args.command == "list-plugins":
         return _cmd_list(args)
+    if args.command == "replay":
+        from .replay.cli import run_replay
+
+        return run_replay(args)
     return 2  # pragma: no cover - argparse enforces a command
 
 

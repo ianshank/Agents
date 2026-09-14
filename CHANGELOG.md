@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — fixture replay of recorded AgentTrajectory envelopes (F-070, ADR 0049)
+
+Offline `eval-harness replay --mode exact|counterfactual` re-scores committed
+`ReplayEnvelope` JSONL (strict `trajectory_from_dict`, `OUTPUT_ROOT`/`DATA_ROOT`
+confinement). Counterfactual is a registered `replay` TargetRunner, not a scorer
+(ADR 0046). Slice tags expose regressions a global pass-rate can hide; the first
+`tool_error` is printed as an ordered step table, not a vendor waterfall. Demo
+beat 6 uses `demo/replay/baseline.jsonl`. Advisory answer-quality corpus at
+`corpora/answer_quality/v1/` reuses `req_scope_hallucination` and
+`trajectory_recovery`. SQL sketches live under `experiments/trace-analytics/`
+(unsigned, not in `make check-all`). ClickHouse, production ingest, and
+reconstructing trajectories from Langfuse/Phoenix spans remain out of scope.
+
 ### Changed — VP decision package for eval-tool selection
 
 - `docs/executive-report-eval-tools.md` is a VP review brief, not an approval stamp: scores are **expert judgment** (not a three-vendor bake-off); the harness owns testgen/RCA/requirements scorers; vendors are sinks/UIs. Adds a one-page memo, Option 4 (defer / keep all three optional), CHARTER and package-name constraints, and F-067/F-068/F-069 grounding without attributing corpus self-grades to vendors.

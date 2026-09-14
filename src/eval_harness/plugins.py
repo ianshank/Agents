@@ -31,6 +31,7 @@ def load_builtin_plugins() -> None:
     """Import built-in component modules so their decorators run."""
     from . import datasets as _datasets  # noqa: F401
     from . import judges as _judges  # noqa: F401
+    from . import replay as _replay  # noqa: F401
     from . import scorers as _scorers  # noqa: F401
     from . import sinks as _sinks  # noqa: F401
     from . import state_adapters as _state_adapters  # noqa: F401

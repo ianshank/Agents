@@ -43,6 +43,11 @@ before that guard existed.
   CHARTER §3 ratified amendment plus its own ADR — §3 lists "a general observability
   platform" as a non-goal. Calibration packages it originally queued behind are archived;
   remaining in-flight dependency is add-measurement-harness-wedge.
+- [`changes/add-fixture-replay/`](changes/add-fixture-replay/) —
+  *in progress (F-070 / ADR 0049).* Offline fixture replay of recorded `AgentTrajectory`
+  envelopes: exact re-score and counterfactual `TargetRunner`. Does **not** unblock the
+  production-eval flywheel, does not reconstruct trajectories from vendor spans, and does
+  not add ClickHouse to `eval_harness`.
 
 ## Archived changes
 

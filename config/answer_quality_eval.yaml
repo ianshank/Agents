@@ -1,0 +1,42 @@
+# Answer-quality evaluation — advisory profile (F-070, ADR 0049).
+#
+# Replays recorded AgentTrajectory envelopes from the synthetic
+# `corpora/answer_quality/v1/` corpus. Scorers are reused, not invented:
+# `req_scope_hallucination` (citation / unsupported claim) and
+# `trajectory_recovery` (unrecovered tool_error).
+#
+# Every gate rule is advisory. Bounds are soak starting points, not spec
+# thresholds. Human-label meta-eval (MEMERAG-style) is not claimed.
+
+schema_version: "1.0"
+
+run:
+  name: "answer-quality-eval"
+  seed: 7
+
+dataset:
+  type: jsonl
+  params:
+    path: "corpora/answer_quality/v1/eval/items.jsonl"
+
+target:
+  type: replay
+  params:
+    archive: "corpora/answer_quality/v1/eval/envelopes.jsonl"
+    mode: exact
+
+scorers:
+  - type: req_scope_hallucination
+  - type: trajectory_recovery
+
+# Every rule is advisory. Bounds are soak starting points recorded in config, not
+# spec thresholds — a blocking rule is a later, separate change.
+gate:
+  rules:
+    # `max`, not `min`: this scorer is a hallucination RATE, where lower is better.
+    - { score: req_scope_hallucination, metric: mean, max: 0.50, report_only: true }
+    - { score: trajectory_recovery, metric: mean, min: 0.70, report_only: true }
+
+sinks:
+  - type: console
+    params: { verbose: true }

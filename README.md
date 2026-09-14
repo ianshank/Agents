@@ -9,6 +9,20 @@ A dynamic, modular, backwards-compatible enterprise LLM evaluation harness with
 first-class Langfuse integration, CI secret scanning, and a pluggable skill
 framework.
 
+**LLM evaluation harness for agents and models.** Config-driven judges, scorers,
+gates, and sinks. Offline by default. Langfuse, Phoenix, and BrainTrust are
+optional export/UI adapters — they are not the evaluation architecture (see the
+[VP decision package](docs/executive-report-eval-tools.md)). Agent trajectories
+are **target-owned** and scored in-process (exact / in-order / recovery / loops).
+Calibrated `ship / hold / escalate` lives in the `behavioral-regression` package.
+
+**Fixture replay (offline).** `eval-harness replay --mode exact` re-scores recorded
+`AgentTrajectory` envelopes. `--mode counterfactual` pins recorded tool
+observations and swaps one declared stub. Slice tags expose regressions that a
+global pass-rate can hide. Vendors remain optional sinks. The engine never
+reconstructs trajectories from Langfuse/Phoenix spans, and this repo does not
+ship a ClickHouse warehouse or production ingest path.
+
 
 ## Contents
 
@@ -168,6 +182,7 @@ uses the standard AWS credential chain). For the component **file layout**, see
 eval-harness list-plugins
 eval-harness run --config config/eval.example.yaml --offline
 eval-harness run --config config/eval.example.yaml --set run.sample_rate=0.1
+eval-harness replay --archive demo/replay/baseline.jsonl --mode exact --offline
 ```
 
 The process exits non-zero when the quality gate fails, so it drops directly
@@ -177,8 +192,8 @@ into a CI step.
 
 A repeatable, fully offline demo (zero credentials, deterministic) lives in
 [`demo/`](demo/README.md). One command runs the whole story — pluggable harness,
-a passing then CI-failing quality gate, multi-model comparison, and calibrated
-ship/hold/escalate decisions:
+a passing then CI-failing quality gate, multi-model comparison, calibrated
+ship/hold/escalate decisions, and fixture replay of a hidden slice regression:
 
 ```bash
 PYTHONPATH=. bash demo/run_demo.sh
@@ -471,7 +486,11 @@ src/eval_harness/
                      item's telemetry; F-067),
                      testgen_agent (generate a suite from focal+obligations, never
                      seeing inputs.suite, then execute via run_generated_suite;
-                     F-069)
+                     F-069),
+                     replay (exact or counterfactual reload of recorded
+                     AgentTrajectory envelopes; F-070)
+  replay/            ReplayEnvelope, JSONL archive, replay TargetRunner, slice
+                     pass-rates, eval-harness replay CLI (F-070, ADR 0049)
   sinks/             console, json_file, html_file, langfuse, phoenix, braintrust
   judges/            mock (deterministic), openai (Nemotron/GPT), anthropic, bedrock,
                      phoenix_evals, panel (aggregates N member judges — median/mean/

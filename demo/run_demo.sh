@@ -62,9 +62,18 @@ echo "  v2 regressed  ->"; bregress --seed 7 --set v2_sycophancy_mean=0.55 \
 echo "  no clear change ->"; bregress --seed 7 --set v2_sycophancy_mean=0.30 \
   --out "$OUT/bregress_escalate.json" --html "$OUT/bregress_escalate.html"
 
+banner "6. Fixture replay — hidden slice regression"
+note "Exact re-score of recorded envelopes, then a counterfactual stub that fails only freshness=sensitive."
+eval-harness replay --archive demo/replay/baseline.jsonl --mode exact --offline
+eval-harness replay --archive demo/replay/baseline.jsonl --mode counterfactual \
+  --override tool.search=demo.replay_stubs:search_v2 \
+  --override tool.fetch=error:stale_index \
+  --override-when freshness=sensitive --offline \
+  --html "$OUT/replay.html" --json "$OUT/replay.json"
+
 banner "Done — reports written to $OUT/"
 for f in report.html report-fail.html compare.html \
-         bregress_ship.html bregress_hold.html bregress_escalate.html; do
+         bregress_ship.html bregress_hold.html bregress_escalate.html replay.html; do
   [[ -f "$OUT/$f" ]] && echo "  $OUT/$f" || true
 done
 # Open the eval report if a desktop is available (best-effort, never fatal).

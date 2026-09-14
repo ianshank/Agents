@@ -26,7 +26,7 @@ harness imports it by dotted path.
 bash demo/run_demo.sh            # add --install to pip-install first
 ```
 
-That runs all five beats below and writes every report to `out/demo/`. The rest
+That runs all six beats below and writes every report to `out/demo/`. The rest
 of this doc is the **spoken script**: what to type, what appears, and what to say.
 
 ---
@@ -116,6 +116,30 @@ then decides. Open any `out/demo/bregress_*.html` for the reliability diagram.
 - **Leader hears:** it **never rubber-stamps** — when the measurement can't tell,
   it **fails safe to a human** instead of guessing. That's the trust story.
 
+## Beat 6 — "Fixture replay, hidden slice" (~90s)
+
+```bash
+eval-harness replay --archive demo/replay/baseline.jsonl --mode exact --offline
+eval-harness replay --archive demo/replay/baseline.jsonl --mode counterfactual \
+  --override tool.search=demo.replay_stubs:search_v2 \
+  --override tool.fetch=error:stale_index \
+  --override-when freshness=sensitive --offline \
+  --html out/demo/replay.html
+```
+
+Exact replay answers “can I reproduce the recorded trajectory scores?”
+Counterfactual answers “holding later steps fixed, does this stub change the
+sensitive slice?” That distinction is ADR 0046: this is a **target**, not a scorer.
+
+- **Engineer says:** global `trajectory_recovery` pass-rate can stay non-zero while
+  `freshness=sensitive` drops to 0. The HTML table lists the first `tool_error`
+  (`search → fetch → tool_error(fetch)`), not a vendor waterfall.
+- **Leader hears:** a flat headline metric can hide a tagged regression. Open the
+  HTML; the failing step is named.
+
+What this beat does **not** demo: ClickHouse, Langfuse as system of record,
+production traces, or clicking a span in a SPA.
+
 ## Close — "Why you can't game it" (~30s)
 
 The cheapest way to pass an eval is to weaken the eval. Two gates stop that:
@@ -158,7 +182,9 @@ can also run `eval-harness compare` with one offline arm and one live model arm.
 
 | Path | Purpose |
 |---|---|
-| `run_demo.sh` | one-shot orchestrator for all five beats |
+| `run_demo.sh` | one-shot orchestrator for all six beats |
+| `replay_fixtures.py` / `replay_stubs.py` | committed envelope generator + stale search stub (beat 6) |
+| `replay/baseline.jsonl` | 12 recorded envelopes tagged `freshness=normal|sensitive` |
 | `support_bot_target.py` | the offline "support bot" system-under-test |
 | `data/support_bot.jsonl` | 10 realistic support questions |
 | `configs/eval.pass.yaml` | multi-scorer eval, gate **PASS** (exit 0) |
