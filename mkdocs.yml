@@ -56,6 +56,10 @@ nav:
       - Charter: CHARTER.md
       - C4 architecture: c4_architecture.md
       - Matrix coverage: matrix-coverage.md
+  - Evaluations:
+      - Executive report (eval tools): executive-report-eval-tools.md
+      - VP deck: plans/scenario-eval-matrices/VP_DECK.md
+      - Deck A+ speaker notes: plans/scenario-eval-matrices/DECK_A_PLUS.md
   - Decisions:
       - Overview: decisions/README.md
   - Roadmap:

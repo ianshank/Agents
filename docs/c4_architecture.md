@@ -438,7 +438,8 @@ Local and CI pre-merge gate pipelines execute through dedicated test automation 
    - Provides structured test output reporting, failure classification, and isolation across the 5 monorepo packages.
 
 3. **Evaluation Tool Matrix & Executive Metrics (`scripts/generate_eval_metrics.py`)**:
-   - Automated data aggregation across the evaluation landscape (Test Case Generation, Root Cause Analysis, and Requirements Generation).
+   - Scores are expert-assigned JSON (`docs/eval_metrics.json`, `scoring_basis: expert_judgment`), not automated aggregation of a live bake-off.
+   - The renderer is `--check`-gated (`python scripts/generate_eval_metrics.py --check`); the speaker deck is [`plans/scenario-eval-matrices/VP_DECK.md`](plans/scenario-eval-matrices/VP_DECK.md).
    - Validates schema conformance against `docs/eval_metrics_schema.json` and produces visual comparative matrices (`docs/eval_metrics_comparison.png`, `.svg`) linking to the executive decision report (`docs/executive-report-eval-tools.md`).
 
 ## Data Flow

@@ -35,5 +35,14 @@
         "timeout": 60
       }
     ]
+  },
+  "generated-artifacts-guard": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python .claude/hooks/stop-generated-artifacts.py",
+        "timeout": 200
+      }
+    ]
   }
 }

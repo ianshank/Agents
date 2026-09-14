@@ -26,6 +26,9 @@ These stay human. Agents must not `--apply` branch protection, must not write
   Delivers complete evaluation landscape and strategic leadership decision matrix across Test Case Generation,
   Root Cause Analysis, and Requirements Generation. Fully schema-validated with grouped-bar comparative visualizations,
   drift check CLI (`--check`), and comprehensive unit test suite.
+  2026-09-13 restamp is expert judgment (`scoring_basis`) plus speaker deck
+  [`docs/plans/scenario-eval-matrices/VP_DECK.md`](docs/plans/scenario-eval-matrices/VP_DECK.md);
+  not a completed bake-off.
 - [x] **Tier A Mechanical Verification Harness & Tiered Test Automation** — `scripts/verify_tier_a.py`,
   `scripts/verify-tier-a.sh`, `scripts/verify-tier-a.ps1`, and `scripts/run_tiered_tests.py`:
   Unified 11-gate deterministic pre-merge validator executing in under 60 seconds with strict failure isolation,

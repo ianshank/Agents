@@ -16,6 +16,7 @@ import json
 import logging
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,25 @@ logger = logging.getLogger("generate_eval_metrics")
 DEFAULT_INPUT_PATH = Path("docs/eval_metrics.json")
 DEFAULT_OUTPUT_PATH = Path("docs/eval_metrics_comparison.png")
 DEFAULT_DPI = 300
+DEFAULT_CHART_TAGLINE = "Comparative Analysis: Test Case Gen, Root Cause Analysis & Requirement Gen"
+DEFAULT_CHART_TITLE = "Evaluation Tools Benchmark"
+
+
+@dataclass(frozen=True)
+class ChartTitleStyle:
+    """Title typography for the comparison chart.
+
+    Field defaults are the documented values; ``render_comparison_chart`` must
+    not restate them as literals at the call site.
+    """
+
+    fontsize_two_line: int = 15  # Historic two-line title size (pt).
+    fontsize_multi_line: int = 13  # Size when chart_subtitle adds a third line.
+    pad_two_line: int = 18  # Title pad for the two-line layout (pt).
+    pad_multi_line: int = 22  # Title pad when a third line is present (pt).
+    default_title: str = DEFAULT_CHART_TITLE
+    default_tagline: str = DEFAULT_CHART_TAGLINE
+
 
 # Harmonious, accessible palette for executive slide presentations
 DEFAULT_TOOL_COLORS = {
@@ -103,6 +123,35 @@ def load_and_validate_metrics(input_path: Path, schema_path: Path | None = None)
 
     _validate_score_matrix(data)
     return data
+
+
+def _optional_title_text(value: object) -> str | None:
+    """Return stripped text, or None when the value is missing/blank/non-string."""
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def chart_title_lines(
+    metadata: dict[str, Any],
+    *,
+    style: ChartTitleStyle | None = None,
+) -> list[str]:
+    """Build chart title lines from dataset metadata.
+
+    Missing ``chart_tagline`` / ``chart_subtitle`` keep the historic two-line
+    title (backwards compatible with fixtures that omit those keys).
+    """
+    cfg = style or ChartTitleStyle()
+    title = _optional_title_text(metadata.get("title")) or cfg.default_title
+    tagline = _optional_title_text(metadata.get("chart_tagline")) or cfg.default_tagline
+    lines = [title, tagline]
+    subtitle = _optional_title_text(metadata.get("chart_subtitle"))
+    if subtitle is not None:
+        logger.debug("Appending chart_subtitle to title: %s", subtitle)
+        lines.append(subtitle)
+    return lines
 
 
 def render_comparison_chart(
@@ -186,13 +235,16 @@ def render_comparison_chart(
     # Formatting and styling
     scale_label = f"0 – {int(max_val) if max_val.is_integer() else max_val:.1f}"
     ax.set_ylabel(f"Score ({scale_label} scale)", fontsize=12, fontweight="bold", color="#1E293B", labelpad=10)
+    title_style = ChartTitleStyle()
+    metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+    title_lines = chart_title_lines(metadata, style=title_style)
+    multi_line = len(title_lines) > 2
     ax.set_title(
-        f"{data['metadata'].get('title', 'Evaluation Tools Benchmark')}\n"
-        "Comparative Analysis: Test Case Gen, Root Cause Analysis & Requirement Gen",
-        fontsize=15,
+        "\n".join(title_lines),
+        fontsize=title_style.fontsize_multi_line if multi_line else title_style.fontsize_two_line,
         fontweight="bold",
         color="#0F172A",
-        pad=18,
+        pad=title_style.pad_multi_line if multi_line else title_style.pad_two_line,
     )
     ax.set_xticks(x_indices)
     ax.set_xticklabels(dim_labels, fontsize=11, fontweight="semibold", color="#334155")
