@@ -73,7 +73,7 @@ def _eval_record(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _envelope(item: dict[str, Any]) -> dict[str, Any]:
-    from eval_harness.core.types import REQUIREMENTS_EVIDENCE_KEY, AgentTrajectory
+    from eval_harness.core.types import REQUIREMENTS_EVIDENCE_KEY, TRAJECTORY_SCHEMA_VERSION, AgentTrajectory
     from eval_harness.replay.envelope import (
         ReplayEnvelope,
         canonical_hash,
@@ -81,7 +81,10 @@ def _envelope(item: dict[str, Any]) -> dict[str, Any]:
         trajectory_from_dict,
     )
 
-    steps_raw = {"schema_version": "1.0.0", "steps": _trajectory_steps(item["unrecovered_tool_error"])}
+    steps_raw = {
+        "schema_version": TRAJECTORY_SCHEMA_VERSION,
+        "steps": _trajectory_steps(item["unrecovered_tool_error"]),
+    }
     trajectory = trajectory_from_dict(steps_raw)
     assert isinstance(trajectory, AgentTrajectory)
     output = item["generated"]

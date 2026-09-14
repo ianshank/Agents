@@ -22,16 +22,22 @@ from .envelope import ReplayConfig, ReplayEnvelope, ReplayError, ReplayMode
 logger = logging.getLogger(__name__)
 
 
-def _looks_like_callable_path(value: str) -> bool:
-    """Dotted ``module.attr:name`` paths only — ``error:stale`` is a literal prefix."""
+def _looks_like_callable_path(value: str, *, error_prefix: str | None = None) -> bool:
+    """``module:attr`` paths, including one-component modules (``demo:search_v2``).
+
+    Values starting with the configurable ``error:`` prefix stay literals.
+    """
+    prefix = ReplayConfig().error_override_prefix if error_prefix is None else error_prefix
+    if value.startswith(prefix):
+        return False
     if ":" not in value:
         return False
     module, _, attr = value.partition(":")
-    return "." in module and bool(attr) and attr.isidentifier()
+    return bool(module) and bool(attr) and attr.isidentifier()
 
 
-def _resolve_override(value: str, recorded: Any) -> str:
-    if not _looks_like_callable_path(value):
+def _resolve_override(value: str, recorded: Any, *, error_prefix: str | None = None) -> str:
+    if not _looks_like_callable_path(value, error_prefix=error_prefix):
         return value
     module_name, _, attr = value.partition(":")
     module = import_allowed_module(module_name)
@@ -81,7 +87,7 @@ def apply_counterfactual(
         if replacement is None:
             rebuilt.append(step)
             continue
-        resolved = _resolve_override(replacement, step.content)
+        resolved = _resolve_override(replacement, step.content, error_prefix=prefix)
         if resolved.startswith(prefix):
             rebuilt.append(
                 TrajectoryStep(
@@ -105,11 +111,13 @@ def apply_counterfactual(
     return AgentTrajectory(steps=tuple(rebuilt), schema_version=trajectory.schema_version)
 
 
-def _normalize_overrides(raw: Mapping[str, str] | None, prefix: str) -> dict[str, str]:
+def _normalize_overrides(raw: Mapping[Any, Any] | None, prefix: str) -> dict[str, str]:
     if not raw:
         return {}
     out: dict[str, str] = {}
     for key, value in raw.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise ReplayError("override keys and values must be strings")
         name = key[len(prefix) :] if key.startswith(prefix) else key
         if not name:
             raise ReplayError("override tool name is empty")
@@ -123,13 +131,16 @@ class ReplayTarget(TargetRunner):
 
     Missing envelopes degrade to a scored error (ADR 0038), not a crash.
     Invalid mode / corrupt archive fail closed at construction or first load.
+    The replay CLI turns ``TargetOutput.error`` into failed scores; the engine
+    leaves a missing trajectory as F-051 not-applicable (``on_missing`` still
+    enters the mean, so a min-mean gate fails closed).
     """
 
     def __init__(
         self,
         archive: str = "",
         mode: str | None = None,
-        overrides: Mapping[str, str] | None = None,
+        overrides: Mapping[Any, Any] | None = None,
         from_span: str | None = None,
         override_tag_key: str | None = None,
         override_tag_value: str | None = None,
@@ -153,8 +164,11 @@ class ReplayTarget(TargetRunner):
         self._index: dict[str, ReplayEnvelope] | None = None
 
     def is_deterministic(self) -> bool | None:
-        """Literal/no overrides are constant; a callable override is undeclared."""
-        if any(_looks_like_callable_path(value) for value in self._overrides.values()):
+        """Literal/exact/no overrides are constant; a counterfactual callable is undeclared."""
+        if self.config.mode != "counterfactual":
+            return True
+        prefix = self.config.error_override_prefix
+        if any(_looks_like_callable_path(value, error_prefix=prefix) for value in self._overrides.values()):
             return None
         return True
 

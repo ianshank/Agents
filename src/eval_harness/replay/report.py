@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from html import escape
@@ -10,6 +11,16 @@ from typing import Any
 from ..core.types import AgentTrajectory, ItemResult, TrajectoryStep
 from .envelope import ReplayConfig
 from .slice import SliceRow, global_pass_rate, pass_rates_by_tag
+
+#: CSI / C0 so JSONL content cannot forge extra CLI lines or colour the terminal.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _safe_text(value: object) -> str:
+    """Single-line sanitised field for the text renderer."""
+    text = " ".join(str(value).replace("\r", "\n").split("\n"))
+    return _CTRL_RE.sub("", _ANSI_RE.sub("", text))
 
 
 @dataclass(frozen=True)
@@ -71,13 +82,14 @@ def render_text(
     cfg = config or ReplayConfig()
     passed, n, rate = global_pass_rate(results, config=cfg)
     lines = [
-        f"global {cfg.slice_score} pass_rate={format_pass_rate(rate, config=cfg)} passed={passed} n={n}",
+        f"global {_safe_text(cfg.slice_score)} pass_rate={format_pass_rate(rate, config=cfg)} passed={passed} n={n}",
     ]
     key = tag_key if tag_key is not None else cfg.override_tag_key
     for row in pass_rates_by_tag(results, key, config=cfg):
         label = row.tag_value if row.tag_value else "(untagged)"
         lines.append(
-            f"slice {row.tag_key}={label} pass_rate={format_pass_rate(row.pass_rate, config=cfg)} "
+            f"slice {_safe_text(row.tag_key)}={_safe_text(label)} "
+            f"pass_rate={format_pass_rate(row.pass_rate, config=cfg)} "
             f"passed={row.passed} n={row.n}"
         )
     steps = failing_steps(results)
@@ -87,7 +99,10 @@ def render_text(
         lines.append("first_failing_step:")
         for step in steps:
             tool = step.tool_name or "<unknown>"
-            lines.append(f"  {step.item_id}: {step.kind} {tool} @ step {step.index}: {step.content}")
+            lines.append(
+                f"  {_safe_text(step.item_id)}: {_safe_text(step.kind)} {_safe_text(tool)} "
+                f"@ step {step.index}: {_safe_text(step.content)}"
+            )
     return "\n".join(lines)
 
 

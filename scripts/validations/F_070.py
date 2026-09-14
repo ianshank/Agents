@@ -156,6 +156,7 @@ def _check_confinement(errors: list[str]) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "out"
         root.mkdir()
+        previous = os.environ.get(OUTPUT_ROOT_ENV)
         os.environ[OUTPUT_ROOT_ENV] = str(root)
         try:
             raised = False
@@ -165,7 +166,10 @@ def _check_confinement(errors: list[str]) -> None:
                 raised = True
             _check(raised, "archive writes refuse paths outside OUTPUT_ROOT", errors)
         finally:
-            os.environ.pop(OUTPUT_ROOT_ENV, None)
+            if previous is None:
+                os.environ.pop(OUTPUT_ROOT_ENV, None)
+            else:
+                os.environ[OUTPUT_ROOT_ENV] = previous
 
 
 def _check_cli_and_registry(errors: list[str]) -> None:

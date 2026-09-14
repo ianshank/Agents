@@ -85,7 +85,7 @@ def _step_from_dict(raw: object) -> TrajectoryStep:
         raise ReplayError(f"unknown step kind: {kind!r}")
     step_kind = cast(Literal["model_decision", "tool_call", "tool_observation", "tool_error", "final"], kind)
     timestamp_ms = raw.get("timestamp_ms")
-    if timestamp_ms is not None and not isinstance(timestamp_ms, int):
+    if timestamp_ms is not None and (isinstance(timestamp_ms, bool) or not isinstance(timestamp_ms, int)):
         raise ReplayError("timestamp_ms must be an int when present")
     tool_call_raw = raw.get("tool_call")
     tool_call = _tool_call_from_dict(tool_call_raw) if tool_call_raw is not None else None

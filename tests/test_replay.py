@@ -542,6 +542,10 @@ def test_envelope_from_dict_rejects_malformed_payloads(payload: object, match: s
             "timestamp_ms must be an int",
         ),
         (
+            {"schema_version": "1.0.0", "steps": [{"kind": "final", "timestamp_ms": True}]},
+            "timestamp_ms must be an int",
+        ),
+        (
             {"schema_version": "1.0.0", "steps": [{"kind": "final", "metadata": []}]},
             "step metadata must be a mapping",
         ),
@@ -650,6 +654,30 @@ def test_callable_override_is_undeclared_determinism() -> None:
         overrides={"search": "error:stale"},
     )
     assert literal.is_deterministic() is True
+    exact_callable = ReplayTarget(
+        envelopes=[_envelope()],
+        mode="exact",
+        overrides={"search": "demo.replay_stubs:search_v2"},
+    )
+    assert exact_callable.is_deterministic() is True
+
+
+def test_one_component_module_callable_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST", "demo")
+    env = _envelope()
+    out = ReplayTarget(
+        envelopes=[env],
+        mode="counterfactual",
+        overrides={"search": "demo:search_v2"},
+    ).run(EvalItem(id="i1", inputs={}))
+    assert out.trajectory is not None
+    obs = [step.content for step in out.trajectory.steps if step.kind == "tool_observation"]
+    assert obs and str(obs[0]).startswith("STALE:")
+
+
+def test_non_string_override_value_raises_at_construction() -> None:
+    with pytest.raises(ReplayError, match="must be strings"):
+        ReplayTarget(envelopes=[_envelope()], overrides={"search": ["stale"]})  # type: ignore[dict-item]
 
 
 def test_replay_target_without_archive_is_a_scored_error() -> None:
@@ -847,6 +875,20 @@ def test_report_renders_failing_steps_without_tool_name() -> None:
     found = failing_steps([result, no_traj])
     assert len(found) == 1
     assert found[0].tool_name is None
+
+
+def test_render_text_strips_newlines_and_ansi_from_archive_fields() -> None:
+    traj = trajectory(
+        TrajectoryStep(kind="tool_error", content="stale\n\x1b[31mINJECT\x1b[0m", tool_call=call("fetch")),
+        final("ok"),
+    )
+    result = _scored("id\nforged", {"freshness": "a\nb"}, passed=False, trajectory=traj)
+    text = render_text([result])
+    assert "\x1b" not in text
+    assert "INJECT" in text
+    assert "forged" in text
+    assert "id\nforged" not in text
+    assert "a\nb" not in text
 
 
 def test_step_path_includes_tool_error_without_call() -> None:

@@ -70,9 +70,11 @@ def populate(conn: sqlite3.Connection, rows: list[dict[str, Any]]) -> None:
 
 def query_results(conn: sqlite3.Connection) -> dict[str, Any]:
     first_fail = conn.execute(
-        "SELECT envelope_id, item_id, MIN(step_index) AS first_error_index "
-        "FROM steps WHERE kind = 'tool_error' GROUP BY envelope_id, item_id "
-        "ORDER BY envelope_id"
+        "SELECT e.envelope_id, e.item_id, MIN(s.step_index) AS first_error_index "
+        "FROM steps s JOIN envelopes e ON e.envelope_id = s.envelope_id "
+        "WHERE s.kind = 'tool_error' AND e.passed = 0 "
+        "GROUP BY e.envelope_id, e.item_id "
+        "ORDER BY e.envelope_id"
     ).fetchall()
     by_tag = conn.execute(
         "SELECT tag_freshness, AVG(passed) AS pass_rate, COUNT(*) AS n "
@@ -89,14 +91,18 @@ def query_results(conn: sqlite3.Connection) -> dict[str, Any]:
         "FROM envelopes GROUP BY item_id ORDER BY item_id"
     ).fetchall()
     latest = conn.execute(
-        "SELECT envelope_id, MAX(recorded_at) AS latest FROM envelopes GROUP BY envelope_id ORDER BY envelope_id"
+        "SELECT e.item_id, e.envelope_id, e.recorded_at AS latest "
+        "FROM envelopes e "
+        "JOIN (SELECT item_id, MAX(recorded_at) AS latest FROM envelopes GROUP BY item_id) t "
+        "ON e.item_id = t.item_id AND e.recorded_at = t.latest "
+        "ORDER BY e.item_id"
     ).fetchall()
     return {
         "first_failing_step": [dict(row) for row in first_fail],
         "pass_rate_by_tag": [dict(row) for row in by_tag],
         "global_vs_freshness": dict(hidden) if hidden is not None else {},
         "sessions": [dict(row) for row in sessions],
-        "latest_per_envelope": [dict(row) for row in latest],
+        "latest_per_item": [dict(row) for row in latest],
     }
 
 

@@ -26,8 +26,13 @@ reconstructing trajectories from Langfuse/Phoenix spans remain out of scope.
 are last-write-wins before scoring, matching the target index. Invalid UTF-8
 archives wrap as `ReplayError`. `DATA_ROOT` confinement `ValueError` becomes
 a scored `TargetOutput.error`. Callable overrides declare
-`is_deterministic() is None`. Demo/PLAN counterfactual commands export
-`PYTHONPATH` and `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo`.
+`is_deterministic() is None` in counterfactual mode. Demo/PLAN counterfactual
+commands export `PYTHONPATH` and `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo`.
+CLI text reports strip newlines and ANSI from archive fields. `timestamp_ms`
+rejects bool. Override maps require string keys/values. One-component
+`module:attr` callables (e.g. `demo:search_v2`) are imported; `error:` stays
+a literal. Trace-analytics sketches join `passed = 0` for first-fail and
+dedupe retries by `item_id`. F-070 restores a pre-existing `OUTPUT_ROOT`.
 
 ### Fixed — chart_title_lines metadata narrowing
 
