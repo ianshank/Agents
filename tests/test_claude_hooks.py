@@ -181,6 +181,37 @@ def test_eval_metrics_generator_is_watched_by_the_stop_hook() -> None:
     assert "scripts/generate_eval_metrics.py" in watched
 
 
+def _agents_hooks() -> dict[str, Any]:
+    return json.loads((REPO_ROOT / ".agents" / "hooks.json").read_text(encoding="utf-8"))
+
+
+def _stop_commands(node: object) -> list[str]:
+    """Collect command strings that run on Stop, from Claude or Cursor hook JSON."""
+    commands: list[str] = []
+
+    def walk(obj: object, *, under_stop: bool) -> None:
+        if isinstance(obj, dict):
+            if under_stop and isinstance(obj.get("command"), str):
+                commands.append(obj["command"])
+            for key, val in obj.items():
+                walk(val, under_stop=under_stop or key == "Stop")
+            return
+        if isinstance(obj, list):
+            for item in obj:
+                walk(item, under_stop=under_stop)
+
+    walk(node, under_stop=False)
+    return commands
+
+
+def test_cursor_stop_invokes_the_same_generated_artifacts_hook_as_claude() -> None:
+    """A Cursor session without this Stop row would skip the freshness reminder the tests cover."""
+    claude_cmds = " ".join(_stop_commands(_settings()["hooks"]))
+    agents_cmds = " ".join(_stop_commands(_agents_hooks()))
+    assert "stop-generated-artifacts.py" in claude_cmds
+    assert "stop-generated-artifacts.py" in agents_cmds
+
+
 @pytest.mark.parametrize("generator", _corpus_generators())
 def test_every_corpus_generator_is_watched_by_the_stop_hook(generator: str) -> None:
     """A new corpus that no checker row names goes stale exactly as silently as before.

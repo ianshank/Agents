@@ -307,9 +307,7 @@ def test_chart_title_lines_whitespace_tagline_falls_back() -> None:
     assert lines == ["T", DEFAULT_CHART_TAGLINE]
 
 
-def test_render_comparison_chart_svg_contains_subtitle(
-    tmp_path: Path, minimal_metrics_data: dict[str, Any]
-) -> None:
+def test_render_comparison_chart_svg_contains_subtitle(tmp_path: Path, minimal_metrics_data: dict[str, Any]) -> None:
     pytest.importorskip("matplotlib", reason="matplotlib required for rendering comparison charts")
     data = json.loads(json.dumps(minimal_metrics_data))
     subtitle = "Expert judgment not a bake-off"
