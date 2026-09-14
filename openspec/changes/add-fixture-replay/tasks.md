@@ -22,5 +22,5 @@
 
 ## 3. Verification
 
-- [ ] 3.1 `./scripts/quality-gate.sh all` green.
+- [x] 3.1 `./scripts/quality-gate.sh all` green.
 - [x] 3.2 Record that this change does **not** archive or unblock `add-production-eval-flywheel`.
