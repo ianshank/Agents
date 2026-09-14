@@ -76,7 +76,7 @@ _CHECKERS: tuple[tuple[str, tuple[str, ...], str], ...] = (
         # SVG is the byte-compared canonical. `--check` (default `--format both`)
         # also requires a non-empty PNG; PNG pixels are not compared because Agg
         # output is not portable across renderers. The fix command regenerates both.
-        "docs/eval_metrics_comparison.svg",
+        "docs/eval_metrics_comparison.svg (canonical freshness artifact; PNG existence only)",
         ("scripts/generate_eval_metrics.py", "--check"),
         "python scripts/generate_eval_metrics.py --format both",
     ),

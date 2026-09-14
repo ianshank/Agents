@@ -153,7 +153,7 @@
       "test_case_gen": {
         "score": 7.5,
         "rationale": "Strong dataset versioning and prompt registry (F-026) enable repeatable test case suites, but lacks native mutation score evaluators.",
-        "evidence_ref": "docs/decisions/0043-testgen-evaluation-seam.md"
+        "evidence_ref": "docs/decisions/0010-langfuse-prompt-management.md"
       },
       "rca": {
         "score": 8.0,
@@ -163,7 +163,7 @@
       "requirement_gen": {
         "score": 7.0,
         "rationale": "Prompt management playground simplifies iterating on extraction prompts, though requirement obligation scoring is computed by harness F-068 scorers, not by Langfuse.",
-        "evidence_ref": "docs/decisions/0047-requirements-eval-matrix.md"
+        "evidence_ref": "docs/decisions/0010-langfuse-prompt-management.md"
       },
       "observability_tracing": {
         "score": 8.5,
@@ -183,7 +183,7 @@
       "tco_cost_efficiency": {
         "score": 8.5,
         "rationale": "Open-source self-hosting eliminates software licensing fees; modest database hosting footprint. No dollar TCO claimed.",
-        "evidence_ref": "docs/phoenix-spike.md#rollback"
+        "evidence_ref": "docs/executive-report-eval-tools.md"
       }
     },
     "phoenix": {
