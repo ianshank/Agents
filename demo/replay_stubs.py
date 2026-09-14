@@ -1,7 +1,11 @@
 """Literal and callable observation stubs for counterfactual demo replay."""
 
-#: Not a callable — used to prove override resolution fails closed.
-NOT_CALLABLE = "not a stub"
+
+class NotCallable:
+    """Module-defined non-callable; override resolution must fail closed."""
+
+
+NOT_CALLABLE = NotCallable()
 
 
 def search_v2(_recorded: object) -> str:

@@ -274,6 +274,7 @@ def test_optional_envelope_fields_round_trip() -> None:
         model_parameters_hash="abc",
         dependency_snapshot_id="dep",
         state_before=StateSnapshot(data={"k": "v"}),
+        state_after=StateSnapshot(data={"k": "after"}),
         payload_refs={"blob": "ref://x"},
     )
     restored = envelope_from_dict(envelope_to_dict(original))
@@ -588,6 +589,23 @@ def test_apply_counterfactual_skips_non_observation_steps() -> None:
     assert rebuilt.steps[1].kind == "tool_error"
 
 
+def test_unmatched_override_leaves_recorded_observations() -> None:
+    env = _envelope()
+    out = ReplayTarget(
+        envelopes=[env],
+        mode="counterfactual",
+        overrides={"fetch": "error:x"},
+    ).run(EvalItem(id="i1", inputs={}))
+    assert out.trajectory == env.trajectory
+
+
+def test_envelope_omits_none_output() -> None:
+    original = _envelope(output=None)
+    payload = envelope_to_dict(original)
+    assert "output" not in payload
+    assert envelope_from_dict(payload).output is None
+
+
 def test_non_callable_override_is_a_scored_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST", "demo")
     env = _envelope()
@@ -615,6 +633,7 @@ def test_callable_override_stringifies_non_str(monkeypatch: pytest.MonkeyPatch) 
 
 def test_parse_overrides_mapping_and_empty_override_when() -> None:
     assert parse_overrides_mapping({"tool.search": "v"}) == {"search": "v"}
+    assert parse_tag_filter("freshness=sensitive") == ("freshness", "sensitive")
     with pytest.raises(ReplayError, match="tag key is empty"):
         parse_tag_filter("=sensitive")
 
