@@ -42,7 +42,7 @@ exits 0.
 `"{prompt}"` while live items only set `inputs.question`. Missing that key
 is a `KeyError`, an empty gate still exits 0, and the host log still claims
 a real round-trip. Both `scripts/run_all_e2e.ps1` and `scripts/run_all_e2e.sh`
-now emit the template. Re-run `python tests/test_e2e_driver_parity.py` after
+now emit the template. Re-run `python -m pytest tests/test_e2e_driver_parity.py` after
 editing either driver.
 
 ## Campaign table (`summary.json`)

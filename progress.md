@@ -1,6 +1,21 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 026 — 2026-09-15
+
+### Changes
+
+Copilot review on PR #244: `--update` now refuses a leftover `--tiers all`
+census (Tier D/E not NOT-RUN). Makefile comments are no longer the only gate.
+Live-journey and progress record `python -m pytest tests/test_e2e_driver_parity.py`.
+Did not restamp `docs/e2e-matrix/` (provenance SHA `f83f7f0` still on this
+branch — merge as a merge commit, or restamp from `--tiers offline` after squash).
+
+### Validation evidence
+
+`python -m pytest tests/test_e2e_matrix.py tests/test_e2e_driver_parity.py`.
+
+---
 ## Session 025 — 2026-09-15
 
 ### Changes
@@ -81,7 +96,7 @@ Finished PR #244 live capture on worktree `.claude/worktrees/e2e-vp-capture`
 Live honesty gates on `artifacts/e2e-report/` (gitignored). After extras:
 `test_m8_text_scorers_pipeline` PASS; `python scripts/validate.py -v` → 68 done;
 drift-guard e2e 10 passed; skills+hooks 77 passed / 15 skipped (`_bash_works`).
-Post-docs: `python tests/test_e2e_driver_parity.py` (pass); `python
+Post-docs: `python -m pytest tests/test_e2e_driver_parity.py` (pass); `python
 scripts/generate_eval_metrics.py --check` (pass); `python scripts/validate.py
 --tier fast --strict-git` (68 done; shallow-clone provenance warnings).
 `python tests/test_e2e_matrix.py --check` is **stale vs the leftover live
