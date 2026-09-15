@@ -1,7 +1,7 @@
 schema_version: "1.0"
 
 # Same eval as eval.pass.yaml, with ONE stricter gate threshold (helpfulness
-# mean >= 0.95). The bot scores 0.85, so this config FAILS its quality gate and
+# mean >= 0.95). The bot scores 0.844, so this config FAILS its quality gate and
 # the process exits NON-ZERO — exactly what breaks a CI build.
 #
 # Run:

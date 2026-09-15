@@ -11,10 +11,11 @@ E2E + VP capture on `cursor/e2e-vp-capture-eefa` (PR #244):
 - Ran POSIX `run_all_e2e.sh --tiers all --hypothesis-profile ci` (31 PASS / 0 FAIL / 7 SKIP, no live creds) and `--tiers offline --hypothesis-profile ci` (31 PASS / 0 FAIL / 0 SKIP). Committed `docs/e2e-matrix/` from the **offline** report only (`suite:root` 3123, backend-validation 357). Updated `docs/e2e-runbook.md` test-status counts to match.
 - Re-measured F-065 four slices at `run.repetitions=1` (n=60); means unchanged. Demo fail-closed `helpfulness.mean=0.844` vs min 0.95, exit 1.
 - Did **not** retune `docs/eval_metrics.json` 0–10 cells. Census honesty: 68 done + 2 deferred of 70.
+- Last-mile speaker honesty: `demo/deck.html` / demo README / `eval.fail.yaml` comment match console `helpfulness mean=0.844 pass_rate=0.89 n=9` (F-057 skip). ERRATA / NEXT_STEPS / exec-report / docs index cite the 2026-09-15 restamp as current. PLAN.md “say instead” 63→68.
 
 ### Validation evidence
 
-`python scripts/verify_tier_a.py`; `python scripts/generate_eval_metrics.py --check`; `python tests/test_e2e_matrix.py --check`; `pytest tests/test_e2e_matrix.py tests/test_e2e_driver_parity.py tests/test_generate_eval_metrics.py`; `demo/run_demo.sh`.
+`python scripts/verify_tier_a.py`; `python scripts/generate_eval_metrics.py --check`; `python tests/test_e2e_matrix.py --check`; `pytest tests/test_e2e_matrix.py tests/test_e2e_driver_parity.py tests/test_generate_eval_metrics.py`; `demo/run_demo.sh`; `make pre-pr` (only allowed failure: unlabeled `check_protected_changes.py` for `features.yaml`).
 
 ---
 ## Session 021 — 2026-09-09

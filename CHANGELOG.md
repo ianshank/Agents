@@ -68,6 +68,13 @@ expert_judgment`).
 weak mutation 0.322 / recall 0.260, false-alarm 0.397). Demo fail-closed
 beat still `helpfulness.mean=0.844` vs min 0.95, exit 1.
 
+### Hardening — demo speaker surfaces match F-057 skip
+
+`demo/deck.html`, `demo/README.md`, and the `demo/configs/eval.fail.yaml`
+comment now match the console sink after F-057 skips the judge on the
+out-of-scope item: `helpfulness` n=9, mean 0.844, pass_rate 0.89 — not a
+phantom n=10 mean 0.850. Gate thresholds unchanged.
+
 ### Changed — VP decision package for eval-tool selection
 
 - `docs/executive-report-eval-tools.md` is a VP review brief, not an approval stamp: scores are **expert judgment** (not a three-vendor bake-off); the harness owns testgen/RCA/requirements scorers; vendors are sinks/UIs. Adds a one-page memo, Option 4 (defer / keep all three optional), CHARTER and package-name constraints, and F-067/F-068/F-069 grounding without attributing corpus self-grades to vendors.

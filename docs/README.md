@@ -58,7 +58,8 @@ Active engineering epics and architectural roadmap live in [roadmap/](roadmap/RE
 - [e2e-matrix/](e2e-matrix/README.md) — the generated test matrix for a full end-to-end
   run (markdown, CSV and workbook renderings of one run report). See
   [e2e-matrix/ERRATA.md](e2e-matrix/ERRATA.md) for the historical provenance defect
-  and its 2026-09-10 restamp disposition (results current as of that stamp).
+  and the 2026-09-15 restamp (`suite:root` 3123; results current as of that stamp).
+  The 2026-09-10 2978 counts are history.
 - [runbooks/branch-protection-enablement.md](runbooks/branch-protection-enablement.md) —
   ADR 0037 admin steps; `scripts/check_branch_protection.py` derives the check names.
 - [runbooks/merge-gate-audit-triage.md](runbooks/merge-gate-audit-triage.md) — weekly
