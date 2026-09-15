@@ -55,7 +55,8 @@ These stay human. Agents must not `--apply` branch protection, must not write
 - [x] **Eval-evidence Phase 8 residual** — Provenance SHA reachable (ancestor of
   HEAD, never equal-to-HEAD) plus monotonicity/waiver. ADR 0033 amended.
   Restamped 2026-09-10 from a 31/31 offline POSIX driver (`suite:root` 2978).
-  OpenSpec `repair-e2e-matrix-provenance` archived.
+  Restamped again 2026-09-15 (`suite:root` 3123, `e2e:backend-validation` 357;
+  F-070 tests in the root suite). OpenSpec `repair-e2e-matrix-provenance` archived.
 - [x] **Eval-evidence Phase 9 + Phase 10 canaries** — fleet census
   (`tests/_fleet_matrix.py`); M2/M6 negative controls only. Do not implement
   measurement-wedge WS-1 or the production eval flywheel.
@@ -71,6 +72,12 @@ These stay human. Agents must not `--apply` branch protection, must not write
   offline-lexical semantic diversity with temperature qualification, gold AC recall,
   scope hallucination with contradiction reporting, structured traceability closure,
   and frozen synthetic corpus at `corpora/requirements/v1/`.
+- [x] **Live e2e capture (PR #244)** — Windows `-Tiers all` with
+  `LOCAL_MODEL_ID` + `prompt_template: "{question}"`; evidence
+  [`docs/e2e-live-journey.md`](docs/e2e-live-journey.md). Confirmed extras-present
+  rerun **36 PASS / 0 FAIL / 2 SKIP**. F-067 `rca_maxz` mocked vs a gitignored
+  12-item live JSON adapter. Do **not** `--update` `docs/e2e-matrix/` from
+  `--tiers all`. Expert-judgment 0–10 cells were not retuned.
 - [x] **`make pre-pr` + the `pre-pr-gate` skill** — an automation-opportunity scan of
   the god-file-decomposition session below found its own ~15-command validation
   checklist existed nowhere as one command (`AGENTS.md`/`CONTRIBUTING.md` each

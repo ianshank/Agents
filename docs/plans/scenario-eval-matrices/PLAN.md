@@ -158,7 +158,7 @@ in from the source material.
 | "200 paired labels gives a κ CI width of 0.10" | Wrong by 4–6×; that is a ±0.10 **half**-width | "±0.10 half-width needs ~200–350; width 0.10 needs ~800–1,200" |
 | "n=300" for any testgen figure | 5 identical repetitions of 60 deterministic items (DELIVERY D1) | **"n=60"** |
 | "we measured our agents at test generation" | Nothing generates a suite from an agent; nothing chains targets | "scorers, corpus and execution sandbox are done; agent-in-the-loop is next" |
-| "63/63" as a coverage ratio | `validate.py` runs exactly the `done` set (F-008/F-036 deferred) | "63 runnable proofs; 2 deferred and named" |
+| "63/63" as a coverage ratio | `validate.py` runs exactly the `done` set (F-008/F-036 deferred) | "68 runnable proofs; 2 deferred and named" |
 | "the audit found 24 issues" | Hygiene audit found 20; automated review found 4 more (DELIVERY D4) | "20 from the audit, 4 from an automated review afterwards" |
 
 ---

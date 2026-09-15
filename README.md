@@ -64,6 +64,7 @@ coverage floor. Full package table and version gates: [AGENTS.md](AGENTS.md).
 
 - **[docs/quickstart.md](docs/quickstart.md)** — **your first eval in 5 minutes** (install → config → run → Langfuse).
 - **[docs/](docs/README.md)** — the documentation index (architecture, ADRs, runbooks, spikes, baselines).
+- **[docs/e2e-live-journey.md](docs/e2e-live-journey.md)** — live (non-mock) e2e capture; not an e2e-matrix restamp.
 - **[AGENTS.md](AGENTS.md)** — orientation for coding agents and the root-documentation map.
 - **[docs/CHARTER.md](docs/CHARTER.md)** — north-star scope & invariants.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** · **[GOVERNANCE.md](GOVERNANCE.md)** · **[SECURITY.md](SECURITY.md)** · **[SUPPORT.md](SUPPORT.md)** · **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**

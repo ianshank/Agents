@@ -2,10 +2,12 @@
 
 **Author:** Staff AI & Infrastructure Architecture Team
 **Target Audience:** VP of Engineering, VP of Product, Chief Architect
-**Date:** September 13, 2026
+**Date:** September 13, 2026 (expert-judgment scores); companion deck/census restamped September 15, 2026
 **Status:** Ready for VP review — expert judgment, not a measured bake-off
-**Companion deck:** [`plans/scenario-eval-matrices/VP_DECK.md`](plans/scenario-eval-matrices/VP_DECK.md)
+**Companion deck:** [`plans/scenario-eval-matrices/VP_DECK.md`](plans/scenario-eval-matrices/VP_DECK.md) (census 68 `done` + 2 `deferred` of 70; 0–10 cells unchanged)
 **Data Sources:** [`docs/matrix-coverage.md`](matrix-coverage.md), [`docs/phoenix-spike.md`](phoenix-spike.md), [`docs/braintrust-spike.md`](braintrust-spike.md), [`docs/eval_metrics.json`](eval_metrics.json)
+
+**Live CI eval (not a bake-off).** A 2026-09-15 Windows `-Tiers all` capture on PR #244 exercised a local OpenAI-compatible model (`nvidia/nemotron-3-nano-omni:2`) through `live:judge-openai` (`llm_judge`) and Langfuse / Phoenix smokes. Sink journeys scored `contains`, not live LLM grades. Anthropic and Bedrock SKIP (no keys). NVIDIA cloud and BrainTrust have **no** e2e-runner steps. Remaining SKIPs and honesty gates: [`e2e-live-journey.md`](e2e-live-journey.md). Expert-judgment 0–10 cells were **not** retuned.
 
 ---
 

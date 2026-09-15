@@ -6,6 +6,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — extras-present live e2e rerun + F-067 mocked/unmocked slice
+
+Windows `-Tiers all -HypothesisProfile ci` with `autoevals`/`archguard` already
+in the venv: **36 PASS / 0 FAIL / 2 SKIP**. Honesty gates still hold
+(`prompt_template: "{question}"`, `live:judge-openai` helpfulness 1.0, Langfuse
+and Phoenix smokes PASS; sink PASS remains `contains`). F-067 `rca_maxz` on the
+frozen 96-item corpus (AC@1 mean 0.333, advisory abstention miss 0.719) plus a
+gitignored 12-item live-model JSON adapter vs the same slice. Did **not**
+`--update` `docs/e2e-matrix/` or retune expert-judgment 0–10s. BrainTrust still
+not a live write (token is not a Cognito JWT). `tests/test_e2e_driver_parity.py`
+now locks the live `prompt_template: "{question}"` assignment in both drivers
+(`make e2e-driver-parity`).
+
+### Fixed — live e2e fixtures bind `prompt_template` to `{question}`
+
+`ModelTarget` defaults to `"{prompt}"` while Tier D items only set
+`inputs.question`. Missing that key is a `KeyError`, the empty gate still
+exits 0, and the host log still prints `model/<id> (real round-trip)`.
+Both `scripts/run_all_e2e.ps1` and `scripts/run_all_e2e.sh` now emit
+`prompt_template: "{question}"`. `.env.example` documents `LOCAL_MODEL_ID` /
+`OPENAI_BASE_URL` / `OPENAI_JUDGE_MODEL` vs YAML `EVAL_BASE_URL`.
+
+### Added — live e2e journey capture (PR #244)
+
+Windows `-Tiers all -HypothesisProfile ci` with a local OpenAI-compatible
+model: `live:judge-openai` (`llm_judge`) plus Langfuse/Phoenix smokes PASS;
+Anthropic/Bedrock SKIP. Sink PASS is `contains`, not live LLM scores.
+Evidence: `docs/e2e-live-journey.md`. Committed `docs/e2e-matrix/` was
+**not** restamped from this `--tiers all` report (offline POSIX remains
+canonical). Expert-judgment 0–10 cells were not retuned.
+
 ### Added — fixture replay of recorded AgentTrajectory envelopes (F-070, ADR 0049)
 
 Offline `eval-harness replay --mode exact|counterfactual` re-scores committed
@@ -42,6 +73,38 @@ writes outside `OUTPUT_ROOT` exit 2. Archive load failures are cached.
 
 `scripts/generate_eval_metrics.py` binds `metadata` through a local `dict` after
 `isinstance(..., dict)` so mypy 2.1 accepts `chart_title_lines` (left open on #232).
+
+### Hardening — F-070 `implemented_in` restamp (F-064)
+
+Restamped F-070 `implemented_in` from pre-squash `4ea0789a` (not an ancestor of
+squash #233) to `e1c8e9700390aa8406c8d2fe06c05e31877d731b` so `validate.py
+--strict-git` / F-064 accept the landed ledger. Same shape as the F-069 restamp.
+
+### Added — e2e-matrix restamp (offline ci, 2026-09-15)
+
+Canonical POSIX `bash scripts/run_all_e2e.sh --tiers offline --hypothesis-profile ci`
+then `python tests/test_e2e_matrix.py --update`. `suite:root` 2978 → 3123;
+`e2e:backend-validation` 355 → 357. Declared steps 40, observed 31 PASS, Tier D
+`NOT-RUN`. A `--tiers all` run in this environment was 31 PASS / 7 SKIP (no
+live credentials) and was **not** used as the committed restamp. Updated
+`docs/e2e-runbook.md` test-status counts to match. Vendor 0–10
+cells in `docs/eval_metrics.json` were not retuned (`scoring_basis:
+expert_judgment`).
+
+### Changed — VP deck census after F-070
+
+`docs/plans/scenario-eval-matrices/VP_DECK.md` and `DECK_A_PLUS.md`: 68 `done`
++ 2 `deferred` (F-008, F-036) of 70. Discrimination table re-measured
+2026-09-15 at `run.repetitions=1` / n=60; means unchanged (thorough 1.000,
+weak mutation 0.322 / recall 0.260, false-alarm 0.397). Demo fail-closed
+beat still `helpfulness.mean=0.844` vs min 0.95, exit 1.
+
+### Hardening — demo speaker surfaces match F-057 skip
+
+`demo/deck.html`, `demo/README.md`, and the `demo/configs/eval.fail.yaml`
+comment now match the console sink after F-057 skips the judge on the
+out-of-scope item: `helpfulness` n=9, mean 0.844, pass_rate 0.89 — not a
+phantom n=10 mean 0.850. Gate thresholds unchanged.
 
 ### Changed — VP decision package for eval-tool selection
 

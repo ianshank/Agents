@@ -88,11 +88,11 @@ _CHECKERS: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ),
 )
 
-#: Deliberately NOT here: `tests/test_public_surface.py`. It has an `--update` flag but no
-#: `--check` — its freshness is asserted by running the module under pytest, which is far
-#: too slow for a Stop hook and is already covered by the suite. A row that shelled out to
-#: pytest would make ending a turn cost a test run; a row whose `--check` did not exist
-#: would silently report "fresh" for an artifact nothing examined.
+#: Deliberately NOT here:
+#: - `tests/test_public_surface.py`: has `--update` but no `--check`; freshness is pytest.
+#: - `docs/e2e-matrix/`: has `--check`, but a leftover `--tiers all` report uses SKIP for
+#:   missing creds. SKIP is not NOT-RUN and would corrupt the committed pin. Restamp only
+#:   from `--tiers offline`. Live evidence is `docs/e2e-live-journey.md`, not the matrix.
 
 
 def _stale(argv: tuple[str, ...]) -> bool:

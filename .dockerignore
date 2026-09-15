@@ -55,7 +55,7 @@ desktop.ini
 .git/
 .gitignore
 
-# Generated output
+# Generated output (includes live e2e-report and gitignored RCA live adapters)
 out/
 results/
 artifacts/

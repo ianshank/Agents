@@ -257,13 +257,13 @@ judges:   anthropic, bedrock, mock, openai, phoenix_evals</div>
               <tr><td class="scorename">mentions_settings</td><td><div class="bar"><i style="width:90%"></i></div></td><td class="metric">0.900</td><td class="metric">0.90</td></tr>
               <tr><td class="scorename">actionable_step</td><td><div class="bar"><i style="width:90%"></i></div></td><td class="metric">0.900</td><td class="metric">0.90</td></tr>
               <tr><td class="scorename">answer_quality</td><td><div class="bar"><i style="width:90%"></i></div></td><td class="metric">0.900</td><td class="metric">0.90</td></tr>
-              <tr><td class="scorename">helpfulness</td><td><div class="bar"><i style="width:85%"></i></div></td><td class="metric">0.850</td><td class="metric">0.90</td></tr>
+              <tr><td class="scorename">helpfulness</td><td><div class="bar"><i style="width:84%"></i></div></td><td class="metric">0.844</td><td class="metric">0.89</td></tr>
             </tbody>
           </table>
         </div>
         <div class="out"><span class="pass">QUALITY GATE: PASS</span>   (exit 0)</div>
         <div class="split">
-          <div class="lens"><p class="who">Engineer</p><p>Dataset, target, scorers, sinks, and the gate are one YAML file. A self-contained HTML scorecard drops out.</p></div>
+          <div class="lens"><p class="who">Engineer</p><p>Dataset, target, scorers, sinks, and the gate are one YAML file. F-057 skips the judge on the out-of-scope item, so helpfulness is n=9 (mean 0.844) — no phantom 10th 0.9. A self-contained HTML scorecard drops out.</p></div>
           <div class="lens"><p class="who">Leader</p><p>Every release gets the same scorecard, automatically and identically.</p></div>
         </div>
       </div>
@@ -277,7 +277,7 @@ judges:   anthropic, bedrock, mock, openai, phoenix_evals</div>
         <p class="sub">Same eval, one stricter threshold. The process exits non-zero — this is what breaks a CI build.</p>
         <code class="cmd"><span class="p">$ </span><span class="c">eval-harness</span> <span class="f">run</span> --config demo/configs/eval.fail.yaml <span class="f">--offline</span></code>
         <div class="out"><span class="fail">QUALITY GATE: FAIL</span>
-  - helpfulness.mean=0.850 below min 0.95      (exit 1)</div>
+  - helpfulness.mean=0.844 below min 0.95      (exit 1)</div>
         <div class="split">
           <div class="lens"><p class="who">Engineer</p><p><code>run</code> is a CI gate: a non-zero exit fails the pipeline. No extra glue.</p></div>
           <div class="lens"><p class="who">Leader</p><p>A quality drop can't silently ship. The build goes red instead.</p></div>

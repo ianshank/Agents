@@ -23,3 +23,7 @@ You execute targeted tests, capture detailed execution traces, and categorize fa
   - `CAT-LIVE`: Network timeout, credential absence, or rate limits.
 - **Strict Repetition Budget**: Do not endlessly repeat failing commands. If a test fails repeatedly, halt and emit an explicit log triage artifact containing the captured outputs for the orchestrator.
 - **Suite Integrity**: Never loosen, skip, or xfail a test to make a suite pass.
+- **E2E drivers**: After any edit to `scripts/run_all_e2e.ps1` or
+  `scripts/run_all_e2e.sh`, run `pytest tests/test_e2e_driver_parity.py` (or
+  `make e2e-driver-parity`). That lock includes the live
+  `prompt_template: "{question}"` assignment, not only step names.

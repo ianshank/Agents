@@ -579,7 +579,10 @@ if [ "$TIERS" = live ] || [ "$TIERS" = all ]; then
     # and the openai SDK reads OPENAI_BASE_URL from the environment, keeping the
     # endpoint out of committed YAML.
     if [ -n "${LOCAL_MODEL_ID:-}" ]; then
-        LIVE_TARGET="{ type: model, params: { provider: openai, model: \"$LOCAL_MODEL_ID\" } }"
+        # ModelTarget defaults prompt_template to "{prompt}"; live items only set
+        # inputs.question. Without this key the target KeyErrors, the empty gate
+        # still exits 0, and the host log still claims a real round-trip (D-3).
+        LIVE_TARGET="{ type: model, params: { provider: openai, model: \"$LOCAL_MODEL_ID\", prompt_template: \"{question}\" } }"
         # A real judge too: `mock` returned a constant 0.9 regardless of the output.
         LIVE_JUDGE="{ type: openai, params: { model: \"$LOCAL_MODEL_ID\" } }"
         echo "  live target/judge: model/$LOCAL_MODEL_ID (real round-trip)"

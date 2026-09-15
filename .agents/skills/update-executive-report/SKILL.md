@@ -11,6 +11,8 @@ Perform the update and maintenance of the LLM Evaluation Tools Executive Report 
 
 **Scoring basis:** `docs/eval_metrics.json` `metadata.scoring_basis` is `expert_judgment`. The 0–10 cells are not verified bake-off outcomes. Do not present them as measured capability scores.
 
+**Live e2e is not a restamp path:** a `--tiers all` campaign (including PR #244) is recorded in [`docs/e2e-live-journey.md`](../../../docs/e2e-live-journey.md). Never `python tests/test_e2e_matrix.py --update` from that report — SKIP is not NOT-RUN. Never retune 0–10 cells from Langfuse/Phoenix smokes or `contains` sink PASS.
+
 ## 1. Preconditions (Input Contract)
 
 Confirm these hold before proceeding:

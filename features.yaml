@@ -1552,11 +1552,12 @@ features:
       - "registered name replay appears in plugin_registry_baseline.json"
       - "slice report shows a tag whose pass_rate drops while the global pass_rate is unchanged, on committed demo fixtures"
     validation_command: "python scripts/validations/F_070.py"
-    implemented_in: "4ea0789a604695e509dacce4ca7c442445171340"
+    implemented_in: "e1c8e9700390aa8406c8d2fe06c05e31877d731b"
     depends_on: ["F-051", "F-039", "F-053"]
     notes: >
       Not Change 5 of docs/plans/agent-eval-coverage/PLAN.md. CHARTER §3 observability
-      non-goal is not amended. ADR 0049. implemented_in is the first landing commit
-      on this branch so F-064's ancestry check resolves against HEAD.
+      non-goal is not amended. ADR 0049. implemented_in is the squash-merge of PR
+      #233 on main (e1c8e97) so F-064's ancestry check resolves against HEAD.
+      The pre-merge branch tip 4ea0789a is not an ancestor of main.
       public_surface_baseline.json is unchanged: replay/ declares no __all__.
 

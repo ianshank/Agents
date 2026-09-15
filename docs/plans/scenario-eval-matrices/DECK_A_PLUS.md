@@ -33,9 +33,9 @@ The shipped test-generation config can score **1.000 on every axis** today. That
 
 ### Slide 3 — Capabilities vs proofs (D2 wording)
 **Say exactly:**  
-"We declare **69** capabilities. **67** have executable proofs that run on every pull request. **Two** are declared and deferred — F-008 and F-036 — their proofs do not run, and the ledger says so."
+"We declare **70** capabilities. **68** have executable proofs that run on every pull request. **Two** are declared and deferred — F-008 and F-036 — their proofs do not run, and the ledger says so."
 
-**Do not say:** "67/67" or "69 capabilities, 67 proofs" without naming the deferred pair. The validator runs exactly the `done` set, so a bare 67/67 ratio cannot fail on the count. Census from `features.yaml` on 2026-09-13.
+**Do not say:** "68/68" or "70 capabilities, 68 proofs" without naming the deferred pair. The validator runs exactly the `done` set, so a bare 68/68 ratio cannot fail on the count. Census from `features.yaml` on 2026-09-15 (F-070 landed).
 
 ### Slide 4 — What the matrix actually measures
 - M1–M7: method-count floors with waivers named in `docs/matrix-coverage.md`.
@@ -69,7 +69,7 @@ EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=eval_harness.targets.testgen \
 
 **Denominator rule (D1):** Never say n=300. `repetitions: 5` × 60 deterministic items is a 5× multiplier with **zero new information** until a stochastic target exists. Honest figure: **n=60 per slice, 240 across four slices**.
 
-**Re-measured 2026-09-13** (`run.repetitions=1`): thorough 1.000/1.000/0.000/1.000; weak mutation **0.322** / recall **0.260**; false-alarm **0.397** — matches [`DELIVERY.md`](./DELIVERY.md) §3a. On `broken`, dependents print a mean with `pass_rate=n/a`; quote n/a for the pass-rate channel.
+**Re-measured 2026-09-15** (`run.repetitions=1`): thorough 1.000/1.000/0.000/1.000; weak mutation **0.322** / recall **0.260**; false-alarm **0.397** — unchanged from 2026-09-13 / [`DELIVERY.md`](./DELIVERY.md) §3a. On `broken`, dependents print a mean with `pass_rate=n/a`; quote n/a for the pass-rate channel.
 
 **Weak separation (D3):** Say "we built the weak slice to discriminate, then verified that it does" — not "our corpus was discovered to discriminate."
 
@@ -107,7 +107,7 @@ Vendor-UI choice (Phoenix / Langfuse / BrainTrust / defer) lives on [`VP_DECK.md
 |---|---|---|
 | "n=300" for any testgen figure | 5 identical repetitions of 60 deterministic items (D1) | **"n=60"** |
 | "we measured our agents at test generation" | No committed live generator | "scorers, corpus, and sandbox are done; live generator is next" |
-| "67/67 proofs" as coverage | Validator runs only `done` features | Name 67 runnable + 2 deferred (F-008, F-036) |
+| "68/68 proofs" as coverage | Validator runs only `done` features | Name 68 runnable + 2 deferred (F-008, F-036) |
 | "the audit found 24 issues" | Audit 20; review +4 (D4) | "20 from the audit, 4 from an automated review afterwards" |
 | "OpenRCA agents went 10% → 33%" | Vendor self-report vs independent 12.5% | Independent full-benchmark figures only |
 | "a trivial heuristic scores 36.5%, beating agents" | Invalid cross-pool comparison | Measure our floor on our corpus |
@@ -125,7 +125,7 @@ Vendor-UI choice (Phoenix / Langfuse / BrainTrust / defer) lives on [`VP_DECK.md
 - [ ] Know `helpfulness.mean=0.844` vs min 0.95, exit 1
 - [ ] Optional: `validate.py --tier fast` only if the room is technical
 - [ ] Rehearse slide 9 out loud (volunteer gaps; do not apologize)
-- [ ] Rehearse answer to "why 69 and 67?" — two deferred features, named (F-008, F-036)
+- [ ] Rehearse answer to "why 70 and 68?" — two deferred features, named (F-008, F-036)
 - [ ] Discrimination table printed at n=60; no n=300 anywhere in the deck
 - [ ] Confirm `repetitions` story: inert for deterministic callable until stochastic target
 

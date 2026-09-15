@@ -1,6 +1,110 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 025 — 2026-09-15
+
+### Changes
+
+Pre-PR hygiene vs `main` on PR #244: no Python feature land (docs + dual e2e
+drivers). Locked live `prompt_template: "{question}"` in
+`tests/test_e2e_driver_parity.py` (`LiveFixturePinConfig`, `make e2e-driver-parity`).
+Wired C4, NEXT_STEPS, AGENTS, README, test-runner/explorer/narrow-critic, Makefile
+e2e-matrix-update warning. Did not split god-classes (none in this diff; ADR 0019
+already gates `.py` size). Did not restamp e2e-matrix or retune eval_metrics.
+
+### Validation evidence
+
+`pytest tests/test_e2e_driver_parity.py` (pass, including live
+`prompt_template` lock); `pytest tests/test_claude_hooks.py` (pass);
+`python scripts/verify_tier_a.py` (11/11); `python scripts/generate_eval_metrics.py --check`;
+`python scripts/validate.py --tier fast --strict-git` (68 done; shallow-clone warnings);
+`python scripts/skill_marketplace.py validate`; `python scripts/check_skill_script_drift.py`
+(20 copies); mermaid `--check` clean. First `regression_gate.py --base-ref origin/main`
+flagged `test_matrix_artifact_is_fresh` because leftover `--tiers all`
+`artifacts/e2e-report/` (SKIP ≠ NOT-RUN vs the committed offline pin) — relocated to
+`artifacts/e2e-report-live-2026-09-15/`; targeted gate on the two test files then OK.
+`gitleaks` not on PATH. Bare `mypy` on the parity test hits the documented numpy-2.5 /
+`python_version = "3.11"` stub limitation, not a branch defect.
+
+---
+## Session 024 — 2026-09-15
+
+### Changes
+
+Local e2e rerun + F-067 RCA mocked/unmocked on worktree
+`.claude/worktrees/e2e-vp-capture` (`0665f4d`, PR #244 still draft):
+
+- Preflight: venv 3.12 extras `autoevals`/`grimp` present; installed `botocore`
+  for Phoenix OTEL; Phoenix `17.18.0` HTTP 200; LM Studio
+  `nvidia/nemotron-3-nano-omni:2`.
+- `powershell … run_all_e2e.ps1 -Tiers all -HypothesisProfile ci` → **36 PASS /
+  0 FAIL / 2 SKIP** (~15 min). Honesty: real model target, `{question}`
+  template, judge helpfulness 1.0, smokes PASS. Langfuse OTEL still certifi TLS;
+  Phoenix `register` ran (boto3 still missing). Did **not** restamp
+  `docs/e2e-matrix/`.
+- RCA mocked: `eval-harness.cli run --config config/rca_eval.yaml` — 96 items,
+  AC@1 0.333, abstention 0.719 advisory miss, FAR 0.000, gate PASS.
+- RCA unmocked: gitignored 12-item slice + JSON callable (ADR 0039 allowlist
+  only for that process). Live AC@1 0.500 vs mocked slice 0.333; FAR 0.250 on
+  unanswerables. Not a bake-off.
+
+### Validation evidence
+
+`artifacts/e2e-report/summary.json` (gitignored) 36/0/2. RCA results under
+`artifacts/rca_unmocked/` (gitignored). No `features.yaml` / matrix `--update` /
+eval_metrics retune. PR #244 not marked ready.
+
+---
+## Session 023 — 2026-09-15
+
+### Changes
+
+Finished PR #244 live capture on worktree `.claude/worktrees/e2e-vp-capture`
+(continued `cursor/e2e-vp-capture-eefa`, did not branch from stale local `main`):
+
+- Patched both e2e drivers so live YAML sets `prompt_template: "{question}"`.
+- Documented `LOCAL_MODEL_ID` / `OPENAI_BASE_URL` / `OPENAI_JUDGE_MODEL` vs
+  `EVAL_BASE_URL` in `.env.example` (comments only).
+- Ran `powershell … run_all_e2e.ps1 -Tiers all -HypothesisProfile ci` against
+  LM Studio `nvidia/nemotron-3-nano-omni:2`, Langfuse smoke, Phoenix `17.18.0`.
+  Honesty: not echo+mock; `live:judge-openai` non-empty completion; smokes PASS.
+  Sinks PASS on `contains`. Anthropic/Bedrock SKIP. NVIDIA/BrainTrust unused.
+- First campaign 32 PASS / 4 FAIL / 2 SKIP — FAILs were missing `autoevals` /
+  `archguard`; confirmed PASS after those extras. Did **not** `--update`
+  `docs/e2e-matrix/` from `--tiers all`.
+- Canonical evidence `docs/e2e-live-journey.md`; pointers in VP_DECK, executive
+  brief, e2e-runbook (Phoenix pin `17.18.0`), demo README (link only; F-057
+  0.844 unchanged), docs index, mkdocs Runbooks.
+
+### Validation evidence
+
+Live honesty gates on `artifacts/e2e-report/` (gitignored). After extras:
+`test_m8_text_scorers_pipeline` PASS; `python scripts/validate.py -v` → 68 done;
+drift-guard e2e 10 passed; skills+hooks 77 passed / 15 skipped (`_bash_works`).
+Post-docs: `python tests/test_e2e_driver_parity.py` (pass); `python
+scripts/generate_eval_metrics.py --check` (pass); `python scripts/validate.py
+--tier fast --strict-git` (68 done; shallow-clone provenance warnings).
+`python tests/test_e2e_matrix.py --check` is **stale vs the leftover live
+report** (expected); committed `docs/e2e-matrix/` was not `--update`d.
+
+---
+## Session 022 — 2026-09-15
+
+### Changes
+
+E2E + VP capture on `cursor/e2e-vp-capture-eefa` (PR #244):
+
+- Restamped F-070 `implemented_in` to squash #233 (`e1c8e97`) so F-064 / `--strict-git` pass (protected `features.yaml`; needs `eval-change-approved`).
+- Ran POSIX `run_all_e2e.sh --tiers all --hypothesis-profile ci` (31 PASS / 0 FAIL / 7 SKIP, no live creds) and `--tiers offline --hypothesis-profile ci` (31 PASS / 0 FAIL / 0 SKIP). Committed `docs/e2e-matrix/` from the **offline** report only (`suite:root` 3123, backend-validation 357). Updated `docs/e2e-runbook.md` test-status counts to match.
+- Re-measured F-065 four slices at `run.repetitions=1` (n=60); means unchanged. Demo fail-closed `helpfulness.mean=0.844` vs min 0.95, exit 1.
+- Did **not** retune `docs/eval_metrics.json` 0–10 cells. Census honesty: 68 done + 2 deferred of 70.
+- Last-mile speaker honesty: `demo/deck.html` / demo README / `eval.fail.yaml` comment match console `helpfulness mean=0.844 pass_rate=0.89 n=9` (F-057 skip). ERRATA / NEXT_STEPS / exec-report / docs index cite the 2026-09-15 restamp as current. PLAN.md “say instead” 63→68.
+
+### Validation evidence
+
+`python scripts/verify_tier_a.py` (11/11); `python scripts/generate_eval_metrics.py --check`; `python tests/test_e2e_matrix.py --check`; `bash demo/run_demo.sh` (console `helpfulness mean=0.844 pass_rate=0.89 n=9`; fail-closed `0.844` vs min 0.95); `python scripts/validate.py --tier fast --strict-git` (68 done); `python scripts/regression_gate.py --base-ref origin/main`; `./scripts/quality-gate.sh coverage` 3097 passed / 26 skipped / 97.55% (unset `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST` first — `demo/run_demo.sh` leaked `=demo` into the shell and denied callable tests). `make pre-pr` extra failures vs the labeled-exception contract: `check_protected_changes.py` unlabeled (expected; `PR_LABELS=eval-change-approved` simulation is local-only and does not label GitHub); `make check-all` typecheck is the documented phoenix-evals/numpy 2.5 stub vs `python_version = "3.11"` limitation (`pyproject.toml`), not this diff — CI test job omits phoenix-evals and was already green.
+
+---
 ## Session 021 — 2026-09-09
 
 ### Changes

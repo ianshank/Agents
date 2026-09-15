@@ -67,7 +67,7 @@ corpus-write: ## Regenerate committed corpora from their generators
 	$(PYTHON) scripts/gen_requirements_corpus.py --write
 	$(PYTHON) scripts/gen_answer_quality_corpus.py --write
 
-.PHONY: e2e-matrix-check e2e-matrix-update invariants e2e-matrix uv-sync uv-lock-check
+.PHONY: e2e-matrix-check e2e-matrix-update e2e-driver-parity invariants e2e-matrix uv-sync uv-lock-check
 
 uv-sync: ## Install from the committed uv.lock (workspace; does not replace pip `make install`)
 	uv sync --locked --extra dev --extra langfuse --extra openai --extra parquet --extra autoevals
@@ -87,7 +87,12 @@ e2e-matrix-check: ## Verify docs/e2e-matrix/ matches a live regeneration (ADR 00
 	$(PYTHON) tests/test_e2e_matrix.py --check
 
 e2e-matrix-update: ## Regenerate docs/e2e-matrix/ from artifacts/e2e-report/ (ADR 0033)
+	@# Offline `--tiers offline` reports only. A `--tiers all` report uses SKIP
+	@# for missing creds; SKIP is not NOT-RUN and corrupts the committed pin.
 	$(PYTHON) tests/test_e2e_matrix.py --update
+
+e2e-driver-parity: ## POSIX/Windows e2e driver inventory + live prompt_template lock
+	$(PYTHON) -m pytest tests/test_e2e_driver_parity.py -q
 
 .PHONY: verify-tier-a tiered-tests eval-metrics-check eval-metrics-update
 
