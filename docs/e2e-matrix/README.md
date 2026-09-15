@@ -18,11 +18,17 @@ test counts, and the evidence log the runner wrote.
 
 ```bash
 bash scripts/run_all_e2e.sh --tiers offline --hypothesis-profile ci   # POSIX (nightly freshness / committed restamp)
-# or: bash scripts/run_all_e2e.sh --tiers all --hypothesis-profile ci   # + Tier D live
-# or: pwsh -NoProfile -File scripts/run_all_e2e.ps1 -Tiers all -HypothesisProfile ci
-python tests/test_e2e_matrix.py --update      # rewrite this directory
+python tests/test_e2e_matrix.py --update      # rewrite this directory (refuses a `--tiers all` leftover)
 python tests/test_e2e_matrix.py --check       # exit 1 if it is stale
 ```
+
+Live (`--tiers all`) campaigns are evidence in
+[`../e2e-live-journey.md`](../e2e-live-journey.md), not a restamp path. `--update`
+exits 1 if the census observed Tier D or E (SKIP or PASS). SKIP is not NOT-RUN.
+
+Do not squash-merge a PR whose only matrix provenance SHA lives on the feature
+branch: after squash that SHA is not an ancestor of main (ADR 0033). Prefer a
+merge commit, or restamp from `--tiers offline` on main afterwards.
 
 The workbook needs the optional extra: `pip install -e ".[e2e-matrix]"`. Without it the
 markdown and CSVs are still written and the command still exits 0.

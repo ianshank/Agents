@@ -87,8 +87,8 @@ e2e-matrix-check: ## Verify docs/e2e-matrix/ matches a live regeneration (ADR 00
 	$(PYTHON) tests/test_e2e_matrix.py --check
 
 e2e-matrix-update: ## Regenerate docs/e2e-matrix/ from artifacts/e2e-report/ (ADR 0033)
-	@# Offline `--tiers offline` reports only. A `--tiers all` report uses SKIP
-	@# for missing creds; SKIP is not NOT-RUN and corrupts the committed pin.
+	@# Generator refuses a leftover `--tiers all` report (Tier D/E SKIP or PASS).
+	@# SKIP is not NOT-RUN and would corrupt the committed pin.
 	$(PYTHON) tests/test_e2e_matrix.py --update
 
 e2e-driver-parity: ## POSIX/Windows e2e driver inventory + live prompt_template lock

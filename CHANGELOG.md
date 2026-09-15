@@ -19,6 +19,14 @@ not a live write (token is not a Cognito JWT). `tests/test_e2e_driver_parity.py`
 now locks the live `prompt_template: "{question}"` assignment in both drivers
 (`make e2e-driver-parity`).
 
+### Hardening — `--update` refuses a `--tiers all` e2e report
+
+`python tests/test_e2e_matrix.py --update` exits 1 when the census observed
+Tier D or E (SKIP or PASS). Makefile comments were not a gate. Live captures
+stay in `docs/e2e-live-journey.md`. Squash-merging this PR would orphan the
+matrix Provenance SHA (`f83f7f0`); merge as a merge commit or restamp from
+`--tiers offline` on main afterwards.
+
 ### Fixed — live e2e fixtures bind `prompt_template` to `{question}`
 
 `ModelTarget` defaults to `"{prompt}"` while Tier D items only set

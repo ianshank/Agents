@@ -153,6 +153,7 @@ docker run -p 6006:6006 arizephoenix/phoenix:17.18.0
 compared over time. `docs/e2e-matrix/` is the committed rendering of one run:
 
 ```bash
+# Offline report only. `--update` refuses a leftover `--tiers all` census (Tier D/E SKIP/PASS).
 python tests/test_e2e_matrix.py --update      # regenerate from artifacts/e2e-report/
 python tests/test_e2e_matrix.py --check       # exit 1 if the committed artifact is stale
 ```

@@ -1025,15 +1025,19 @@ def policy_problems(run: Sequence[RunStep], declared: Sequence[DeclaredStep]) ->
 
 #: Header of the column carrying a step's outcome; the workbook colours by it.
 STATUS_COLUMN = "Status"
+TIER_COLUMN = "Tier"
+STEP_COLUMN = "Step"
+TEST_MATRIX_SHEET_NAME = "Test Matrix"
+
 
 MATRIX_COLUMNS = (
-    "Tier",
+    TIER_COLUMN,
     "Area",
-    "Step",
+    STEP_COLUMN,
     "Command",
     "Workdir",
     "Required Credentials",
-    "Status",
+    STATUS_COLUMN,
     "Detail",
     "Duration (ms)",
     "Tests",
@@ -1042,6 +1046,57 @@ MATRIX_COLUMNS = (
     "Skipped",
     "Evidence",
 )
+
+
+@dataclass(frozen=True)
+class OfflineRestampConfig:
+    """``--update`` may only consume a census that never entered live/enterprise tiers.
+
+    Nightly freshness and the committed pin use ``--tiers offline``. Selecting
+    ``--tiers all`` records those steps as SKIP (missing creds) or PASS (creds
+    present). SKIP is not NOT-RUN. The generator also stamps the offline
+    invocation regardless of the report, so a leftover live report would ship
+    with misleading provenance.
+    """
+
+    excluded_tiers: tuple[str, ...] = ("D", "E")
+    allowed_status: str = NOT_RUN
+
+
+DEFAULT_OFFLINE_RESTAMP = OfflineRestampConfig()
+
+
+def restamp_source_problems(
+    sheets: Sequence[Sheet],
+    *,
+    config: OfflineRestampConfig = DEFAULT_OFFLINE_RESTAMP,
+) -> list[str]:
+    """Reasons ``--update`` must not rewrite the committed pin from *sheets*."""
+    matrix = next((sheet for sheet in sheets if sheet.name == TEST_MATRIX_SHEET_NAME), None)
+    if matrix is None:
+        return [f"render has no {TEST_MATRIX_SHEET_NAME!r} sheet"]
+    try:
+        tier_i = matrix.columns.index(TIER_COLUMN)
+        status_i = matrix.columns.index(STATUS_COLUMN)
+        step_i = matrix.columns.index(STEP_COLUMN)
+    except ValueError as exc:
+        return [f"{TEST_MATRIX_SHEET_NAME} is missing a required column: {exc}"]
+
+    excluded = frozenset(config.excluded_tiers)
+    offenders = [
+        f"{row[step_i]}={row[status_i]}"
+        for row in matrix.rows
+        if row[tier_i] in excluded and row[status_i] != config.allowed_status
+    ]
+    if not offenders:
+        return []
+    return [
+        "report observed excluded-tier steps ("
+        + ", ".join(offenders)
+        + "); --update requires a `--tiers offline` report "
+        f"(tiers {', '.join(config.excluded_tiers)} must stay {config.allowed_status})"
+    ]
+
 
 SUMMARY_COLUMNS = ("Metric", "Value")
 COVERAGE_COLUMNS = (
@@ -1107,7 +1162,7 @@ def build_matrix_sheet(
                 evidence_for(step.name, report_dir) if result else "",
             )
         )
-    return Sheet(name="Test Matrix", columns=MATRIX_COLUMNS, rows=tuple(rows))
+    return Sheet(name=TEST_MATRIX_SHEET_NAME, columns=MATRIX_COLUMNS, rows=tuple(rows))
 
 
 def build_summary_sheet(run: Sequence[RunStep], declared: Sequence[DeclaredStep]) -> Sheet:
