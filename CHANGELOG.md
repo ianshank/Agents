@@ -43,6 +43,12 @@ writes outside `OUTPUT_ROOT` exit 2. Archive load failures are cached.
 `scripts/generate_eval_metrics.py` binds `metadata` through a local `dict` after
 `isinstance(..., dict)` so mypy 2.1 accepts `chart_title_lines` (left open on #232).
 
+### Hardening — F-070 `implemented_in` restamp (F-064)
+
+Restamped F-070 `implemented_in` from pre-squash `4ea0789a` (not an ancestor of
+squash #233) to `e1c8e9700390aa8406c8d2fe06c05e31877d731b` so `validate.py
+--strict-git` / F-064 accept the landed ledger. Same shape as the F-069 restamp.
+
 ### Changed — VP decision package for eval-tool selection
 
 - `docs/executive-report-eval-tools.md` is a VP review brief, not an approval stamp: scores are **expert judgment** (not a three-vendor bake-off); the harness owns testgen/RCA/requirements scorers; vendors are sinks/UIs. Adds a one-page memo, Option 4 (defer / keep all three optional), CHARTER and package-name constraints, and F-067/F-068/F-069 grounding without attributing corpus self-grades to vendors.
