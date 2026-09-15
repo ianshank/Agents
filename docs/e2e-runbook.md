@@ -200,6 +200,10 @@ with `LOCAL_MODEL_ID=nvidia/nemotron-3-nano-omni:2`. Honesty gates: host log
 Campaign also recorded 4 FAIL from a venv missing `autoevals`/`archguard`
 (later confirmed PASS). **Do not** `--update` the committed matrix from this
 `--tiers all` report. Evidence: [`e2e-live-journey.md`](e2e-live-journey.md).
+A leftover live `artifacts/e2e-report/` also makes
+`tests/test_e2e_matrix.py::test_matrix_artifact_is_fresh` fail locally (SKIP ≠ NOT-RUN
+vs the committed offline pin). Relocate that directory under gitignored `artifacts/`
+before pre-PR; do not `--update`.
 
 Suite sizes on the 2026-09-15 offline restamp (nightly extras + F-070 tests):
 root 3123, agent-core 921, behavioral-regression 161, flow-corpus 163,

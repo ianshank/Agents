@@ -15,7 +15,9 @@ and Phoenix smokes PASS; sink PASS remains `contains`). F-067 `rca_maxz` on the
 frozen 96-item corpus (AC@1 mean 0.333, advisory abstention miss 0.719) plus a
 gitignored 12-item live-model JSON adapter vs the same slice. Did **not**
 `--update` `docs/e2e-matrix/` or retune expert-judgment 0–10s. BrainTrust still
-not a live write (token is not a Cognito JWT).
+not a live write (token is not a Cognito JWT). `tests/test_e2e_driver_parity.py`
+now locks the live `prompt_template: "{question}"` assignment in both drivers
+(`make e2e-driver-parity`).
 
 ### Fixed — live e2e fixtures bind `prompt_template` to `{question}`
 

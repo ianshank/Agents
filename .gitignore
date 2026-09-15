@@ -58,7 +58,9 @@ desktop.ini
 .benchmarks/
 
 # Generated reports (committed corpora/ is the opposite: frozen, regenerated
-# by scripts/gen_*_corpus.py and freshness-gated — do not ignore it)
+# by scripts/gen_*_corpus.py and freshness-gated — do not ignore it).
+# Live e2e + RCA adapter slices also land here (`e2e-report/`, `rca_unmocked/`)
+# and must never be committed (secrets, host logs).
 artifacts/
 out/
 results/

@@ -72,6 +72,12 @@ These stay human. Agents must not `--apply` branch protection, must not write
   offline-lexical semantic diversity with temperature qualification, gold AC recall,
   scope hallucination with contradiction reporting, structured traceability closure,
   and frozen synthetic corpus at `corpora/requirements/v1/`.
+- [x] **Live e2e capture (PR #244)** — Windows `-Tiers all` with
+  `LOCAL_MODEL_ID` + `prompt_template: "{question}"`; evidence
+  [`docs/e2e-live-journey.md`](docs/e2e-live-journey.md). Confirmed extras-present
+  rerun **36 PASS / 0 FAIL / 2 SKIP**. F-067 `rca_maxz` mocked vs a gitignored
+  12-item live JSON adapter. Do **not** `--update` `docs/e2e-matrix/` from
+  `--tiers all`. Expert-judgment 0–10 cells were not retuned.
 - [x] **`make pre-pr` + the `pre-pr-gate` skill** — an automation-opportunity scan of
   the god-file-decomposition session below found its own ~15-command validation
   checklist existed nowhere as one command (`AGENTS.md`/`CONTRIBUTING.md` each

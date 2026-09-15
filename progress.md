@@ -1,6 +1,32 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 025 — 2026-09-15
+
+### Changes
+
+Pre-PR hygiene vs `main` on PR #244: no Python feature land (docs + dual e2e
+drivers). Locked live `prompt_template: "{question}"` in
+`tests/test_e2e_driver_parity.py` (`LiveFixturePinConfig`, `make e2e-driver-parity`).
+Wired C4, NEXT_STEPS, AGENTS, README, test-runner/explorer/narrow-critic, Makefile
+e2e-matrix-update warning. Did not split god-classes (none in this diff; ADR 0019
+already gates `.py` size). Did not restamp e2e-matrix or retune eval_metrics.
+
+### Validation evidence
+
+`pytest tests/test_e2e_driver_parity.py` (pass, including live
+`prompt_template` lock); `pytest tests/test_claude_hooks.py` (pass);
+`python scripts/verify_tier_a.py` (11/11); `python scripts/generate_eval_metrics.py --check`;
+`python scripts/validate.py --tier fast --strict-git` (68 done; shallow-clone warnings);
+`python scripts/skill_marketplace.py validate`; `python scripts/check_skill_script_drift.py`
+(20 copies); mermaid `--check` clean. First `regression_gate.py --base-ref origin/main`
+flagged `test_matrix_artifact_is_fresh` because leftover `--tiers all`
+`artifacts/e2e-report/` (SKIP ≠ NOT-RUN vs the committed offline pin) — relocated to
+`artifacts/e2e-report-live-2026-09-15/`; targeted gate on the two test files then OK.
+`gitleaks` not on PATH. Bare `mypy` on the parity test hits the documented numpy-2.5 /
+`python_version = "3.11"` stub limitation, not a branch defect.
+
+---
 ## Session 024 — 2026-09-15
 
 ### Changes

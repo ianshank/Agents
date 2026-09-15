@@ -57,6 +57,22 @@ class NightlyExtraPinConfig:
 NIGHTLY_EXTRA_PIN = NightlyExtraPinConfig()
 NIGHTLY_WORKFLOW = ROOT / NIGHTLY_EXTRA_PIN.workflow_relpath
 
+
+@dataclass(frozen=True)
+class LiveFixturePinConfig:
+    """Keys both e2e drivers must emit in ``LOCAL_MODEL_ID`` live YAML.
+
+    ``ModelTarget`` defaults ``prompt_template`` to ``{prompt}``; live items only
+    set ``inputs.question``. A missing key is a ``KeyError``, the empty gate still
+    exits 0, and the host log still claims a real round-trip (D-3).
+    """
+
+    prompt_template: str = "{question}"
+    echo_output_key: str = "question"
+
+
+LIVE_FIXTURE_PIN = LiveFixturePinConfig()
+
 #: Same extra-flag / pip-extras regexes as ``tests._matrix_coverage.ci_installed_imports``.
 #: Kept as extra *names* here: ``archguard`` has no ``_EXTRA_PROVIDES`` row (it is not
 #: an importorskip matrix gate), so mapping through that helper would silently drop it.
@@ -103,6 +119,40 @@ def test_bash_driver_declares_exactly_the_ps1_steps() -> None:
     bash = _bash_declared_steps()
     ps1 = _ps1_declared_steps()
     assert bash == ps1, f"e2e driver step drift: bash-only {sorted(bash - ps1)}, ps1-only {sorted(ps1 - bash)}"
+
+
+def _live_target_assignment_lines(text: str) -> list[str]:
+    """Lines that bind the live target fixture (POSIX ``LIVE_TARGET`` / PS ``$LiveTarget``)."""
+    lines: list[str] = []
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if stripped.startswith("#") or stripped.startswith("'"):
+            continue
+        if "LIVE_TARGET=" in raw or "$LiveTarget" in raw:
+            lines.append(raw)
+    return lines
+
+
+def test_live_model_target_binds_prompt_template_to_question() -> None:
+    """Both drivers must emit ``prompt_template: {question}`` on the model branch.
+
+    Step-inventory parity does not read fixture YAML bodies, so a one-sided
+    revert of this key would stay green here without this lock.
+    """
+    pin = LIVE_FIXTURE_PIN
+    for path in (BASH_DRIVER, PS1_DRIVER):
+        text = path.read_text(encoding="utf-8")
+        assigns = _live_target_assignment_lines(text)
+        logger.debug("live target assignment lines in %s: %s", path.name, assigns)
+        model_lines = [ln for ln in assigns if "type: model" in ln]
+        echo_lines = [ln for ln in assigns if "type: echo" in ln]
+        assert model_lines, f"{path.name} has no model-branch live target assignment"
+        assert echo_lines, f"{path.name} has no echo-branch live target assignment"
+        for line in model_lines:
+            assert "prompt_template" in line, f"{path.name} model target missing prompt_template: {line}"
+            assert pin.prompt_template in line, f"{path.name} model target must bind {pin.prompt_template}: {line}"
+        for line in echo_lines:
+            assert pin.echo_output_key in line, f"{path.name} echo target missing {pin.echo_output_key}: {line}"
 
 
 def test_bash_driver_mirrors_the_python_skip_code() -> None:

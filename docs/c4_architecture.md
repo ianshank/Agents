@@ -447,6 +447,11 @@ it runs every package suite, every `features.yaml` functionality gate (Tier B ca
 a curated set of package CLI journeys (`eval-harness`, `bregress`, `merge_gate_ci`,
 `skill_marketplace`), the skill/hook e2e tests, and credential-gated live integrations, and
 aggregates one report under `artifacts/e2e-report/`. See [e2e-runbook.md](e2e-runbook.md).
+Live (non-mock) generate → score → judge evidence is [e2e-live-journey.md](e2e-live-journey.md):
+set `LOCAL_MODEL_ID` so Tier D is not echo+mock; both drivers emit
+`prompt_template: "{question}"` (D-3). Do not restamp [e2e-matrix/](e2e-matrix/README.md)
+from a `--tiers all` report (SKIP ≠ NOT-RUN). Sink PASS on those journeys is `contains`,
+not LLM scores in Langfuse/Phoenix.
 
 ### Tier A Mechanical Verification & Tiered Test Automation
 
