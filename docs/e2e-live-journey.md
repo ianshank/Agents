@@ -171,3 +171,16 @@ treat it as a reason to restamp. CI freshness regenerates from `--tiers offline`
 Keep Phoenix as the default **operations UI** recommendation. This capture
 does not reorder expert-judgment 0–10 cells in `docs/eval_metrics.json`.
 See [`plans/scenario-eval-matrices/VP_DECK.md`](plans/scenario-eval-matrices/VP_DECK.md).
+
+## Follow-up — NVIDIA / Langfuse / BrainTrust (same host, after the runner)
+
+Not an e2e-driver restamp. Keys lived only in uncommitted `.env`. **Rotate them** — they were pasted in chat.
+
+| Surface | Result |
+|---|---|
+| NVIDIA NIM `OpenAIJudge` (`tests/integration/test_nvidia_judge_live.py::TestNemotronInference::test_evaluates_simple_qa`) | **PASS** (78s). Model `nvidia/nemotron-3.5-lightning-30b-a3b` (listed `/v1/models`; default ultra-550b was listed but nano 404 / nano-omni 503). `OPENAI_BASE_URL` unset so this did not hit LM Studio. |
+| `scripts/smokes/langfuse_smoke.py` | **PASS** |
+| `tests/test_braintrust_live.py` | **SKIP** ×2 (`BRAINTRUST_TEST_PROJECT`/`DATASET` unset; Factuality needs `OPENAI_API_KEY` which was left unset to avoid LM Studio) |
+| BrainTrust `build_client(enabled=True)` + `log_item` | SDK client constructed (not `NullBrainTrustClient`); **flush 401** — key rejected as not a Cognito JWT. Batch dropped. Not a live BrainTrust write. |
+
+This NVIDIA judge call is `llm_judge`-class scoring. It is **not** a BrainTrust or Langfuse LLM-score bake-off.
