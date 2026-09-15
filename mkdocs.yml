@@ -71,6 +71,7 @@ nav:
       - "Epic 5: Integrations & Plugins": roadmap/epic-5-integrations-and-plugins.md
   - Runbooks:
       - End-to-end harness: e2e-runbook.md
+      - Live e2e capture: e2e-live-journey.md
       - End-to-end test matrix: e2e-matrix/README.md
       - Branch protection enablement: runbooks/branch-protection-enablement.md
       - Merge-gate audit triage: runbooks/merge-gate-audit-triage.md

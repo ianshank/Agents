@@ -3,6 +3,10 @@
 A repeatable, **fully offline** demo (zero credentials, deterministic) tuned for a
 mixed **engineer + leadership** audience. Runs in ~6–8 minutes.
 
+Live generate → score → judge (not this demo):
+[`docs/e2e-live-journey.md`](../docs/e2e-live-journey.md). This script stays
+MockJudge; spoken F-057 helpfulness remains **n=9 mean 0.844**.
+
 **The one-liner:** *this is an LLM evaluation harness you can't quietly weaken* —
 config-driven grading that gates CI, multi-model comparison, and **calibrated
 ship / hold / escalate** decisions that fail safe to a human.

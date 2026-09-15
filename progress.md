@@ -1,6 +1,39 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 023 — 2026-09-15
+
+### Changes
+
+Finished PR #244 live capture on worktree `.claude/worktrees/e2e-vp-capture`
+(continued `cursor/e2e-vp-capture-eefa`, did not branch from stale local `main`):
+
+- Patched both e2e drivers so live YAML sets `prompt_template: "{question}"`.
+- Documented `LOCAL_MODEL_ID` / `OPENAI_BASE_URL` / `OPENAI_JUDGE_MODEL` vs
+  `EVAL_BASE_URL` in `.env.example` (comments only).
+- Ran `powershell … run_all_e2e.ps1 -Tiers all -HypothesisProfile ci` against
+  LM Studio `nvidia/nemotron-3-nano-omni:2`, Langfuse smoke, Phoenix `17.18.0`.
+  Honesty: not echo+mock; `live:judge-openai` non-empty completion; smokes PASS.
+  Sinks PASS on `contains`. Anthropic/Bedrock SKIP. NVIDIA/BrainTrust unused.
+- First campaign 32 PASS / 4 FAIL / 2 SKIP — FAILs were missing `autoevals` /
+  `archguard`; confirmed PASS after those extras. Did **not** `--update`
+  `docs/e2e-matrix/` from `--tiers all`.
+- Canonical evidence `docs/e2e-live-journey.md`; pointers in VP_DECK, executive
+  brief, e2e-runbook (Phoenix pin `17.18.0`), demo README (link only; F-057
+  0.844 unchanged), docs index, mkdocs Runbooks.
+
+### Validation evidence
+
+Live honesty gates on `artifacts/e2e-report/` (gitignored). After extras:
+`test_m8_text_scorers_pipeline` PASS; `python scripts/validate.py -v` → 68 done;
+drift-guard e2e 10 passed; skills+hooks 77 passed / 15 skipped (`_bash_works`).
+Post-docs: `python tests/test_e2e_driver_parity.py` (pass); `python
+scripts/generate_eval_metrics.py --check` (pass); `python scripts/validate.py
+--tier fast --strict-git` (68 done; shallow-clone provenance warnings).
+`python tests/test_e2e_matrix.py --check` is **stale vs the leftover live
+report** (expected); committed `docs/e2e-matrix/` was not `--update`d.
+
+---
 ## Session 022 — 2026-09-15
 
 ### Changes

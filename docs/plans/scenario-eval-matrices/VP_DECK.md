@@ -24,6 +24,8 @@
 
 **Do not say:** “we measured vendors at test generation” or “Phoenix generates better tests.”
 
+**Live round-trip (not a bake-off):** 2026-09-15 Windows capture on PR #244 used local model `nvidia/nemotron-3-nano-omni:2`. `live:judge-openai` PASS (`llm_judge`, non-empty completion). Langfuse and Phoenix **smokes** PASS. Sink steps PASS on `contains` only — do not say those backends received live LLM scores. Anthropic / Bedrock SKIP. NVIDIA cloud and BrainTrust are not runner steps. Details: [`docs/e2e-live-journey.md`](../../e2e-live-journey.md).
+
 ---
 
 ## Slide 2 — Two questions (do not mix)

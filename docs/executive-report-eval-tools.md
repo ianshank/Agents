@@ -7,6 +7,8 @@
 **Companion deck:** [`plans/scenario-eval-matrices/VP_DECK.md`](plans/scenario-eval-matrices/VP_DECK.md) (census 68 `done` + 2 `deferred` of 70; 0–10 cells unchanged)
 **Data Sources:** [`docs/matrix-coverage.md`](matrix-coverage.md), [`docs/phoenix-spike.md`](phoenix-spike.md), [`docs/braintrust-spike.md`](braintrust-spike.md), [`docs/eval_metrics.json`](eval_metrics.json)
 
+**Live CI eval (not a bake-off).** A 2026-09-15 Windows `-Tiers all` capture on PR #244 exercised a local OpenAI-compatible model (`nvidia/nemotron-3-nano-omni:2`) through `live:judge-openai` (`llm_judge`) and Langfuse / Phoenix smokes. Sink journeys scored `contains`, not live LLM grades. Anthropic and Bedrock SKIP (no keys). NVIDIA cloud and BrainTrust have **no** e2e-runner steps. Remaining SKIPs and honesty gates: [`e2e-live-journey.md`](e2e-live-journey.md). Expert-judgment 0–10 cells were **not** retuned.
+
 ---
 
 ## 0. Decision memo (one page)

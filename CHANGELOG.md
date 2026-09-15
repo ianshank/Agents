@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Fixed — live e2e fixtures bind `prompt_template` to `{question}`
+
+`ModelTarget` defaults to `"{prompt}"` while Tier D items only set
+`inputs.question`. Missing that key is a `KeyError`, the empty gate still
+exits 0, and the host log still prints `model/<id> (real round-trip)`.
+Both `scripts/run_all_e2e.ps1` and `scripts/run_all_e2e.sh` now emit
+`prompt_template: "{question}"`. `.env.example` documents `LOCAL_MODEL_ID` /
+`OPENAI_BASE_URL` / `OPENAI_JUDGE_MODEL` vs YAML `EVAL_BASE_URL`.
+
+### Added — live e2e journey capture (PR #244)
+
+Windows `-Tiers all -HypothesisProfile ci` with a local OpenAI-compatible
+model: `live:judge-openai` (`llm_judge`) plus Langfuse/Phoenix smokes PASS;
+Anthropic/Bedrock SKIP. Sink PASS is `contains`, not live LLM scores.
+Evidence: `docs/e2e-live-journey.md`. Committed `docs/e2e-matrix/` was
+**not** restamped from this `--tiers all` report (offline POSIX remains
+canonical). Expert-judgment 0–10 cells were not retuned.
+
 ### Added — fixture replay of recorded AgentTrajectory envelopes (F-070, ADR 0049)
 
 Offline `eval-harness replay --mode exact|counterfactual` re-scores committed

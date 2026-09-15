@@ -551,7 +551,10 @@ if ($Tiers -in @('live', 'all')) {
     # behave exactly as before.
     $LocalModel = $env:LOCAL_MODEL_ID
     if ($LocalModel) {
-        $LiveTarget = "{ type: model, params: { provider: openai, model: `"$LocalModel`" } }"
+        # ModelTarget defaults prompt_template to "{prompt}"; live items only set
+        # inputs.question. Without this key the target KeyErrors, the empty gate
+        # still exits 0, and the host log still claims a real round-trip (D-3).
+        $LiveTarget = "{ type: model, params: { provider: openai, model: `"$LocalModel`", prompt_template: `"{question}`" } }"
         # A real judge too: `mock` returned a constant 0.9 regardless of the output, so
         # the sink journeys were asserting that a hardcoded number reaches the backend.
         $LiveJudge = "{ type: openai, params: { model: `"$LocalModel`" } }"

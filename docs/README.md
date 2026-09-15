@@ -55,6 +55,8 @@ Active engineering epics and architectural roadmap live in [roadmap/](roadmap/RE
 
 - [e2e-runbook.md](e2e-runbook.md) — running and reading the one-command
   end-to-end / user-journey harness.
+- [e2e-live-journey.md](e2e-live-journey.md) — 2026-09-15 live (non-mock)
+  generate → score → judge capture; not an e2e-matrix restamp.
 - [e2e-matrix/](e2e-matrix/README.md) — the generated test matrix for a full end-to-end
   run (markdown, CSV and workbook renderings of one run report). See
   [e2e-matrix/ERRATA.md](e2e-matrix/ERRATA.md) for the historical provenance defect

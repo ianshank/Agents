@@ -9,8 +9,9 @@ command, and writes one aggregated report to `artifacts/e2e-report/`.
 - A virtualenv at `.venv/` (Python 3.12) with every SDK installed. **A fresh one can be
   built** — the previous "PyPI is TLS-blocked here" note was wrong, or has stopped being
   true. Verified 2026-08-08: `pip` reaches PyPI unaided, and a full from-scratch install of
-  all extras plus the five sibling packages succeeds. Two caveats on a TLS-intercepting
-  host:
+  all extras plus the five sibling packages succeeds. Include `autoevals` (matrix
+  `Levenshtein` row) and `archguard` (`grimp` for F-009 / F-011 and drift-guard e2e) or
+  Tier A/B/C FAIL on those steps. Two caveats on a TLS-intercepting host:
   - **`uv` needs `--native-tls` on every invocation** (`uv venv --native-tls`,
     `uv pip install --native-tls …`). Without it: `invalid peer certificate: UnknownIssuer`.
     uv bundles its own roots and will not see a corporate CA; pip uses the OS store already.
@@ -138,11 +139,12 @@ The runner loads `.env` from the repo root (BOM-safe). Each live step runs only 
 | `live:judge-anthropic` | `ANTHROPIC_API_KEY` (model via `ANTHROPIC_JUDGE_MODEL`, default `claude-haiku-4-5-20251001`) |
 | `live:judge-bedrock` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (model via `BEDROCK_JUDGE_MODEL`) |
 
-Start a local Phoenix collector for the Phoenix steps:
+Start a local Phoenix collector for the Phoenix steps (pin matches
+`AGENTS.md` / `phoenix-live.yml`; unpinned `:latest` drifts):
 
 ```bash
-docker run -p 6006:6006 arizephoenix/phoenix
-# then set PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006 in .env
+docker run -p 6006:6006 arizephoenix/phoenix:17.18.0
+# then set PHOENIX_COLLECTOR_ENDPOINT=http://127.0.0.1:6006 in .env
 ```
 
 ## Test matrix artifact
@@ -188,6 +190,16 @@ not NOT-RUN, and nightly freshness regenerates from offline.
 A `--tiers all` run *with* Langfuse, Phoenix, and OpenAI credentials can convert those
 SKIPs to PASS (the runbook once recorded 36 PASS / 2 SKIP when only Anthropic and
 Bedrock were missing).
+
+**Live host (2026-09-15, this Windows worktree, PR #244):**
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run_all_e2e.ps1 -Tiers all -HypothesisProfile ci`
+with `LOCAL_MODEL_ID=nvidia/nemotron-3-nano-omni:2`. Honesty gates: host log
+`model/<id>` not `echo+mock`; fixtures `prompt_template: "{question}"`;
+`live:judge-openai` non-empty completion (`llm_judge`); Langfuse/Phoenix
+**smokes** PASS. Sinks PASS on `contains` only. Anthropic/Bedrock SKIP.
+Campaign also recorded 4 FAIL from a venv missing `autoevals`/`archguard`
+(later confirmed PASS). **Do not** `--update` the committed matrix from this
+`--tiers all` report. Evidence: [`e2e-live-journey.md`](e2e-live-journey.md).
 
 Suite sizes on the 2026-09-15 offline restamp (nightly extras + F-070 tests):
 root 3123, agent-core 921, behavioral-regression 161, flow-corpus 163,
@@ -251,7 +263,10 @@ against a dead backend, which is worth internalising before writing the next one
 
 Set `LOCAL_MODEL_ID` to a model served by any OpenAI-compatible endpoint (LM Studio, Ollama,
 vLLM) and the Tier-D journeys use a real `model` target and a real `openai` judge instead of
-`echo`/`mock`. `OpenAIJudge` documents LM Studio support explicitly. Put the endpoint in the
+`echo`/`mock`. Generated live YAML must set `prompt_template: "{question}"` —
+`ModelTarget` defaults to `"{prompt}"` while live items only set `inputs.question`
+(missing key → `KeyError`, empty gate still exits 0, host log still claims a
+round-trip). `OpenAIJudge` documents LM Studio support explicitly. Put the endpoint in the
 environment, not the fixture:
 
 ```
