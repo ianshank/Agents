@@ -2,7 +2,7 @@
 
 Run as a script to (re)generate or verify the committed artifact:
 
-    python tests/test_e2e_matrix.py --update      # regenerate from artifacts/e2e-report/
+    python tests/test_e2e_matrix.py --update      # regenerate from an *offline* artifacts/e2e-report/
     python tests/test_e2e_matrix.py --check       # exit 1 if the committed artifact is stale
 
 Exit codes:
@@ -1137,6 +1137,26 @@ class TestCommandLine:
         )
         assert "2026-08-13T22:45:39+00:00" in (out / em.ARTIFACT_DOC_NAME).read_text(encoding="utf-8")
 
+    def test_update_refuses_a_live_tier_report(self, tmp_path: Path, capsys) -> None:
+        """A leftover ``--tiers all`` census must not rewrite the committed pin.
+
+        Makefile comments were not a gate: ``--update`` stamped the offline
+        invocation even when the report had observed Tier D as SKIP.
+        """
+        report, out = tmp_path / "report", tmp_path / "out"
+        _write_report(
+            report,
+            [
+                _record("suite:root", tier="A"),
+                _record("live:judge-openai", tier="D", status=em.STATUS_SKIP),
+            ],
+        )
+        assert main(["--update", "--report", str(report), "--out", str(out)]) == EXIT_PROBLEM
+        err = capsys.readouterr().err
+        assert "live:judge-openai=SKIP" in err
+        assert "restamp source" in err
+        assert not (out / em.ARTIFACT_DOC_NAME).is_file()
+
     def test_update_refuses_a_monotonicity_drop(self, tmp_path: Path, capsys) -> None:
         """`--update` must not overwrite a larger render with a smaller one."""
         report, out = self._seed(tmp_path)
@@ -1251,6 +1271,33 @@ def test_default_monotonicity_waivers_reject_the_historical_errata_drop() -> Non
     assert em.MONOTONICITY_WAIVERS == ()
     assert any("observed steps dropped" in p for p in problems)
     assert any(f"{drop.suite_step} tests dropped" in p for p in problems)
+
+
+def test_restamp_source_problems_rejects_skip_on_excluded_tier() -> None:
+    """SKIP on Tier D is the leftover ``--tiers all`` census the pin must refuse."""
+
+    def _row(*, tier: str, step: str, status: str) -> tuple[str, ...]:
+        cells = [""] * len(em.MATRIX_COLUMNS)
+        cells[em.MATRIX_COLUMNS.index(em.TIER_COLUMN)] = tier
+        cells[em.MATRIX_COLUMNS.index(em.STEP_COLUMN)] = step
+        cells[em.MATRIX_COLUMNS.index(em.STATUS_COLUMN)] = status
+        return tuple(cells)
+
+    live_skip = em.Sheet(
+        name=em.TEST_MATRIX_SHEET_NAME,
+        columns=em.MATRIX_COLUMNS,
+        rows=(_row(tier="D", step="live:judge-openai", status=em.STATUS_SKIP),),
+    )
+    problems = em.restamp_source_problems((live_skip,))
+    assert problems
+    assert "live:judge-openai=SKIP" in problems[0]
+
+    live_not_run = em.Sheet(
+        name=em.TEST_MATRIX_SHEET_NAME,
+        columns=em.MATRIX_COLUMNS,
+        rows=(_row(tier="D", step="live:judge-openai", status=em.NOT_RUN),),
+    )
+    assert em.restamp_source_problems((live_not_run,)) == []
 
 
 def test_provenance_records_the_configured_runner_invocation() -> None:
@@ -1547,6 +1594,10 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_OK
 
     rendered = em.render_markdown(sheets)
+    restamp_problems = em.restamp_source_problems(sheets)
+    if restamp_problems:
+        print("e2e-matrix: restamp source:\n" + "\n".join(restamp_problems), file=sys.stderr)
+        return EXIT_PROBLEM
     committed_doc = args.out / em.ARTIFACT_DOC_NAME
     if committed_doc.is_file():
         drop_problems = em.monotonicity_problems(
