@@ -49,6 +49,25 @@ Restamped F-070 `implemented_in` from pre-squash `4ea0789a` (not an ancestor of
 squash #233) to `e1c8e9700390aa8406c8d2fe06c05e31877d731b` so `validate.py
 --strict-git` / F-064 accept the landed ledger. Same shape as the F-069 restamp.
 
+### Added — e2e-matrix restamp (offline ci, 2026-09-15)
+
+Canonical POSIX `bash scripts/run_all_e2e.sh --tiers offline --hypothesis-profile ci`
+then `python tests/test_e2e_matrix.py --update`. `suite:root` 2978 → 3123;
+`e2e:backend-validation` 355 → 357. Declared steps 40, observed 31 PASS, Tier D
+`NOT-RUN`. A `--tiers all` run in this environment was 31 PASS / 7 SKIP (no
+live credentials) and was **not** used as the committed restamp. Updated
+`docs/e2e-runbook.md` test-status counts to match. Vendor 0–10
+cells in `docs/eval_metrics.json` were not retuned (`scoring_basis:
+expert_judgment`).
+
+### Changed — VP deck census after F-070
+
+`docs/plans/scenario-eval-matrices/VP_DECK.md` and `DECK_A_PLUS.md`: 68 `done`
++ 2 `deferred` (F-008, F-036) of 70. Discrimination table re-measured
+2026-09-15 at `run.repetitions=1` / n=60; means unchanged (thorough 1.000,
+weak mutation 0.322 / recall 0.260, false-alarm 0.397). Demo fail-closed
+beat still `helpfulness.mean=0.844` vs min 0.95, exit 1.
+
 ### Changed — VP decision package for eval-tool selection
 
 - `docs/executive-report-eval-tools.md` is a VP review brief, not an approval stamp: scores are **expert judgment** (not a three-vendor bake-off); the harness owns testgen/RCA/requirements scorers; vendors are sinks/UIs. Adds a one-page memo, Option 4 (defer / keep all three optional), CHARTER and package-name constraints, and F-067/F-068/F-069 grounding without attributing corpus self-grades to vendors.

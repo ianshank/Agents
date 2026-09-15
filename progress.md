@@ -1,6 +1,22 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 022 — 2026-09-15
+
+### Changes
+
+E2E + VP capture on `cursor/e2e-vp-capture-eefa` (PR #244):
+
+- Restamped F-070 `implemented_in` to squash #233 (`e1c8e97`) so F-064 / `--strict-git` pass (protected `features.yaml`; needs `eval-change-approved`).
+- Ran POSIX `run_all_e2e.sh --tiers all --hypothesis-profile ci` (31 PASS / 0 FAIL / 7 SKIP, no live creds) and `--tiers offline --hypothesis-profile ci` (31 PASS / 0 FAIL / 0 SKIP). Committed `docs/e2e-matrix/` from the **offline** report only (`suite:root` 3123, backend-validation 357). Updated `docs/e2e-runbook.md` test-status counts to match.
+- Re-measured F-065 four slices at `run.repetitions=1` (n=60); means unchanged. Demo fail-closed `helpfulness.mean=0.844` vs min 0.95, exit 1.
+- Did **not** retune `docs/eval_metrics.json` 0–10 cells. Census honesty: 68 done + 2 deferred of 70.
+
+### Validation evidence
+
+`python scripts/verify_tier_a.py`; `python scripts/generate_eval_metrics.py --check`; `python tests/test_e2e_matrix.py --check`; `pytest tests/test_e2e_matrix.py tests/test_e2e_driver_parity.py tests/test_generate_eval_metrics.py`; `demo/run_demo.sh`.
+
+---
 ## Session 021 — 2026-09-09
 
 ### Changes

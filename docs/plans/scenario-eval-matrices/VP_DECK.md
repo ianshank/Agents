@@ -1,9 +1,9 @@
 # VP deck — default eval operations UI
 
 **Companion to:** [`../../executive-report-eval-tools.md`](../../executive-report-eval-tools.md), [`PLAN.md`](./PLAN.md), [`DELIVERY.md`](./DELIVERY.md), [`DECK_A_PLUS.md`](./DECK_A_PLUS.md)
-**Date:** 2026-09-13 · **Census:** 67 `done` + 2 `deferred` (F-008, F-036) of 69 in `features.yaml`
+**Date:** 2026-09-15 · **Census:** 68 `done` + 2 `deferred` (F-008, F-036) of 70 in `features.yaml`
 **Purpose:** Speaker-ready copy (paste into Slides/PowerPoint). This *is* the deck PLAN.md declined to write.
-**Evidence basis:** Vendor scores are expert judgment, not a bake-off. Discrimination table re-measured this date at `run.repetitions=1`.
+**Evidence basis:** Vendor scores are expert judgment, not a bake-off. Discrimination table re-measured this date at `run.repetitions=1` (means unchanged from 2026-09-13).
 
 ### Timing
 
@@ -41,7 +41,7 @@ Mixing them is how the September 7 report almost failed in a hostile room: vendo
 
 **Title:** The instrument separates known-good from known-bad
 
-We built a corpus with known-good and known-bad suites so scorers could be checked against a known answer. Re-run 2026-09-13, `run.repetitions=1`, allowlist `eval_harness.targets.testgen`.
+We built a corpus with known-good and known-bad suites so scorers could be checked against a known answer. Re-run 2026-09-15, `run.repetitions=1`, allowlist `eval_harness.targets.testgen`.
 
 | Slice | Executability | Mutation | False-alarm | Obligation recall |
 |---|---|---|---|---|
@@ -64,7 +64,7 @@ On `broken`, dependents print a mean but `pass_rate=n/a` — absent evidence is 
 
 - **No live agent performance.** F-069 pipeline is shipped; committed `config/testgen_agent_eval.yaml` has **no** `generator_path`. Do not quote `pass^k` / n=55 from that deterministic fake. If a number appears, quote thorough **holdout n=11 unique** only after a live generator exists (ADR 0039 allowlist; never allowlist `eval_harness`).
 - **No κ / ECE / Brier / AUROC as live results.** Zero `HUMAN_AUDIT` labels; calibration is an empty query until labeling is funded.
-- **67 executable proofs run on every PR.** Two more are declared and deferred — **F-008 and F-036** — their proofs do not run, and the ledger says so. Never “63/63” or “67/67” as a coverage ratio: `validate.py` runs exactly the `done` set.
+- **68 executable proofs run on every PR.** Two more are declared and deferred — **F-008 and F-036** — their proofs do not run, and the ledger says so. Never “63/63”, “67/67”, or “68/68” as a coverage ratio: `validate.py` runs exactly the `done` set.
 
 ---
 
@@ -159,7 +159,7 @@ Recommended: **Option 1**, with Option 2 if heuristic scoring UX matters this qu
 4. **Are we dropping Langfuse / renaming?** No this quarter. Option 1 is default UI, not exclusive.
 5. **Can we keep all three?** Yes — Option 4 and today’s code.
 6. **Air-gap not required — still Phoenix?** Then the tree splits on trace debugging vs prompt-ops vs experiment diffs. Option 3 / 2 become live.
-7. **Why 69 vs 67?** Two deferred features, named (F-008, F-036). The validator runs only the `done` set.
+7. **Why 70 vs 68?** Two deferred features, named (F-008, F-036). The validator runs only the `done` set. F-070 (fixture replay) is in the `done` set.
 8. **n=300?** Five identical repetitions of 60 deterministic items. Quote **n=60**.
 9. **When do we see agent numbers?** After a live `generator_path` (ADR 0039; never allowlist `eval_harness`). Holdout n=11 unique. Do not quote the empty/fail-closed config.
 10. **Who pays for labels?** Not this meeting. DECISIONS.md §4: two annotators, κ ≥ 0.60, floor 50.
@@ -175,7 +175,7 @@ Copied from [`DELIVERY.md`](./DELIVERY.md) §6 so they cannot creep back from ol
 | “our test generation scores 1.0 on mutation / executability / recall” as an agent result | Corpus’s own reference suite; `inputs.suite` pre-supplied | “the instrument separates known-good from known-bad: 1.000 vs 0.322 mutation, 0.000 vs 0.397 false-alarm, n=60 per slice” |
 | “we measured our agents at test generation” | No committed generator; nothing chains a live model into `testgen_agent` in the shipped YAML | “scorers, corpus, and sandbox are done; live generator is next” |
 | “n=300” for any testgen figure | 5× multiplier on 60 deterministic items | **n=60** |
-| “63/63” or “67/67” as coverage | Tool runs exactly the `done` set | “67 runnable proofs; 2 deferred and named” |
+| “63/63”, “67/67”, or “68/68” as coverage | Tool runs exactly the `done` set | “68 runnable proofs; 2 deferred and named” |
 | “zero scenario scorers implemented” | F-065 / F-067 / F-068 shipped | “scenario scorers shipped; no live agent measured through them yet” |
 | “the audit found 24 issues” | Audit 20; review +4 | “20 from the audit, 4 from an automated review afterwards” |
 | “OpenRCA agents went 10% → 33%” | Vendor self-report vs independent 12.5% | Independent full-benchmark figures only |
@@ -190,5 +190,5 @@ Copied from [`DELIVERY.md`](./DELIVERY.md) §6 so they cannot creep back from ol
 - [ ] Pre-open `out/demo/report-fail.html`; know `helpfulness.mean=0.844` vs min 0.95, exit 1
 - [ ] Discrimination table at n=60; no n=300 in any pasted slide
 - [ ] Rehearse “this is not an agent result” and “this is not a vendor bake-off” until automatic
-- [ ] Rehearse “why 69 and 67?” — F-008 and F-036, named
+- [ ] Rehearse “why 70 and 68?” — F-008 and F-036, named
 - [ ] If they refuse markdown in the room, paste this file into the org slide tool

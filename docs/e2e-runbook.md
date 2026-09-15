@@ -177,21 +177,26 @@ but not in the parse is a hard error. See
 
 ## Test status on this checkout
 
-A clean **`-Tiers all`** run reports **36 PASS / 0 FAIL / 2 SKIP** (38 steps: 1 pre-flight,
-7 Tier A, 2 Tier B, 21 Tier C, 7 Tier D). The only two SKIPs are `live:judge-anthropic` and
-`live:judge-bedrock`, which need cloud credentials; every other live step, including a real
-model round-trip, passes. `-Tiers offline` reports 29 PASS / 0 FAIL of 31 steps.
+A clean **`--tiers all`** run **without live credentials** (2026-09-15) reports
+**31 PASS / 0 FAIL / 7 SKIP** (PRE + Tiers A–C green; all seven Tier D steps SKIP).
+`--tiers offline --hypothesis-profile ci` reports **31 PASS / 0 FAIL** of 31 observed
+steps (9 declared steps `NOT-RUN`: 7 Tier D + `cli:bregress json-valid` + Tier E).
+That offline report is the committed [`docs/e2e-matrix/`](e2e-matrix/e2e-matrix.md)
+restamp. Do not `--update` the committed matrix from a `--tiers all` report: SKIP is
+not NOT-RUN, and nightly freshness regenerates from offline.
+
+A `--tiers all` run *with* Langfuse, Phoenix, and OpenAI credentials can convert those
+SKIPs to PASS (the runbook once recorded 36 PASS / 2 SKIP when only Anthropic and
+Bedrock were missing).
+
+Suite sizes on the 2026-09-15 offline restamp (nightly extras + F-070 tests):
+root 3123, agent-core 921, behavioral-regression 161, flow-corpus 163,
+flow-protocol 21, claude-foundation 140, skills+hooks 92, backend-validation 357.
+A *drop* below the committed counts is refused by `--update` monotonicity.
 
 **Assert the exact step list, not a count.** "step count ≥ 30" is satisfied by an offline
 run, which never executes the tier most worth exercising — the same false-green shape as
 D-2 below, reproduced in the success criteria.
-
-Suite sizes with every extra installed: root 1504, agent-core 790, behavioral-regression
-157, flow-corpus 163, flow-protocol 21, claude-foundation 136, skills+hooks 85,
-backend-validation 211. These are substantially higher than earlier records (root was 995)
-because a venv carrying every optional SDK stops `pytest.importorskip` from skipping —
-roughly 700 additional tests actually execute. A *flat* count after installing more extras
-means the install did not take.
 
 Twelve cross-platform root causes have been found and fixed. The first nine came from an
 earlier campaign; **W-01, W-02 and D-1/D-2/D-3 (2026-08-08) are new** and are listed after
