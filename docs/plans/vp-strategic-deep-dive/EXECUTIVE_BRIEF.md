@@ -6,7 +6,7 @@
 
 ## One-Line Summary
 
-The codebase is **feature-complete** (64/66 shipped); value delivery now depends on **operational activation** requiring human audit labels and branch protection enablement.
+The codebase is **feature-complete** (66/68 shipped); value delivery now depends on **operational activation** requiring human audit labels and branch protection enablement.
 
 ---
 
@@ -14,10 +14,10 @@ The codebase is **feature-complete** (64/66 shipped); value delivery now depends
 
 | Dimension | Status | Health |
 |-----------|--------|--------|
-| Features | 64/66 shipped, 2 deferred | ✅ Strong |
+| Features | 66/68 shipped, 2 deferred | ✅ Strong |
 | Test Coverage | 96-100% across all packages | ✅ Strong |
 | Architecture | 43 ADRs, enforced airgaps | ✅ Strong |
-| Merge-Gate Store | 165 records, 0 human-audited | ⚠️ Blocked |
+| Merge-Gate Store | 221 records (as of 2026-09-15), 0 human-audited | ⚠️ Blocked |
 | Branch Protection | None enabled | ❌ Gap |
 | Human Audit Labels | 0 of ~380 needed per domain | ❌ Gap |
 
