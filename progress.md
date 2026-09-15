@@ -15,7 +15,7 @@ E2E + VP capture on `cursor/e2e-vp-capture-eefa` (PR #244):
 
 ### Validation evidence
 
-`python scripts/verify_tier_a.py`; `python scripts/generate_eval_metrics.py --check`; `python tests/test_e2e_matrix.py --check`; `pytest tests/test_e2e_matrix.py tests/test_e2e_driver_parity.py tests/test_generate_eval_metrics.py`; `demo/run_demo.sh`; `make pre-pr` (only allowed failure: unlabeled `check_protected_changes.py` for `features.yaml`).
+`python scripts/verify_tier_a.py` (11/11); `python scripts/generate_eval_metrics.py --check`; `python tests/test_e2e_matrix.py --check`; `bash demo/run_demo.sh` (console `helpfulness mean=0.844 pass_rate=0.89 n=9`; fail-closed `0.844` vs min 0.95); `python scripts/validate.py --tier fast --strict-git` (68 done); `python scripts/regression_gate.py --base-ref origin/main`; `./scripts/quality-gate.sh coverage` 3097 passed / 26 skipped / 97.55% (unset `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST` first — `demo/run_demo.sh` leaked `=demo` into the shell and denied callable tests). `make pre-pr` extra failures vs the labeled-exception contract: `check_protected_changes.py` unlabeled (expected; `PR_LABELS=eval-change-approved` simulation is local-only and does not label GitHub); `make check-all` typecheck is the documented phoenix-evals/numpy 2.5 stub vs `python_version = "3.11"` limitation (`pyproject.toml`), not this diff — CI test job omits phoenix-evals and was already green.
 
 ---
 ## Session 021 — 2026-09-09
