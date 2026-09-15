@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — extras-present live e2e rerun + F-067 mocked/unmocked slice
+
+Windows `-Tiers all -HypothesisProfile ci` with `autoevals`/`archguard` already
+in the venv: **36 PASS / 0 FAIL / 2 SKIP**. Honesty gates still hold
+(`prompt_template: "{question}"`, `live:judge-openai` helpfulness 1.0, Langfuse
+and Phoenix smokes PASS; sink PASS remains `contains`). F-067 `rca_maxz` on the
+frozen 96-item corpus (AC@1 mean 0.333, advisory abstention miss 0.719) plus a
+gitignored 12-item live-model JSON adapter vs the same slice. Did **not**
+`--update` `docs/e2e-matrix/` or retune expert-judgment 0–10s. BrainTrust still
+not a live write (token is not a Cognito JWT).
+
 ### Fixed — live e2e fixtures bind `prompt_template` to `{question}`
 
 `ModelTarget` defaults to `"{prompt}"` while Tier D items only set

@@ -1,6 +1,34 @@
 # Progress Log — langfuse-eval-harness
 
 ---
+## Session 024 — 2026-09-15
+
+### Changes
+
+Local e2e rerun + F-067 RCA mocked/unmocked on worktree
+`.claude/worktrees/e2e-vp-capture` (`0665f4d`, PR #244 still draft):
+
+- Preflight: venv 3.12 extras `autoevals`/`grimp` present; installed `botocore`
+  for Phoenix OTEL; Phoenix `17.18.0` HTTP 200; LM Studio
+  `nvidia/nemotron-3-nano-omni:2`.
+- `powershell … run_all_e2e.ps1 -Tiers all -HypothesisProfile ci` → **36 PASS /
+  0 FAIL / 2 SKIP** (~15 min). Honesty: real model target, `{question}`
+  template, judge helpfulness 1.0, smokes PASS. Langfuse OTEL still certifi TLS;
+  Phoenix `register` ran (boto3 still missing). Did **not** restamp
+  `docs/e2e-matrix/`.
+- RCA mocked: `eval-harness.cli run --config config/rca_eval.yaml` — 96 items,
+  AC@1 0.333, abstention 0.719 advisory miss, FAR 0.000, gate PASS.
+- RCA unmocked: gitignored 12-item slice + JSON callable (ADR 0039 allowlist
+  only for that process). Live AC@1 0.500 vs mocked slice 0.333; FAR 0.250 on
+  unanswerables. Not a bake-off.
+
+### Validation evidence
+
+`artifacts/e2e-report/summary.json` (gitignored) 36/0/2. RCA results under
+`artifacts/rca_unmocked/` (gitignored). No `features.yaml` / matrix `--update` /
+eval_metrics retune. PR #244 not marked ready.
+
+---
 ## Session 023 — 2026-09-15
 
 ### Changes

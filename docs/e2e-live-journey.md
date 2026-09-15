@@ -126,8 +126,10 @@ Langfuse / Phoenix / NVIDIA / BrainTrust pytest.
   exercised. Optional `pytest tests/integration -m integration` /
   `tests/test_phoenix_live.py` were not required for this capture.
 - **Phoenix sink spans** — `configure_tracing` is contractually forbidden
-  from raising. This run additionally logged
+  from raising. The first campaign logged
   `phoenix.otel.register() failed; tracing disabled: No module named 'botocore'`.
+  The extras-present rerun installed `botocore` and `register` ran; it still
+  logged `DependencyConflict` (missing `boto3`) and smoke OTLP HTTP 405.
   Do not cite sink PASS as “spans arrived”. Smoke PASS is the TCP probe.
 - **Langfuse sink OTLP** — certifi TLS failed against the cloud host
   (`CERTIFICATE_VERIFY_FAILED`). Smokes use OS trust and still PASS. That
@@ -152,8 +154,52 @@ F-011 and drift-guard e2e). After installing both:
 | skills+hooks (runner flags) | 77 passed, 15 skipped |
 
 A later `--tiers all` with those extras in the venv *before* Tier A would
-be 36 PASS / 0 FAIL / 2 SKIP on this host. That re-run was not used to
-overwrite `artifacts/e2e-report/` (live logs stay the source of truth).
+be 36 PASS / 0 FAIL / 2 SKIP on this host. The same-day rerun below confirmed
+that count and **did** overwrite gitignored `artifacts/e2e-report/`.
+
+## Confirmed rerun (same host, extras present)
+
+| Field | Value |
+|---|---|
+| Date | 2026-09-15 |
+| SHA at run | `0665f4d` |
+| Command | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run_all_e2e.ps1 -Tiers all -HypothesisProfile ci` |
+| Duration | ~15 min (`elapsed_ms` 883931) |
+| Summary | **PASS 36 / FAIL 0 / SKIP 2** (Anthropic + Bedrock) |
+
+Honesty on this report:
+
+| Gate | Result |
+|---|---|
+| Host log `model/nvidia/nemotron-3-nano-omni:2` not echo+mock | **PASS** |
+| Fixtures `type: model` and `prompt_template: "{question}"` | **PASS** |
+| `live:judge-openai` `helpfulness` mean 1.0, QUALITY GATE PASS, no `KeyError: 'prompt'` | **PASS** |
+| `live:langfuse-smoke` / `live:phoenix-smoke` | **PASS** (Langfuse `e2e_smoke`; Phoenix TCP + 405 on one OTLP path) |
+| Sink PASS is `contains` (`mentions_reset`) | **PASS** — not LLM scores in Langfuse/Phoenix |
+| Langfuse sink OTLP | still certifi `CERTIFICATE_VERIFY_FAILED` |
+| Phoenix `botocore` | installed for this rerun; `phoenix.otel.register` ran. Remaining: `DependencyConflict` missing `boto3`. Do not cite sink PASS as spans arrived |
+
+`e2e:skills+hooks` JUnit count is 92 (was 77 passed / 15 `_bash_works` skips after extras — same 92 collected).
+
+## F-067 RCA mocked vs unmocked (not in the e2e driver)
+
+Judge-free. Mocked target is `rca_maxz`. Unmocked is a gitignored JSON adapter
+(`artifacts/rca_unmocked/`, ADR 0039 allowlist `rca_live_target` for that
+process only) over LM Studio `nvidia/nemotron-3-nano-omni:2`. Same five scorers.
+Gold `expected` / `inputs.onset` were not in the live prompt. Full 96-item live
+pass was not run.
+
+| Run | n | AC@1 mean | abstention mean | FAR mean | onset mean | gate |
+|---|---|---|---|---|---|---|
+| `config/rca_eval.yaml` (`rca_maxz`) | 96 | 0.333 (advisory min 0.30) | 0.719 (advisory min 0.80, miss) | 0.000 (advisory max 0.20) | 0.000 | PASS (advisory) |
+| mocked 12-item slice | 12 | 0.333 | 0.667 | 0.000 | 0.000 | PASS (advisory) |
+| live 12-item slice | 12 | 0.500 | 0.750 | 0.250 (advisory miss) | 0.750 | PASS (advisory) |
+
+Live parse health: 12/12 items scored with no target error (JSON diagnoses).
+Live FAR miss is confident rank on all three unanswerable slice items, not a
+parse failure. Not a bake-off: corpus `events` often name the cause; the
+baseline never claims onset. Manifest `baseline_strict_ac1` remains the
+per-cell floor for `rca_maxz`, not the live slice.
 
 ## Matrix pin
 
