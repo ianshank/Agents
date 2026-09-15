@@ -9,6 +9,7 @@ carrying its schema version, generator seed, and a content hash per item.
 | [`testgen/v1/`](testgen/v1/) | [`scripts/gen_testgen_corpus.py`](../scripts/gen_testgen_corpus.py) | [`config/testgen_eval.yaml`](../config/testgen_eval.yaml) via the `jsonl` dataset |
 | [`rca/v1/`](rca/v1/) | [`scripts/gen_rca_corpus.py`](../scripts/gen_rca_corpus.py) | [`config/rca_eval.yaml`](../config/rca_eval.yaml) via the `jsonl` dataset |
 | [`requirements/v1/`](requirements/v1/) | [`scripts/gen_requirements_corpus.py`](../scripts/gen_requirements_corpus.py) | [`config/requirements_eval.yaml`](../config/requirements_eval.yaml) via the `jsonl` dataset |
+| [`answer_quality/v1/`](answer_quality/v1/) | [`scripts/gen_answer_quality_corpus.py`](../scripts/gen_answer_quality_corpus.py) | [`config/answer_quality_eval.yaml`](../config/answer_quality_eval.yaml) via `jsonl` items + `replay` envelopes |
 
 ## What belongs here
 
@@ -103,4 +104,27 @@ Three properties are measured rather than asserted:
   `testgen/v1/`, reused rather than imported (F-011 airgap).
 
 Regenerate with `python scripts/gen_requirements_corpus.py --write`; verify with `--check`.
-Or run both corpora through `make corpus-check` / `make corpus-write`.
+
+## `answer_quality/v1/`
+
+Fourteen synthetic question/answer envelopes across seven strata (citation miss,
+source selection, multi-hop, numerical claim, ambiguity, unrecovered tool error,
+poisoned/stale retrieval). Loaded by `config/answer_quality_eval.yaml` through the
+`jsonl` dataset plus the `replay` target (F-070). Scorers are reused:
+`req_scope_hallucination` and `trajectory_recovery`. Every gate rule is advisory.
+
+| File | Contents |
+|---|---|
+| `manifest.json` | schema version, generator seed, strata and split counts, per-item hashes |
+| `items.json` | the corpus itself — questions, evidence sources, generated stand-in requirements |
+| `eval/items.jsonl` | harness-loadable records |
+| `eval/envelopes.jsonl` | recorded `ReplayEnvelope` lines the `replay` target reloads |
+
+The `generated` field is a **scripted stand-in**, not a model output. Scores
+describe the stand-in. Human-label meta-eval is not claimed.
+
+The holdout split is keyed (`sha256(seed:item_id)`), reused rather than imported
+(F-011 airgap).
+
+Regenerate with `python scripts/gen_answer_quality_corpus.py --write`; verify with `--check`.
+Or run every corpus through `make corpus-check` / `make corpus-write`.

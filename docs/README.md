@@ -30,7 +30,7 @@ agents share one source of navigation. Prose docs also render as a site — see
   regenerate with `python tests/test_matrix_coverage.py --update` — freshness-gated
   in CI, never hand-edit).
 - [`../corpora/README.md`](../corpora/README.md) — frozen harness-loaded corpora
-  (`testgen/v1`, `rca/v1`, `requirements/v1`). Verify with `make corpus-check`.
+  (`testgen/v1`, `rca/v1`, `requirements/v1`, `answer_quality/v1`). Verify with `make corpus-check`.
 
 ## Decisions (ADRs)
 
@@ -123,6 +123,7 @@ before this index existed:
 | enterprise-docs-overhaul | [PLAN](plans/enterprise-docs-overhaul/PLAN.md) · [GAP_ANALYSIS](plans/enterprise-docs-overhaul/GAP_ANALYSIS.md) |
 | eval-delivery-sequencing | [PLAN](plans/eval-delivery-sequencing/PLAN.md) · [REVIEW](plans/eval-delivery-sequencing/REVIEW.md) · [HYGIENE_AUDIT](plans/eval-delivery-sequencing/HYGIENE_AUDIT.md) |
 | eval-evidence-integrity | [PLAN](plans/eval-evidence-integrity/PLAN.md) · [REVIEW](plans/eval-evidence-integrity/REVIEW.md) |
+| fixture-replay | [PLAN](plans/fixture-replay/PLAN.md) |
 | orbital-drift-alignment | [PLAN](plans/orbital-drift-alignment/PLAN.md) |
 | real-data-activation | [PLAN](plans/real-data-activation/PLAN.md) · [REVIEW](plans/real-data-activation/REVIEW.md) |
 | scenario-eval-matrices | [PLAN](plans/scenario-eval-matrices/PLAN.md) · [REVIEW](plans/scenario-eval-matrices/REVIEW.md) · [DELIVERY](plans/scenario-eval-matrices/DELIVERY.md) · [DECK_A_PLUS](plans/scenario-eval-matrices/DECK_A_PLUS.md) · [VP_DECK](plans/scenario-eval-matrices/VP_DECK.md) |

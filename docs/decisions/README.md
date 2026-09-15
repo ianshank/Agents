@@ -66,3 +66,4 @@ changes course is a *new* ADR that supersedes the old one, not an edit.
 | [0046](0046-rca-eval-matrix.md) | RCA evaluation matrix: triplet shape, ranked scoring, baseline-as-target |
 | [0047](0047-requirements-eval-matrix.md) | Requirements-generation evaluation: revision-scoped provenance, unpinnable sources, offline-lexical diversity |
 | [0048](0048-agent-in-the-loop-testgen.md) | Agent-in-the-loop test generation: sequential pipeline, suite stripping, holdout allowlist |
+| [0049](0049-fixture-replay-target.md) | Fixture replay target: envelope reload, exact re-score, counterfactual TargetRunner |

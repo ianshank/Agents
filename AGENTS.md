@@ -115,7 +115,8 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 | RCA eval (F-067) | `eval-harness run --config config/rca_eval.yaml` — advisory gates; corpus at `corpora/rca/v1/` |
 | Requirements-generation eval (F-068) | `eval-harness run --config config/requirements_eval.yaml` — advisory gates; corpus at `corpora/requirements/v1/` |
 | Testgen agent-in-the-loop (F-069) | `eval-harness run --config config/testgen_agent_eval.yaml` — advisory gates; thorough holdout n=11 unique; empty baseline `config/testgen_agent_empty_eval.yaml`; do not quote `pass^k` from a deterministic fake. `config/testgen_eval.yaml` remains the Deck A+ corpus path. |
-| Verify committed corpora | `make corpus-check` — byte-identical regeneration of `testgen/v1`, `rca/v1`, and `requirements/v1` |
+| Fixture replay (F-070) | `eval-harness replay --archive demo/replay/baseline.jsonl --mode exact --offline` (counterfactual: `--mode counterfactual --override …`). Advisory answer-quality journey: `eval-harness run --config config/answer_quality_eval.yaml` |
+| Verify committed corpora | `make corpus-check` — byte-identical regeneration of `testgen/v1`, `rca/v1`, `requirements/v1`, and `answer_quality/v1` |
 | **Tier A mechanical gate runner** | `python scripts/verify_tier_a.py` or `make verify-tier-a` — 11 deterministic quality gates in <60s |
 | **Tiered test runner** | `python scripts/run_tiered_tests.py --tier all` or `make tiered-tests` |
 | **Executive eval metrics** | `python scripts/generate_eval_metrics.py --check` or `make eval-metrics-check` |
@@ -126,6 +127,7 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 | Regression sibling package | `pytest behavioral-regression/tests --cov=behavioral_regression` |
 | Behavioural-regression detector CLI | `python -m behavioral_regression --config <cfg>` — see `behavioral-regression/README.md` |
 | Eval-backend validation experiment | `make -C experiments/backend-validation check` (own gate) — an **isolated, temporary** subtree (`eval-backend-validation_v1`; Langfuse/Opik capability validation). Consumes the harness as a dependency only; zero writes outside itself; ships unsigned (probes gated behind human sign-off of `PROBES.yaml`/`RUBRIC.md`). NOT a package/skill and NOT in `make check-all`; see `experiments/backend-validation/README.md`. |
+| Trace-analytics SQL sketches | `make -C experiments/trace-analytics check` — stdlib sqlite over fixture JSONL. Unsigned; **not** in `make check-all`. ClickHouse/DuckDB/production ingest stay gated. See `experiments/trace-analytics/README.md`. |
 
 ## Seams that must stay narrow
 
@@ -144,6 +146,7 @@ The following files implement "SDK-optional" seams: the real dependency is impor
 - `src/eval_harness/core/interfaces.py` — `Judge`/`DatasetSource`/`TargetRunner`/`ResultSink`/`Scorer`/`StateAdapter` are `typing.Protocol` (structural DI). Every DI seam is structural: fakes used in tests satisfy interfaces by shape alone without inheritance, while existing nominal subclasses keep working unchanged.
 - `src/eval_harness/targets/provenance.py` — `EvidenceStore` Protocol (one call: `fetch`) + `MappingEvidenceStore` (ADR 0047). The seam for requirements-generation evidence retrieval: live adapters (Google Drive, Context7) sit behind this protocol while offline evaluations and synthetic corpora use the deterministic in-memory store. Verification is *not* a store method — `verify_provenance` re-fetches through `fetch` and compares hashes itself, so a store cannot certify bytes it has already drifted away from.
 - `src/eval_harness/targets/testgen_agent.py` — registered `testgen_agent` pipeline (F-069, ADR 0048). Strip `inputs.suite` on a **deep copy**, then `run_generated_suite`. The registry name is **not** an ADR 0039 allowlist entry; ADR 0039 applies only to optional `generator_path`. Never allowlist `eval_harness`. Do not fold this into `targets/testgen.py` (size-budget).
+- `src/eval_harness/replay/` — fixture replay of recorded `AgentTrajectory` envelopes (F-070, ADR 0049). Exact re-score and counterfactual observation swap are a `TargetRunner`, never a scorer (ADR 0046). JSONL archive confined by `DATA_ROOT`/`OUTPUT_ROOT`. The engine never reconstructs trajectories from Langfuse/Phoenix spans. ClickHouse is not a harness extra.
 - `src/eval_harness/scorers/__init__.py` — `autoevals` bridges BrainTrust's `autoevals` scorer library (heuristic offline-safe; LLM/Embedding need a provider key). `src/eval_harness/datasets/__init__.py` — `braintrust` pulls a dataset via `init_dataset` (fail-fast when the SDK is absent).
 
 Test the "SDK absent" path via `sys.modules` injection, not `@patch(...)` — see `feedback_agents_offline_optional_dep_testing` behaviour documented in existing tests. `@patch("phoenix.otel.register")` raises `ModuleNotFoundError` at patch time when the SDK isn't installed. The concrete idiom is `monkeypatch.setitem(sys.modules, "phoenix.otel", None)`, which forces the lazy import to `ImportError` even when the extra *is* installed (this venv installs all extras).

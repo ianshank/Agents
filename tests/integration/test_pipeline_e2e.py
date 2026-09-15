@@ -47,6 +47,7 @@ OFFLINE_CONFIG_JOURNEYS: tuple[tuple[str, dict[str, str]], ...] = (
     ("eval.example.yaml", {}),
     ("rca_eval.yaml", {}),
     ("requirements_eval.yaml", {}),
+    ("answer_quality_eval.yaml", {}),
     ("trajectory_eval.yaml", {"EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST": "tests", "PYTHONPATH": str(PROJECT_ROOT)}),
 )
 

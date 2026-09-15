@@ -1,0 +1,36 @@
+{
+  "generator": "scripts/gen_answer_quality_corpus.py",
+  "generator_seed": 20260914,
+  "holdout_fraction": 0.25,
+  "item_count": 14,
+  "items": {
+    "aq-ambiguity-00": "7b9a1f0bd6fb3facc7b904053b1d42a0937c10adf0c82d1cfa679e9985f7dde6",
+    "aq-ambiguity-01": "ff893d4a184bb420412884999aca8f3e3ef01819aaa94aee7060f72c929efb99",
+    "aq-citation_miss-00": "2a62bebf38fe10c502fe99d270ba429eb9b6f2a33888cbc3c4288ffe7aa94138",
+    "aq-citation_miss-01": "1aed2c6b9bcb131c6bc9551d83a57de7b622252405d63c5df275bbbfa54b218a",
+    "aq-multi_hop-00": "22d415f912fbd933092014677699c64031b4b5afba4c87365552e92d45ba301e",
+    "aq-multi_hop-01": "91b75c2262b506ea3b429477e96dde25907a348475f7984c677e1ccca3f288ef",
+    "aq-numerical-00": "83001b557b80244ecd1941d2cc1fdb14ecc5e954a13ff73a81ed37bb96035f1a",
+    "aq-numerical-01": "7bff14bbf66fc94a0043963532fecc9cc6a1d02e7b8ad35ba529b5ed1a56137a",
+    "aq-poisoned_stale-00": "f9c6454fa7be52de053139b6784cf6fc96c0e812f5acaaed486ab93c24639a62",
+    "aq-poisoned_stale-01": "edd922387413647c86bbbd71ca48f41961e2c07d9d7e852a27b4e2304c862ff2",
+    "aq-source_selection-00": "9cbcc4f27d4ae4f252964694500e14403325d921b61b0fd9742087f7806a7dba",
+    "aq-source_selection-01": "2def74412b46315e24b11d5b4ecac5c16523b041f2fa7f4e4098ea9cd5c275d5",
+    "aq-unrecovered_tool_error-00": "f1a61bdfdb10230b9ccfb3e1e63563af7409857b574097d9a70790d501576b5b",
+    "aq-unrecovered_tool_error-01": "5f0a5cbb3d00655cee076a89eec7e9294cea8b73635fdadbdf110f6a7793215d"
+  },
+  "schema_version": "1.0",
+  "splits": {
+    "holdout": 1,
+    "train": 13
+  },
+  "strata": {
+    "ambiguity": 2,
+    "citation_miss": 2,
+    "multi_hop": 2,
+    "numerical": 2,
+    "poisoned_stale": 2,
+    "source_selection": 2,
+    "unrecovered_tool_error": 2
+  }
+}

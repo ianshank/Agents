@@ -32,6 +32,7 @@ from eval_harness.core.types import (
     TrajectoryStep,
     trajectory_to_dict,
 )
+from eval_harness.replay.envelope import ReplayError, trajectory_from_dict
 from tests._trajectory_helpers import call, final, observation, run_result, tool_call, tool_error
 
 # --- ADR 0031 compatibility obligations -------------------------------------------
@@ -387,3 +388,27 @@ def test_max_depth_must_be_positive() -> None:
 def test_ordinary_nesting_is_well_within_the_default_limit() -> None:
     cfg = NormalizationConfig()
     assert canonical_call(call("t", {"a": {"b": {"c": {"d": 1}}}}), cfg)[0] == "t"
+
+
+def test_trajectory_from_dict_round_trips_a_two_call_path() -> None:
+    original = AgentTrajectory(
+        steps=(
+            tool_call("search", {"q": "x"}),
+            observation("hit", name="search"),
+            tool_call("search", {"q": "x"}),
+            observation("hit-2", name="search"),
+            final("done"),
+        )
+    )
+    restored = trajectory_from_dict(trajectory_to_dict(original))
+    assert restored == original
+
+
+def test_trajectory_from_dict_rejects_unknown_keys() -> None:
+    with pytest.raises(ReplayError, match="unknown keys"):
+        trajectory_from_dict({"schema_version": TRAJECTORY_SCHEMA_VERSION, "steps": [], "span_id": "nope"})
+
+
+def test_empty_steps_round_trip() -> None:
+    original = AgentTrajectory()
+    assert trajectory_from_dict(trajectory_to_dict(original)) == original

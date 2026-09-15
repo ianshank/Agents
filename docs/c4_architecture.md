@@ -53,7 +53,7 @@ C4Container
     Person(dev, "Developer", "")
 
     Container_Boundary(harness, "Eval Harness Package") {
-        Container(cli, "CLI", "Python / argparse", "Entry point — parses args, loads config, runs engine")
+        Container(cli, "CLI", "Python / argparse", "Entry point — parses args, loads config, runs engine; eval-harness replay re-scores recorded envelopes without growing the engine loop")
         Container(engine, "EvalEngine", "Python", "Orchestrates: load → sample → run → score → aggregate → emit")
         Container(config, "Config Loader", "Python / Pydantic", "YAML → migrate → interpolate → validate → EvalConfig")
         Container(core, "Core (core)", "Python", "Structural Protocol contracts (Scorer, Judge, DatasetSource, TargetRunner, ResultSink) + generic Registry[T] with structured logging and alias support (src/eval_harness/core/). Also holds the two operator-controlled trust-boundary gates: _imports.py (allowlist for config-driven dynamic imports, ADR 0039) and _paths.py (DATA_ROOT/OUTPUT_ROOT read/write confinement) — both pure stdlib, so neither adds a dependency")
@@ -65,7 +65,7 @@ C4Container
         Container(scorers, "Scorers", "Python", "exact_match, regex, contains, json_keys, weighted, llm_judge, autoevals; trajectory_{exact,in_order,any_order,precision_recall,step_efficiency,loop_detection,recovery} (F-051); state_transition, policy_violation (F-060); test_executability, testgen_mutation_score, testgen_green_on_correct, requirement_obligation_recall (F-065); rca_{ac_at_k,component_match} (ranking prototype); req_{ac_recall,scope_hallucination,semantic_diversity,traceability_closure} (F-068)")
         Container(judges, "Judges", "Python", "mock, bedrock, openai (Nemotron-compatible), anthropic, phoenix_evals, panel (F-059)")
         Container(datasets, "Datasets", "Python", "inline, jsonl, csv, parquet, langfuse, braintrust — file-backed sources resolve through core/_paths.py, confined to DATA_ROOT when set")
-        Container(targets, "Targets", "Python", "echo, callable (dynamic import, gated by core/_imports.py's EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST — unset denies, ADR 0039), model (alias llm), provenance_recorder (F-068), rca_maxz (F-067), testgen_agent (F-069)")
+        Container(targets, "Targets", "Python", "echo, callable (dynamic import, gated by core/_imports.py's EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST — unset denies, ADR 0039), model (alias llm), provenance_recorder (F-068), rca_maxz (F-067), testgen_agent (F-069), replay (F-070: exact/counterfactual envelope reload; never reconstructed from vendor spans)")
         Container(sinks, "Sinks", "Python", "console, json_file, html_file, langfuse, phoenix, braintrust — file-backed sinks resolve through core/_paths.py, confined to OUTPUT_ROOT when set")
         Container(state_adapters, "State Adapters", "Python", "in_memory, filesystem, sqlite, mock_http — local, deterministic; the engine brackets target.run with reset/snapshot/evaluate when configured, detecting an agent that reports success without changing anything (F-060)")
         Container(gating, "Quality Gate", "Python", "Config-driven pass/fail for CI, including pass_at_k/pass_power_k reliability metrics (F-056), judge-calibration-artifact enforcement (F-057), and a refusal to pass over item-execution failures unless gate.allow_item_errors=true (ADR 0038)")
@@ -186,6 +186,30 @@ The original item is not mutated: nested `obligations` / `reference` live on a
 deep copy, so a generator that appends to them cannot poison
 `run_generated_suite`. Execute-path logs carry hashes, not the suite body.
 `config/testgen_eval.yaml` remains the Deck A+ `callable` path.
+
+## Level 3 — Component: fixture replay (F-070, ADR 0049)
+
+Runtime/call semantics of the offline envelope reload path. This is **not** an
+import-edge diagram: `replay → core, plugins` is declared in
+[`architecture.yaml`](../architecture.yaml). Selecting `type: replay` is a
+registry lookup. The engine still never reconstructs a trajectory from
+Langfuse/Phoenix spans. Counterfactual work is this TargetRunner, never a scorer
+(ADR 0046). ClickHouse is not a harness runtime.
+
+```mermaid
+flowchart LR
+    archive[JSONL ReplayArchive]
+    archive --> env[ReplayEnvelope]
+    env --> exact["mode=exact: re-emit recorded trajectory"]
+    env --> cf["mode=counterfactual: pin observations, swap one stub"]
+    exact --> score[Existing scorers]
+    cf --> score
+    score --> slice[pass-rate by envelope tags]
+    slice --> report["CLI/HTML first tool_error step table"]
+```
+
+Demo beat 6 uses committed `demo/replay/baseline.jsonl`. Production ingest,
+span reconstruction, and a first-party warehouse stay out of this component.
 
 ## Level 3 — Component: Calibrated Merge Gate (F-010 + F-032…F-035 + F-049, agent_core, default-off)
 

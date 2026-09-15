@@ -48,6 +48,10 @@ These stay human. Agents must not `--apply` branch protection, must not write
   is holdout-only (`n=11` unique thorough items); do not quote `pass^k` from a
   deterministic fake. `config/testgen_eval.yaml` remains the Deck A+ corpus path.
   `implemented_in` restamped to squash #217 (`f1fd5ef`); OpenSpec change archived.
+- [x] **Fixture replay (F-070, ADR 0049)** — offline reload of recorded
+  `AgentTrajectory` envelopes: `eval-harness replay --mode exact|counterfactual`,
+  JSONL archive, slice tags, first `tool_error` step table. Not the blocked
+  production-eval flywheel; vendors remain sinks; no ClickHouse in `eval_harness`.
 - [x] **Eval-evidence Phase 8 residual** — Provenance SHA reachable (ancestor of
   HEAD, never equal-to-HEAD) plus monotonicity/waiver. ADR 0033 amended.
   Restamped 2026-09-10 from a 31/31 offline POSIX driver (`suite:root` 2978).

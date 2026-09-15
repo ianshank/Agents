@@ -1524,3 +1524,39 @@ features:
       (`f1fd5ef`) so F-064's ancestry check resolves against main; the pre-squash
       feature commit `26e56e0` is not an ancestor of that merge. public_surface_baseline.json
       is unchanged: the new module declares no __all__.
+
+  - id: "F-070"
+    epic: "Eval Harness"
+    name: "Fixture replay of recorded AgentTrajectory envelopes"
+    description: >
+      Adds an offline, deterministic reload path for F-051 trajectories: a versioned
+      ReplayEnvelope, trajectory_from_dict (strict unknown keys), JSONL archive confined
+      by OUTPUT_ROOT, a registered replay TargetRunner with modes exact and counterfactual,
+      and eval-harness replay CLI. Exact mode re-scores a recorded envelope without live
+      tools. Counterfactual mode is a TargetRunner that pins recorded tool/retrieval
+      observations and swaps one declared stub (ADR 0046: not a Scorer). Slice tags on
+      the envelope expose per-tag pass-rate deltas a global aggregate can hide. Does not
+      ingest production traces, does not reconstruct trajectories from Langfuse/Phoenix
+      spans, does not add ClickHouse, and does not unblock add-production-eval-flywheel
+      or F-036.
+    category: "functional"
+    priority: "high"
+    status: "done"
+    tier: "fast"
+    verification:
+      - "trajectory_from_dict is the inverse of trajectory_to_dict on a two-call trajectory; unknown keys raise"
+      - "exact replay of a recorded envelope re-emits the same trajectory_in_order / trajectory_recovery verdicts"
+      - "counterfactual replay with a swapped search stub changes only items whose recorded search observation is replaced; pinned later steps stay identical"
+      - "archive writes refuse paths outside OUTPUT_ROOT when that env var is set"
+      - "eval-harness replay --help lists exact and counterfactual; no network"
+      - "registered name replay appears in plugin_registry_baseline.json"
+      - "slice report shows a tag whose pass_rate drops while the global pass_rate is unchanged, on committed demo fixtures"
+    validation_command: "python scripts/validations/F_070.py"
+    implemented_in: "4ea0789a604695e509dacce4ca7c442445171340"
+    depends_on: ["F-051", "F-039", "F-053"]
+    notes: >
+      Not Change 5 of docs/plans/agent-eval-coverage/PLAN.md. CHARTER §3 observability
+      non-goal is not amended. ADR 0049. implemented_in is the first landing commit
+      on this branch so F-064's ancestry check resolves against HEAD.
+      public_surface_baseline.json is unchanged: replay/ declares no __all__.
+

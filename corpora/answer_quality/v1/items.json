@@ -1,0 +1,618 @@
+[
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-citation_miss-00-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-citation_miss-00-ghost"
+          ],
+          "id": "aq-citation_miss-00-r0",
+          "text": "Answer claims freshness for aq-citation_miss-00."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-citation_miss-00",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-citation_miss-00",
+    "question": "What is the current policy for aq-citation_miss-00?",
+    "recorded_source_ids": [
+      "src-aq-citation_miss-00-fresh"
+    ],
+    "split": "train",
+    "stratum": "citation_miss",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-citation_miss-01-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-citation_miss-01-ghost"
+          ],
+          "id": "aq-citation_miss-01-r0",
+          "text": "Answer claims freshness for aq-citation_miss-01."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-citation_miss-01",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-citation_miss-01",
+    "question": "What is the current policy for aq-citation_miss-01?",
+    "recorded_source_ids": [
+      "src-aq-citation_miss-01-fresh"
+    ],
+    "split": "train",
+    "stratum": "citation_miss",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-source_selection-00-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      },
+      {
+        "refutes": [
+          "freshness"
+        ],
+        "source_id": "src-aq-source_selection-00-stale",
+        "source_type": "doc",
+        "supports": []
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-source_selection-00-stale"
+          ],
+          "id": "aq-source_selection-00-r0",
+          "text": "Answer claims freshness for aq-source_selection-00."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-source_selection-00",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-source_selection-00",
+    "question": "What is the current policy for aq-source_selection-00?",
+    "recorded_source_ids": [
+      "src-aq-source_selection-00-fresh",
+      "src-aq-source_selection-00-stale"
+    ],
+    "split": "train",
+    "stratum": "source_selection",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-source_selection-01-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      },
+      {
+        "refutes": [
+          "freshness"
+        ],
+        "source_id": "src-aq-source_selection-01-stale",
+        "source_type": "doc",
+        "supports": []
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-source_selection-01-stale"
+          ],
+          "id": "aq-source_selection-01-r0",
+          "text": "Answer claims freshness for aq-source_selection-01."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-source_selection-01",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-source_selection-01",
+    "question": "What is the current policy for aq-source_selection-01?",
+    "recorded_source_ids": [
+      "src-aq-source_selection-01-fresh",
+      "src-aq-source_selection-01-stale"
+    ],
+    "split": "train",
+    "stratum": "source_selection",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-multi_hop-00-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      },
+      {
+        "refutes": [],
+        "source_id": "src-aq-multi_hop-00-hop",
+        "source_type": "doc",
+        "supports": [
+          "freshness"
+        ]
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-multi_hop-00-fresh"
+          ],
+          "id": "aq-multi_hop-00-r0",
+          "text": "Answer claims freshness for aq-multi_hop-00."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-multi_hop-00",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-multi_hop-00",
+    "question": "What is the current policy for aq-multi_hop-00?",
+    "recorded_source_ids": [
+      "src-aq-multi_hop-00-fresh"
+    ],
+    "split": "train",
+    "stratum": "multi_hop",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-multi_hop-01-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      },
+      {
+        "refutes": [],
+        "source_id": "src-aq-multi_hop-01-hop",
+        "source_type": "doc",
+        "supports": [
+          "freshness"
+        ]
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-multi_hop-01-fresh"
+          ],
+          "id": "aq-multi_hop-01-r0",
+          "text": "Answer claims freshness for aq-multi_hop-01."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-multi_hop-01",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-multi_hop-01",
+    "question": "What is the current policy for aq-multi_hop-01?",
+    "recorded_source_ids": [
+      "src-aq-multi_hop-01-fresh"
+    ],
+    "split": "train",
+    "stratum": "multi_hop",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-numerical-00-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "count_99",
+          "evidence_links": [
+            "src-aq-numerical-00-fresh"
+          ],
+          "id": "aq-numerical-00-r0",
+          "text": "Answer claims count_99 for aq-numerical-00."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-numerical-00",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-numerical-00",
+    "question": "What is the current policy for aq-numerical-00?",
+    "recorded_source_ids": [
+      "src-aq-numerical-00-fresh"
+    ],
+    "split": "train",
+    "stratum": "numerical",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-numerical-01-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "count_99",
+          "evidence_links": [
+            "src-aq-numerical-01-fresh"
+          ],
+          "id": "aq-numerical-01-r0",
+          "text": "Answer claims count_99 for aq-numerical-01."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-numerical-01",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-numerical-01",
+    "question": "What is the current policy for aq-numerical-01?",
+    "recorded_source_ids": [
+      "src-aq-numerical-01-fresh"
+    ],
+    "split": "train",
+    "stratum": "numerical",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-ambiguity-00-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      },
+      {
+        "refutes": [
+          "freshness"
+        ],
+        "source_id": "src-aq-ambiguity-00-stale",
+        "source_type": "doc",
+        "supports": []
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-ambiguity-00-fresh"
+          ],
+          "id": "aq-ambiguity-00-r0",
+          "text": "Answer claims freshness for aq-ambiguity-00."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-ambiguity-00",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-ambiguity-00",
+    "question": "What is the current policy for aq-ambiguity-00?",
+    "recorded_source_ids": [
+      "src-aq-ambiguity-00-fresh",
+      "src-aq-ambiguity-00-stale"
+    ],
+    "split": "train",
+    "stratum": "ambiguity",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-ambiguity-01-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      },
+      {
+        "refutes": [
+          "freshness"
+        ],
+        "source_id": "src-aq-ambiguity-01-stale",
+        "source_type": "doc",
+        "supports": []
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-ambiguity-01-fresh"
+          ],
+          "id": "aq-ambiguity-01-r0",
+          "text": "Answer claims freshness for aq-ambiguity-01."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-ambiguity-01",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-ambiguity-01",
+    "question": "What is the current policy for aq-ambiguity-01?",
+    "recorded_source_ids": [
+      "src-aq-ambiguity-01-fresh",
+      "src-aq-ambiguity-01-stale"
+    ],
+    "split": "train",
+    "stratum": "ambiguity",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-unrecovered_tool_error-00-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-unrecovered_tool_error-00-fresh"
+          ],
+          "id": "aq-unrecovered_tool_error-00-r0",
+          "text": "Answer claims freshness for aq-unrecovered_tool_error-00."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-unrecovered_tool_error-00",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-unrecovered_tool_error-00",
+    "question": "What is the current policy for aq-unrecovered_tool_error-00?",
+    "recorded_source_ids": [
+      "src-aq-unrecovered_tool_error-00-fresh"
+    ],
+    "split": "train",
+    "stratum": "unrecovered_tool_error",
+    "unrecovered_tool_error": true
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-unrecovered_tool_error-01-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-unrecovered_tool_error-01-fresh"
+          ],
+          "id": "aq-unrecovered_tool_error-01-r0",
+          "text": "Answer claims freshness for aq-unrecovered_tool_error-01."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-unrecovered_tool_error-01",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-unrecovered_tool_error-01",
+    "question": "What is the current policy for aq-unrecovered_tool_error-01?",
+    "recorded_source_ids": [
+      "src-aq-unrecovered_tool_error-01-fresh"
+    ],
+    "split": "train",
+    "stratum": "unrecovered_tool_error",
+    "unrecovered_tool_error": true
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-poisoned_stale-00-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      },
+      {
+        "refutes": [
+          "freshness"
+        ],
+        "source_id": "src-aq-poisoned_stale-00-stale",
+        "source_type": "doc",
+        "supports": []
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-poisoned_stale-00-stale"
+          ],
+          "id": "aq-poisoned_stale-00-r0",
+          "text": "Answer claims freshness for aq-poisoned_stale-00."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-poisoned_stale-00",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-poisoned_stale-00",
+    "question": "What is the current policy for aq-poisoned_stale-00?",
+    "recorded_source_ids": [
+      "src-aq-poisoned_stale-00-fresh",
+      "src-aq-poisoned_stale-00-stale"
+    ],
+    "split": "holdout",
+    "stratum": "poisoned_stale",
+    "unrecovered_tool_error": false
+  },
+  {
+    "evidence_sources": [
+      {
+        "refutes": [],
+        "source_id": "src-aq-poisoned_stale-01-fresh",
+        "source_type": "doc",
+        "supports": [
+          "freshness",
+          "count_12"
+        ]
+      },
+      {
+        "refutes": [
+          "freshness"
+        ],
+        "source_id": "src-aq-poisoned_stale-01-stale",
+        "source_type": "doc",
+        "supports": []
+      }
+    ],
+    "generated": {
+      "requirements": [
+        {
+          "claim": "freshness",
+          "evidence_links": [
+            "src-aq-poisoned_stale-01-stale"
+          ],
+          "id": "aq-poisoned_stale-01-r0",
+          "text": "Answer claims freshness for aq-poisoned_stale-01."
+        }
+      ]
+    },
+    "gold_ac": [
+      {
+        "id": "ac-aq-poisoned_stale-01",
+        "text": "cite a recorded fresh source"
+      }
+    ],
+    "item_id": "aq-poisoned_stale-01",
+    "question": "What is the current policy for aq-poisoned_stale-01?",
+    "recorded_source_ids": [
+      "src-aq-poisoned_stale-01-fresh",
+      "src-aq-poisoned_stale-01-stale"
+    ],
+    "split": "train",
+    "stratum": "poisoned_stale",
+    "unrecovered_tool_error": false
+  }
+]

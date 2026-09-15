@@ -236,7 +236,8 @@ def render_comparison_chart(
     scale_label = f"0 – {int(max_val) if max_val.is_integer() else max_val:.1f}"
     ax.set_ylabel(f"Score ({scale_label} scale)", fontsize=12, fontweight="bold", color="#1E293B", labelpad=10)
     title_style = ChartTitleStyle()
-    metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+    raw_metadata = data.get("metadata")
+    metadata: dict[str, Any] = raw_metadata if isinstance(raw_metadata, dict) else {}
     title_lines = chart_title_lines(metadata, style=title_style)
     multi_line = len(title_lines) > 2
     ax.set_title(

@@ -6,6 +6,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — fixture replay of recorded AgentTrajectory envelopes (F-070, ADR 0049)
+
+Offline `eval-harness replay --mode exact|counterfactual` re-scores committed
+`ReplayEnvelope` JSONL (strict `trajectory_from_dict`, `OUTPUT_ROOT`/`DATA_ROOT`
+confinement). Counterfactual is a registered `replay` TargetRunner, not a scorer
+(ADR 0046). Slice tags expose regressions a global pass-rate can hide; the first
+`tool_error` is printed as an ordered step table, not a vendor waterfall. Demo
+beat 6 uses `demo/replay/baseline.jsonl`. Advisory answer-quality corpus at
+`corpora/answer_quality/v1/` reuses `req_scope_hallucination` and
+`trajectory_recovery`. SQL sketches live under `experiments/trace-analytics/`
+(unsigned, not in `make check-all`). ClickHouse, production ingest, and
+reconstructing trajectories from Langfuse/Phoenix spans remain out of scope.
+
+### Fixed — fixture-replay format, fail-closed archive, and CLI last-wins
+
+`ruff format` on `replay/envelope.py`. CLI error rows use
+`ReplayConfig.error_score` (no call-site `0.0`). Duplicate `item_id` lines
+are last-write-wins before scoring, matching the target index. Invalid UTF-8
+archives wrap as `ReplayError`. `DATA_ROOT` confinement `ValueError` becomes
+a scored `TargetOutput.error`. Callable overrides declare
+`is_deterministic() is None` in counterfactual mode. Demo/PLAN counterfactual
+commands export `PYTHONPATH` and `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=demo`.
+CLI text reports strip newlines and ANSI from archive fields. `timestamp_ms`
+rejects bool. Override maps require string keys/values. One-component
+`module:attr` callables (e.g. `demo:search_v2`) are imported; `error:` stays
+a literal. Trace-analytics sketches join `passed = 0` for first-fail and
+dedupe retries by parsed UTC instant plus JSONL ingest order. F-070 restores
+a pre-existing `OUTPUT_ROOT` and checks replay `--help` text. Override
+failures omit the recorded trajectory so engine scorers cannot pass a healthy
+recording. Empty `--override-when tag=` matches only empty tags. Report
+writes outside `OUTPUT_ROOT` exit 2. Archive load failures are cached.
+
+### Fixed — chart_title_lines metadata narrowing
+
+`scripts/generate_eval_metrics.py` binds `metadata` through a local `dict` after
+`isinstance(..., dict)` so mypy 2.1 accepts `chart_title_lines` (left open on #232).
+
 ### Changed — VP decision package for eval-tool selection
 
 - `docs/executive-report-eval-tools.md` is a VP review brief, not an approval stamp: scores are **expert judgment** (not a three-vendor bake-off); the harness owns testgen/RCA/requirements scorers; vendors are sinks/UIs. Adds a one-page memo, Option 4 (defer / keep all three optional), CHARTER and package-name constraints, and F-067/F-068/F-069 grounding without attributing corpus self-grades to vendors.

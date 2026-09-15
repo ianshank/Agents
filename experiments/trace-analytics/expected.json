@@ -1,0 +1,67 @@
+{
+  "first_failing_step": [
+    {
+      "envelope_id": "e-fail",
+      "first_error_index": 1,
+      "item_id": "s1"
+    },
+    {
+      "envelope_id": "e-fail-retry",
+      "first_error_index": 0,
+      "item_id": "s1"
+    }
+  ],
+  "global_vs_freshness": {
+    "freshness_pass": 0.0,
+    "global_pass": 0.5
+  },
+  "latest_per_item": [
+    {
+      "envelope_id": "e-ok",
+      "item_id": "n1",
+      "latest": "2026-09-14T00:00:00+00:00"
+    },
+    {
+      "envelope_id": "e-ok-2",
+      "item_id": "n2",
+      "latest": "2026-09-14T00:00:00+00:00"
+    },
+    {
+      "envelope_id": "e-fail-retry",
+      "item_id": "s1",
+      "latest": "2026-09-14T00:00:01+00:00"
+    }
+  ],
+  "pass_rate_by_tag": [
+    {
+      "n": 2,
+      "pass_rate": 1.0,
+      "tag_freshness": "normal"
+    },
+    {
+      "n": 2,
+      "pass_rate": 0.0,
+      "tag_freshness": "sensitive"
+    }
+  ],
+  "sessions": [
+    {
+      "item_id": "n1",
+      "n": 1,
+      "session_end": "2026-09-14T00:00:00+00:00",
+      "session_start": "2026-09-14T00:00:00+00:00"
+    },
+    {
+      "item_id": "n2",
+      "n": 1,
+      "session_end": "2026-09-14T00:00:00+00:00",
+      "session_start": "2026-09-14T00:00:00+00:00"
+    },
+    {
+      "item_id": "s1",
+      "n": 2,
+      "session_end": "2026-09-14T00:00:01+00:00",
+      "session_start": "2026-09-14T00:00:00+00:00"
+    }
+  ]
+}

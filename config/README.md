@@ -19,6 +19,7 @@ these files can alter what the evaluation measures.
 | `testgen_agent_empty_eval.yaml` | Weak-slice empty/null baseline beside the agent (OWNER_DEFAULTS). | `eval-harness run --config config/testgen_agent_empty_eval.yaml` |
 | `rca_eval.yaml` | RCA evaluation over the shipped corpus (F-067, ADR 0046). Every gate rule is advisory. | `eval-harness run --config config/rca_eval.yaml` |
 | `requirements_eval.yaml` | Requirements-generation evaluation over the shipped corpus (F-068, ADR 0047). Every gate rule is advisory. | `eval-harness run --config config/requirements_eval.yaml` |
+| `answer_quality_eval.yaml` | Answer-quality fixture replay over the shipped corpus (F-070, ADR 0049). Reuses `req_scope_hallucination` and `trajectory_recovery`. Every gate rule is advisory. | `eval-harness run --config config/answer_quality_eval.yaml` |
 | `trajectory_eval.yaml` | Agent-trajectory evaluation example (F-051, ADR 0031). | `eval-harness run` with `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST=tests` **and `PYTHONPATH=.`** — its target lives in `tests/_sut.py`, which only pytest puts on the path |
 | `legacy.v0_9.yaml` | A legacy (v0.9) config kept to exercise the migration chain. | config migration tests |
 
