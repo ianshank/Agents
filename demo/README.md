@@ -59,13 +59,15 @@ run 'support-bot-demo-…' — 10 item(s)
   mentions_settings: mean=0.900 pass_rate=0.90 n=10
   actionable_step:   mean=0.900 pass_rate=0.90 n=10
   answer_quality:    mean=0.900 pass_rate=0.90 n=10
-  helpfulness:       mean=0.850 pass_rate=0.90 n=10
+  helpfulness:       mean=0.844 pass_rate=0.89 n=9
 QUALITY GATE: PASS        (exit 0)
 ```
 Open `out/demo/report.html` — a self-contained HTML scorecard (no server, no CDN).
 - **Engineer says:** dataset, target, four scorers (incl. a `weighted` composite
   and an LLM-judge), sinks, and the gate are **all config** — no hard-coded values.
-  The one out-of-scope question is the item dragging the deterministic scores to 0.9.
+  The out-of-scope item fails programmatic scorers, so F-057 skips the judge
+  (`helpfulness` is n=9, mean 0.844 — not a phantom 10th 0.9). The cancellation
+  answer is the 0.4 that pulls the mean.
 - **Leader hears:** every release gets the same scorecard, automatically.
 
 ## Beat 3 — "The gate has teeth" (~60s) — the CI story
@@ -75,7 +77,7 @@ eval-harness run --config demo/configs/eval.fail.yaml --offline ; echo "exit=$?"
 ```
 ```
 QUALITY GATE: FAIL
-  - helpfulness.mean=0.850 below min 0.95
+  - helpfulness.mean=0.844 below min 0.95
 exit=1
 ```
 The only change from Beat 2 is **one stricter threshold**. The process **exits

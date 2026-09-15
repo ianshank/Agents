@@ -2,9 +2,9 @@
 
 **Author:** Staff AI & Infrastructure Architecture Team
 **Target Audience:** VP of Engineering, VP of Product, Chief Architect
-**Date:** September 13, 2026
+**Date:** September 13, 2026 (expert-judgment scores); companion deck/census restamped September 15, 2026
 **Status:** Ready for VP review — expert judgment, not a measured bake-off
-**Companion deck:** [`plans/scenario-eval-matrices/VP_DECK.md`](plans/scenario-eval-matrices/VP_DECK.md)
+**Companion deck:** [`plans/scenario-eval-matrices/VP_DECK.md`](plans/scenario-eval-matrices/VP_DECK.md) (census 68 `done` + 2 `deferred` of 70; 0–10 cells unchanged)
 **Data Sources:** [`docs/matrix-coverage.md`](matrix-coverage.md), [`docs/phoenix-spike.md`](phoenix-spike.md), [`docs/braintrust-spike.md`](braintrust-spike.md), [`docs/eval_metrics.json`](eval_metrics.json)
 
 ---

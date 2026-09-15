@@ -70,5 +70,10 @@ unless `MONOTONICITY_WAIVERS` names that exact pair.
 A full offline POSIX driver restamp landed 2026-09-10: PASS 31 / FAIL 0 / SKIP 0,
 Provenance SHA `27e5b8cb588569f021e8bc83b7592fa67be91015` (`suite:root` 2978). The
 historical `09337aec…` / `0b2cbfb7…` waiver rows and the 1627→995 / 38→30
-monotonicity waivers are retired. Treat committed *results* columns as current as of
-that restamp.
+monotonicity waivers are retired.
+
+A later offline POSIX restamp landed 2026-09-15 (`--hypothesis-profile ci`):
+PASS 31 / FAIL 0 / SKIP 0, Provenance SHA
+`f83f7f071435b04cb4926848b147cdfd7a381588` (`suite:root` 3123,
+`e2e:backend-validation` 357). Treat committed *results* columns as current as
+of that restamp. The 2026-09-10 2978 counts are history.
