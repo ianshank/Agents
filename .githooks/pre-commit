@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Git pre-commit hook - runs Tier A mechanical verification gates (<60s).
+# Install with: git config core.hooksPath .githooks (or `make install-hooks`).
+
+set -e
+
+# Detect python executable in venv or environment
+if [ -f "./.venv/Scripts/python.exe" ]; then
+    PYTHON="./.venv/Scripts/python.exe"
+elif [ -f "./.venv/bin/python" ]; then
+    PYTHON="./.venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON="python"
+else
+    echo "[pre-commit] ERROR: No python executable found" >&2
+    exit 1
+fi
+
+echo "[pre-commit] Running Tier A mechanical verification..."
+"$PYTHON" scripts/verify_tier_a.py
+RC=$?
+
+if [ $RC -ne 0 ]; then
+    echo "[pre-commit] FAILED: Tier A verification gates did not pass. Fix issues before committing." >&2
+    exit $RC
+fi
+
+echo "[pre-commit] All Tier A gates passed."
+exit 0

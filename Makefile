@@ -108,6 +108,23 @@ eval-metrics-check: ## Verify executive evaluation metrics and charts are fresh
 eval-metrics-update: ## Regenerate executive evaluation metrics and charts
 	$(PYTHON) scripts/generate_eval_metrics.py
 
+.PHONY: aqa-check install-hooks hooks-check fix-loop docker-build
+
+aqa-check: ## Verify Answer Quality Architecture (AQA) test suite
+	$(PYTHON) -m pytest tests/test_answer_quality_corpus.py -q
+
+install-hooks: ## Configure git to use repository pre-commit hooks
+	git config core.hooksPath .githooks
+
+hooks-check: ## Verify Claude and repository hooks are wired and advisory
+	$(PYTHON) -m pytest tests/test_claude_hooks.py -q
+
+fix-loop: ## Run automated formatting and linting fix loop
+	$(PYTHON) scripts/fix_loop.py
+
+docker-build: ## Build minimal evaluation harness container image
+	docker build -t eval-harness:latest .
+
 build: ## Build distributables
 	$(PYTHON) -m build
 

@@ -15,7 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `requirements.txt` to permit latest minor releases without breaking reproducible lockstep pins.
 - Refreshed `docs/eval_metrics_comparison.svg` and `docs/eval_metrics_comparison.png` via
   `generate_eval_metrics.py --format both` to satisfy `tests/test_claude_hooks.py`.
-- Corrected executive analysis figures in `EXECUTIVE_BRIEF.md` (66/68 features, 221 store records).
+- Corrected executive analysis figures in `EXECUTIVE_BRIEF.md` (68/70 shipped features, 49 ADRs, 221 store records).
+
+### Hardening — OpenSpec archiving, git pre-commit hooks, and developer tooling
+
+- Archived completed OpenSpec change `openspec/changes/add-fixture-replay` to `openspec/changes/archive/add-fixture-replay` (stamped landed `e1c8e970` for F-070 / ADR 0049) and synchronized `openspec/README.md` index.
+- Created `.githooks/pre-commit` hook script enforcing the 11-gate Tier A mechanical verification harness (<60s) before any commit can be created.
+- Added convenience targets to `Makefile`: `aqa-check`, `install-hooks`, `hooks-check`, `fix-loop`, and `docker-build`.
+- Created minimal production `Dockerfile` for headless, unprivileged evaluation harness execution with layer caching.
 
 ### Added — extras-present live e2e rerun + F-067 mocked/unmocked slice
 

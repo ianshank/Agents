@@ -1,6 +1,6 @@
 # Change: add-fixture-replay
 
-**Status:** in progress — F-070 / ADR 0049
+**Status:** implemented (archived; landed `e1c8e970`) 
 **Date:** 2026-09-14
 **Depends on:** F-051 `AgentTrajectory`, ADR 0031, ADR 0046 (counterfactual is a TargetRunner, not a Scorer)
 **Does not depend on / must not unblock:** `openspec/changes/add-production-eval-flywheel` (CHARTER-blocked)
