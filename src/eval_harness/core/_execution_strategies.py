@@ -140,6 +140,81 @@ def _make_item_rng(base_seed: int, item_index: int) -> random.Random:
     return random.Random(base_seed + item_index)
 
 
+def _submit_parallel_tasks(
+    executor: ThreadPoolExecutor,
+    items: list[EvalItem],
+    run_id: str,
+    base_seed: int,
+    repetitions: int,
+    make_ctx: Callable[[int, random.Random], RunContext],
+    run_one_safe: Callable[..., tuple[int, ItemResult | Exception]],
+) -> tuple[
+    list[Future[tuple[int, ItemResult | Exception]]],
+    list[tuple[EvalItem, int | None, str | None]],
+]:
+    """Submit items and attempts to the thread pool executor."""
+    futures: list[Future[tuple[int, ItemResult | Exception]]] = []
+    submitted: list[tuple[EvalItem, int | None, str | None]] = []
+    for idx, item in enumerate(items):
+        item_run_id = f"{run_id}:{item.id}" if repetitions > 1 else None
+        for attempt in range(repetitions):
+            attempt_index = attempt if repetitions > 1 else None
+            item_rng = _make_item_rng(base_seed, idx)
+            ctx = make_ctx(idx, item_rng)
+            futures.append(
+                executor.submit(
+                    run_one_safe,
+                    idx,
+                    item,
+                    ctx,
+                    attempt_index=attempt_index,
+                    item_run_id=item_run_id,
+                )
+            )
+            submitted.append((item, attempt_index, item_run_id))
+    return futures, submitted
+
+
+def _collect_parallel_results(
+    executor: ThreadPoolExecutor,
+    futures: list[Future[tuple[int, ItemResult | Exception]]],
+    submitted: list[tuple[EvalItem, int | None, str | None]],
+    item_error_policy: str,
+    item_error_score: float,
+) -> tuple[list[tuple[int, ItemResult]], Exception | None]:
+    """Collect results from parallel futures according to error policy."""
+    collected: list[tuple[int, ItemResult]] = []
+    first_error: Exception | None = None
+    for future, (item, attempt_index, item_run_id) in zip(futures, submitted, strict=True):
+        try:
+            index, result_or_exc = future.result()
+        except FATAL_RUN_ERRORS:
+            executor.shutdown(wait=False, cancel_futures=True)
+            raise
+        if isinstance(result_or_exc, Exception):
+            if first_error is None:
+                first_error = result_or_exc
+            if item_error_policy == ITEM_ERROR_POLICY_RAISE:
+                executor.shutdown(wait=False, cancel_futures=True)
+                break
+            if item_error_policy == ITEM_ERROR_POLICY_RECORD:
+                collected.append(
+                    (
+                        index,
+                        build_failed_item_result(
+                            item,
+                            result_or_exc,
+                            error_score=item_error_score,
+                            attempt_index=attempt_index,
+                            item_run_id=item_run_id,
+                        ),
+                    )
+                )
+        else:
+            collected.append((index, result_or_exc))
+    return collected, first_error
+
+
 def _execute_parallel(
     items: list[EvalItem],
     run_id: str,
@@ -152,26 +227,7 @@ def _execute_parallel(
     item_error_policy: str,
     item_error_score: float,
 ) -> list[ItemResult]:
-    """Execute items -- and, when ``repetitions > 1``, each item's attempts --
-    in parallel via ``ThreadPoolExecutor``.
-
-    Every ``(item, attempt)`` pair gets its own submission and its own
-    ``RunContext`` (built by ``make_ctx``), RNG freshly seeded from
-    ``base_seed + item_index`` -- never advanced across attempts of the same
-    item, only ever re-derived from this loop's own ``enumerate()`` index (not
-    ``ctx.item_index``, which nothing reads back). At ``repetitions == 1`` this
-    submits exactly one future per item with ``attempt_index=None``, identical
-    to the pre-reliability-metrics engine. Results are collected in submission
-    order -- item-major, attempts ascending within an item. Under the ``raise``
-    policy the executor is shut down as soon as the first error surfaces.
-
-    ``item_error_policy`` is the *effective* policy (the engine has already
-    folded ``fail_fast`` into it), and it -- never ``max_workers`` -- decides
-    what a target failure means. Under ``record`` a failed attempt is collected
-    as a visibly-failed ``ItemResult`` at its own submission index, so it keeps
-    its place in the ordering and its weight in every aggregate. This path used
-    to drop it, which silently shrank the denominator and inflated ``pass_rate``.
-    """
+    """Execute items in parallel via ThreadPoolExecutor."""
     logger.info(
         "Parallel execution: %d items x %d repetitions with max_workers=%d",
         len(items),
@@ -179,73 +235,27 @@ def _execute_parallel(
         max_workers,
     )
 
-    collected: list[tuple[int, ItemResult]] = []
-    first_error: Exception | None = None
-
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures: list[Future[tuple[int, ItemResult | Exception]]] = []
-        # Submission identity, positionally aligned with ``futures``. A future
-        # reports only its item index, but rendering a failed attempt needs the
-        # item itself and its attempt identity, and neither is recoverable from
-        # the index alone once ``repetitions > 1`` fans one index into many.
-        submitted: list[tuple[EvalItem, int | None, str | None]] = []
-        for idx, item in enumerate(items):
-            item_run_id = f"{run_id}:{item.id}" if repetitions > 1 else None
-            for attempt in range(repetitions):
-                attempt_index = attempt if repetitions > 1 else None
-                item_rng = _make_item_rng(base_seed, idx)
-                ctx = make_ctx(idx, item_rng)
-                futures.append(
-                    executor.submit(
-                        run_one_safe,
-                        idx,
-                        item,
-                        ctx,
-                        attempt_index=attempt_index,
-                        item_run_id=item_run_id,
-                    )
-                )
-                submitted.append((item, attempt_index, item_run_id))
+        futures, submitted = _submit_parallel_tasks(
+            executor,
+            items,
+            run_id,
+            base_seed,
+            repetitions,
+            make_ctx,
+            run_one_safe,
+        )
+        collected, first_error = _collect_parallel_results(
+            executor,
+            futures,
+            submitted,
+            item_error_policy,
+            item_error_score,
+        )
 
-        for future, (item, attempt_index, item_run_id) in zip(futures, submitted, strict=True):
-            try:
-                index, result_or_exc = future.result()
-            except FATAL_RUN_ERRORS:
-                # Never policy-gated: see FATAL_RUN_ERRORS for why each member
-                # aborts the run rather than becoming a recorded item failure.
-                executor.shutdown(wait=False, cancel_futures=True)
-                raise
-            if isinstance(result_or_exc, Exception):
-                if first_error is None:
-                    first_error = result_or_exc
-                if item_error_policy == ITEM_ERROR_POLICY_RAISE:
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    break
-                if item_error_policy == ITEM_ERROR_POLICY_RECORD:
-                    collected.append(
-                        (
-                            index,
-                            build_failed_item_result(
-                                item,
-                                result_or_exc,
-                                error_score=item_error_score,
-                                attempt_index=attempt_index,
-                                item_run_id=item_run_id,
-                            ),
-                        )
-                    )
-            else:
-                collected.append((index, result_or_exc))
-
-    # One condition, one meaning. ``fail_fast`` used to be a second, independent
-    # switch here; the pair (fail_fast=True, policy="record") then broke early and
-    # returned a TRUNCATED list without raising -- reintroducing, inside this very
-    # function, the silent item loss it exists to prevent. The engine folds
-    # ``fail_fast`` into the effective policy, so the parameter is gone.
     if first_error is not None and item_error_policy == ITEM_ERROR_POLICY_RAISE:
         raise first_error
 
-    # Sort by submission index to guarantee deterministic ordering
     collected.sort(key=lambda pair: pair[0])
     return [result for _, result in collected]
 

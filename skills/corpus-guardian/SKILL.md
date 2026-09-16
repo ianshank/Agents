@@ -1,15 +1,16 @@
 ---
 name: corpus-guardian
+version: 1.0.0
 description: Manage, verify, and synchronize the four frozen synthetic evaluation corpora (RCA, Requirements, TestGen, Answer Quality). Use whenever verifying corpus freshness, regenerating frozen synthetic fixtures, or asserting negative control invariants.
 ---
 
 # Corpus Guardian — Synthetic Evaluation Corpora Management
 
 Unified management and invariant enforcement for the four frozen synthetic evaluation corpora:
-1. **RCA Corpus** (`tests/fixtures/eval/rca_corpus.jsonl` via `scripts/gen_rca_corpus.py`)
-2. **Requirements Corpus** (`tests/fixtures/eval/requirements_corpus.jsonl` via `scripts/gen_requirements_corpus.py`)
-3. **TestGen Corpus** (`tests/fixtures/eval/testgen_corpus.jsonl` via `scripts/gen_testgen_corpus.py`)
-4. **Answer Quality Corpus** (`tests/fixtures/eval/answer_quality_corpus.jsonl` via `scripts/gen_answer_quality_corpus.py`)
+1. **RCA Corpus** (`corpora/rca/v1/` via `scripts/gen_rca_corpus.py`)
+2. **Requirements Corpus** (`corpora/requirements/v1/` via `scripts/gen_requirements_corpus.py`)
+3. **TestGen Corpus** (`corpora/testgen/v1/` via `scripts/gen_testgen_corpus.py`)
+4. **Answer Quality Corpus** (`corpora/answer_quality/v1/` via `scripts/gen_answer_quality_corpus.py`)
 
 ## Invariants
 

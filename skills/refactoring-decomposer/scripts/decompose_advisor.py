@@ -53,22 +53,30 @@ def scan_size_budgets(repo_root: Path, roots: list[str] | None = None) -> int:
         return 1
 
     hard_findings = [f for f in report if f.get("hard")]
-    warnings = [f for f in report if not f.get("hard")]
+    func_warnings = [f for f in report if not f.get("hard") and f.get("kind") == "function_lines"]
+    method_warnings = [f for f in report if not f.get("hard") and f.get("kind") == "public_methods"]
 
     print("=== Decomposition Advisor Report ===")
     print(f"Hard file-budget violations (>500 lines): {len(hard_findings)}")
-    print(f"Function-length warnings (>50 lines): {len(warnings)}")
+    print(f"Function-length warnings (>50 lines): {len(func_warnings)}")
+    print(f"Class public-method warnings (>20 methods): {len(method_warnings)}")
 
     if hard_findings:
         print("\nCRITICAL - The following files MUST be decomposed immediately:")
         for f in hard_findings:
             print(f"  - {f['path']} ({f['value']} lines > {f['limit']})")
 
-    top_warnings = sorted(warnings, key=lambda x: x["value"], reverse=True)[:10]
-    if top_warnings:
+    top_func_warnings = sorted(func_warnings, key=lambda x: x["value"], reverse=True)[:10]
+    if top_func_warnings:
         print("\nTop Over-Budget Functions for Decomposition:")
-        for w in top_warnings:
+        for w in top_func_warnings:
             print(f"  - {w['path']}::{w['name']} ({w['value']} lines > {w['limit']})")
+
+    top_method_warnings = sorted(method_warnings, key=lambda x: x["value"], reverse=True)[:10]
+    if top_method_warnings:
+        print("\nTop Over-Budget Classes (Public Methods) for Decomposition:")
+        for w in top_method_warnings:
+            print(f"  - {w['path']}::{w['name']} ({w['value']} methods > {w['limit']})")
 
     return 1 if hard_findings else 0
 

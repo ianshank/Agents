@@ -32,7 +32,7 @@ Verify:
 
 ### 3. Sample Unlabelled Candidates
 ```bash
-python -m agent_core.audit_sampler select --store data/merge_outcomes.jsonl --domain human/agent-core --count 5 --floor 3
+python -m agent_core.audit_sampler --store data/merge_outcomes.jsonl select --per-domain-floor 3 --with-propensity
 ```
 
 ### 4. Generate Audit Verdict Card
@@ -54,8 +54,8 @@ For each sampled candidate change ID:
    - **Merge Gate Confidence**: `<raw_confidence>`
    - **Revert / Fixup Observed**: None / Commit `<sha>`
    - **Maintainer Actions**:
-     - Confirm Correct: `python scripts/record_audit_verdict.py --store data/merge_outcomes.jsonl --change <change_id> --actor @ianshank --correct`
-     - Confirm Regressed: `python scripts/record_audit_verdict.py --store data/merge_outcomes.jsonl --change <change_id> --actor @ianshank --incorrect`
+     - Confirm Correct: `python scripts/record_audit_verdict.py --store data/merge_outcomes.jsonl --change-id <change_id> --actor @ianshank --correct`
+     - Confirm Regressed: `python scripts/record_audit_verdict.py --store data/merge_outcomes.jsonl --change-id <change_id> --actor @ianshank --incorrect`
    ```
 
 ### 5. Sync Human Verdicts to Remote Store

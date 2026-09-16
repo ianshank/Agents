@@ -328,14 +328,3 @@ class AutoevalsScorer(Scorer):
             comment=comment,
             metadata=metadata,
         )
-
-
-__all__ = [
-    "AutoevalsScorer",
-    "CompositeScorer",
-    "ContainsScorer",
-    "ExactMatchScorer",
-    "JsonKeysScorer",
-    "LLMJudgeScorer",
-    "RegexMatchScorer",
-]

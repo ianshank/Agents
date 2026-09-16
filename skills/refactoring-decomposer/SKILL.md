@@ -1,5 +1,6 @@
 ---
 name: refactoring-decomposer
+version: 1.0.0
 description: Analyze codebase for size budget violations, decompose god-files and over-budget functions, and generate backwards-compatible shims. Use whenever decomposing complex files, reducing function line counts, or maintaining size budget compliance across packages.
 ---
 
