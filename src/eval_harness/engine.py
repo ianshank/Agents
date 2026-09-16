@@ -22,6 +22,7 @@ from .config.models import EvalConfig
 from .core._execution_strategies import (
     FATAL_RUN_ERRORS,
     ITEM_ERROR_POLICY_RAISE,
+    _evaluate_item_scorers,
     _execute_parallel,
     _execute_sequential_repeated,
     run_item_guarded,
@@ -100,6 +101,38 @@ class EvalEngine:
         self.langfuse_client: LangfuseClient | None = None
 
     @classmethod
+    def _create_judge(cls, config: EvalConfig, langfuse_client: LangfuseClient | None) -> Judge | None:
+        """Instantiate and optionally prompt-resolve and budget-wrap the judge."""
+        if config.judge is None:
+            return None
+        judge_params = config.judge.params
+        judge_prompt = getattr(config, "judge_prompt", None)
+        if judge_prompt is not None:
+            from .prompts import resolve_prompt
+
+            resolved = resolve_prompt(judge_prompt, cast(Any, langfuse_client))
+            if resolved is not None:
+                judge_params = {**judge_params, "system": resolved}
+        judge = JUDGES.create(config.judge.type, judge_params)
+        judge_budget = getattr(config, "judge_budget", None)
+        if judge_budget is not None and judge_budget.enabled:
+            adapter = import_module("eval_harness.agent_core_adapter")
+            build_budgeted_judge = getattr(adapter, "build_budgeted_judge", None)
+            if build_budgeted_judge is None:  # pragma: no cover - defensive compatibility guard
+                raise RuntimeError("eval_harness.agent_core_adapter.build_budgeted_judge is unavailable")
+            judge = build_budgeted_judge(judge, judge_budget)
+        return judge
+
+    @classmethod
+    def _create_state_adapter(cls, config: EvalConfig) -> StateAdapter | None:
+        """Instantiate and log the state adapter if configured."""
+        if config.state_adapter is None:
+            return None
+        adapter = STATE_ADAPTERS.create(config.state_adapter.type, config.state_adapter.params)
+        log_state_adapter_configured(config.state_adapter.type, config.run.max_workers)
+        return adapter
+
+    @classmethod
     def from_config(
         cls,
         config: EvalConfig,
@@ -116,44 +149,10 @@ class EvalEngine:
         dataset = DATASETS.create(config.dataset.type, config.dataset.params)
         target = TARGETS.create(config.target.type, config.target.params)
         scorers = [SCORERS.create(s.type, s.params) for s in config.scorers]
-        judge = None
-        if config.judge is not None:
-            judge_params = config.judge.params
-            # F-026: resolve the judge system prompt from Langfuse (or YAML fallback)
-            # and inject it as the judge's `system` param. Additive — absent
-            # judge_prompt leaves params untouched.
-            judge_prompt = getattr(config, "judge_prompt", None)
-            if judge_prompt is not None:
-                from .prompts import resolve_prompt
-
-                resolved = resolve_prompt(judge_prompt, cast(Any, langfuse_client))
-                if resolved is not None:
-                    judge_params = {**judge_params, "system": resolved}
-            judge = JUDGES.create(config.judge.type, judge_params)
+        judge = cls._create_judge(config, langfuse_client)
         sinks = [SINKS.create(s.type, s.params) for s in config.sinks]
-        state_adapter = None
-        if config.state_adapter is not None:
-            state_adapter = STATE_ADAPTERS.create(config.state_adapter.type, config.state_adapter.params)
-            log_state_adapter_configured(config.state_adapter.type, config.run.max_workers)
-        # Wrap the judge with a cost cap when enabled (F-022). Imported lazily so
-        # the offline path never pulls in agent_core unless budgeting is on.
-        #
-        # This must precede client injection below. When it ran *after*, the loop
-        # attached to the raw judge and the wrapper then replaced it, so
-        # BudgetedJudge.attach_client — which exists to delegate inward — was never
-        # reached on this path: unit-tested, production-unreachable. Tracing still
-        # worked only because OpenAIJudge.attach_client mutates its own client, an
-        # accident that would not survive a wrapper holding client state of its own.
-        judge_budget = getattr(config, "judge_budget", None)
-        if judge is not None and judge_budget is not None and judge_budget.enabled:
-            adapter = import_module("eval_harness.agent_core_adapter")
-            build_budgeted_judge = getattr(adapter, "build_budgeted_judge", None)
-            if build_budgeted_judge is None:  # pragma: no cover - defensive compatibility guard
-                raise RuntimeError("eval_harness.agent_core_adapter.build_budgeted_judge is unavailable")
-            judge = build_budgeted_judge(judge, judge_budget)
+        state_adapter = cls._create_state_adapter(config)
 
-        # Inject the Langfuse client into any client-aware component. `judge` is now
-        # whatever the engine will actually call, wrapper included.
         if langfuse_client is not None:
             for component in [dataset, judge, *sinks]:
                 if component is not None and hasattr(component, "attach_client"):
@@ -192,6 +191,21 @@ class EvalEngine:
             return items
         return [it for it in items if self.rng.random() < rate]
 
+    def _link_langfuse_trace(self, item_id: str) -> None:
+        """Link current Langfuse trace to the dataset item if client is attached."""
+        client = getattr(self, "langfuse_client", None)
+        if client is not None:
+            from .langfuse_client import langfuse_context
+
+            trace_id = langfuse_context.get_current_trace_id()
+            if trace_id:
+                run_name = self.config.run.run_id or f"{self.config.run.name}"
+                client.link_dataset_item(
+                    item_id=item_id,
+                    trace_id=trace_id,
+                    run_name=run_name,
+                )
+
     @observe()
     def _run_one(
         self,
@@ -214,8 +228,6 @@ class EvalEngine:
         reset/snapshot/evaluate lifecycle; unconfigured is a strict no-op (ADR
         0031 obligation 1).
         """
-        from .langfuse_client import langfuse_context
-
         state_score: ScoreResult | None = None
         if self.state_adapter is not None:
             output, state_score = run_state_bracketed_attempt(
@@ -224,49 +236,17 @@ class EvalEngine:
         else:
             output = self.target.run(item)
 
-        scores: list[ScoreResult] = []
-        programmatic_failed = False
-        if state_score is not None:
-            scores.append(state_score)
-            programmatic_failed = True
-        for scorer in self.scorers:
-            # F-057: skip a judge once a programmatic scorer has failed (routing, not an outcome).
-            if _uses_judge(scorer) and programmatic_failed:
-                logger.debug(
-                    "item=%r: skipping judge scorer %r, a programmatic scorer already failed",
-                    item.id,
-                    getattr(scorer, "name", "scorer"),
-                )
-                continue
-            try:
-                scores.append(result := scorer.score(item, output, ctx))
-                if not _uses_judge(scorer) and result.passed is False:
-                    programmatic_failed = True
-            except Exception as exc:
-                scores.append(
-                    ScoreResult(
-                        name=getattr(scorer, "name", "scorer"),
-                        value=0.0,
-                        passed=False,
-                        comment=f"scorer error: {exc}",
-                    )
-                )
-                if self.config.run.fail_fast:
-                    raise
-                if not _uses_judge(scorer):
-                    programmatic_failed = True
+        scores = _evaluate_item_scorers(
+            self.scorers,
+            item,
+            output,
+            ctx,
+            fail_fast=self.config.run.fail_fast,
+            initial_score=state_score,
+            item_logger=logger,
+        )
 
-        # Link trace to dataset item if client is available
-        client = getattr(self, "langfuse_client", None)
-        if client is not None:
-            trace_id = langfuse_context.get_current_trace_id()
-            if trace_id:
-                run_name = self.config.run.run_id or f"{self.config.run.name}"
-                client.link_dataset_item(
-                    item_id=item.id,
-                    trace_id=trace_id,
-                    run_name=run_name,
-                )
+        self._link_langfuse_trace(item.id)
 
         attempt_id = f"{item.id}:{attempt_index}" if attempt_index is not None else None
         return ItemResult(
@@ -356,6 +336,38 @@ class EvalEngine:
             item_error_score=self.config.run.item_error_score,
         )
 
+    @staticmethod
+    def _warn_duplicate_items(items: list[EvalItem]) -> None:
+        """Log a warning if duplicate dataset item IDs are detected."""
+        seen_ids = set()
+        for item in items:
+            if item.id in seen_ids:
+                logger.warning(
+                    "Duplicate item ID detected in dataset: %s. "
+                    "This may cause tracing, aggregation, or reporting issues.",
+                    item.id,
+                )
+            else:
+                seen_ids.add(item.id)
+
+    def _finalize_run(self, run_id: str, results: list[ItemResult], started: datetime) -> RunResult:
+        """Aggregate item results, attach diagnostics and gate verdict, and emit to sinks."""
+        aggregate = self._aggregate(results)
+        diagnostics = [*item_error_diagnostics(results), *self._run_reliability_diagnostics(results)]
+        run = RunResult(
+            run_id=run_id,
+            config_name=self.config.run.name,
+            items=results,
+            aggregate=aggregate,
+            started_at=started,
+            finished_at=self.clock(),
+            diagnostics=diagnostics,
+        )
+        run.gate = self._evaluate_gate(run)
+        for sink in self.sinks:
+            sink.emit(run)
+        return run
+
     @observe()
     def run(self) -> RunResult:
         """Execute the full evaluation pipeline.
@@ -371,18 +383,7 @@ class EvalEngine:
         """
         started = self.clock()
         items = self._sample(list(self.dataset.load()))
-
-        # Check for duplicate item IDs
-        seen_ids = set()
-        for item in items:
-            if item.id in seen_ids:
-                logger.warning(
-                    "Duplicate item ID detected in dataset: %s. "
-                    "This may cause tracing, aggregation, or reporting issues.",
-                    item.id,
-                )
-            else:
-                seen_ids.add(item.id)
+        self._warn_duplicate_items(items)
 
         run_id = self.config.run.run_id or f"{self.config.run.name}-{uuid.uuid4().hex[:8]}"
         max_workers = self.config.run.max_workers
@@ -394,33 +395,9 @@ class EvalEngine:
             else:
                 results = self._run_sequential_repeated(items, started, run_id)
         else:
-            # --- Parallel path ---
             results = self._run_parallel(items, started, run_id)
 
-        aggregate = self._aggregate(results)
-        # Item-execution failures first: they qualify every other diagnostic and
-        # every other aggregate below them. Both lists are empty on a clean run,
-        # so `diagnostics` stays absent from the payload exactly as before.
-        diagnostics = [*item_error_diagnostics(results), *self._run_reliability_diagnostics(results)]
-
-        run = RunResult(
-            run_id=run_id,
-            config_name=self.config.run.name,
-            items=results,
-            aggregate=aggregate,
-            started_at=started,
-            finished_at=self.clock(),
-            diagnostics=diagnostics,
-        )
-        # Evaluated *before* the sinks, so every exported artifact carries the
-        # verdict. Previously the gate ran in the CLI after `run()` returned,
-        # which meant no sink -- including the html_file report -- could say
-        # whether the run passed, and a soak's decisions existed only as
-        # process output.
-        run.gate = self._evaluate_gate(run)
-        for sink in self.sinks:
-            sink.emit(run)
-        return run
+        return self._finalize_run(run_id, results, started)
 
     def _evaluate_gate(self, run: RunResult) -> GateDecision | None:
         """The gate's verdict on *run*, or ``None`` when no gate is configured.

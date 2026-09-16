@@ -18,7 +18,7 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 
-from .interfaces import StateResetError
+from .interfaces import Scorer, StateResetError, _uses_judge
 from .types import EvalItem, ItemResult, RunContext, ScoreResult, TargetOutput
 
 logger = logging.getLogger(__name__)
@@ -291,3 +291,49 @@ def _execute_sequential_repeated(
                 )
             )
     return results
+
+
+def _evaluate_item_scorers(
+    scorers: list[Scorer],
+    item: EvalItem,
+    output: TargetOutput,
+    ctx: RunContext,
+    *,
+    fail_fast: bool,
+    initial_score: ScoreResult | None = None,
+    item_logger: logging.Logger | None = None,
+) -> list[ScoreResult]:
+    """Execute item scorers, honoring fail-fast and judge-skipping invariants (F-057)."""
+    log = item_logger or logger
+    scores: list[ScoreResult] = []
+    programmatic_failed = False
+    if initial_score is not None:
+        scores.append(initial_score)
+        programmatic_failed = True
+    for scorer in scorers:
+        # F-057: skip a judge once a programmatic scorer has failed (routing, not an outcome).
+        if _uses_judge(scorer) and programmatic_failed:
+            log.debug(
+                "item=%r: skipping judge scorer %r, a programmatic scorer already failed",
+                item.id,
+                getattr(scorer, "name", "scorer"),
+            )
+            continue
+        try:
+            scores.append(result := scorer.score(item, output, ctx))
+            if not _uses_judge(scorer) and result.passed is False:
+                programmatic_failed = True
+        except Exception as exc:
+            scores.append(
+                ScoreResult(
+                    name=getattr(scorer, "name", "scorer"),
+                    value=0.0,
+                    passed=False,
+                    comment=f"scorer error: {exc}",
+                )
+            )
+            if fail_fast:
+                raise
+            if not _uses_judge(scorer):
+                programmatic_failed = True
+    return scores
