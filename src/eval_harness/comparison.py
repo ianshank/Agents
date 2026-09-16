@@ -267,6 +267,23 @@ def _rank_confidently(
     return (RankVerdict.RANKED if len(tiers) > 1 else RankVerdict.NO_DIFFERENCE), tiers
 
 
+def _compute_values_and_deltas(
+    runs: list[tuple[str, RunResult]],
+    score: str,
+    metric: str,
+    baseline: str | None,
+) -> tuple[dict[str, float | None], dict[str, float | None], list[str], list[str]]:
+    """Compute per-model metric values, deltas vs baseline, and ordered present/absent model names."""
+    values: dict[str, float | None] = {name: _metric_value(r, score, metric) for name, r in runs}
+    base_val = values.get(baseline) if baseline is not None else None
+    deltas: dict[str, float | None] = {
+        name: ((val - base_val) if (val is not None and base_val is not None) else None) for name, val in values.items()
+    }
+    present = sorted((n for n in values if values[n] is not None), key=lambda n: -values[n])  # type: ignore[operator]
+    absent = [n for n in values if values[n] is None]
+    return values, deltas, present, absent
+
+
 def compare_metric(
     runs: list[tuple[str, RunResult]],
     score: str,
@@ -290,22 +307,7 @@ def compare_metric(
     numeric literal appearing here.
     """
     conf = confidence if confidence is not None else RankConfidenceConfig()
-    values: dict[str, float | None] = {name: _metric_value(r, score, metric) for name, r in runs}
-
-    base_val = values.get(baseline) if baseline is not None else None
-    deltas: dict[str, float | None] = {}
-    for name, val in values.items():
-        deltas[name] = (val - base_val) if (val is not None and base_val is not None) else None
-
-    # Rank by value descending; None last. Stable within ties / Nones (config order):
-    # sorted() is itself stable, so the key must encode "descending" directly rather
-    # than sorting ascending and reversing the whole list afterward -- a trailing
-    # [::-1] flips the RESULT's order wholesale, which also swaps two tied models'
-    # relative order even though neither one's key differs. Negating the numeric
-    # part of the key gives descending-by-value while leaving equal keys, and
-    # therefore config order, untouched.
-    present = sorted((n for n in values if values[n] is not None), key=lambda n: -values[n])  # type: ignore[operator]
-    absent = [n for n in values if values[n] is None]
+    values, deltas, present, absent = _compute_values_and_deltas(runs, score, metric, baseline)
     ordered = present + absent
 
     stats = _model_stats(runs, score, metric, conf.wilson_z)
@@ -358,6 +360,16 @@ def _resolve_confidence(comp: Any, override: RankConfidenceConfig | None) -> Ran
     )
 
 
+def _extract_overall_ranking(
+    comparisons: list[MetricComparison], rank_by: str | None
+) -> tuple[list[str], RankVerdict, list[list[str]]]:
+    """Find overall ranking, verdict, and confident tiers for the rank_by score."""
+    for c in comparisons:
+        if c.score == rank_by:
+            return c.ranking, c.verdict, c.confident_ranking
+    return [], RankVerdict.CANT_TELL, []
+
+
 def run_comparison(
     config: Any,
     comparison: Any | None = None,
@@ -388,15 +400,7 @@ def run_comparison(
     comparisons = [compare_metric(runs, s, comp.rank_metric, comp.baseline, confidence=conf) for s in scores]
 
     rank_by = comp.rank_by if comp.rank_by is not None else (scores[0] if scores else None)
-    overall_ranking: list[str] = []
-    overall_verdict = RankVerdict.CANT_TELL
-    overall_tiers: list[list[str]] = []
-    for c in comparisons:
-        if c.score == rank_by:
-            overall_ranking = c.ranking
-            overall_verdict = c.verdict
-            overall_tiers = c.confident_ranking
-            break
+    overall_ranking, overall_verdict, overall_tiers = _extract_overall_ranking(comparisons, rank_by)
 
     logger.info(
         "comparison of %d model(s) ranked by %s (%s): verdict=%s point_ranking=%s confident_ranking=%s",
