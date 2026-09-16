@@ -24,6 +24,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added convenience targets to `Makefile`: `aqa-check`, `install-hooks`, `hooks-check`, `fix-loop`, and `docker-build`.
 - Created minimal production `Dockerfile` for headless, unprivileged evaluation harness execution with layer caching.
 
+### Refactored — God-file & function complexity decomposition (Phase 2)
+
+- Decomposed monolithic built-in scorers in `src/eval_harness/scorers/__init__.py` (338 lines -> 25 lines) into `src/eval_harness/scorers/basic.py` while preserving backwards-compatible imports and registration.
+- Decomposed monolithic `agent-core/tests/test_store_sync.py` (717 lines) into three focused modules:
+  - `test_store_sync.py` (354 lines): Pure merge core, schema validation, Hypothesis properties, and F-040 soak progress.
+  - `test_store_sync_git.py` (166 lines): Real git bare remotes, pull/push lifecycle, binary handling, and CRLF regression prevention.
+  - `test_store_sync_concurrency.py` (152 lines): Competitor clone races, backoff retry sequence, and CLI exit codes.
+- Decomposed `src/eval_harness/engine.py` (493 lines -> 418 lines): extracted scoring execution to `core/_execution_strategies.py` (`_evaluate_item_scorers`), extracted component builders (`_create_judge`, `_create_state_adapter`), and partitioned `run` into modular helpers (`_warn_duplicate_items`, `_finalize_run`), reducing all functions under the 50-line budget.
+- Decomposed `src/eval_harness/comparison.py` (489 lines -> 415 lines): partitioned `compare_metric` and `run_comparison` into `_compute_values_and_deltas` and `_extract_overall_ranking` to eliminate function-length budget warnings.
+
+### Added — Specialized skills and agents implementation (Phase 3)
+
+- Implemented `merge-gate-auditor` subagent and skill (`.agents/skills/merge-gate-auditor/SKILL.md`, `.agents/agents/merge-gate-auditor.md`, `.claude/agents/merge-gate-auditor.md`) to guide weekly maintainer audit triage batches and verdict card logging.
+- Implemented `corpus-guardian` skill (`skills/corpus-guardian/SKILL.md`, `scripts/corpus_guard.py`, `evals/evals.json`) providing automated negative-control and byte-reproducibility checks across all four synthetic corpora (`rca`, `requirements`, `testgen`, `answer_quality`).
+- Implemented `e2e-matrix-sentinel` skill (`skills/e2e-matrix-sentinel/SKILL.md`, `scripts/sentinel.py`, `evals/evals.json`) providing cross-platform E2E driver parity validation and committed matrix freshness assertions.
+- Implemented `refactoring-decomposer` skill (`skills/refactoring-decomposer/SKILL.md`, `scripts/decompose_advisor.py`, `evals/evals.json`) providing AST-driven structural and line-budget diagnostics to guide clean decompositions.
+- Wired `architecture-drift-guard` into `.agents/hooks.json` under `Stop` events to proactively prevent architectural boundary violations.
+
 ### Added — extras-present live e2e rerun + F-067 mocked/unmocked slice
 
 Windows `-Tiers all -HypothesisProfile ci` with `autoevals`/`archguard` already
