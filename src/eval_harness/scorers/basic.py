@@ -1,0 +1,341 @@
+"""Basic built-in scorers. Each registers under a stable name (plus aliases).
+
+Extracted from ``scorers/__init__.py`` so the scorers package stays modular
+and well within the 500-line size budget enforced by ``scripts/check_size_budget.py``.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+from typing import Any
+
+from ..core._serialize import as_text as _as_text
+from ..core.interfaces import Scorer
+from ..core.types import EvalItem, RunContext, ScoreResult, TargetOutput
+from ..plugins import SCORERS
+
+logger = logging.getLogger(__name__)
+
+
+@SCORERS.register("exact_match", aliases=("exact",))
+class ExactMatchScorer(Scorer):
+    default_name = "exact_match"
+
+    def __init__(self, name: str | None = None, case_sensitive: bool = True, strip: bool = True):
+        super().__init__(name)
+        self.case_sensitive = case_sensitive
+        self.strip = strip
+
+    def _norm(self, value: Any) -> str:
+        text = _as_text(value)
+        if self.strip:
+            text = text.strip()
+        if not self.case_sensitive:
+            text = text.lower()
+        return text
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        match = self._norm(output.output) == self._norm(item.expected)
+        return ScoreResult(self.name, value=1.0 if match else 0.0, passed=match)
+
+
+@SCORERS.register("regex_match", aliases=("regex",))
+class RegexMatchScorer(Scorer):
+    default_name = "regex_match"
+
+    def __init__(self, name: str | None = None, pattern: str = ".*", flags: int = 0):
+        super().__init__(name)
+        self.pattern = re.compile(pattern, flags)
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        match = bool(self.pattern.search(_as_text(output.output)))
+        return ScoreResult(self.name, value=1.0 if match else 0.0, passed=match)
+
+
+@SCORERS.register("contains")
+class ContainsScorer(Scorer):
+    default_name = "contains"
+
+    def __init__(self, name: str | None = None, substring: str = "", case_sensitive: bool = False):
+        super().__init__(name)
+        self.substring = substring
+        self.case_sensitive = case_sensitive
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        haystack = _as_text(output.output)
+        needle = self.substring
+        if not self.case_sensitive:
+            haystack, needle = haystack.lower(), needle.lower()
+        match = needle in haystack
+        return ScoreResult(self.name, value=1.0 if match else 0.0, passed=match)
+
+
+@SCORERS.register("json_keys", aliases=("schema_keys",))
+class JsonKeysScorer(Scorer):
+    """Fraction of required keys present in a JSON/dict output."""
+
+    default_name = "json_keys"
+
+    def __init__(self, name: str | None = None, required: list[str] | None = None):
+        super().__init__(name)
+        self.required = required or []
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        data = output.output
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except json.JSONDecodeError:
+                return ScoreResult(self.name, value=0.0, passed=False, comment="output is not valid JSON")
+        if not isinstance(data, dict):
+            return ScoreResult(self.name, value=0.0, passed=False, comment="output is not an object")
+        if not self.required:
+            return ScoreResult(self.name, value=1.0, passed=True)
+        present = sum(1 for k in self.required if k in data)
+        value = present / len(self.required)
+        missing = [k for k in self.required if k not in data]
+        return ScoreResult(
+            self.name,
+            value=value,
+            passed=value == 1.0,
+            comment=None if not missing else f"missing keys: {missing}",
+        )
+
+
+@SCORERS.register("weighted", aliases=("composite", "ensemble"))
+class CompositeScorer(Scorer):
+    """Combines several child scorers into one weighted composite score.
+
+    Each ``components`` entry is ``{type, params?, weight?, name?}``. Children are
+    built once at construction via the same registry the engine uses, so an
+    ``llm_judge`` child still receives ``ctx.judge`` when scored. The composite
+    value is the weight-normalised mean of child values
+    (``Σ wᵢ·vᵢ / Σ wᵢ``); the per-child breakdown is recorded in
+    ``ScoreResult.metadata['components']``. Nothing is hardcoded — weights and the
+    optional ``pass_threshold`` come from config; omitted weights default to 1.0.
+    """
+
+    default_name = "weighted"
+
+    _STRATEGIES = ("weighted_mean",)
+
+    def __init__(
+        self,
+        name: str | None = None,
+        components: list[dict[str, Any]] | None = None,
+        strategy: str = "weighted_mean",
+        pass_threshold: float | None = None,
+    ):
+        super().__init__(name)
+        if strategy not in self._STRATEGIES:
+            raise ValueError(f"unknown strategy {strategy!r}; supported: {list(self._STRATEGIES)}")
+        self.strategy = strategy
+        self.pass_threshold = None if pass_threshold is None else float(pass_threshold)
+        specs = components or []
+        if not specs:
+            raise ValueError("CompositeScorer requires at least one component")
+        # Build children once; record the resolved label and weight alongside.
+        self._children: list[tuple[str, float, Scorer]] = []
+        for spec in specs:
+            if not isinstance(spec, dict):
+                raise ValueError(f"each CompositeScorer component must be a mapping; got {type(spec).__name__}")
+            ctype = spec.get("type")
+            if not ctype:
+                raise ValueError("each CompositeScorer component must specify a 'type'")
+            child = SCORERS.create(ctype, spec.get("params", {}))
+            label = spec.get("name") or child.name
+            weight = float(spec.get("weight", 1.0))
+            if weight < 0:
+                raise ValueError(f"component weight must be >= 0; got {weight} for {label!r}")
+            self._children.append((label, weight, child))
+        if sum(w for _, w, _ in self._children) <= 0:
+            raise ValueError("CompositeScorer total weight must be > 0")
+
+    def uses_judge(self) -> bool:
+        return any(child.uses_judge() for _, _, child in self._children)
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        breakdown: list[dict[str, Any]] = []
+        weighted_sum = 0.0
+        total_weight = 0.0
+        child_passed: list[bool | None] = []
+        for label, weight, child in self._children:
+            res = child.score(item, output, ctx)
+            weighted_sum += weight * res.value
+            total_weight += weight
+            child_passed.append(res.passed)
+            breakdown.append({"name": label, "value": res.value, "weight": weight, "passed": res.passed})
+        value = weighted_sum / total_weight  # total_weight > 0 guaranteed in __init__
+        if self.pass_threshold is not None:
+            passed: bool | None = value >= self.pass_threshold
+        else:
+            # No explicit threshold: composite passes only if every child that
+            # reported a pass/fail verdict passed (None verdicts are ignored).
+            verdicts = [p for p in child_passed if p is not None]
+            passed = all(verdicts) if verdicts else None
+        return ScoreResult(
+            self.name,
+            value=value,
+            passed=passed,
+            metadata={"strategy": self.strategy, "components": breakdown},
+        )
+
+
+@SCORERS.register("llm_judge", aliases=("llm-judge", "judge"))
+class LLMJudgeScorer(Scorer):
+    """Delegates qualitative scoring to the injected judge."""
+
+    default_name = "llm_judge"
+
+    DEFAULT_TEMPLATE = (
+        "You are grading an AI response.\n"
+        "Input: {input}\n"
+        "Expected: {expected}\n"
+        "Response: {output}\n"
+        "Return a quality score in [0,1]."
+    )
+
+    def __init__(
+        self,
+        name: str | None = None,
+        prompt_template: str | None = None,
+        threshold: float = 0.5,
+    ):
+        super().__init__(name)
+        self.prompt_template = prompt_template or self.DEFAULT_TEMPLATE
+        self.threshold = float(threshold)
+
+    def uses_judge(self) -> bool:
+        return True
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        if ctx.judge is None:
+            raise RuntimeError(f"scorer '{self.name}' requires a judge but none was configured")
+        prompt = self.prompt_template.format(input=item.inputs, expected=item.expected, output=output.output)
+        verdict = ctx.judge.evaluate(prompt, context={"item_id": item.id})
+        # A judge that abstained (e.g. PanelJudge below quorum or over its disagreement
+        # threshold) flags this duck-typed in raw["abstained"] -- mirrors AutoevalsScorer's
+        # own on-skip passed=None, the house convention for "this evaluator declined to score."
+        abstained = verdict.raw.get("abstained") is True
+        return ScoreResult(
+            self.name,
+            value=verdict.score,
+            passed=None if abstained else verdict.score >= self.threshold,
+            comment=verdict.reasoning or None,
+        )
+
+
+@SCORERS.register("autoevals")
+class AutoevalsScorer(Scorer):
+    """Bridges a BrainTrust ``autoevals`` scorer into the harness ``Scorer`` contract.
+
+    ``autoevals`` scorers return a ``Score(name, score: float|None, metadata)`` with
+    ``score`` in [0,1] (``None`` when skipped) — mapping cleanly onto ``ScoreResult``.
+    This adapter instantiates the named scorer once and, per item, calls it on the
+    documented sync surface (``evaluator(output=, expected=, input=)``), then converts
+    the ``Score`` to a ``ScoreResult``.
+
+    ``scorer`` is the autoevals class name (e.g. ``"Levenshtein"``, ``"Factuality"``);
+    the canonical names are preferred over back-compat aliases like ``LevenshteinScorer``.
+    Any extra params flow through to the scorer's constructor (e.g. ``model=``,
+    ``base_url=``), so provider selection is config-driven; provider credentials come from
+    the environment (e.g. ``OPENAI_API_KEY``), never hardcoded. Set ``coerce_text=True`` to
+    stringify output/expected/input for string scorers when the target emits non-string data
+    (off by default so structured scorers like ``JSONDiff`` keep their raw inputs — see
+    :meth:`_prep`).
+
+    Heuristic scorers (``Levenshtein``, ``ExactMatch``, ``NumericDiff``, ``JSONDiff``) are
+    pure-Python — safe for the offline suite. LLM/Embedding scorers (``Factuality``,
+    ``ClosedQA``, ``EmbeddingSimilarity``, …) call a provider at runtime and — because they
+    do NOT route through ``ctx.judge`` — run OUTSIDE the harness ``judge_budget``/rate-limit
+    guard, which only wraps the ``Judge`` seam. ``braintrust`` itself is not required;
+    ``autoevals`` is a standalone, lazily-imported dependency.
+    """
+
+    default_name = "autoevals"
+
+    def __init__(
+        self,
+        name: str | None = None,
+        scorer: str = "Levenshtein",
+        threshold: float = 0.5,
+        on_skip: float = 0.0,
+        coerce_text: bool = False,
+        **scorer_kwargs: Any,
+    ):
+        # Default the emitted score name to the specific scorer (e.g. "Levenshtein") so
+        # several autoevals scorers in one run don't collide on the generic default.
+        super().__init__(name or scorer)
+        self.scorer_name = scorer
+        self.threshold = float(threshold)
+        self.on_skip = float(on_skip)
+        self.coerce_text = bool(coerce_text)
+        try:
+            import autoevals
+        except ImportError as exc:
+            raise RuntimeError(
+                f"The 'autoevals' package is required for the '{scorer}' autoevals scorer. "
+                "Install with: pip install 'langfuse-eval-harness[autoevals]'"
+            ) from exc
+        factory = getattr(autoevals, scorer, None)
+        if factory is None:
+            raise ValueError(f"unknown autoevals scorer {scorer!r}")
+        self._evaluator = factory(**scorer_kwargs)
+
+    def _prep(self, value: Any) -> Any:
+        """Optionally coerce a value to text for string scorers.
+
+        Off by default: values pass through raw, because structured autoevals scorers
+        (``JSONDiff``, ``NumericDiff``, ``ValidJSON``) need the original dict/number/JSON —
+        blanket stringification would break them. Set ``coerce_text=True`` for string scorers
+        (``Levenshtein``, ``Factuality``, …) when the target emits non-string output, so it
+        scores the text instead of silently falling to the ``0.0`` fail-safe. ``None`` is left
+        as-is either way.
+        """
+        return _as_text(value) if self.coerce_text and value is not None else value
+
+    def score(self, item: EvalItem, output: TargetOutput, ctx: RunContext) -> ScoreResult:
+        # Fail-safe covers the whole call AND result normalization (evaluator, metadata
+        # access, score coercion): a provider/parse error must not abort the run.
+        try:
+            result = self._evaluator(
+                output=self._prep(output.output),
+                expected=self._prep(item.expected),
+                input=self._prep(item.inputs),
+            )
+            raw_metadata = getattr(result, "metadata", None)
+            metadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
+            raw_score = result.score
+            value = None if raw_score is None else float(raw_score)
+        except Exception as exc:
+            logger.warning("autoevals scorer %r failed for item %s: %s", self.scorer_name, item.id, exc)
+            return ScoreResult(self.name, value=0.0, passed=False, comment=f"autoevals error: {exc}")
+        if value is None:  # autoevals returns None on skip; ScoreResult.value is non-optional
+            return ScoreResult(
+                self.name,
+                value=self.on_skip,
+                passed=None,
+                comment="autoevals skipped (score=None)",
+                metadata=metadata,
+            )
+        comment = metadata.get("rationale") if isinstance(metadata.get("rationale"), str) else None
+        return ScoreResult(
+            self.name,
+            value=value,
+            passed=value >= self.threshold,
+            comment=comment,
+            metadata=metadata,
+        )
+
+
+__all__ = [
+    "AutoevalsScorer",
+    "CompositeScorer",
+    "ContainsScorer",
+    "ExactMatchScorer",
+    "JsonKeysScorer",
+    "LLMJudgeScorer",
+    "RegexMatchScorer",
+]
