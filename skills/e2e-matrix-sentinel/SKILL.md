@@ -1,5 +1,6 @@
 ---
 name: e2e-matrix-sentinel
+version: 1.0.0
 description: Validate cross-platform end-to-end matrix coverage, verify POSIX and Windows driver parity, and enforce offline fixture restamping invariants. Use whenever running end-to-end matrix suites, checking e2e driver parity, or validating matrix coverage freshness.
 ---
 

@@ -86,3 +86,18 @@ skills:
     path: skills/test-completeness-guard
     description: Census frozen public-surface names against a test tree and fail only when an explicit hit-rate floor is missed. Does not invent coverage floors.
     compatibility: python>=3.10
+  - name: corpus-guardian
+    version: 1.0.0
+    path: skills/corpus-guardian
+    description: Manage, verify, and synchronize the four frozen synthetic evaluation corpora (RCA, Requirements, TestGen, Answer Quality).
+    compatibility: python>=3.10
+  - name: e2e-matrix-sentinel
+    version: 1.0.0
+    path: skills/e2e-matrix-sentinel
+    description: Validate cross-platform end-to-end matrix coverage, verify POSIX and Windows driver parity, and enforce offline fixture restamping invariants.
+    compatibility: python>=3.10
+  - name: refactoring-decomposer
+    version: 1.0.0
+    path: skills/refactoring-decomposer
+    description: Analyze codebase for size budget violations, decompose god-files and over-budget functions, and generate backwards-compatible shims.
+    compatibility: python>=3.10

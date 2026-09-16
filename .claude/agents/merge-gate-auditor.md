@@ -14,7 +14,7 @@ The `merge-gate-auditor` is an autonomous evaluation subagent dedicated to:
 
 ## Associated Skills
 
-- `skills/merge-gate-auditor/`
+- `.agents/skills/merge-gate-auditor/SKILL.md`
 - `skills/architecture-drift-guard/`
 - `skills/dataset-lint/`
 
