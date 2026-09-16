@@ -1,0 +1,14 @@
+{
+  "skill": "e2e-matrix-sentinel",
+  "evals": [
+    {
+      "id": "check-sentinel",
+      "prompt": "Verify matrix coverage completeness and E2E driver parity.",
+      "run": "python scripts/sentinel.py --check",
+      "assertions": [
+        { "type": "exit_zero", "text": "sentinel checks pass" },
+        { "type": "output_contains", "contains": "driver parity checks PASSED", "text": "reports driver parity clean" }
+      ]
+    }
+  ]
+}

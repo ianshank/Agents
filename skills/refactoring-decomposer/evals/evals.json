@@ -1,0 +1,14 @@
+{
+  "skill": "refactoring-decomposer",
+  "evals": [
+    {
+      "id": "scan-budgets",
+      "prompt": "Scan codebase for structural size budget violations.",
+      "run": "python scripts/decompose_advisor.py --scan --root src/eval_harness",
+      "assertions": [
+        { "type": "exit_zero", "text": "advisor scan completes without hard violations" },
+        { "type": "output_contains", "contains": "Decomposition Advisor Report", "text": "generates report header" }
+      ]
+    }
+  ]
+}

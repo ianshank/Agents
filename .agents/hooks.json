@@ -44,5 +44,14 @@
         "timeout": 200
       }
     ]
+  },
+  "architecture-drift-guard": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python skills/architecture-drift-guard/scripts/drift_check.py --manifest architecture.yaml",
+        "timeout": 30
+      }
+    ]
   }
 }

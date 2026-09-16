@@ -1,0 +1,14 @@
+{
+  "skill": "corpus-guardian",
+  "evals": [
+    {
+      "id": "check-all-fresh",
+      "prompt": "Verify that all four synthetic evaluation corpora match generator code.",
+      "run": "python scripts/corpus_guard.py --check",
+      "assertions": [
+        { "type": "exit_zero", "text": "freshness check passes across all corpora" },
+        { "type": "output_contains", "contains": "synthetic corpora verified clean", "text": "reports clean status" }
+      ]
+    }
+  ]
+}
