@@ -24,5 +24,5 @@ ruff==0.15.20
 jsonschema>=4.0
 
 # Transitive safety pins (Snyk / CVE)
-idna>=3.18
+idna>=3.19
 requests>=2.34.2

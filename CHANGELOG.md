@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Hardening — mypy stub compatibility (python_version = 3.12) & dependabot security bumps
+
+- Set `[tool.mypy] python_version = "3.12"` in `pyproject.toml` so mypy parses transitive
+  numpy 2.5+ `type` statement stubs cleanly across all 324 source files without syntax errors,
+  fulfilling the note in `pyproject.toml:173-182`.
+- Bumped `pyarrow>=14,<26` in `pyproject.toml` (parquet and dev extras) and `idna>=3.19` in
+  `requirements.txt` to permit latest minor releases without breaking reproducible lockstep pins.
+- Refreshed `docs/eval_metrics_comparison.svg` and `docs/eval_metrics_comparison.png` via
+  `generate_eval_metrics.py --format both` to satisfy `tests/test_claude_hooks.py`.
+- Corrected executive analysis figures in `EXECUTIVE_BRIEF.md` (66/68 features, 221 store records).
+
 ### Added — extras-present live e2e rerun + F-067 mocked/unmocked slice
 
 Windows `-Tiers all -HypothesisProfile ci` with `autoevals`/`archguard` already
