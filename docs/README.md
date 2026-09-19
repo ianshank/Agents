@@ -132,6 +132,7 @@ before this index existed:
 |---|---|
 | agent-eval-coverage | [PLAN](plans/agent-eval-coverage/PLAN.md) · [REVIEW](plans/agent-eval-coverage/REVIEW.md) |
 | agents-md-directory-docs | [PLAN](plans/agents-md-directory-docs/PLAN.md) · [TEMPLATE](plans/agents-md-directory-docs/TEMPLATE.md) |
+| branch-hardening | [PLAN](plans/branch-hardening/PLAN.md) — gap analysis, tech-debt and wiring remediation |
 | agent-record-decontamination | [PLAN](plans/agent-record-decontamination/PLAN.md) · [REVIEW](plans/agent-record-decontamination/REVIEW.md) · [REVIEW-v2](plans/agent-record-decontamination/REVIEW-v2.md) |
 | agents-critical-path | [PLAN](plans/agents-critical-path/PLAN.md) · [REVIEW](plans/agents-critical-path/REVIEW.md) |
 | claude-foundation | [PLAN](plans/claude-foundation/PLAN.md) · [REVIEW](plans/claude-foundation/REVIEW.md) · [sources](plans/claude-foundation/sources.md) |
