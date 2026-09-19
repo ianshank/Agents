@@ -103,8 +103,10 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 | **Whole-repo e2e / user-journey harness** | `bash scripts/run_all_e2e.sh --tiers offline` (POSIX; `pwsh scripts/run_all_e2e.ps1 -Tiers offline` on Windows). Both drivers declare the same steps and `tests/test_e2e_driver_parity.py` fails on drift. See [docs/e2e-runbook.md](docs/e2e-runbook.md) |
 
 Per-eval invocations (RCA F-067, requirements F-068, testgen F-069, replay F-070) are in
-[config/AGENTS.md](config/AGENTS.md) and [corpora/AGENTS.md](corpora/AGENTS.md); the two
-isolated experiment gates are in [experiments/AGENTS.md](experiments/AGENTS.md).
+[config/README.md](config/README.md), with the corpora they read described in
+[corpora/AGENTS.md](corpora/AGENTS.md); the two isolated experiment gates are in
+[experiments/AGENTS.md](experiments/AGENTS.md). Live Phoenix e2e and the tiered test runner
+are in [README.md](README.md).
 
 ## Seams that must stay narrow
 

@@ -14,6 +14,11 @@ import _agents_md_lib as lib
 import check_agents_md as guard
 import pytest
 
+#: The repo root, resolved from this file rather than the cwd. Both repo-level tests below
+#: used to default to ``--root "."``: one failed when pytest ran from elsewhere, and the
+#: other passed *vacuously* off-root because it found no files to measure.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 # A minimal file that satisfies every structural check. Individual tests break one thing.
 GOOD_BODY = """# AGENTS.md - test
 
@@ -78,8 +83,8 @@ def _doc(tmp_path: Path, body: str = GOOD_BODY, budget: int = lib.TIER2_BUDGET) 
 
 
 def test_repo_agents_md_set_is_clean() -> None:
-    """The committed AGENTS.md set passes every check."""
-    assert guard.main([]) == guard.EXIT_OK
+    """The committed AGENTS.md set passes every check, from any working directory."""
+    assert guard.main(["--root", str(REPO_ROOT)]) == guard.EXIT_OK
 
 
 def test_tier_tables_have_no_overlap() -> None:
@@ -116,7 +121,8 @@ def test_eager_files_are_all_outside_the_tier_table() -> None:
 
 def test_eager_budget_passes_for_the_real_repo() -> None:
     """What the committed repo actually loads at session start is within the ceiling."""
-    assert lib.check_eager_budget(Path()) == []
+    assert (REPO_ROOT / lib.AGENTS_FILENAME).is_file()  # else the assertion below is vacuous
+    assert lib.check_eager_budget(REPO_ROOT) == []
 
 
 def test_eager_budget_sums_across_files(tmp_path: Path) -> None:
@@ -288,6 +294,32 @@ def test_covered_directory_must_not_carry_a_file(tmp_path: Path) -> None:
     (skill / lib.AGENTS_FILENAME).write_text(GOOD_BODY, encoding="utf-8")
     findings = lib.check_coverage(tmp_path)
     assert any("must NOT exist" in f.detail for f in findings)
+
+
+def test_a_stray_file_nested_below_a_covered_dir_is_reported(tmp_path: Path) -> None:
+    """The forbidden arrangement is a second instruction file beside a SKILL.md.
+
+    ``skills/*`` matched only ``skills/<skill>``, so a file one level deeper -- exactly where
+    a skill keeps its scripts -- was invisible to the guard that forbids it.
+    """
+    nested = tmp_path / "skills" / "demo" / "scripts"
+    nested.mkdir(parents=True)
+    (nested / lib.AGENTS_FILENAME).write_text(GOOD_BODY, encoding="utf-8")
+    findings = lib.check_coverage(tmp_path)
+    assert any(f.path == "skills/demo/scripts/AGENTS.md" for f in findings)
+
+
+def test_a_required_dir_is_not_also_forbidden(tmp_path: Path) -> None:
+    """``skills/**`` matches ``skills`` itself, which is Tier 1.
+
+    Without required-wins precedence the guard would demand skills/AGENTS.md and forbid it in
+    the same run. Every directory must be in exactly one state.
+    """
+    (tmp_path / "skills").mkdir()
+    (tmp_path / "skills" / lib.AGENTS_FILENAME).write_text(GOOD_BODY, encoding="utf-8")
+    covered = [p.relative_to(tmp_path).as_posix() for p, _ in lib._covered_dirs(tmp_path)]
+    assert "skills" not in covered
+    assert not [f for f in lib.check_coverage(tmp_path) if f.path == "skills/AGENTS.md"]
 
 
 def test_covered_by_parent_reasons_are_all_populated() -> None:

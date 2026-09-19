@@ -12,7 +12,7 @@ what that index does not tell an agent about to edit one.
 | Path | Role |
 |---|---|
 | `validate.py` | Drives `features.yaml`; runs the tier-filtered `F_0NN.py` proofs |
-| `validations/` | 72 one-shot feature proofs. PROTECTED; a gate, not an editable surface |
+| `validations/` | 69 one-shot feature proofs. PROTECTED; a gate, not an editable surface |
 | `quality-gate.sh` | GENERATED. Hand extensions only in `do_extra()` below the marker |
 | `validate_skill.py` | Canonical copy; vendored byte-identically into every skill |
 | `eval_protected_paths.py` | Single source of truth for the protected-path globs |
@@ -80,7 +80,7 @@ flowchart LR
 | Task in this directory | Agent | Why |
 |---|---|---|
 | Find every call site of a guard before changing its signature | `explorer` | Read-only `Grep` sweep; these modules are imported by tests, hooks and workflows alike |
-| Run the gate and isolate which stage failed | `test-runner` | Has `Bash`; the gate has five stages and only names the failing one in its own output |
+| Run the gate and isolate which stage failed | `test-runner` | Has `Bash`; the gate has four stages and only names the failing one in its own output |
 | Review a guard change before pushing | `narrow-critic` | A guard that fails open is a security defect a linter cannot see |
 
 ## See also

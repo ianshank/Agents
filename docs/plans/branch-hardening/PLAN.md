@@ -433,6 +433,57 @@ so it belongs in the same labeled PR as the CI wiring, not before. `features.yam
 
 ---
 
+## 6A. Workstream E — what the adversarial peer review found
+
+It verified ~60 specific claims across the 46 files — counts, symbol names, aliases, env
+vars, ADR numbers, coverage floors — and found only **4 wrong**. Every `## Verify` command
+resolves and runs; every ADR cited exists and says what the citing file claims; every
+`## Subagents` row names a real agent with the right tools; every coverage floor and
+protected-path claim is correct. The content is sound. The damage was elsewhere.
+
+### 6A.1 Fixed in this branch
+
+| Finding | What was wrong |
+|---|---|
+| **B1** | `CHANGELOG.md` claimed *"Nothing was deleted"*. False. Rewriting `openspec/AGENTS.md` dropped three sections, including a direct do-not-do instruction — *"the `agent_core` runtime and the calibrated merge gate are the **subject** a change measures… Do not route change-execution through them"* — which then existed **nowhere** in the repo. Restored, and the CHANGELOG now names what did go. |
+| **B4** | Both repo-level tests resolved their root from the cwd. `test_repo_agents_md_set_is_clean` **failed** from another directory; worse, `test_eager_budget_passes_for_the_real_repo` **passed vacuously**, asserting nothing. With the guard in no workflow, those two tests *were* the enforcement. |
+| **G1** | `COVERED_BY_PARENT["skills/*"]` never matched below `skills/<skill>`, so the one arrangement the policy forbids — a second instruction file beside a `SKILL.md` — was invisible one level down, exactly where a skill keeps its scripts. |
+| **precedence** | Fixing G1 exposed that `skills/**` also matches `skills` itself, which is Tier 1: the guard would have demanded `skills/AGENTS.md` and forbidden it in the same run. Required now wins over covered; regression tests for both. |
+| **S1/S2** | `scripts/AGENTS.md` said 72 feature proofs (69) and "five stages" where `src/eval_harness/AGENTS.md` said four — two files contradicting each other about the same command. `do_all()` runs four. |
+| **S3** | The root forwarded per-eval invocations to `config/AGENTS.md` and `corpora/AGENTS.md`. Neither contains a single one; they live in `config/README.md`. |
+| **S8** | My own exemplar omitted `config.py` from its Map and drew an `engine -> budget` edge that the file's own `## Verify` reports as declared-but-unobserved. |
+
+### 6A.2 Outstanding — guard bypasses, all proven — **S each**
+
+- **G3** `_LINK_RE` stops at the first `)`, so a target containing parentheses
+  false-positives (`foo (bar).md` is read as `foo (bar`); the
+  angle-bracket escape is dead code because the title split runs before the `<…>` strip.
+- **G4** Any target containing `* ? [ ]` is skipped, so a link to a genuinely missing
+  `missing[1].md` reports nothing. `[` and `]` do not belong in that metachar set.
+- **G5** `check_blind_references` keys on an exact `"## See also"`: one trailing space
+  disables it silently while every other check stays green. Escaped pipes also break the
+  cell split.
+- **G6** Exit-code contract violated: a non-UTF-8 file documents exit 2 but returns 1.
+- **G7** `_mermaid_blocks` does not understand nested fences, so a file documenting the
+  template trips it.
+- **G2** `.github/` and `.githooks/` are in neither tier table nor `COVERED_BY_PARENT` —
+  for a protected editing surface that reads as an oversight, which is the exact failure
+  `COVERED_BY_PARENT` exists to prevent. Nothing detects a new top-level package either.
+
+### 6A.3 Outstanding — content — **S each**
+
+- **B2** The root claims `docs/README.md` indexes the governance files. It does not —
+  `GOVERNANCE`, `CODE_OF_CONDUCT`, `MAINTAINERS`, `LICENSE`, `NOTICE`, `NEXT_STEPS` are all
+  absent, and its preamble still says it mirrors a table that no longer exists.
+- **B3** covered at §3.2. **S9** `experiments/AGENTS.md`'s diagram draws the dependency
+  direction its own rule forbids. **S10** `.agents/AGENTS.md` says "not this file" loads,
+  contradicting the lazy-loading premise the whole project rests on.
+- **Test quality:** 7 of 49 tests assert on the tier table rather than behaviour — they pin
+  the data, but inflate the apparent coverage of the checks; and no test drives `main()` to
+  `EXIT_OK` on a synthetic clean tree, so the success branch rests on the repo-level test.
+
+---
+
 ## 7. Corrections to my own analysis
 
 Recorded because an audit that hides its own misses is not an audit.

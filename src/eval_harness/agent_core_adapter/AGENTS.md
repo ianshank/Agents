@@ -13,6 +13,7 @@ translates between the two type systems and owns the cost ledger that caps judge
 | `bridge.py` | `CycleResult` / `CycleState` translation across the seam |
 | `calibration.py` | Surfaces `JudgeCalibrationReport` to the harness |
 | `gate_authorization.py` | Authorizes a gate verdict against the ledger |
+| `config.py` | The adapter's own `*Config` dataclasses; defaults live here, not at call sites |
 
 ## Diagram
 
@@ -34,7 +35,7 @@ flowchart LR
 
   AC["agent_core<br/>(sibling package)"]
 
-  ENG --> BUD
+  ENG -.declared, not yet observed.-> BUD
   GATE --> BRI
   BUD --> AC
   BRI --> AC

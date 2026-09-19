@@ -28,10 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Trimmed the root `AGENTS.md` from 246 to 176 lines, back under the 200-line Context Bloat
   threshold that Claude Code's memory docs and the configuration-smell literature both use.
-  Nothing was deleted: the SDK-optional seam roster moved to `docs/seams.md`, the
+  Most content moved rather than went away: the SDK-optional seam roster moved to `docs/seams.md`, the
   cross-platform traps to `docs/windows-gotchas.md`, and directory-local detail into the
   `AGENTS.md` of the directory it describes. Both new docs are registered in `mkdocs.yml`
   and `docs/README.md`.
+- Restored a rule the root trim dropped: `openspec/AGENTS.md` now again states that the
+  `agent_core` runtime, the calibrated merge gate and the `(agent_version, domain)` cells are
+  the *subject* a change measures, not executors to route change-execution through. An
+  adversarial review of the branch found that instruction had survived nowhere.
+- Known drops from the root trim, recorded rather than implied away: the `SKIP_SESSION_BOOTSTRAP`
+  opt-out, the live-Phoenix e2e invocation, `python -m behavioral_regression --config`, the
+  Stop hook's `_CHECKERS` inventory, and the one-line roles of the governance files. The
+  commands remain in `README.md` and `config/README.md`; the rest is tracked in
+  `docs/plans/branch-hardening/PLAN.md`.
 - `claude-foundation/CLAUDE.md` now opens with `@AGENTS.md`. It is the repo's only
   `CLAUDE.md`, and under Claude Code's default project-instructions setting its presence made
   Claude read `CLAUDE.md` files *only* — so an agent working inside `claude-foundation/`

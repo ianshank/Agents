@@ -61,12 +61,19 @@ flowchart LR
   `changes/archive/<name>/` and **not** still as `changes/<name>/`.
 - **Archive with the script, never by hand.** `python scripts/openspec_archive.py` does the
   `git mv` *and* rewrites outbound relative links, which is what keeps that gate green.
-- **Review is advisory by design.** `spec-guardian` and `peer-reviewer` output is a checklist
-  item, never a merge blocker. Do not wire it into CI.
+- **Review is advisory by design:** `spec-guardian` / `peer-reviewer` output is a checklist item, never a merge blocker. Do not wire it into CI.
 - **The `foundation:*` fleet is staged, not installed** (ADR 0028): dispatching it needs a
   session started with `claude --plugin-dir claude-foundation`. Without that, the row degrades
   to a `general-purpose` sub-agent inlining the same method — degrade deliberately rather than
   failing to find the agent.
+- **The runtime is the subject, not an executor.** `agent_core`'s `LoopController` /
+  `AsyncLoopController` / `ParallelClaimRunner`, the calibrated merge gate
+  (`merge_gate.decide()`, `merge_gate_ci`) and the `(agent_version, domain)` calibration cells
+  are what a change *measures and tunes*. **Do not route change-execution through them** —
+  doing so contaminates the very signal the change exists to read.
+- **Guards run under every action, whatever the phase:** `architecture-drift-guard` blocks an
+  undeclared import edge; when the plugin is staged, `foundation:pre-tool-guard` is fail-closed
+  on secret reads and out-of-project writes.
 
 ## Verify
 

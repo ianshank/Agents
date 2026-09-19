@@ -109,7 +109,7 @@ COVERED_BY_PARENT: dict[str, str] = {
         "directory documentation there taxes every session in the repo whether or not "
         "anyone touches it, so .claude/ is documented in .claude/README.md instead."
     ),
-    "skills/*": "SKILL.md is already the agent contract for a skill; see skills/AGENTS.md",
+    "skills/**": "SKILL.md is already the agent contract for a skill; see skills/AGENTS.md",
     "docs/decisions": "immutable ADRs; docs/AGENTS.md covers the convention",
     "docs/plans": "plan folders; docs/AGENTS.md covers the convention",
     "docs/roadmap": "epic index; docs/AGENTS.md covers the convention",
@@ -200,15 +200,31 @@ def required_dirs() -> dict[str, int]:
 
 
 def _covered_dirs(root: Path) -> list[tuple[Path, str]]:
-    """Expand COVERED_BY_PARENT, including its glob forms, to concrete directories."""
+    """Expand COVERED_BY_PARENT, including its glob forms, to concrete directories.
+
+    A required directory always wins over a covered pattern that happens to match it.
+    ``skills/**`` has to reach *below* ``skills/<skill>`` -- otherwise the one arrangement the
+    policy explicitly forbids, a second instruction file beside a ``SKILL.md``, is invisible
+    one level down -- and ``**`` also matches zero segments, so the pattern covers ``skills``
+    itself, which is Tier 1. Without this filter the guard would demand ``skills/AGENTS.md``
+    and forbid it in the same run. Every directory is in exactly one state.
+    """
+    required = set(required_dirs())
     out: list[tuple[Path, str]] = []
     for pattern, reason in COVERED_BY_PARENT.items():
+        matches: list[Path]
         if any(ch in pattern for ch in _GLOB_METACHARS):
-            out.extend((p, reason) for p in sorted(root.glob(pattern)) if p.is_dir())
+            matches = [p for p in sorted(root.glob(pattern)) if p.is_dir()]
         else:
             candidate = root / pattern
-            if candidate.is_dir():
-                out.append((candidate, reason))
+            matches = [candidate] if candidate.is_dir() else []
+        for path in matches:
+            try:
+                rel = path.relative_to(root).as_posix()
+            except ValueError:  # pragma: no cover - glob results are always under root
+                continue
+            if rel not in required:
+                out.append((path, reason))
     return out
 
 
