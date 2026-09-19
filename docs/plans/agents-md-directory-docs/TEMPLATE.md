@@ -53,7 +53,7 @@ flowchart LR
 
 | Doc | Read it when |
 |---|---|
-| [`relative/path.md`](relative/path.md) | <the trigger that should send an agent there> |
+| [`PLAN.md`](PLAN.md) | <the trigger that should send an agent there — not just what the doc is> |
 ````
 
 ## Budgets
