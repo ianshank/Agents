@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Added — per-directory `AGENTS.md` coverage with a mechanical guard
+
+- Added an `AGENTS.md` to every directory in a declared tier table: 18 top-level components
+  and 29 source subpackages, each carrying a local mermaid diagram (`accTitle`/`accDescr` for
+  screen readers), the directory's own constraints, its verify command, and a subagent-routing
+  table written against each agent's real tool set.
+- Added `scripts/check_agents_md.py` + `scripts/_agents_md_lib.py`: a deterministic offline
+  guard over coverage, line budget, section order, mermaid validity, relative-link resolution,
+  lint-rule leakage, and un-triggered "See also" references. Exit codes 0/1/2, `--json`.
+  Wired into the `AGENTS.md` pre-PR checklist; the CI step is left for a labeled change
+  because `.github/**` is a protected path.
+- Recorded directories that deliberately carry **no** `AGENTS.md` in `COVERED_BY_PARENT`,
+  each with a reason, so an absent file reads as a decision rather than an oversight. A
+  skill's `SKILL.md` is already its agent contract, so `skills/*/` is covered by the parent.
+- Extended `docs/STYLE.md` to sanction `AGENTS.md` below the repo root (its `UPPERCASE.md`
+  rule was scoped to the root only) and to state that `README.md` addresses a human evaluating
+  a component while `AGENTS.md` addresses an agent about to change it.
+
+### Fixed — root `AGENTS.md` context bloat and a `CLAUDE.md` suppression hazard
+
+- Trimmed the root `AGENTS.md` from 246 to 199 lines, back under the 200-line Context Bloat
+  threshold that Claude Code's memory docs and the configuration-smell literature both use.
+  Nothing was deleted: the SDK-optional seam roster moved to `docs/seams.md`, the
+  cross-platform traps to `docs/windows-gotchas.md`, and directory-local detail into the
+  `AGENTS.md` of the directory it describes. Both new docs are registered in `mkdocs.yml`
+  and `docs/README.md`.
+- `claude-foundation/CLAUDE.md` now opens with `@AGENTS.md`. It is the repo's only
+  `CLAUDE.md`, and under Claude Code's default project-instructions setting its presence made
+  Claude read `CLAUDE.md` files *only* — so an agent working inside `claude-foundation/`
+  silently received none of the repo's `AGENTS.md` orientation.
+- Recorded in `.agents/AGENTS.md` that Claude Code never reads anything under a `.agents/`
+  directory, so `.claude/` is authoritative and the two trees' drift is documented rather
+  than load-bearing.
+
 ### Hardening — mypy stub compatibility (python_version = 3.12) & dependabot security bumps
 
 - Set `[tool.mypy] python_version = "3.12"` in `pyproject.toml` so mypy parses transitive

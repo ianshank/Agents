@@ -90,5 +90,8 @@ nav:
       - "Merge gate (2026-07-24)": gap-analysis-merge-gate-2026-07-24.md
   - Conventions:
       - Style & taxonomy: STYLE.md
+      - AGENTS.md template: plans/agents-md-directory-docs/TEMPLATE.md
+      - SDK-optional seams: seams.md
+      - Windows gotchas: windows-gotchas.md
       - Skill template: SKILL_TEMPLATE.md
       - Skill validation template: SKILL_VALIDATION_TEMPLATE.md

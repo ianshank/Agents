@@ -7,17 +7,18 @@ sources rather than restating them.
 
 ## What this repo is
 
-A monorepo of five Python packages plus vendored skills and CI:
+A monorepo of five Python packages plus vendored skills and CI. **Every component carries
+its own `AGENTS.md`** with its gate command, coverage floor, seams and constraints — go
+there, not here, once you know which one you are working in.
 
-| Path | Role | Version gate |
-|---|---|---|
-| `src/eval_harness/` (root) | `langfuse-eval-harness` — LLM evaluation harness with pluggable judges, scorers, sinks, and datasets | `pyproject.toml [tool.coverage.report] fail_under = 96` |
-| `agent-core/` | Deterministic control & calibration core; zero runtime deps | `agent-core/pyproject.toml fail_under = 95` |
-| `behavioral-regression/` | Behavioral-regression detector + `ship/hold/escalate` gate | `behavioral-regression/pyproject.toml fail_under = 95` |
-| `flow-corpus/` | Calibrated flow corpus (offline + deterministic) | `flow-corpus/pyproject.toml fail_under = 95` |
-| `flow-protocol/` | Cross-package flow protocol | `flow-protocol/pyproject.toml fail_under = 95` |
-| `scripts/` + `scripts/validations/` | Operational tooling — feature validators, CI guards | `scripts/.coveragerc fail_under = 85` |
-| `skills/` | Vendored skills registered via `skills/marketplace.yaml` — eval skills plus deterministic generator skills (`project-setup`/`quality-gate`/`deploy`) that emit Makefiles/shell scripts (ADR 0020) | `skills/*` gate: pinned `ruff`/`mypy` + `pytest --cov-fail-under=95` per `skills-ci.yml` |
+`src/eval_harness/` is the harness and the top of the dependency DAG. `agent-core/` and
+`flow-protocol/` are pure leaves (`agent_core` has zero runtime dependencies).
+`flow-corpus/` builds on both; `behavioral-regression/` is a terminal consumer.
+`scripts/` holds the CI guards and `skills/` the vendored skills.
+
+**The airgap:** `eval_harness` and `flow_corpus` must never import each other, and
+`eval_harness` reaches `agent_core` only through `src/eval_harness/agent_core_adapter/`.
+The absence of those edges in `architecture.yaml` *is* the structure; `drift_check.py` enforces it.
 
 ## The map
 
@@ -34,40 +35,24 @@ Before writing code, read in order:
 
 ## Reasoning & Planning Skills
 
-The `skills/` marketplace contains composable reasoning skills for conducting controlled research and producing OpenSpec packages that respect the Agents CHARTER. 
-
-To execute an end-to-end research pipeline, compose the following skills:
-1. `hierarchical-recursive-brainstorm` expands a research question into a pruned tree.
-2. `openspec-quality-plan` turns the strongest leaves into a full OpenSpec package.
-3. `openspec-peer-review` critiques and rewrites that package to the quality standards.
-
-The final peer-reviewed OpenSpec package will be ready to drop under `openspec/changes/`.
+`skills/` holds composable reasoning skills that compose into an end-to-end research
+pipeline ending in an OpenSpec package. See [skills/AGENTS.md](skills/AGENTS.md) for the
+roster, the marketplace registration rules, and how to chain them.
 
 ## Root documentation map
 
-These root-level docs answer different questions; check this table before guessing which one
-to read or update. Governance and community-health files (bottom rows) were added in the
-enterprise-docs pass and point at the charter as the single source of truth:
+The docs an agent writes *to* are listed below. For everything else — the full index by
+category, including the community-health and governance files — see
+[docs/README.md](docs/README.md), which is the canonical index this table used to duplicate.
 
-| File | Answers | Currency |
-|---|---|---|
-| `README.md` | How do I install / run / test this? | Kept current with each release |
-| `docs/quickstart.md` | How do I run my first evaluation in 5 minutes? | Canonical onboarding guide |
-| `AGENTS.md` (this file) | What must an agent read or avoid before editing? | Manually maintained — see "Rebuilding this file" below |
-| `HARNESS_SPEC.md` | What is the canonical spec (features, gates, checkpoints)? | Canonical source of truth (see its own header) |
-| `NEXT_STEPS.md` | What shipped recently, what's next? | A rolling log of intent; decomposed into `docs/roadmap/` epics |
-| `docs/roadmap/` | Detailed active engineering epics (Epics 1–5)? | Active epic tracking |
-| `CHANGELOG.md` | What changed, release by release? | Keep-a-changelog format; append to the `[Unreleased]`/dev section |
-| `progress.md` | What happened in each work session? | Rotates to `progress-archive/YYYY-MM.md` once large (see `HARNESS_SPEC.md`'s "progress-archive/" section) |
-| `docs/README.md` | Where is every doc, by category? | The documentation index (mirrors this table) |
-| `openspec/` | What in-flight change proposals exist, and which agent owns each phase? | A reversible coordination layer over `features.yaml`/ADRs; see `openspec/README.md` and `docs/openspec-spike.md`. Delete-safe |
-| `CONTRIBUTING.md` | How do I set up, test, and submit a change? | Generalizes `agent-core/CONTRIBUTING.md` to the monorepo |
-| `GOVERNANCE.md` | Who decides, and how? | Defers to `docs/CHARTER.md` §3/§6 |
-| `SECURITY.md` | How do I report a vulnerability? | Private GitHub advisories; reuses the Snyk/secret-scan posture |
-| `SUPPORT.md` | Where do I ask for help? | Points at docs + issue templates |
-| `CODE_OF_CONDUCT.md` | What behavior is expected? | Contributor Covenant 2.1 |
-| `MAINTAINERS.md` | Who maintains this? | Derived from `.github/CODEOWNERS` |
-| `LICENSE` / `NOTICE` | Under what terms is this licensed? | Apache-2.0 |
+| File | Write to it when |
+|---|---|
+| `CHANGELOG.md` | Any user-visible change. Append to `[1.3.0-dev]`, keep-a-changelog headings |
+| `docs/decisions/NNNN-*.md` | The change is an architectural decision with lasting consequences |
+| `docs/plans/<topic>/PLAN.md` | The change is a plan of work. It must also be listed in `docs/README.md` |
+| `progress.md` | A session log entry. Rotates to `progress-archive/YYYY-MM.md` once large |
+| `HARNESS_SPEC.md` | The canonical spec — features, gates, checkpoints — actually changed |
+| `AGENTS.md` (this file) | A component moved, a gate changed, or a constraint was added or lifted |
 
 `docs/decisions/` ADR numbers are **not** contiguous by design — `0007` is an intentional
 gap in the sequence (see `docs/plans/agents-critical-path/REVIEW.md`); do not backfill it
@@ -112,72 +97,45 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 | Install harness with every optional integration | `pip install -e ".[dev,langfuse,openai,anthropic,bedrock,phoenix,phoenix-evals,braintrust,autoevals,parquet,archguard]"` |
 | Install a sibling package | `pip install -e ./agent-core[dev]` (same for `behavioral-regression`, `flow-corpus`, `flow-protocol`) |
 | Run the CLI | `eval-harness run --config config/eval.example.yaml` |
-| RCA eval (F-067) | `eval-harness run --config config/rca_eval.yaml` — advisory gates; corpus at `corpora/rca/v1/` |
-| Requirements-generation eval (F-068) | `eval-harness run --config config/requirements_eval.yaml` — advisory gates; corpus at `corpora/requirements/v1/` |
-| Testgen agent-in-the-loop (F-069) | `eval-harness run --config config/testgen_agent_eval.yaml` — advisory gates; thorough holdout n=11 unique; empty baseline `config/testgen_agent_empty_eval.yaml`; do not quote `pass^k` from a deterministic fake. `config/testgen_eval.yaml` remains the Deck A+ corpus path. |
-| Fixture replay (F-070) | `eval-harness replay --archive demo/replay/baseline.jsonl --mode exact --offline` (counterfactual: `--mode counterfactual --override …`). Advisory answer-quality journey: `eval-harness run --config config/answer_quality_eval.yaml` |
-| Verify committed corpora | `make corpus-check` — byte-identical regeneration of `testgen/v1`, `rca/v1`, `requirements/v1`, and `answer_quality/v1` |
 | **Tier A mechanical gate runner** | `python scripts/verify_tier_a.py` or `make verify-tier-a` — 11 deterministic quality gates in <60s |
-| **Tiered test runner** | `python scripts/run_tiered_tests.py --tier all` or `make tiered-tests` |
-| **Executive eval metrics** | `python scripts/generate_eval_metrics.py --check` or `make eval-metrics-check` |
-| Full offline gate (single source of truth; CI mirrors it) | `./scripts/quality-gate.sh all` — generated by the quality-gate skill; lint (ruff check + format), 3 per-path mypy runs, coverage ≥96, and the F-031 scripts gate (hand extension below the marker). `make check` delegates to it. |
-| Whole-workspace gate (root + all 5 sibling packages) | `make check-all` — root gate plus `$(MAKE) -C <member> check` per member, each delegating to its own generated `scripts/quality-gate.sh` |
-| **Whole-repo e2e / user-journey harness** | `pwsh scripts/run_all_e2e.ps1 -Tiers offline` (Windows) or `bash scripts/run_all_e2e.sh --tiers offline` (POSIX; the nightly freshness job runs this one) — runs every package suite, `features.yaml` gate, package CLI journey, and skill/hook e2e test; report at `artifacts/e2e-report/`. The two drivers declare the same steps (`tests/test_e2e_driver_parity.py` fails on drift, including the live `prompt_template: "{question}"` lock). See [docs/e2e-runbook.md](docs/e2e-runbook.md). Live (non-mock) capture: [docs/e2e-live-journey.md](docs/e2e-live-journey.md) (`LOCAL_MODEL_ID`; do not restamp `docs/e2e-matrix/` from `--tiers all`). |
-| Live Phoenix e2e (mirrors `phoenix-live.yml`) | `docker run -p 6006:6006 arizephoenix/phoenix:17.18.0` then `pytest tests/test_phoenix_live.py -v -rs` with `PHOENIX_COLLECTOR_ENDPOINT` and `OPENAI_API_KEY` set |
-| Regression sibling package | `pytest behavioral-regression/tests --cov=behavioral_regression` |
-| Behavioural-regression detector CLI | `python -m behavioral_regression --config <cfg>` — see `behavioral-regression/README.md` |
-| Eval-backend validation experiment | `make -C experiments/backend-validation check` (own gate) — an **isolated, temporary** subtree (`eval-backend-validation_v1`; Langfuse/Opik capability validation). Consumes the harness as a dependency only; zero writes outside itself; ships unsigned (probes gated behind human sign-off of `PROBES.yaml`/`RUBRIC.md`). NOT a package/skill and NOT in `make check-all`; see `experiments/backend-validation/README.md`. |
-| Trace-analytics SQL sketches | `make -C experiments/trace-analytics check` — stdlib sqlite over fixture JSONL. Unsigned; **not** in `make check-all`. ClickHouse/DuckDB/production ingest stay gated. See `experiments/trace-analytics/README.md`. |
+| Full offline gate (CI mirrors it) | `./scripts/quality-gate.sh all` — generated; lint, three per-path mypy runs, coverage >=96, and the F-031 scripts gate. `make check` delegates to it |
+| Whole-workspace gate | `make check-all` — the root gate plus `make -C <member> check` for all five |
+| **Whole-repo e2e / user-journey harness** | `bash scripts/run_all_e2e.sh --tiers offline` (POSIX; `pwsh scripts/run_all_e2e.ps1 -Tiers offline` on Windows). Both drivers declare the same steps and `tests/test_e2e_driver_parity.py` fails on drift. See [docs/e2e-runbook.md](docs/e2e-runbook.md) |
+
+Per-eval invocations (RCA F-067, requirements F-068, testgen F-069, replay F-070) are in
+[config/AGENTS.md](config/AGENTS.md) and [corpora/AGENTS.md](corpora/AGENTS.md); the two
+isolated experiment gates are in [experiments/AGENTS.md](experiments/AGENTS.md).
 
 ## Seams that must stay narrow
 
-The following files implement "SDK-optional" seams: the real dependency is imported lazily so the package installs and the offline suite runs with **zero external dependencies**. Follow the same pattern for any new integration:
+Every integration imports its real dependency **lazily**, so the package installs and the
+offline suite runs with zero external dependencies. Follow that pattern for any new
+integration, and test the "SDK absent" path via `sys.modules` injection
+(`monkeypatch.setitem(sys.modules, "phoenix.otel", None)`) rather than `@patch(...)`,
+which raises `ModuleNotFoundError` at patch time when the SDK is genuinely absent.
 
-- `src/eval_harness/core/_trajectory.py` — pure, deterministic tool-call canonicalisation
-  (sets sorted by value, unknown types rendered by `type:value`, bounded recursion). No I/O.
-- `src/eval_harness/scorers/trajectory.py` — the seven agent-trajectory scorers (F-051).
-- `src/eval_harness/langfuse_client/__init__.py` — Langfuse tracing + score export.
-- `src/eval_harness/phoenix_client/__init__.py` — Phoenix tracing + score export (mirrors `langfuse_client` deliberately; ROI matrix in `docs/phoenix-spike.md`).
-- `src/eval_harness/braintrust_client/__init__.py` — BrainTrust experiment export (`build_client`) + dataset read (`fetch_dataset_items`); mirrors `phoenix_client`, `docs/braintrust-spike.md`.
-- `src/eval_harness/judges/*.py` — `MockJudge` (offline default), `OpenAIJudge`, `AnthropicJudge`, `BedrockJudge`, `PhoenixEvalJudge`.
-- `src/eval_harness/sinks/__init__.py` — `console`, `json_file`, `html_file`, `langfuse`, `phoenix`, `braintrust`.
-- `agent-core/agent_core/proxies.py` — `ProxyExtractor` Protocol + `MappingProxy`. Same shape, different direction: an external score (an LLM judge, a static analyser) is *injected* rather than a client being lazily imported, so `agent_core` measures a judge's signal while staying dependency-free and pure stdlib. Add a proxy here, never a dependency there.
-- `agent-core/agent_core/protocols.py` — `Clock` Protocol + `SystemClock`/`FixedClock`. The DI seam for "now": `audit_sampler.record_verdict`, `merge_seed.seed_pending`, `outcome_labeller.label_matured`, and `merge_gate_ci._append_audit` all take an optional `clock: Clock | None = None` instead of calling `datetime.now()` directly, so tests inject a `FixedClock` for determinism without patching `datetime`.
-- `src/eval_harness/core/interfaces.py` — `Judge`/`DatasetSource`/`TargetRunner`/`ResultSink`/`Scorer`/`StateAdapter` are `typing.Protocol` (structural DI). Every DI seam is structural: fakes used in tests satisfy interfaces by shape alone without inheritance, while existing nominal subclasses keep working unchanged.
-- `src/eval_harness/targets/provenance.py` — `EvidenceStore` Protocol (one call: `fetch`) + `MappingEvidenceStore` (ADR 0047). The seam for requirements-generation evidence retrieval: live adapters (Google Drive, Context7) sit behind this protocol while offline evaluations and synthetic corpora use the deterministic in-memory store. Verification is *not* a store method — `verify_provenance` re-fetches through `fetch` and compares hashes itself, so a store cannot certify bytes it has already drifted away from.
-- `src/eval_harness/targets/testgen_agent.py` — registered `testgen_agent` pipeline (F-069, ADR 0048). Strip `inputs.suite` on a **deep copy**, then `run_generated_suite`. The registry name is **not** an ADR 0039 allowlist entry; ADR 0039 applies only to optional `generator_path`. Never allowlist `eval_harness`. Do not fold this into `targets/testgen.py` (size-budget).
-- `src/eval_harness/replay/` — fixture replay of recorded `AgentTrajectory` envelopes (F-070, ADR 0049). Exact re-score and counterfactual observation swap are a `TargetRunner`, never a scorer (ADR 0046). JSONL archive confined by `DATA_ROOT`/`OUTPUT_ROOT`. The engine never reconstructs trajectories from Langfuse/Phoenix spans. ClickHouse is not a harness extra.
-- `src/eval_harness/scorers/__init__.py` — `autoevals` bridges BrainTrust's `autoevals` scorer library (heuristic offline-safe; LLM/Embedding need a provider key). `src/eval_harness/datasets/__init__.py` — `braintrust` pulls a dataset via `init_dataset` (fail-fast when the SDK is absent).
-
-Test the "SDK absent" path via `sys.modules` injection, not `@patch(...)` — see `feedback_agents_offline_optional_dep_testing` behaviour documented in existing tests. `@patch("phoenix.otel.register")` raises `ModuleNotFoundError` at patch time when the SDK isn't installed. The concrete idiom is `monkeypatch.setitem(sys.modules, "phoenix.otel", None)`, which forces the lazy import to `ImportError` even when the extra *is* installed (this venv installs all extras).
+The roster of seams, and why each one is shaped the way it is, lives in
+[docs/seams.md](docs/seams.md) — read it before adding a seam or changing an existing one.
 
 ## Testing conventions
 
 - Every scorer, judge, sink, and dataset registers itself via `@REGISTRY.register("name")`. Tests should exercise the registered name path, not the class constructor path — that's how the real engine resolves them.
 - All evaluation components (Judges, Datasets, Scorers, Sinks) that interact with external dependencies must be fully mocked for offline testing using deterministic dependency injection as seen in `tests/test_matrix_eval_tools.py`. Do not use hardcoded `try...except` exception swallows or brittle magic mock returns.
 - Registered components carry a **matrix obligation** (ADR 0032): rows in `tests/test_matrix_eval_tools.py` to the kind's `REQUIRED_DIMS` floor, declared with literal `MATRIX_KIND`/`MATRIX_COMPONENTS` class attributes and `test_m<dim>_*` method names — both cross-checked against the live-registry census by `tests/test_matrix_coverage.py`, so the declarations cannot go stale. Waivers are data with reasons (`WAIVED` in `tests/_matrix_coverage.py`), never silent omissions. After adding or renaming rows, regenerate the artifact with `python tests/test_matrix_coverage.py --update`; never hand-edit `docs/matrix-coverage.md`.
-- Pytest markers: `integration` (live API tests, individually skipped by an env-var check in each test, not by a default `-m` deselect — `addopts` carries no `-m "not integration"`, so `tests/integration/` is collected by the coverage gate and only credential-gated tests skip), `slow` (>5s), `property` (Hypothesis property-based tests, registered to match the four sibling packages). Filter with `-m "not integration"` for a narrower local run; seven files carry the `integration` marker today — `test_phoenix_live.py`, `test_braintrust_live.py`, and five files under `tests/integration/`.
-- Hypothesis: run with `HYPOTHESIS_PROFILE=ci` when reproducing CI behaviour locally. Profiles are `dev` (50 examples) and `ci` (500, no per-example deadline), registered in each package's `conftest.py` — including the root suite since F-061. Five workflows set it: `eval-harness-ci`, `agent-core-ci`, `flow-corpus-ci`, `behavioral-regression-ci` and `nightly-e2e`.
+- Pytest markers: `integration` (live API; each test skips on its own env-var check, not a default `-m` deselect, so `tests/integration/` is still collected by the coverage gate), `slow` (>5s), `property` (Hypothesis). Run Hypothesis with `HYPOTHESIS_PROFILE=ci` to reproduce CI: profiles are `dev` (50 examples) and `ci` (500, no per-example deadline).
 - Do NOT patch `os.environ.clear()` — replace with `monkeypatch.delenv` for surgical env manipulation. See `CHANGELOG.md` note under [1.2.0-dev] `Testing`.
 - New tests trigger the protected-paths guard; adding a test file requires the `eval-change-approved` label on the PR.
 
 ## Windows / cross-platform gotchas
 
-The offline suite must pass on Windows as well as Linux CI. Known traps (all were real bugs — see the CHANGELOG "Windows / cross-platform portability" entry):
+The offline suite must pass on Windows as well as Linux CI. Two traps bite often enough to
+name here: **never send git-plumbing stdin through `text=True`** (CRLF translation corrupts
+`mktree`/`hash-object` input), and **emit path strings with `.as_posix()`** so output is
+deterministic across platforms.
 
-- **`platform.uname()` hangs on some locked-down Windows hosts** (WMI blocked), and Hypothesis calls it at import — so *every* pytest run wedges before collecting a test. `scripts/e2e_shims/sitecustomize.py` neutralizes the hanging `platform._wmi_query`; put `scripts/e2e_shims/` on `PYTHONPATH` when running pytest by hand there (the e2e harness does this automatically).
-- **Never send git-plumbing stdin through text mode.** `subprocess.run(..., text=True)` CRLF-translates `\n`→`\r\n` on Windows, which corrupts `mktree`/`hash-object` input (a tree entry name became `<file>\r`). Use byte I/O — see `agent_core.store_sync._run`.
-- **Emit path/finding strings with `.as_posix()`**, not OS-native separators, so output is deterministic across platforms.
-- **Keep eval commands and generated YAML free of Windows `\` paths and POSIX-only shell** (`/dev/null`, `test $? -eq 1`, pipes). `validate_skill.py` rewrites a standalone `python` token to `sys.executable`; write `command_exit_zero` evals as cross-platform python one-liners.
-- **WSL bash cannot execute scripts at Windows paths.** `shutil.which("bash")`
-  finds `C:\WINDOWS\system32\bash.EXE` (the WSL shim), which accepts `bash -c
-  'echo ok'` but returns exit 127 when handed a Windows-native temp path.
-  Skill tests that shell out to bash use a `_bash_works()` probe (creates a
-  real temp `.sh` file and verifies execution) rather than a simple `BASH is
-  not None` check.
-- **Symlinks require elevation on Windows.** `Path.symlink_to()` raises
-  `OSError` / `WinError 1314` unless the user has `SeCreateSymbolicLinkPrivilege`.
-  Tests guarded by `_can_symlink()`.
+The full list — the WMI/Hypothesis import hang, the WSL bash path trap, symlink elevation —
+is in [docs/windows-gotchas.md](docs/windows-gotchas.md). Read it when a test passes on
+Linux and fails on Windows, or before writing anything that shells out.
 
 ## Logging
 
@@ -185,61 +143,33 @@ Standard library `logging` module. Modules obtain a logger via `logger = logging
 
 ## Agents, skills, and hooks (`.claude/` and `.agents/`)
 
-- **Specialized Subagents** (`.claude/agents/`):
-  - `narrow-critic.md` — Read-only security and uncatchable style critic for completed diffs.
-  - `test-runner.md` — Dedicated test execution, log capture, and failure isolation worker.
-  - `explorer.md` — Fast codebase discovery and semantic file reconnaissance agent.
-- **Skills & Maintenance Workflows**:
-  - `update-executive-report` (`.agents/skills/update-executive-report/SKILL.md` & `.claude/skills/update-executive-report/SKILL.md`) — keep `docs/executive-report-eval-tools.md`, `docs/eval_metrics.json`, figures, and `docs/plans/scenario-eval-matrices/VP_DECK.md` aligned; scores are expert judgment (`scoring_basis`), not bake-off outcomes. Do not silently retune the 0–10 cells.
-- **Hooks**:
-  - `SessionStart` → `.claude/hooks/session-start.sh` — installs every sibling package + extras
-    (hypothesis, pydantic, etc.) so a fresh session's toolchain matches CI before any work starts;
-    fail-open `git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main` before the
-    stale-local-`main` warning (never updates local `refs/heads/main`; never `main:main`);
-    `SKIP_SESSION_BOOTSTRAP` skips pip only; idempotent, never fails the session.
-  - `PostToolUse` (Edit|Write) → `.claude/hooks/post-edit-size-budget.py` — fail-open, advisory
-    re-check of the ADR 0019 500-line file budget on just the edited `.py` file.
-  - `PostToolUse` (Edit|Write) → `.claude/hooks/post-edit-protected-path.py` — fail-open, advisory
-    reminder when an edit lands on a protected eval path without `eval-change-approved`.
-  - `PostToolUse` (Edit|Write) → `.claude/hooks/post-edit-registry-drift.py` — advisory check that
-    edits to plugin registries do not introduce silent drift against `docs/matrix-coverage.md`.
-  - `Stop` → `.claude/hooks/stop-generated-artifacts.py` — fail-open, advisory reminder when
-    generated artifacts look stale. `_CHECKERS` is matrix coverage, the three corpora, and
-    eval-metrics (`scripts/generate_eval_metrics.py --check` → `docs/eval_metrics_comparison.svg`).
-    e2e-matrix and public-surface are deliberately **not** in this hook (too slow / no `--check`).
-
-## Where to put a design decision
-
-- **Single-file change with clear reason:** commit message and a bullet in `CHANGELOG.md`.
-- **Architectural choice affecting multiple files or a future contract:** new ADR at `docs/decisions/NNNN-<slug>.md`.
-- **Cross-cutting analysis (baselines, gap analysis):** `docs/gap-analysis-<date>.md`.
-- **Reversible integration spike:** `docs/<name>-spike.md` — see `docs/phoenix-spike.md` for the model.
+Subagents, skills and hooks are documented where they live: [.claude/README.md](.claude/README.md)
+for the agent roster and the five hooks, and [.agents/AGENTS.md](.agents/AGENTS.md) for the
+parallel tree that **Claude Code never reads**. Do not add a hook without reading the first.
 
 ## Pre-PR checklist
 
 Before opening a PR, run all of:
 
 ```bash
-python scripts/verify_tier_a.py                    # 11-gate mechanical gate in <60s (or: make verify-tier-a)
-python scripts/generate_eval_metrics.py --check    # eval metrics freshness (or: make eval-metrics-check)
-make check-all                                     # root + every sibling package gate
-                                                   # (each delegates to its generated
-                                                   #  scripts/quality-gate.sh — lint, mypy,
-                                                   #  pytest --cov with the package's floor)
-pip install '.[phoenix-evals,parquet]' --dry-run                  # numpy/pyarrow resolve
+python scripts/verify_tier_a.py                  # 11-gate mechanical gate in <60s (make verify-tier-a)
+python scripts/generate_eval_metrics.py --check  # eval metrics freshness (make eval-metrics-check)
+python scripts/check_agents_md.py                # per-directory AGENTS.md coverage and budget
+make check-all                                   # root + every sibling package gate, each
+                                                 # delegating to its generated quality-gate.sh
+pip install '.[phoenix-evals,parquet]' --dry-run # numpy/pyarrow resolve
 ```
 
 If the matrix freshness gate fails (`docs/matrix-coverage.md` stale), the remedy is
 `python tests/test_matrix_coverage.py --update` — never a hand edit to the generated file
 (`--update` refuses to write while the matrix itself has holes; fix the rows first).
-Note `make check-all` is not the whole CI surface: `quality-gates.yml` additionally runs
+`make check-all` is not the whole CI surface: `quality-gates.yml` also runs the merge-marker
 the merge-marker sweep, size budget, guard reachability, charter drift/invariants, the
 validator battery (`python scripts/validate.py --tier fast --strict-git`) and the tooling
 coverage step — run those too when touching `scripts/`, workflows, or `features.yaml`.
 
-On Windows, `pwsh scripts/run_all_e2e.ps1 -Tiers offline` is the equivalent whole-repo pass
-(it applies the WMI shim and per-package coverage floors). If any step fails, do NOT push —
-either fix the root cause or ask a human. Do not disable failing gates.
+On Windows, `pwsh scripts/run_all_e2e.ps1 -Tiers offline` is the equivalent whole-repo pass.
+If any step fails, do NOT push — fix the root cause or ask a human. Never disable a gate.
 
 ## Rebuilding this file
 

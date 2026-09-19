@@ -1,5 +1,14 @@
 # CLAUDE.md
 
+@AGENTS.md
+
+> The import above is load-bearing, not decoration. This is the repo's only `CLAUDE.md`, and
+> under Claude Code's default project-instructions setting a `CLAUDE.md` in the working
+> directory or above it makes Claude read `CLAUDE.md` files *only* — so an agent working
+> inside `claude-foundation/` would otherwise receive none of the repo's `AGENTS.md`
+> orientation. The import pulls the sibling `claude-foundation/AGENTS.md` back in, which in
+> turn points at the root. Do not delete it without moving this file's content up.
+
 ## Build/Test Commands
 
 ```bash
