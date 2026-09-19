@@ -302,7 +302,9 @@ Exit codes follow the repo's existing guards: `0` clean, `1` violation, `2` conf
   - name: AGENTS.md coverage and budget
     run: python scripts/check_agents_md.py
   ```
-  Until then the guard is available locally and via `make pre-pr`.
+  Until then the guard runs only when invoked by hand; `make pre-pr` does not call it,
+  because the `Makefile` is protected too. Wiring it into `scripts/verify_tier_a.py`
+  (which is NOT protected) is the one route that needs no label -- see the hardening plan.
 - `Makefile` is **protected** → the `make agents-md-check` target is specified here, not added.
 
 ---

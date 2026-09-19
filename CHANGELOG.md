@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added — per-directory `AGENTS.md` coverage with a mechanical guard
 
-- Added an `AGENTS.md` to every directory in a declared tier table: 18 top-level components
+- Added an `AGENTS.md` to every directory in a declared tier table: 17 top-level components
   and 29 source subpackages, each carrying a local mermaid diagram (`accTitle`/`accDescr` for
   screen readers), the directory's own constraints, its verify command, and a subagent-routing
   table written against each agent's real tool set.
@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — root `AGENTS.md` context bloat and a `CLAUDE.md` suppression hazard
 
-- Trimmed the root `AGENTS.md` from 246 to 199 lines, back under the 200-line Context Bloat
+- Trimmed the root `AGENTS.md` from 246 to 176 lines, back under the 200-line Context Bloat
   threshold that Claude Code's memory docs and the configuration-smell literature both use.
   Nothing was deleted: the SDK-optional seam roster moved to `docs/seams.md`, the
   cross-platform traps to `docs/windows-gotchas.md`, and directory-local detail into the
@@ -49,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `requirements.txt` to permit latest minor releases without breaking reproducible lockstep pins.
 - Refreshed `docs/eval_metrics_comparison.svg` and `docs/eval_metrics_comparison.png` via
   `generate_eval_metrics.py --format both` to satisfy `tests/test_claude_hooks.py`.
-- Corrected executive analysis figures in `EXECUTIVE_BRIEF.md` (68/70 shipped features, 49 ADRs, 221 store records).
+- Corrected executive analysis figures in `docs/plans/vp-strategic-deep-dive/EXECUTIVE_BRIEF.md` (68/70 shipped features, 49 ADRs, 221 store records).
 
 ### Hardening — OpenSpec archiving, git pre-commit hooks, and developer tooling
 

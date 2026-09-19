@@ -164,7 +164,7 @@ If the matrix freshness gate fails (`docs/matrix-coverage.md` stale), the remedy
 `python tests/test_matrix_coverage.py --update` — never a hand edit to the generated file
 (`--update` refuses to write while the matrix itself has holes; fix the rows first).
 `make check-all` is not the whole CI surface: `quality-gates.yml` also runs the merge-marker
-the merge-marker sweep, size budget, guard reachability, charter drift/invariants, the
+sweep, `uv lock --check`, the skill-script drift guard, size budget, guard reachability, charter drift/invariants, the
 validator battery (`python scripts/validate.py --tier fast --strict-git`) and the tooling
 coverage step — run those too when touching `scripts/`, workflows, or `features.yaml`.
 
