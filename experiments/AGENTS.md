@@ -58,9 +58,9 @@ flowchart TD
 - **`trace-analytics` deliberately has no `pyproject.toml`.** A manifest there would pull in
   dependency and coverage obligations the experiment does not have. Do not add one to make
   tooling happy.
-- **`README.md`'s table lists only `backend-validation`.** `trace-analytics` is real, has its
-  own gate and is documented in its own README, but is missing from that table — add a row
-  rather than concluding the directory does not exist.
+- **Keep `README.md`'s experiment table in sync.** Both `backend-validation` and
+  `trace-analytics` must appear there when present on disk; add a row when you introduce
+  an experiment rather than leaving the index to drift.
 - **Live probes are sign-off gated.** `backend-validation`'s preflight phase stops with a
   distinct exit code until a human sign-off file exists. Do not route around it.
 

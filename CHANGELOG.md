@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wired `AGENTS.md Coverage` into `scripts/verify_tier_a.py` (12 gates). Corrected plan
   drift (budgets 200/100/80, `--paths-only`, Tier 2 count 29). Filled small README drift
   in `skills/README.md` and `experiments/README.md`.
+- Cleared Copilot Wave-2 doc drift: README Tier A count 11→12 (lists AGENTS.md Coverage);
+  `docs/STYLE.md` no longer claims AGENTS.md is the only uppercase name below root;
+  `experiments/AGENTS.md` / `skills/AGENTS.md` no longer warn about README tables this PR repaired;
+  `src/eval_harness/targets/AGENTS.md` clarifies `run_generated_suite` callers and `_suite_runner` import vs exec.
 
 ### Added — per-directory `AGENTS.md` coverage with a mechanical guard
 

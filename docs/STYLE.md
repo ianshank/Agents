@@ -26,12 +26,13 @@ is a plan; an *overview of a thing that exists* is a README.
   `CODE_OF_CONDUCT`, `SUPPORT`, `GOVERNANCE`, `MAINTAINERS`, `AGENTS`,
   `HARNESS_SPEC`, `NEXT_STEPS`. Per-package `CHANGELOG.md` / `GAP_ANALYSIS.md`
   follow the same rule.
-- **`AGENTS.md` is the one UPPERCASE name that also appears below the root**, in any
+- **`AGENTS.md` is the standard agent-orientation filename allowed below the root**, in any
   directory listed in the tier table. The spelling is fixed by the ecosystem
   specification — plural, uppercase — and is what every agent harness looks for; a
-  singular `AGENT.md` is read by nothing. `README.md` and `AGENTS.md` are not
-  alternatives to each other: the README is for a human evaluating the component, the
-  `AGENTS.md` is for an agent about to change it.
+  singular `AGENT.md` is read by nothing. `claude-foundation/CLAUDE.md` is a separate,
+  Claude-Code-specific exception (it imports the sibling `AGENTS.md` via `@AGENTS.md`).
+  `README.md` and `AGENTS.md` are not alternatives to each other: the README is for a
+  human evaluating the component, the `AGENTS.md` is for an agent about to change it.
 - **`progress.md`** stays lowercase — it is a running work log, not a standard
   file, and rotates into `progress-archive/`.
 - **Other docs** use `kebab-case.md` (e.g. `e2e-runbook.md`, `phoenix-spike.md`).

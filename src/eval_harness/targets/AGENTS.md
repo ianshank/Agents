@@ -12,7 +12,7 @@ config file, which makes this the highest-privilege directory in the package.
 | `__init__.py` | `echo` and `callable` (alias `python`), plus the bottom imports that register the siblings |
 | `model.py` | `model` (alias `llm`) — a real OpenAI-compatible, Bedrock or Anthropic endpoint |
 | `rca_baseline.py`, `provenance.py` | `rca_maxz`, a deterministic max-absolute-Z diagnosis baseline; `provenance_recorder`, which wraps an inner target and records retrieval evidence |
-| `testgen.py` | `run_generated_suite` — a callable target, reached only through the allowlist |
+| `testgen.py` | `run_generated_suite` — callable via allowlist **and** called directly by `testgen_agent` |
 | `testgen_agent.py` | `testgen_agent` — generate a suite from focal plus obligations, then execute it |
 | `_sandbox.py`, `_suite_runner.py` | Parent-side environment allowlist and the child interpreter that runs model-authored code |
 
@@ -48,8 +48,11 @@ flowchart LR
 
 - **`callable` is deny-by-default.** `params.path` becomes an import and a call, so it must clear `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST`; unset means deny. Matching is on dotted module
   boundaries, never a string prefix, and the attribute is checked as well as the module (ADR 0039). Never allowlist `eval_harness` itself.
-- **Model-authored code runs only in the child interpreter.** `_suite_runner.py` is executed as a subprocess, never imported; the child inherits an allowlisted environment so generated code
-  cannot read the harness's credentials, and its limits travel in that environment rather than through a fork hook that is unsafe under threads.
+- **Model-authored code runs only in the child interpreter.** `_suite_runner.py` is imported by
+  the parent `testgen.py` for filenames and `__file__`, but the suite itself is **executed** only
+  as a subprocess; the child inherits an allowlisted environment so generated code cannot read
+  the harness's credentials, and its limits travel in that environment rather than through a fork
+  hook that is unsafe under threads.
 - **`targets` may import only `core` and `plugins`.** Reaching into `judges` for a client helper adds an undeclared component edge and fails the drift gate; the duplicated
   client-construction lines in `model.py` are deliberate and recorded in ADR 0013.
 - **Fail closed, do not raise.** A missing generator, a malformed suite or an out-of-scope split returns structured empty evidence, so the item is visibly failed rather than dropped.

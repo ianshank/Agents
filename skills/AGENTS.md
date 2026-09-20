@@ -62,10 +62,9 @@ flowchart TD
   `all-skills` job. A skill with library code carries a coverage floor of 95.
 - **The semver in `SKILL.md` frontmatter must equal the one in `marketplace.yaml`.** Bump both
   in the same commit or `skill_marketplace.py validate` fails.
-- **`README.md`'s table is hand-maintained and is currently stale.** As of this writing it
-  omits `corpus-guardian`, `e2e-matrix-sentinel` and `refactoring-decomposer`, and lists
-  `quality-gate` at 1.2.0 where the registry says 1.3.0. Never derive a fact about a skill
-  from that table; read `marketplace.yaml`.
+- **`README.md`'s skill table is hand-maintained; `marketplace.yaml` is authoritative.**
+  Keep README rows and versions aligned when you add or bump a skill, but never treat the
+  table as the source of truth for registration or semver — read `marketplace.yaml`.
 - **The research skills compose in one order.** `hierarchical-recursive-brainstorm` expands a
   question into a pruned tree; `openspec-quality-plan` turns the strongest leaves into an
   OpenSpec package; `openspec-peer-review` critiques and rewrites it. Running them out of
