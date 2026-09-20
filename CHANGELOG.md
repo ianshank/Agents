@@ -6,6 +6,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0-dev] — Unreleased
 
+### Hardened — `AGENTS.md` guard + Tier A wiring
+
+- Hardened `scripts/check_agents_md.py` / `_agents_md_lib.py` (mermaid checks in `_agents_md_mermaid.py`): require root `AGENTS.md`, reject
+  stray files outside the tier table and `COVERED_BY_PARENT`, emit real paths for
+  `--paths-only` on eager-budget findings, enforce exactly one mermaid diagram with 5–15
+  nodes and `classDef here`, and return exit code 2 for unreadable/non-UTF-8 files.
+- Wired `AGENTS.md Coverage` into `scripts/verify_tier_a.py` (12 gates). Corrected plan
+  drift (budgets 200/100/80, `--paths-only`, Tier 2 count 29). Filled small README drift
+  in `skills/README.md` and `experiments/README.md`.
+- Cleared Copilot Wave-2 doc drift: README Tier A count 11→12 (lists AGENTS.md Coverage);
+  `docs/STYLE.md` no longer claims AGENTS.md is the only uppercase name below root;
+  `experiments/AGENTS.md` / `skills/AGENTS.md` no longer warn about README tables this PR repaired;
+  `src/eval_harness/targets/AGENTS.md` clarifies `run_generated_suite` callers and `_suite_runner` import vs exec.
+
+### Added — per-directory `AGENTS.md` coverage with a mechanical guard
+
+- Added an `AGENTS.md` to every directory in a declared tier table: 17 top-level components
+  and 29 source subpackages, each carrying a local mermaid diagram (`accTitle`/`accDescr` for
+  screen readers), the directory's own constraints, its verify command, and a subagent-routing
+  table written against each agent's real tool set.
+- Added `scripts/check_agents_md.py` + `scripts/_agents_md_lib.py`: a deterministic offline
+  guard over coverage, line budget, section order, mermaid validity, relative-link resolution,
+  lint-rule leakage, and un-triggered "See also" references. Exit codes 0/1/2, `--json`.
+  Wired into the `AGENTS.md` pre-PR checklist; the CI step is left for a labeled change
+  because `.github/**` is a protected path.
+- Recorded directories that deliberately carry **no** `AGENTS.md` in `COVERED_BY_PARENT`,
+  each with a reason, so an absent file reads as a decision rather than an oversight. A
+  skill's `SKILL.md` is already its agent contract, so `skills/*/` is covered by the parent.
+- Extended `docs/STYLE.md` to sanction `AGENTS.md` below the repo root (its `UPPERCASE.md`
+  rule was scoped to the root only) and to state that `README.md` addresses a human evaluating
+  a component while `AGENTS.md` addresses an agent about to change it.
+
+### Fixed — root `AGENTS.md` context bloat and a `CLAUDE.md` suppression hazard
+
+- Trimmed the root `AGENTS.md` from 246 to 176 lines, back under the 200-line Context Bloat
+  threshold that Claude Code's memory docs and the configuration-smell literature both use.
+  Most content moved rather than went away: the SDK-optional seam roster moved to `docs/seams.md`, the
+  cross-platform traps to `docs/windows-gotchas.md`, and directory-local detail into the
+  `AGENTS.md` of the directory it describes. Both new docs are registered in `mkdocs.yml`
+  and `docs/README.md`.
+- Restored a rule the root trim dropped: `openspec/AGENTS.md` now again states that the
+  `agent_core` runtime, the calibrated merge gate and the `(agent_version, domain)` cells are
+  the *subject* a change measures, not executors to route change-execution through. An
+  adversarial review of the branch found that instruction had survived nowhere.
+- Known drops from the root trim, recorded rather than implied away: the `SKIP_SESSION_BOOTSTRAP`
+  opt-out, the live-Phoenix e2e invocation, `python -m behavioral_regression --config`, the
+  Stop hook's `_CHECKERS` inventory, and the one-line roles of the governance files. The
+  commands remain in `README.md` and `config/README.md`; the rest is tracked in
+  `docs/plans/branch-hardening/PLAN.md`.
+- `claude-foundation/CLAUDE.md` now opens with `@AGENTS.md`. It is the repo's only
+  `CLAUDE.md`, and under Claude Code's default project-instructions setting its presence made
+  Claude read `CLAUDE.md` files *only* — so an agent working inside `claude-foundation/`
+  silently received none of the repo's `AGENTS.md` orientation.
+- Recorded in `.agents/AGENTS.md` that Claude Code never reads anything under a `.agents/`
+  directory, so `.claude/` is authoritative and the two trees' drift is documented rather
+  than load-bearing.
+
 ### Hardening — mypy stub compatibility (python_version = 3.12) & dependabot security bumps
 
 - Set `[tool.mypy] python_version = "3.12"` in `pyproject.toml` so mypy parses transitive
@@ -15,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `requirements.txt` to permit latest minor releases without breaking reproducible lockstep pins.
 - Refreshed `docs/eval_metrics_comparison.svg` and `docs/eval_metrics_comparison.png` via
   `generate_eval_metrics.py --format both` to satisfy `tests/test_claude_hooks.py`.
-- Corrected executive analysis figures in `EXECUTIVE_BRIEF.md` (68/70 shipped features, 49 ADRs, 221 store records).
+- Corrected executive analysis figures in `docs/plans/vp-strategic-deep-dive/EXECUTIVE_BRIEF.md` (68/70 shipped features, 49 ADRs, 221 store records).
 
 ### Hardening — OpenSpec archiving, git pre-commit hooks, and developer tooling
 

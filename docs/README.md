@@ -51,6 +51,17 @@ Active engineering epics and architectural roadmap live in [roadmap/](roadmap/RE
 
 - [executive-report-eval-tools.md](executive-report-eval-tools.md) — VP decision brief comparing Langfuse, Phoenix, and BrainTrust as **operations UIs / sinks** (not as scorers). Expert judgment, not a bake-off. One-page memo, four options including defer. Metrics: [eval_metrics.json](eval_metrics.json), [eval_metrics_schema.json](eval_metrics_schema.json), charts ([eval_metrics_comparison.png](eval_metrics_comparison.png) / [eval_metrics_comparison.svg](eval_metrics_comparison.svg)). Speaker deck: [plans/scenario-eval-matrices/VP_DECK.md](plans/scenario-eval-matrices/VP_DECK.md).
 
+## Conventions & reference
+
+- [STYLE.md](STYLE.md) — documentation taxonomy: where each kind of doc goes, and the
+  naming rules (including where `AGENTS.md` is allowed below the repo root).
+- [plans/agents-md-directory-docs/TEMPLATE.md](plans/agents-md-directory-docs/TEMPLATE.md) —
+  the per-directory `AGENTS.md` skeleton, enforced by `scripts/check_agents_md.py`.
+- [seams.md](seams.md) — the roster of SDK-optional seams and why each is shaped as it is.
+  Read before adding or changing an integration.
+- [windows-gotchas.md](windows-gotchas.md) — cross-platform traps that were all real bugs.
+  Read when a test passes on Linux and fails on Windows.
+
 ## Runbooks & operations
 
 - [e2e-runbook.md](e2e-runbook.md) — running and reading the one-command
@@ -120,6 +131,8 @@ before this index existed:
 | Topic | Documents |
 |---|---|
 | agent-eval-coverage | [PLAN](plans/agent-eval-coverage/PLAN.md) · [REVIEW](plans/agent-eval-coverage/REVIEW.md) |
+| agents-md-directory-docs | [PLAN](plans/agents-md-directory-docs/PLAN.md) · [TEMPLATE](plans/agents-md-directory-docs/TEMPLATE.md) |
+| branch-hardening | [PLAN](plans/branch-hardening/PLAN.md) — gap analysis, tech-debt and wiring remediation |
 | agent-record-decontamination | [PLAN](plans/agent-record-decontamination/PLAN.md) · [REVIEW](plans/agent-record-decontamination/REVIEW.md) · [REVIEW-v2](plans/agent-record-decontamination/REVIEW-v2.md) |
 | agents-critical-path | [PLAN](plans/agents-critical-path/PLAN.md) · [REVIEW](plans/agents-critical-path/REVIEW.md) |
 | claude-foundation | [PLAN](plans/claude-foundation/PLAN.md) · [REVIEW](plans/claude-foundation/REVIEW.md) · [sources](plans/claude-foundation/sources.md) |

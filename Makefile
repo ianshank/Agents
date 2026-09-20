@@ -96,7 +96,7 @@ e2e-driver-parity: ## POSIX/Windows e2e driver inventory + live prompt_template 
 
 .PHONY: verify-tier-a tiered-tests eval-metrics-check eval-metrics-update
 
-verify-tier-a: ## Run the deterministic 11-gate Tier A mechanical verification harness
+verify-tier-a: ## Run the deterministic 12-gate Tier A mechanical verification harness
 	$(PYTHON) scripts/verify_tier_a.py
 
 tiered-tests: ## Run the tiered test runner (fast, integration, full)

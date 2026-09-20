@@ -290,7 +290,7 @@ weaken the evaluation itself (lower a gate threshold, swap to the `mock` judge, 
 `verification:` clause). Two complementary gates make that hard:
 
 ```bash
-# Tier A mechanical gates — 11 deterministic checks in <60s:
+# Tier A mechanical gates — 12 deterministic checks in <60s:
 python scripts/verify_tier_a.py     # or: make verify-tier-a
 
 # Tiered test runner — fast, integration, or full:
@@ -307,12 +307,12 @@ python scripts/regression_gate.py --mode warn      # annotate-only soak mode
 python scripts/check_protected_changes.py --base-ref origin/main
 ```
 
-- **Tier A mechanical gate runner** (`scripts/verify_tier_a.py`) chains 11 non-destructive,
+- **Tier A mechanical gate runner** (`scripts/verify_tier_a.py`) chains 12 non-destructive,
   deterministic quality checks into a unified CLI and script wrapper (`scripts/verify-tier-a.sh`,
   `scripts/verify-tier-a.ps1`) executing in under 60 seconds with strict isolation: Charter Invariants,
   Charter Drift, Size Budget, Guard Reachability, Ruff Format, Ruff Lint, Matrix Coverage,
-  RCA Corpus, Requirements Corpus, TestGen Corpus, and Fast Feature Validators (architecture
-  import-graph drift is enforced via CI archguard).
+  RCA Corpus, Requirements Corpus, TestGen Corpus, Fast Feature Validators, and AGENTS.md Coverage
+  (architecture import-graph drift is enforced via CI archguard).
 - **Tiered test runner** (`scripts/run_tiered_tests.py`) organizes test execution into `fast`,
   `integration`, and `full` tiers, isolating unit suites from heavy integration matrices while
   providing structured diagnostic reporting.

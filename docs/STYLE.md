@@ -8,6 +8,7 @@ place and read consistently.
 | Kind | Location | When to use |
 |---|---|---|
 | **Package/component overview** | `<component>/README.md` | Every top-level component has one (see the template below). |
+| **Agent orientation for a directory** | `<directory>/AGENTS.md` | The directory is in the tier table in `scripts/_agents_md_lib.py`. Addressed to a coding agent, not a human: local constraints, the gate command, and subagent routing. See [plans/agents-md-directory-docs/TEMPLATE.md](plans/agents-md-directory-docs/TEMPLATE.md). |
 | **Architecture Decision Record** | `docs/decisions/NNNN-*.md` | A decision with lasting consequences and trade-offs. Immutable; supersede rather than edit. See [decisions/README.md](decisions/README.md). |
 | **Spike** | `docs/<topic>-spike.md` | A reversible-adoption experiment documenting a pattern (e.g. an SDK-optional seam). |
 | **Runbook** | `docs/<topic>-runbook.md` | Operational "how to run/read X" instructions. |
@@ -25,6 +26,13 @@ is a plan; an *overview of a thing that exists* is a README.
   `CODE_OF_CONDUCT`, `SUPPORT`, `GOVERNANCE`, `MAINTAINERS`, `AGENTS`,
   `HARNESS_SPEC`, `NEXT_STEPS`. Per-package `CHANGELOG.md` / `GAP_ANALYSIS.md`
   follow the same rule.
+- **`AGENTS.md` is the standard agent-orientation filename allowed below the root**, in any
+  directory listed in the tier table. The spelling is fixed by the ecosystem
+  specification — plural, uppercase — and is what every agent harness looks for; a
+  singular `AGENT.md` is read by nothing. `claude-foundation/CLAUDE.md` is a separate,
+  Claude-Code-specific exception (it imports the sibling `AGENTS.md` via `@AGENTS.md`).
+  `README.md` and `AGENTS.md` are not alternatives to each other: the README is for a
+  human evaluating the component, the `AGENTS.md` is for an agent about to change it.
 - **`progress.md`** stays lowercase — it is a running work log, not a standard
   file, and rotates into `progress-archive/`.
 - **Other docs** use `kebab-case.md` (e.g. `e2e-runbook.md`, `phoenix-spike.md`).

@@ -9,6 +9,7 @@ Executes all deterministic, offline mechanical checks without side effects:
 - Matrix coverage freshness
 - Frozen synthetic corpora integrity (RCA, Requirements, TestGen)
 - Fast feature validation suite (scripts/validate.py --tier fast)
+- AGENTS.md coverage and budget (scripts/check_agents_md.py)
 
 Exit code:
   0 - All mechanical gates passed
@@ -81,9 +82,13 @@ def main() -> int:
         ("Ruff Lint Check", [py, "-m", "ruff", "check", "."]),
         ("Matrix Coverage", [py, "tests/test_matrix_coverage.py", "--check"]),
         ("RCA Corpus Freshness", [py, "scripts/gen_rca_corpus.py", "--check"]),
-        ("Requirements Corpus Freshness", [py, "scripts/gen_requirements_corpus.py", "--check"]),
+        (
+            "Requirements Corpus Freshness",
+            [py, "scripts/gen_requirements_corpus.py", "--check"],
+        ),
         ("TestGen Corpus Freshness", [py, "scripts/gen_testgen_corpus.py", "--check"]),
         ("Fast Feature Validators", [py, "scripts/validate.py", "--tier", "fast"]),
+        ("AGENTS.md Coverage", [py, "scripts/check_agents_md.py"]),
     ]
 
     failed = []

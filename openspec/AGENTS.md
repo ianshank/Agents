@@ -1,56 +1,100 @@
-# OpenSpec — fleet coordination contract
+# AGENTS.md — openspec
 
-How the agent/sub-agent fleet drives an OpenSpec change through to the enforced back-end.
-This is the concrete "using all agents and sub-agents" mapping. Fleet members are used in
-their **native roles**, with one stated exception: `spec-guardian` and `peer-reviewer` are
-new `claude-foundation/agents/` charters that `add-foundation-reviewer-charters` adds to the
-fleet, filling the `review` role between `verify` and `archive` that no existing member
-held — a read-only conformance gate, then a read-only adversarial second pass. Every other
-row invents nothing.
+> The fleet coordination contract: how an OpenSpec change compiles down to the enforced back-end.
 
-## Lifecycle → owner mapping
+OpenSpec is a thin, reversible authoring front-end over the repo's real spec system. It is
+**not** a source of truth — deleting `openspec/` leaves `features.yaml`, the `F_0NN.py`
+proofs and the ADRs fully intact. Every phase below has a compile-down target that CI
+actually checks; the OpenSpec document is the draft, the target is the artifact.
 
-| OpenSpec phase | Repo compile-down target | Primary owner (fleet / sub-agent) | Review / gate |
+## Map
+
+| OpenSpec phase | Compiles down to | Owner | Gate |
 |---|---|---|---|
-| `propose` (proposal.md) | `docs/plans/<topic>/PLAN.md` | `foundation:plan` skill | human sign-off |
-| `design` (design.md) | a numbered ADR `docs/decisions/NNNN-*.md` | **Plan** sub-agent | human (ADR accept) |
-| spec delta (`specs/<cap>/spec.md`) | `features.yaml` F-ID rows + `verification` bullets | **general-purpose** sub-agent | `eval-change-approved` label |
-| each scenario | `scripts/validations/F_0NN.py` proof | `foundation:test-first` | `scripts/validate.py` in CI |
-| `apply` (implement tasks) | source under `agent-core/agent_core/` etc. | **general-purpose** sub-agent | `foundation:code-review` (forked, read-only) |
-| verify | `make -C <pkg> check` (coverage floor) | `test-runner` sub-agent | package CI |
-| `review` (conformance pass, new) | `openspec/changes/<id>/review.md` — verdict + numbered findings | `spec-guardian` sub-agent | advisory — a `tasks.md` checklist item, never CI-blocking |
-| `review` (adversarial pass, new) | `openspec/changes/<id>/review.md` — two-pass fact-check + attack section; persists into `changes/archive/<id>/review.md` | `peer-reviewer` sub-agent | advisory — a `tasks.md` checklist item, never CI-blocking |
+| `propose` (`proposal.md`) | `docs/plans/<topic>/PLAN.md` | `foundation:plan` skill | human sign-off |
+| `design` (`design.md`) | a numbered ADR in `docs/decisions/` | **Plan** sub-agent | human (ADR accept) |
+| spec delta (`specs/<cap>/spec.md`) | `features.yaml` F-ID rows | **general-purpose** sub-agent | `eval-change-approved` label |
+| each scenario | a `scripts/validations/F_0NN.py` proof | `foundation:test-first` | `scripts/validate.py` in CI |
+| `apply` | source under the owning package | **general-purpose** sub-agent | `foundation:code-review` |
+| `verify` | `make -C <pkg> check` | `test-runner` sub-agent | package CI |
+| `review` (conformance) | `changes/<id>/review.md` | `spec-guardian` sub-agent | advisory, never CI-blocking |
+| `review` (adversarial) | `changes/<id>/review.md` | `peer-reviewer` sub-agent | advisory, never CI-blocking |
 | `archive` | `features.yaml` `status: done` + `implemented_in:<sha>` | **general-purpose** sub-agent | `quality-gates.yml` |
 
-**Staging precondition** (stated, not assumed): every fleet member sourced from
-`claude-foundation/` above — the three `foundation:*` skills, plus `test-runner`,
-`spec-guardian`, and `peer-reviewer` — comes from a plugin that is staged in-tree, not
-installed, in this repo's own sessions (ADR 0028). Dispatching any of them here requires a
-session started with `claude --plugin-dir claude-foundation`; absent that, the corresponding
-row degrades to a `general-purpose` sub-agent inlining the same method — Phase 5
-(`add-openspec-implementation-review`, `docs/plans/orbital-drift-alignment/PLAN.md`) is
-required to do exactly this for `review` rather than silently failing to find the agents.
+## Diagram
 
-## Always-on guards (run under every agent action)
+```mermaid
+flowchart LR
+  accTitle: OpenSpec change lifecycle and its compile-down targets
+  accDescr: A change moves from propose through design, spec delta, apply, verify and review to archive; each phase writes an artifact the enforced back-end checks.
 
-- `foundation:pre-tool-guard` — fail-closed: denies secret-file reads/writes, confines
-  writes to project + scratch.
-- `foundation:post-edit-verify` — advisory lint feedback on each edited file.
-- `foundation:session-logger` — privacy-conscious JSONL audit of each tool call.
-- `architecture-drift-guard` — blocks undeclared import edges vs `architecture.yaml`.
+  subgraph OS["openspec/changes/id/ (you are here)"]
+    P["proposal.md"]
+    D["design.md"]
+    S["specs/cap/spec.md"]
+    R["review.md"]
+  end
 
-## Measurement fleet (consulted by data-gathering changes)
+  subgraph BE["enforced back-end"]
+    PLAN["docs/plans/"]
+    ADR["docs/decisions/"]
+    FEAT["features.yaml"]
+    PROOF["scripts/validations/"]
+  end
 
-- `eval_harness` judges (`anthropic`, `openai`, `bedrock`, `phoenix_evals`, `mock`) +
-  `scorers.llm_judge` + the `model-bench` skill — the LLM-as-judge proxy machinery.
-- `behavioral-regression` `SyntheticJudge` / `RegressionDetector` / `decide_ship` — an
-  independent judge + drift gate.
-- `flow-corpus` κ-validated oracles — offline ground-truth for calibration corpora.
-- `dataset-lint` / `eval-corpus-forge` — validate/assemble any eval fixtures a change adds.
+  P --> PLAN
+  D --> ADR
+  S --> FEAT
+  FEAT --> PROOF
+  R -.advisory.-> FEAT
 
-## The subject vs the executors
+  classDef here fill:#e8f0fe,stroke:#1a73e8,stroke-width:2px
+  class OS here
+```
 
-The `agent-core` runtime (`LoopController` / `AsyncLoopController` / `ParallelClaimRunner`),
-the calibrated merge gate (`merge_gate.decide()`, `merge_gate_ci`), and the
-`(agent_version, domain)` calibration cells are the **subject** that changes measure and
-tune — not executors. Do not route change-execution through them.
+## Rules that bite here
+
+- **The document is never the artifact.** A change is not done because `tasks.md` is ticked;
+  it is done when `features.yaml` carries `status: done` and the `F_0NN.py` proof passes.
+- **Every change directory must be linked from `openspec/README.md`** as a real markdown link.
+  `docs.yml` fails the build otherwise, and an archived change must be linked as
+  `changes/archive/<name>/` and **not** still as `changes/<name>/`.
+- **Archive with the script, never by hand.** `python scripts/openspec_archive.py` does the
+  `git mv` *and* rewrites outbound relative links, which is what keeps that gate green.
+- **Review is advisory by design:** `spec-guardian` / `peer-reviewer` output is a checklist item, never a merge blocker. Do not wire it into CI.
+- **The `foundation:*` fleet is staged, not installed** (ADR 0028): dispatching it needs a
+  session started with `claude --plugin-dir claude-foundation`. Without that, the row degrades
+  to a `general-purpose` sub-agent inlining the same method — degrade deliberately rather than
+  failing to find the agent.
+- **The runtime is the subject, not an executor.** `agent_core`'s `LoopController` /
+  `AsyncLoopController` / `ParallelClaimRunner`, the calibrated merge gate
+  (`merge_gate.decide()`, `merge_gate_ci`) and the `(agent_version, domain)` calibration cells
+  are what a change *measures and tunes*. **Do not route change-execution through them** —
+  doing so contaminates the very signal the change exists to read.
+- **Guards run under every action, whatever the phase:** `architecture-drift-guard` blocks an
+  undeclared import edge; when the plugin is staged, `foundation:pre-tool-guard` is fail-closed
+  on secret reads and out-of-project writes.
+
+## Verify
+
+```bash
+python scripts/validate.py --tier fast --strict-git
+```
+
+## Subagents
+
+| Task in this directory | Agent | Why |
+|---|---|---|
+| Locate the F-ID rows or ADR a change compiles down to | `explorer` | Read-only `Grep` sweep; no execution needed |
+| Run the validator battery for a change's proofs | `test-runner` | Has `Bash`; `validate.py` output names the failing F-ID |
+| Conformance-check an implementation against its own spec | `spec-guardian` | Read-only; needs `--plugin-dir claude-foundation` |
+| Adversarial second pass before archiving | `peer-reviewer` | Two-pass fact-check; same staging precondition |
+
+## See also
+
+| Doc | Read it when |
+|---|---|
+| [`README.md`](README.md) | You need the directory layout and the change index you must update |
+| [`project.md`](project.md) | You need the authoritative back-end this front-end defers to |
+| [`../docs/openspec-spike.md`](../docs/openspec-spike.md) | You are deciding whether OpenSpec should stay; it records the reversibility argument |
+| [`../AGENTS.md`](../AGENTS.md) | You need repo-wide constraints rather than this lifecycle |
