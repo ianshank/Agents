@@ -80,7 +80,7 @@ TIER2_SUBPACKAGES: tuple[str, ...] = (
 
 # Absence is a decision. A skill's SKILL.md is already its agent contract.
 COVERED_BY_PARENT: dict[str, str] = {
-    ".claude": ("Loads eagerly as a second root instruction file; document in .claude/README.md instead."),
+    ".claude": "Loads eagerly as a second root instruction file; document in .claude/README.md instead.",
     "skills/**": "SKILL.md is already the agent contract for a skill; see skills/AGENTS.md",
     "docs/decisions": "immutable ADRs; docs/AGENTS.md covers the convention",
     "docs/plans": "plan folders; docs/AGENTS.md covers the convention",

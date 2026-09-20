@@ -48,11 +48,7 @@ flowchart LR
 
 - **`callable` is deny-by-default.** `params.path` becomes an import and a call, so it must clear `EVAL_HARNESS_CALLABLE_TARGET_ALLOWLIST`; unset means deny. Matching is on dotted module
   boundaries, never a string prefix, and the attribute is checked as well as the module (ADR 0039). Never allowlist `eval_harness` itself.
-- **Model-authored code runs only in the child interpreter.** `_suite_runner.py` is imported by
-  the parent `testgen.py` for filenames and `__file__`, but the suite itself is **executed** only
-  as a subprocess; the child inherits an allowlisted environment so generated code cannot read
-  the harness's credentials, and its limits travel in that environment rather than through a fork
-  hook that is unsafe under threads.
+- **Model-authored code runs only in the child interpreter.** `_suite_runner.py` is imported by the parent `testgen.py` for filenames and `__file__`, but the suite itself is **executed** only as a subprocess; the child inherits an allowlisted environment so generated code cannot read the harness's credentials, and its limits travel in that environment rather than through a fork hook that is unsafe under threads.
 - **`targets` may import only `core` and `plugins`.** Reaching into `judges` for a client helper adds an undeclared component edge and fails the drift gate; the duplicated
   client-construction lines in `model.py` are deliberate and recorded in ADR 0013.
 - **Fail closed, do not raise.** A missing generator, a malformed suite or an out-of-scope split returns structured empty evidence, so the item is visibly failed rather than dropped.
