@@ -80,9 +80,7 @@ TIER2_SUBPACKAGES: tuple[str, ...] = (
 
 # Absence is a decision. A skill's SKILL.md is already its agent contract.
 COVERED_BY_PARENT: dict[str, str] = {
-    ".claude": (
-        "Loads eagerly as a second root instruction file; document in .claude/README.md instead."
-    ),
+    ".claude": ("Loads eagerly as a second root instruction file; document in .claude/README.md instead."),
     "skills/**": "SKILL.md is already the agent contract for a skill; see skills/AGENTS.md",
     "docs/decisions": "immutable ADRs; docs/AGENTS.md covers the convention",
     "docs/plans": "plan folders; docs/AGENTS.md covers the convention",
@@ -195,22 +193,15 @@ def check_coverage(root: Path) -> list[Finding]:
                 )
             )
         elif not (directory / AGENTS_FILENAME).is_file():
-            findings.append(
-                Finding(f"{rel}/{AGENTS_FILENAME}", "coverage", "required but missing")
-            )
+            findings.append(Finding(f"{rel}/{AGENTS_FILENAME}", "coverage", "required but missing"))
 
     covered_rels = {
-        f"{directory.relative_to(root).as_posix()}/{AGENTS_FILENAME}"
-        for directory, _ in _covered_dirs(root)
+        f"{directory.relative_to(root).as_posix()}/{AGENTS_FILENAME}" for directory, _ in _covered_dirs(root)
     }
     for directory, reason in _covered_dirs(root):
         if (directory / AGENTS_FILENAME).is_file():
             rel = directory.relative_to(root).as_posix()
-            findings.append(
-                Finding(
-                    f"{rel}/{AGENTS_FILENAME}", "coverage", f"must NOT exist - {reason}"
-                )
-            )
+            findings.append(Finding(f"{rel}/{AGENTS_FILENAME}", "coverage", f"must NOT exist - {reason}"))
 
     canonical = _canonical_agents_paths()
     for path in root.rglob(AGENTS_FILENAME):
@@ -320,9 +311,7 @@ def check_links(doc: Doc, root: Path) -> list[Finding]:
                 shown = resolved.relative_to(root.resolve()).as_posix()
             except ValueError:
                 shown = resolved.as_posix()
-            findings.append(
-                Finding(doc.rel, "links", f"dead relative link {raw!r} -> {shown}")
-            )
+            findings.append(Finding(doc.rel, "links", f"dead relative link {raw!r} -> {shown}"))
     return findings
 
 
@@ -376,10 +365,7 @@ def load_docs(root: Path) -> tuple[list[Doc], list[Finding]]:
     docs: list[Doc] = []
     findings: list[Finding] = []
     wanted: list[tuple[Path, int]] = [(root / AGENTS_FILENAME, ROOT_BUDGET)]
-    wanted.extend(
-        (root / rel / AGENTS_FILENAME, budget)
-        for rel, budget in sorted(required_dirs().items())
-    )
+    wanted.extend((root / rel / AGENTS_FILENAME, budget) for rel, budget in sorted(required_dirs().items()))
 
     for path, budget in wanted:
         if not path.is_file():

@@ -92,9 +92,7 @@ def _mermaid_nodes(block: list[str]) -> set[str]:
     nodes: set[str] = set()
     for line in block:
         stripped = line.strip()
-        if not stripped or stripped.startswith(
-            ("accTitle", "accDescr", "classDef", "class ")
-        ):
+        if not stripped or stripped.startswith(("accTitle", "accDescr", "classDef", "class ")):
             continue
         match = _SUBGRAPH_RE.match(line)
         if match:
@@ -140,14 +138,10 @@ def check_mermaid(doc: Doc) -> list[Finding]:
 
     header = body[0].strip()
     if not any(header.startswith(kind) for kind in MERMAID_DIAGRAM_TYPES):
-        findings.append(
-            Finding(doc.rel, "mermaid", f"{label} has an unrecognised type: {header!r}")
-        )
+        findings.append(Finding(doc.rel, "mermaid", f"{label} has an unrecognised type: {header!r}"))
     joined = "\n".join(block)
     findings.extend(
-        Finding(
-            doc.rel, "mermaid", f"{label} is missing {keyword} - screen readers need it"
-        )
+        Finding(doc.rel, "mermaid", f"{label} is missing {keyword} - screen readers need it")
         for keyword in ("accTitle:", "accDescr:")
         if keyword not in joined
     )
