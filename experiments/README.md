@@ -16,6 +16,7 @@ outside the main quality bar:
 | Path | What it validates |
 |---|---|
 | [`backend-validation/`](backend-validation/README.md) | `eval-backend-validation_v1` — empirical claimed-vs-observed evidence for the eval-backend decision (Langfuse, Opik), run against real deployments. Own gate; ships unsigned. |
+| [`trace-analytics/`](trace-analytics/README.md) | Offline SQL sketches over replay-envelope fixture JSONL (stdlib `sqlite3`). Own golden-file check; unsigned; no DuckDB/ClickHouse dependency. |
 
 ## Adding an experiment
 

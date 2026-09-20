@@ -19,7 +19,7 @@ the marketplace itself doesn't provide.
 | [`eval-corpus-forge`](eval-corpus-forge/) | 1.0.0 | Build, validate, and package reusable evaluation datasets |
 | [`model-bench`](model-bench/) | 1.0.0 | Benchmark and A/B-test multiple LLMs on one dataset |
 | [`project-setup`](project-setup/) | 1.1.0 | Generate a deterministic Makefile from a project's detected toolchain |
-| [`quality-gate`](quality-gate/) | 1.2.0 | Generate a deterministic lint + type + test + coverage gate script |
+| [`quality-gate`](quality-gate/) | 1.3.0 | Generate a deterministic lint + type + test + coverage gate script |
 | [`deploy`](deploy/) | 1.0.0 | Generate a safety-railed deployment script (dry-run / confirm / rollback) |
 | [`dataset-lint`](dataset-lint/) | 1.0.0 | Validate eval datasets for structure, duplicate IDs, and encoding |
 | [`hierarchical-recursive-brainstorm`](hierarchical-recursive-brainstorm/) | 1.0.0 | Decompose a topic into a pruned, recursively-expanded hierarchy and synthesize upward |
@@ -29,6 +29,9 @@ the marketplace itself doesn't provide.
 | [`openspec-implementation-review`](openspec-implementation-review/) | 1.0.0 | Review a shipped OpenSpec change's implementation against its own plan, producing a dated, two-pass `review.md` (dispatches `spec-guardian`/`peer-reviewer` when loaded, degrades to a `general-purpose` subagent with the method inlined otherwise) |
 | [`pre-pr-gate`](pre-pr-gate/) | 1.0.0 | Chain every quality/regression/architecture gate this repo's CI enforces into one local command (`make pre-pr`) before opening or updating a PR |
 | [`test-completeness-guard`](test-completeness-guard/) | 1.0.0 | Census frozen public-surface names against tests; fail only on an explicit hit-rate floor (does not invent floors) |
+| [`corpus-guardian`](corpus-guardian/) | 1.0.0 | Manage, verify, and synchronize the four frozen synthetic evaluation corpora (RCA, Requirements, TestGen, Answer Quality) |
+| [`e2e-matrix-sentinel`](e2e-matrix-sentinel/) | 1.0.0 | Validate cross-platform e2e matrix coverage, POSIX/Windows driver parity, and offline fixture restamping invariants |
+| [`refactoring-decomposer`](refactoring-decomposer/) | 1.0.0 | Analyze size-budget violations, decompose god-files/over-budget functions, and generate backwards-compatible shims |
 | [`common`](common/) | 1.0.0 | Shared skill validator and utility library — a library, not a standalone skill (no evals; dedicated `common` job in skills-ci.yml) |
 
 ## Three kinds of skill

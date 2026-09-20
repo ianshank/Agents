@@ -277,7 +277,7 @@ one `TIERS` table naming which directories require a file and at what budget.
 Checks, all deterministic and offline:
 
 1. **Coverage** — every Tier 1/2 directory has an `AGENTS.md`; no Tier 3 directory has one.
-2. **Budget** — line count within tier (200 / 80 / 60). This is the Context Bloat heuristic.
+2. **Budget** — line count within tier (200 / 100 / 80). This is the Context Bloat heuristic.
 3. **Sections** — the required headings are present and in order.
 4. **Mermaid** — every ` ```mermaid ` fence closes, declares `accTitle` and `accDescr`, and holds a
    known diagram type. Non-ASCII in labels is rejected (GitHub renderer).
@@ -287,7 +287,7 @@ Checks, all deterministic and offline:
 7. **Blind Reference** — a `See also` row with a path but an empty "Read it when" cell fails.
 
 Exit codes follow the repo's existing guards: `0` clean, `1` violation, `2` config error.
-`--json` for machine use, `--fix-list` to print only the offending paths.
+`--json` for machine use, `--paths-only` to print only the offending paths.
 
 ### Placement constraints (these dictated the design)
 
@@ -336,7 +336,7 @@ it needs it.
    Without this the plan violates the repo's own documented naming rule.
 2. `scripts/check_agents_md.py` + `tests/test_check_agents_md.py`.
 3. Tier 1 (17 files) → run guard.
-4. Tier 2 (48 total) → run guard.
+4. Tier 2 (29 total) → run guard.
 5. Root trim + `claude-foundation/CLAUDE.md` import fix + `.agents/AGENTS.md`.
 6. `make pre-pr`, then PR with the `eval-change-approved` label requested.
 
@@ -348,7 +348,7 @@ python scripts/check_agents_md.py                 # 0 clean / 1 violation / 2 co
 python scripts/check_agents_md.py --json          # machine-readable findings
 
 # Existing gates this change must not break
-python scripts/verify_tier_a.py                   # 11 mechanical gates, <60s
+python scripts/verify_tier_a.py                   # 12 mechanical gates, <60s
 python scripts/check_charter_drift.py             # charter links still resolve
 make check-all                                    # root + all five sibling packages
 make pre-pr                                       # the full local mirror of CI
@@ -358,11 +358,11 @@ make pre-pr                                       # the full local mirror of CI
 
 | Risk | Mitigation |
 |---|---|
-| 48 files drift out of date — Init Fossilization at scale | The guard's coverage + link + budget checks fail on the drift that matters. Diagrams stay small enough to re-read. |
+| 46 files drift out of date — Init Fossilization at scale | The guard's coverage + link + budget checks fail on the drift that matters. Diagrams stay small enough to re-read. |
 | Adding `**/*.md` files fires the whole `docs.yml` workflow | Expected. The advisory link job will go red on any unresolved relative link, which is the signal we want. |
 | Per-directory diagrams drift from `architecture.mmd` | They describe different things by construction (§5), and must not restate import edges. |
 | Guard needs the `eval-change-approved` label | Flagged on the PR. The label is required because `tests/**` is protected — shipping the guard untested to dodge it would be worse. |
-| Tier 2 files become a dumping ground | Hard 60-line budget, mechanically enforced. |
+| Tier 2 files become a dumping ground | Hard 80-line budget, mechanically enforced. |
 
 ## Links
 

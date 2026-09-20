@@ -97,7 +97,7 @@ Every one of these is enforced by CI. Failing any breaks the merge.
 | Install harness with every optional integration | `pip install -e ".[dev,langfuse,openai,anthropic,bedrock,phoenix,phoenix-evals,braintrust,autoevals,parquet,archguard]"` |
 | Install a sibling package | `pip install -e ./agent-core[dev]` (same for `behavioral-regression`, `flow-corpus`, `flow-protocol`) |
 | Run the CLI | `eval-harness run --config config/eval.example.yaml` |
-| **Tier A mechanical gate runner** | `python scripts/verify_tier_a.py` or `make verify-tier-a` — 11 deterministic quality gates in <60s |
+| **Tier A mechanical gate runner** | `python scripts/verify_tier_a.py` or `make verify-tier-a` — 12 deterministic quality gates in <60s |
 | Full offline gate (CI mirrors it) | `./scripts/quality-gate.sh all` — generated; lint, three per-path mypy runs, coverage >=96, and the F-031 scripts gate. `make check` delegates to it |
 | Whole-workspace gate | `make check-all` — the root gate plus `make -C <member> check` for all five |
 | **Whole-repo e2e / user-journey harness** | `bash scripts/run_all_e2e.sh --tiers offline` (POSIX; `pwsh scripts/run_all_e2e.ps1 -Tiers offline` on Windows). Both drivers declare the same steps and `tests/test_e2e_driver_parity.py` fails on drift. See [docs/e2e-runbook.md](docs/e2e-runbook.md) |
@@ -154,7 +154,7 @@ parallel tree that **Claude Code never reads**. Do not add a hook without readin
 Before opening a PR, run all of:
 
 ```bash
-python scripts/verify_tier_a.py                  # 11-gate mechanical gate in <60s (make verify-tier-a)
+python scripts/verify_tier_a.py                  # 12-gate mechanical gate in <60s (make verify-tier-a)
 python scripts/generate_eval_metrics.py --check  # eval metrics freshness (make eval-metrics-check)
 python scripts/check_agents_md.py                # per-directory AGENTS.md coverage and budget
 make check-all                                   # root + every sibling package gate, each

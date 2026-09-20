@@ -58,18 +58,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--root", default=".", help="repo root to check (default: cwd)")
     parser.add_argument("--json", action="store_true", help="emit findings as JSON")
-    parser.add_argument("--paths-only", action="store_true", help="print only offending paths")
+    parser.add_argument(
+        "--paths-only", action="store_true", help="print only offending paths"
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="DEBUG logging")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(message)s")
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO, format="%(message)s"
+    )
 
     root = Path(args.root)
     if not root.is_dir():
-        print(f"agents-md: usage error - no such directory: {root.as_posix()}", file=sys.stderr)
+        print(
+            f"agents-md: usage error - no such directory: {root.as_posix()}",
+            file=sys.stderr,
+        )
         return EXIT_USAGE_ERROR
 
     findings = collect_findings(root)
@@ -84,8 +91,13 @@ def main(argv: list[str] | None = None) -> int:
         for finding in findings:
             print(finding.render())
     else:
-        print(f"agents-md: OK - {len(required_dirs()) + 1} files present, in budget, well formed.")
+        print(
+            f"agents-md: OK - {len(required_dirs()) + 1} files present, in budget, well formed."
+        )
 
+    if any(f.check == "read" for f in findings):
+        logger.warning("agents-md: unreadable/non-UTF-8 file(s)")
+        return EXIT_USAGE_ERROR
     if findings:
         logger.warning("agents-md: %d violation(s)", len(findings))
         return EXIT_VIOLATION

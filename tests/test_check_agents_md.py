@@ -19,7 +19,8 @@ import pytest
 #: other passed *vacuously* off-root because it found no files to measure.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# A minimal file that satisfies every structural check. Individual tests break one thing.
+# A minimal file that satisfies every structural check (5 nodes + classDef here). Individual
+# tests break one thing.
 GOOD_BODY = """# AGENTS.md - test
 
 > A one-line purpose.
@@ -40,6 +41,9 @@ flowchart LR
   accDescr: a sentence a screen reader can use.
 
   A["caller"] --> B["here"]
+  B --> C["helper"]
+  C --> D["sink"]
+  D --> E["out"]
 
   classDef here fill:#e8f0fe,stroke:#1a73e8,stroke-width:2px
   class B here
@@ -69,7 +73,9 @@ make check
 """
 
 
-def _doc(tmp_path: Path, body: str = GOOD_BODY, budget: int = lib.TIER2_BUDGET) -> lib.Doc:
+def _doc(
+    tmp_path: Path, body: str = GOOD_BODY, budget: int = lib.TIER2_BUDGET
+) -> lib.Doc:
     """Build a Doc over a real file so the link check has a directory to resolve against."""
     path = tmp_path / lib.AGENTS_FILENAME
     path.write_text(body, encoding="utf-8")
@@ -121,7 +127,9 @@ def test_eager_files_are_all_outside_the_tier_table() -> None:
 
 def test_eager_budget_passes_for_the_real_repo() -> None:
     """What the committed repo actually loads at session start is within the ceiling."""
-    assert (REPO_ROOT / lib.AGENTS_FILENAME).is_file()  # else the assertion below is vacuous
+    assert (
+        REPO_ROOT / lib.AGENTS_FILENAME
+    ).is_file()  # else the assertion below is vacuous
     assert lib.check_eager_budget(REPO_ROOT) == []
 
 
@@ -129,11 +137,15 @@ def test_eager_budget_sums_across_files(tmp_path: Path) -> None:
     """Two files each under the ceiling can still bust it together."""
     (tmp_path / ".claude").mkdir()
     (tmp_path / lib.AGENTS_FILENAME).write_text("x\n" * 150, encoding="utf-8")
-    (tmp_path / ".claude" / lib.AGENTS_FILENAME).write_text("y\n" * 150, encoding="utf-8")
+    (tmp_path / ".claude" / lib.AGENTS_FILENAME).write_text(
+        "y\n" * 150, encoding="utf-8"
+    )
     findings = lib.check_eager_budget(tmp_path)
-    assert len(findings) == 1
-    assert findings[0].check == "eager-budget"
-    assert "300 lines load at session start" in findings[0].detail
+    assert len(findings) == 2
+    assert {f.path for f in findings} == {"AGENTS.md", ".claude/AGENTS.md"}
+    assert all(f.check == "eager-budget" for f in findings)
+    assert all("300 lines load at session start" in f.detail for f in findings)
+    assert all(" + " not in f.path for f in findings)
 
 
 def test_eager_budget_ignores_a_missing_file(tmp_path: Path) -> None:
@@ -180,22 +192,81 @@ def test_missing_section_is_reported(tmp_path: Path) -> None:
 def test_sections_out_of_order_are_reported(tmp_path: Path) -> None:
     body = GOOD_BODY.replace("## Map", "## TEMP").replace("## Diagram", "## Map")
     doc = _doc(tmp_path, body.replace("## TEMP", "## Diagram"))
-    assert any(f.detail.startswith("sections out of order") for f in lib.check_sections(doc))
+    assert any(
+        f.detail.startswith("sections out of order") for f in lib.check_sections(doc)
+    )
 
 
 @pytest.mark.parametrize(
     ("removed", "expected"),
-    [("  accTitle: a title\n", "accTitle:"), ("  accDescr: a sentence a screen reader can use.\n", "accDescr:")],
+    [
+        ("  accTitle: a title\n", "accTitle:"),
+        ("  accDescr: a sentence a screen reader can use.\n", "accDescr:"),
+    ],
 )
-def test_mermaid_requires_accessibility_metadata(tmp_path: Path, removed: str, expected: str) -> None:
+def test_mermaid_requires_accessibility_metadata(
+    tmp_path: Path, removed: str, expected: str
+) -> None:
     doc = _doc(tmp_path, GOOD_BODY.replace(removed, ""))
     assert any(expected in f.detail for f in lib.check_mermaid(doc))
 
 
 def test_mermaid_missing_entirely_is_reported(tmp_path: Path) -> None:
-    body = GOOD_BODY.split("## Diagram")[0] + "## Diagram\n\n## Rules that bite here\n\n- x\n"
+    body = (
+        GOOD_BODY.split("## Diagram")[0]
+        + "## Diagram\n\n## Rules that bite here\n\n- x\n"
+    )
     doc = _doc(tmp_path, body)
     assert any("no ```mermaid diagram" in f.detail for f in lib.check_mermaid(doc))
+
+
+def test_mermaid_rejects_a_second_diagram(tmp_path: Path) -> None:
+    """The authoring contract is exactly one diagram per file."""
+    extra = """
+```mermaid
+flowchart LR
+  accTitle: other
+  accDescr: a second diagram that must fail.
+  A["a"] --> B["b"]
+  B --> C["c"]
+  C --> D["d"]
+  D --> E["e"]
+  classDef here fill:#fff
+  class A here
+```
+"""
+    doc = _doc(
+        tmp_path,
+        GOOD_BODY.replace("## Rules that bite here", extra + "## Rules that bite here"),
+    )
+    assert any(
+        "exactly 1" in f.detail and "found 2" in f.detail
+        for f in lib.check_mermaid(doc)
+    )
+
+
+def test_mermaid_requires_class_def_here(tmp_path: Path) -> None:
+    doc = _doc(tmp_path, GOOD_BODY.replace("classDef here", "classDef other"))
+    assert any("classDef here" in f.detail for f in lib.check_mermaid(doc))
+
+
+def test_mermaid_rejects_too_few_nodes(tmp_path: Path) -> None:
+    body = GOOD_BODY.replace(
+        '  A["caller"] --> B["here"]\n  B --> C["helper"]\n  C --> D["sink"]\n  D --> E["out"]\n',
+        '  A["caller"] --> B["here"]\n',
+    )
+    doc = _doc(tmp_path, body)
+    assert any("nodes" in f.detail for f in lib.check_mermaid(doc))
+
+
+def test_mermaid_rejects_too_many_nodes(tmp_path: Path) -> None:
+    edges = "\n".join(f'  N{i}["n{i}"] --> N{i + 1}["n{i + 1}"]' for i in range(16))
+    body = GOOD_BODY.replace(
+        '  A["caller"] --> B["here"]\n  B --> C["helper"]\n  C --> D["sink"]\n  D --> E["out"]\n',
+        edges + "\n",
+    )
+    doc = _doc(tmp_path, body)
+    assert any("nodes" in f.detail for f in lib.check_mermaid(doc))
 
 
 def test_mermaid_unknown_diagram_type_is_reported(tmp_path: Path) -> None:
@@ -216,7 +287,10 @@ def test_mermaid_non_ascii_label_is_reported(tmp_path: Path) -> None:
 
 
 def test_empty_mermaid_block_is_reported(tmp_path: Path) -> None:
-    body = GOOD_BODY.split("## Diagram")[0] + "## Diagram\n\n```mermaid\n```\n\n## Rules that bite here\n\n- x\n"
+    body = (
+        GOOD_BODY.split("## Diagram")[0]
+        + "## Diagram\n\n```mermaid\n```\n\n## Rules that bite here\n\n- x\n"
+    )
     doc = _doc(tmp_path, body)
     assert any("is empty" in f.detail for f in lib.check_mermaid(doc))
 
@@ -230,7 +304,14 @@ def test_dead_relative_link_is_reported(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "target",
-    ["https://example.com", "http://example.com", "mailto:a@b.c", "#anchor", "/abs/path", "glob/**"],
+    [
+        "https://example.com",
+        "http://example.com",
+        "mailto:a@b.c",
+        "#anchor",
+        "/abs/path",
+        "glob/**",
+    ],
 )
 def test_non_local_link_targets_are_skipped(tmp_path: Path, target: str) -> None:
     """External links, anchors, absolutes and globs are not drift signals."""
@@ -240,14 +321,20 @@ def test_non_local_link_targets_are_skipped(tmp_path: Path, target: str) -> None
 
 def test_link_anchor_and_title_are_stripped(tmp_path: Path) -> None:
     """``[a](file.md#section "title")`` resolves against ``file.md``."""
-    doc = _doc(tmp_path, GOOD_BODY.replace("(neighbour.md)", '(neighbour.md#part "a title")'))
+    doc = _doc(
+        tmp_path, GOOD_BODY.replace("(neighbour.md)", '(neighbour.md#part "a title")')
+    )
     assert lib.check_links(doc, tmp_path) == []
 
 
-@pytest.mark.parametrize("word", ["snake_case", "PascalCase", "camelCase", "indentation", "import ordering"])
+@pytest.mark.parametrize(
+    "word", ["snake_case", "PascalCase", "camelCase", "indentation", "import ordering"]
+)
 def test_lint_leakage_is_rejected(tmp_path: Path, word: str) -> None:
     """Restating a rule ruff already enforces is dead weight."""
-    doc = _doc(tmp_path, GOOD_BODY.replace("- **A real constraint.**", f"- Use {word} here."))
+    doc = _doc(
+        tmp_path, GOOD_BODY.replace("- **A real constraint.**", f"- Use {word} here.")
+    )
     assert any(f.check == "lint-leakage" for f in lib.check_lint_leakage(doc))
 
 
@@ -282,9 +369,30 @@ def test_coverage_reports_a_missing_required_file(tmp_path: Path) -> None:
     assert any(f.detail == "required but missing" for f in findings)
 
 
+def test_coverage_requires_the_root_agents_md(tmp_path: Path) -> None:
+    """Deleting the always-loaded root file must produce a coverage finding."""
+    findings = lib.check_coverage(tmp_path)
+    assert any(
+        f.path == lib.AGENTS_FILENAME and f.detail == "required but missing"
+        for f in findings
+    )
+
+
 def test_coverage_reports_a_directory_that_does_not_exist(tmp_path: Path) -> None:
     findings = lib.check_coverage(tmp_path)
     assert any("does not exist" in f.detail for f in findings)
+
+
+def test_coverage_rejects_a_stray_agents_md(tmp_path: Path) -> None:
+    """Tier 3 has no files; an AGENTS.md outside the tier table and allowances is a finding."""
+    stray = tmp_path / "flow-corpus" / "flow_corpus"
+    stray.mkdir(parents=True)
+    (stray / lib.AGENTS_FILENAME).write_text(GOOD_BODY, encoding="utf-8")
+    findings = lib.check_coverage(tmp_path)
+    assert any(
+        f.path == "flow-corpus/flow_corpus/AGENTS.md" and "unexpected" in f.detail
+        for f in findings
+    )
 
 
 def test_covered_directory_must_not_carry_a_file(tmp_path: Path) -> None:
@@ -317,7 +425,9 @@ def test_a_required_dir_is_not_also_forbidden(tmp_path: Path) -> None:
     """
     (tmp_path / "skills").mkdir()
     (tmp_path / "skills" / lib.AGENTS_FILENAME).write_text(GOOD_BODY, encoding="utf-8")
-    covered = [p.relative_to(tmp_path).as_posix() for p, _ in lib._covered_dirs(tmp_path)]
+    covered = [
+        p.relative_to(tmp_path).as_posix() for p, _ in lib._covered_dirs(tmp_path)
+    ]
     assert "skills" not in covered
     assert not [f for f in lib.check_coverage(tmp_path) if f.path == "skills/AGENTS.md"]
 
@@ -332,17 +442,29 @@ def test_covered_by_parent_reasons_are_all_populated() -> None:
 # --------------------------------------------------------------------------------------
 
 
-def test_cli_reports_violations_and_exits_one(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_reports_violations_and_exits_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     assert guard.main(["--root", str(tmp_path)]) == guard.EXIT_VIOLATION
     assert "FAIL" in capsys.readouterr().out
 
 
-def test_cli_missing_root_is_a_usage_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_missing_root_is_a_usage_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     assert guard.main(["--root", str(tmp_path / "nope")]) == guard.EXIT_USAGE_ERROR
     assert "usage error" in capsys.readouterr().err
 
 
-def test_cli_json_output_is_parseable(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_unreadable_file_is_a_usage_error(tmp_path: Path) -> None:
+    """Docstring contract: unreadable/non-UTF-8 → exit 2, not a plain violation."""
+    (tmp_path / lib.AGENTS_FILENAME).write_bytes(b"\xff\xfe not utf-8")
+    assert guard.main(["--root", str(tmp_path)]) == guard.EXIT_USAGE_ERROR
+
+
+def test_cli_json_output_is_parseable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     import json
 
     guard.main(["--root", str(tmp_path), "--json"])
@@ -350,11 +472,37 @@ def test_cli_json_output_is_parseable(tmp_path: Path, capsys: pytest.CaptureFixt
     assert payload and {"path", "check", "detail"} == set(payload[0])
 
 
-def test_cli_paths_only_emits_bare_paths(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_paths_only_emits_bare_paths(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     guard.main(["--root", str(tmp_path), "--paths-only"])
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln]
     assert lines == sorted(set(lines))
     assert all("[" not in ln for ln in lines)
+    assert all(" + " not in ln for ln in lines)
+
+
+def test_cli_paths_only_splits_eager_budget_paths(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Eager-budget overage must print each real path, not a synthetic ``A + B`` string."""
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / lib.AGENTS_FILENAME).write_text("x\n" * 150, encoding="utf-8")
+    (tmp_path / ".claude" / lib.AGENTS_FILENAME).write_text(
+        "y\n" * 150, encoding="utf-8"
+    )
+    # Satisfy enough of coverage that eager-budget findings are among the printed paths.
+    for rel in lib.TIER1_COMPONENTS:
+        (tmp_path / rel).mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel / lib.AGENTS_FILENAME).write_text(GOOD_BODY, encoding="utf-8")
+    for rel in lib.TIER2_SUBPACKAGES:
+        (tmp_path / rel).mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel / lib.AGENTS_FILENAME).write_text(GOOD_BODY, encoding="utf-8")
+    guard.main(["--root", str(tmp_path), "--paths-only"])
+    lines = set(capsys.readouterr().out.splitlines())
+    assert "AGENTS.md" in lines
+    assert ".claude/AGENTS.md" in lines
+    assert not any(" + " in ln for ln in lines)
 
 
 def test_cli_verbose_flag_is_accepted(tmp_path: Path) -> None:
@@ -371,3 +519,9 @@ def test_unreadable_file_is_a_read_finding(tmp_path: Path) -> None:
 def test_finding_render_is_human_readable() -> None:
     rendered = lib.Finding("a/AGENTS.md", "budget", "too long").render()
     assert rendered == "  a/AGENTS.md: [budget] too long"
+
+
+def test_verify_tier_a_wires_agents_md_gate() -> None:
+    """Tier A includes the AGENTS.md coverage gate (source-level contract; no subprocess)."""
+    source = (REPO_ROOT / "scripts" / "verify_tier_a.py").read_text(encoding="utf-8")
+    assert '("AGENTS.md Coverage", [py, "scripts/check_agents_md.py"])' in source

@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
 """Tier table and checks behind ``scripts/check_agents_md.py``.
 
-Split out from the entrypoint to stay inside the ADR 0019 500-line file budget. The
-:data:`TIER1_COMPONENTS` / :data:`TIER2_SUBPACKAGES` / :data:`COVERED_BY_PARENT` tables here
-are the single source of truth for which directories carry an ``AGENTS.md``; the CLI only
-formats what :func:`collect_findings` returns.
-
-Why the shape of these checks: coding agents read the ``AGENTS.md`` nearest the file they
-are editing, and Claude Code loads a subdirectory's copy lazily -- only once it opens a file
-there. Nesting is therefore the cure for context bloat rather than a cause of it, but only
-while each file stays small and local. Every check below defends one half of that bargain.
-See ``docs/plans/agents-md-directory-docs/PLAN.md`` for the evidence behind the thresholds.
+Split out from the entrypoint (and mermaid checks into ``_agents_md_mermaid``) to stay
+inside the ADR 0019 500-line file budget. The tier tables here are the single source of
+truth; the CLI formats what :func:`collect_findings` returns.
+See ``docs/plans/agents-md-directory-docs/PLAN.md`` for threshold evidence.
 """
 
 from __future__ import annotations
@@ -19,31 +13,19 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from _agents_md_mermaid import check_mermaid
+
 AGENTS_FILENAME = "AGENTS.md"
 
-# Budgets, in lines. The 200-line ceiling is the configuration-smell literature's Context
-# Bloat threshold, and the number Claude Code's own memory docs give. Nested files are cheap
-# -- they load only once an agent opens a file in that directory -- but exist to stay local,
-# so they are held well below it. The nested ceilings sit just above a full template instance
-# (six sections plus a 15-node diagram is roughly 65 lines), so they bind on prose rather
-# than on structure.
+# Budgets in lines. 200 is the Context Bloat threshold; nested ceilings bind on prose.
 EAGER_BUDGET = 200
 TIER1_BUDGET = 100
 TIER2_BUDGET = 80
 
-# The files loaded at session START, every session, whether or not an agent goes near the
-# directory. Claude Code reads "every AGENTS.md and .claude/AGENTS.md in your working
-# directory and the directories above it" -- so `.claude/AGENTS.md` is NOT a lazily-loaded
-# directory doc like the rest of the tier table. It is a second root-level instruction file.
-# Budgeting it separately would be self-deception: the thing that costs a session is their
-# SUM, so that is what :func:`check_eager_budget` holds to EAGER_BUDGET.
+# Eagerly loaded at session start (Claude Code also loads `.claude/AGENTS.md` when present).
 EAGER_FILES: tuple[str, ...] = (AGENTS_FILENAME, f".claude/{AGENTS_FILENAME}")
-
-# The root is currently the only eager file, so its per-file ceiling equals the eager one.
-# check_eager_budget stays as defence in depth: it fires if a .claude/AGENTS.md reappears.
 ROOT_BUDGET = EAGER_BUDGET
 
-# Top-level components: every directory an agent may be asked to work inside.
 TIER1_COMPONENTS: tuple[str, ...] = (
     ".agents",
     "agent-core",
@@ -64,8 +46,6 @@ TIER1_COMPONENTS: tuple[str, ...] = (
     "tests",
 )
 
-# Source subpackages, chosen by one rule: an agent editing files here needs a constraint it
-# cannot infer from the code, so the nearest-file lookup should land on something useful.
 TIER2_SUBPACKAGES: tuple[str, ...] = (
     "agent-core/agent_core/store_sync",
     "flow-corpus/flow_corpus/canary",
@@ -98,16 +78,10 @@ TIER2_SUBPACKAGES: tuple[str, ...] = (
     "src/eval_harness/targets",
 )
 
-# Directories whose *absence* of a file is a decision, with the reason recorded so nobody
-# helpfully backfills one. A skill's SKILL.md is already its agent contract (preconditions,
-# procedure, output contract, failure handling); a second instruction file beside it invites
-# the two to disagree, which is the Conflicting Instructions smell.
+# Absence is a decision. A skill's SKILL.md is already its agent contract.
 COVERED_BY_PARENT: dict[str, str] = {
     ".claude": (
-        "Claude Code loads .claude/AGENTS.md EAGERLY, at session start, as a second "
-        "root-level instruction file -- not lazily like every other nested file. Putting "
-        "directory documentation there taxes every session in the repo whether or not "
-        "anyone touches it, so .claude/ is documented in .claude/README.md instead."
+        "Loads eagerly as a second root instruction file; document in .claude/README.md instead."
     ),
     "skills/**": "SKILL.md is already the agent contract for a skill; see skills/AGENTS.md",
     "docs/decisions": "immutable ADRs; docs/AGENTS.md covers the convention",
@@ -132,8 +106,6 @@ REQUIRED_SECTIONS: tuple[str, ...] = (
     "## See also",
 )
 
-# Style vocabulary ruff/mypy already enforce. Restating a linter is the most common smell in
-# these files: pure dead weight that competes for attention with real constraints.
 LINT_LEAK_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bsnake_case\b", "naming is enforced by ruff"),
     (r"\bPascalCase\b", "naming is enforced by ruff"),
@@ -144,25 +116,7 @@ LINT_LEAK_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\btrailing whitespace\b", "formatting is enforced by ruff format"),
 )
 
-MERMAID_DIAGRAM_TYPES: tuple[str, ...] = (
-    "flowchart",
-    "graph",
-    "sequenceDiagram",
-    "classDiagram",
-    "stateDiagram",
-    "erDiagram",
-    "journey",
-    "gantt",
-    "C4Component",
-    "C4Context",
-    "C4Container",
-    "mindmap",
-    "timeline",
-)
-
 _LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
-_MERMAID_OPEN_RE = re.compile(r"^\s*```mermaid\s*$")
-_FENCE_CLOSE_RE = re.compile(r"^\s*```\s*$")
 _GLOB_METACHARS = frozenset("*?[]")
 
 
@@ -200,19 +154,10 @@ def required_dirs() -> dict[str, int]:
 
 
 def _covered_dirs(root: Path) -> list[tuple[Path, str]]:
-    """Expand COVERED_BY_PARENT, including its glob forms, to concrete directories.
-
-    A required directory always wins over a covered pattern that happens to match it.
-    ``skills/**`` has to reach *below* ``skills/<skill>`` -- otherwise the one arrangement the
-    policy explicitly forbids, a second instruction file beside a ``SKILL.md``, is invisible
-    one level down -- and ``**`` also matches zero segments, so the pattern covers ``skills``
-    itself, which is Tier 1. Without this filter the guard would demand ``skills/AGENTS.md``
-    and forbid it in the same run. Every directory is in exactly one state.
-    """
+    """Expand COVERED_BY_PARENT (including globs). Required dirs always win over covered."""
     required = set(required_dirs())
     out: list[tuple[Path, str]] = []
     for pattern, reason in COVERED_BY_PARENT.items():
-        matches: list[Path]
         if any(ch in pattern for ch in _GLOB_METACHARS):
             matches = [p for p in sorted(root.glob(pattern)) if p.is_dir()]
         else:
@@ -221,35 +166,75 @@ def _covered_dirs(root: Path) -> list[tuple[Path, str]]:
         for path in matches:
             try:
                 rel = path.relative_to(root).as_posix()
-            except ValueError:  # pragma: no cover - glob results are always under root
+            except ValueError:  # pragma: no cover
                 continue
             if rel not in required:
                 out.append((path, reason))
     return out
 
 
+def _canonical_agents_paths() -> set[str]:
+    """Root file plus every tier-table path — the only AGENTS.md files allowed to exist."""
+    return {AGENTS_FILENAME} | {f"{d}/{AGENTS_FILENAME}" for d in required_dirs()}
+
+
 def check_coverage(root: Path) -> list[Finding]:
-    """Every required directory has a file; no covered directory does."""
+    """Root + every required dir has a file; covered dirs do not; no strays elsewhere."""
     findings: list[Finding] = []
+    if not (root / AGENTS_FILENAME).is_file():
+        findings.append(Finding(AGENTS_FILENAME, "coverage", "required but missing"))
+
     for rel in sorted(required_dirs()):
         directory = root / rel
         if not directory.is_dir():
-            findings.append(Finding(rel, "coverage", "listed in the tier table but the directory does not exist"))
+            findings.append(
+                Finding(
+                    rel,
+                    "coverage",
+                    "listed in the tier table but the directory does not exist",
+                )
+            )
         elif not (directory / AGENTS_FILENAME).is_file():
-            findings.append(Finding(f"{rel}/{AGENTS_FILENAME}", "coverage", "required but missing"))
+            findings.append(
+                Finding(f"{rel}/{AGENTS_FILENAME}", "coverage", "required but missing")
+            )
 
+    covered_rels = {
+        f"{directory.relative_to(root).as_posix()}/{AGENTS_FILENAME}"
+        for directory, _ in _covered_dirs(root)
+    }
     for directory, reason in _covered_dirs(root):
         if (directory / AGENTS_FILENAME).is_file():
             rel = directory.relative_to(root).as_posix()
-            findings.append(Finding(f"{rel}/{AGENTS_FILENAME}", "coverage", f"must NOT exist - {reason}"))
+            findings.append(
+                Finding(
+                    f"{rel}/{AGENTS_FILENAME}", "coverage", f"must NOT exist - {reason}"
+                )
+            )
+
+    canonical = _canonical_agents_paths()
+    for path in root.rglob(AGENTS_FILENAME):
+        parts = path.relative_to(root).parts
+        if ".git" in parts:
+            continue
+        rel = path.relative_to(root).as_posix()
+        if rel in canonical or rel in covered_rels:
+            continue
+        findings.append(
+            Finding(
+                rel,
+                "coverage",
+                "unexpected AGENTS.md outside the tier table and COVERED_BY_PARENT allowances",
+            )
+        )
     return findings
 
 
 def check_eager_budget(root: Path) -> list[Finding]:
-    """The files loaded at session start must fit the Context Bloat ceiling *together*.
+    """Session-start files must fit the Context Bloat ceiling *together*.
 
-    Trimming the root file while adding a `.claude/AGENTS.md` moves lines around without
-    reducing what a session actually pays, so the sum is what the ceiling applies to.
+    One Finding per contributing path so ``--paths-only`` emits real paths, not a synthetic
+    ``A + B`` string.
     """
     counts: dict[str, int] = {}
     for rel in EAGER_FILES:
@@ -259,21 +244,18 @@ def check_eager_budget(root: Path) -> list[Finding]:
         try:
             counts[rel] = len(path.read_text(encoding="utf-8").splitlines())
         except (OSError, UnicodeDecodeError):
-            continue  # check_coverage/load_docs already report an unreadable file.
+            continue
 
     total = sum(counts.values())
     if total <= EAGER_BUDGET:
         return []
     breakdown = ", ".join(f"{rel} {n}" for rel, n in sorted(counts.items()))
-    return [
-        Finding(
-            " + ".join(sorted(counts)),
-            "eager-budget",
-            f"{total} lines load at session start ({breakdown}), over the {EAGER_BUDGET}-line "
-            f"ceiling by {total - EAGER_BUDGET}; these load whether or not an agent goes near "
-            "the directory, so push detail into a lazily-loaded nested file",
-        )
-    ]
+    detail = (
+        f"{total} lines load at session start ({breakdown}), over the {EAGER_BUDGET}-line "
+        f"ceiling by {total - EAGER_BUDGET}; these load whether or not an agent goes near "
+        "the directory, so push detail into a lazily-loaded nested file"
+    )
+    return [Finding(rel, "eager-budget", detail) for rel in sorted(counts)]
 
 
 def check_budget(doc: Doc) -> list[Finding]:
@@ -318,73 +300,6 @@ def check_sections(doc: Doc) -> list[Finding]:
     return findings
 
 
-def _mermaid_blocks(doc: Doc) -> tuple[list[list[str]], list[Finding]]:
-    """Split out every mermaid fence. An unterminated fence is itself a finding.
-
-    A dropped closing fence does not simply run to end-of-file: the next fence *opener*
-    (```bash under ``## Verify``, say) would otherwise be read as the close, silently
-    swallowing the rest of the document into the diagram. Hitting an opener while still
-    inside a block is therefore the unterminated case, reported where it happens.
-    """
-    blocks: list[list[str]] = []
-    findings: list[Finding] = []
-    current: list[str] | None = None
-    for line in doc.lines:
-        if current is None:
-            if _MERMAID_OPEN_RE.match(line):
-                current = []
-            continue
-        if _FENCE_CLOSE_RE.match(line):
-            blocks.append(current)
-            current = None
-            continue
-        if line.lstrip().startswith("```"):
-            findings.append(Finding(doc.rel, "mermaid", f"unterminated ```mermaid fence before {line.strip()!r}"))
-            current = None
-            continue
-        current.append(line)
-    if current is not None:
-        findings.append(Finding(doc.rel, "mermaid", "unterminated ```mermaid fence"))
-    return blocks, findings
-
-
-def check_mermaid(doc: Doc) -> list[Finding]:
-    """A diagram per file, with accessibility metadata and a GitHub-safe label set."""
-    blocks, findings = _mermaid_blocks(doc)
-    if not blocks:
-        findings.append(Finding(doc.rel, "mermaid", "no ```mermaid diagram; every AGENTS.md carries one"))
-        return findings
-
-    for number, block in enumerate(blocks, start=1):
-        label = f"diagram {number}"
-        body = [ln for ln in block if ln.strip()]
-        if not body:
-            findings.append(Finding(doc.rel, "mermaid", f"{label} is empty"))
-            continue
-
-        header = body[0].strip()
-        if not any(header.startswith(kind) for kind in MERMAID_DIAGRAM_TYPES):
-            findings.append(Finding(doc.rel, "mermaid", f"{label} has an unrecognised type: {header!r}"))
-        joined = "\n".join(block)
-        findings.extend(
-            Finding(doc.rel, "mermaid", f"{label} is missing {keyword} - screen readers need it")
-            for keyword in ("accTitle:", "accDescr:")
-            if keyword not in joined
-        )
-        for line in block:
-            if not line.isascii():
-                findings.append(
-                    Finding(
-                        doc.rel,
-                        "mermaid",
-                        f"{label} has non-ASCII text ({line.strip()!r}); "
-                        "GitHub's renderer breaks on emoji and extended characters",
-                    )
-                )
-                break
-    return findings
-
-
 def check_links(doc: Doc, root: Path) -> list[Finding]:
     """Every relative link resolves from the file's own directory."""
     findings: list[Finding] = []
@@ -405,7 +320,9 @@ def check_links(doc: Doc, root: Path) -> list[Finding]:
                 shown = resolved.relative_to(root.resolve()).as_posix()
             except ValueError:
                 shown = resolved.as_posix()
-            findings.append(Finding(doc.rel, "links", f"dead relative link {raw!r} -> {shown}"))
+            findings.append(
+                Finding(doc.rel, "links", f"dead relative link {raw!r} -> {shown}")
+            )
     return findings
 
 
@@ -459,7 +376,10 @@ def load_docs(root: Path) -> tuple[list[Doc], list[Finding]]:
     docs: list[Doc] = []
     findings: list[Finding] = []
     wanted: list[tuple[Path, int]] = [(root / AGENTS_FILENAME, ROOT_BUDGET)]
-    wanted.extend((root / rel / AGENTS_FILENAME, budget) for rel, budget in sorted(required_dirs().items()))
+    wanted.extend(
+        (root / rel / AGENTS_FILENAME, budget)
+        for rel, budget in sorted(required_dirs().items())
+    )
 
     for path, budget in wanted:
         if not path.is_file():
@@ -485,8 +405,6 @@ def collect_findings(root: Path) -> list[Finding]:
         findings.extend(check_links(doc, root))
         findings.extend(check_lint_leakage(doc))
         if doc.rel == AGENTS_FILENAME:
-            # The root file is cross-cutting orientation, not a directory description: it
-            # carries neither the section template nor a local diagram.
             continue
         findings.extend(check_sections(doc))
         findings.extend(check_mermaid(doc))
