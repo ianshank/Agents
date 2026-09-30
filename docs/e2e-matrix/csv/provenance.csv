@@ -1,9 +1,9 @@
 Field,Value
-Commit,f83f7f071435b04cb4926848b147cdfd7a381588
-Branch,cursor/e2e-vp-capture-eefa
-Generated at (UTC),2026-09-15T01:17:11+00:00
-Host,Linux-6.12.94+-x86_64-with-glibc2.39
-Python,3.12.3
+Commit,5cf4758eae0913a1f1afefb14a65cc9ba3897eeb
+Branch,main
+Generated at (UTC),2026-09-20T13:50:01+00:00
+Host,Linux-6.12.94+-x86_64-with-glibc2.41
+Python,3.13.5
 Runner invocation,bash scripts/run_all_e2e.sh --tiers offline --hypothesis-profile ci
 Regenerate,python tests/test_e2e_matrix.py --update
 Policy,Generated artifact per ADR 0032/0033 - do not edit by hand.
