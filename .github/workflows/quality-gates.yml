@@ -160,7 +160,7 @@ jobs:
               sys.exit(1)
           print(f"merge-conflict marker guard OK; {len(files)} tracked file(s) checked")
           PY
-      - uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af426746bb  # v6.1.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true
       - name: Verify the workspace lockfile is current
